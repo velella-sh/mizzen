@@ -135,6 +135,16 @@ test("a collection keeps its keys, and a bad name points at the key", () => {
   assert.equal(d.pos?.column, 3);
 });
 
+test("a bad redirect key keeps ajv's path rule", () => {
+  const src = "title: Docs\nredirects:\n  old: /new/\n";
+  const { diagnostics } = loadConfigText(src, F, "site");
+  const d = diagnostics.find((x) => x.message.includes('"^/"'));
+  assert.ok(d);
+  assert.equal(d.pos?.line, 3);
+  assert.equal(d.pos?.column, 3);
+  assert.ok(diagnostics.every((x) => !x.message.includes("lowercase")));
+});
+
 test("an unknown key inside a collection points at its line", () => {
   const src = "collections:\n  parts:\n    sources: _data/parts.yml\n";
   const { config, diagnostics } = loadConfigText(src, F, "site");

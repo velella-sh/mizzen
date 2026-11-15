@@ -124,8 +124,8 @@ export function loadConfigText(source: string, file: string, folderTitle: string
   const raw = value as Record<string, unknown>;
   if (!validateConfig(raw) && validateConfig.errors) {
     for (const error of validateConfig.errors) {
-      // ajv reports a bad property name twice: once for the inner keyword and once for the name itself.
-      if (error.keyword !== "propertyNames" && error.schemaPath.includes("/propertyNames/")) continue;
+      // ajv reports a bad collection name twice: once for the inner keyword and once for the name itself.
+      if (isCollectionsName(error) && error.keyword !== "propertyNames") continue;
       diagnostics.push(diagnosticFromAjv(error, file, doc, lineCounter));
     }
   }
@@ -198,13 +198,17 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
   return collections;
 }
 
+function isCollectionsName(error: ErrorObject): boolean {
+  return error.schemaPath.startsWith("#/properties/collections/propertyNames");
+}
+
 function diagnosticFromAjv(
   error: ErrorObject,
   file: string,
   doc: Document.Parsed,
   lineCounter: LineCounter,
 ): Diagnostic {
-  if (error.keyword === "propertyNames") {
+  if (error.keyword === "propertyNames" && isCollectionsName(error)) {
     const key = String(error.params["propertyName"] ?? "");
     const path = [...instancePath(error.instancePath), key];
     const pair = getMapPair(doc, path);
