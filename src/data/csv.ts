@@ -24,6 +24,8 @@ export interface CsvRow {
 export interface CsvResult {
   /** The header cells, in source order; empty when the file has no header. */
   readonly header: readonly string[];
+  /** Where each header cell sits on the first line, keyed by field name; every row shares it. */
+  readonly headerPositions: Readonly<Record<string, RecordPos>>;
   /** Sound rows, in source order. */
   readonly rows: readonly CsvRow[];
   /** Header and row problems, each with its exact position. */
@@ -168,10 +170,11 @@ export function parseCsv(text: string, file: string): CsvResult {
       pos: sourcePosOf(spanOf(index, file, 0, 0)),
       help: "Put the field names on the first line, separated by commas.",
     });
-    return { header: [], rows: [], diagnostics };
+    return { header: [], headerPositions: {}, rows: [], diagnostics };
   }
 
   const header: string[] = [];
+  const headerPositions: Record<string, RecordPos> = {};
   const columns: number[] = [];
   for (let cell = 0; cell < headerRow.cells.length; cell++) {
     const value = headerRow.cells[cell]!.value;
@@ -197,6 +200,7 @@ export function parseCsv(text: string, file: string): CsvResult {
       continue;
     }
     header.push(value);
+    headerPositions[value] = at;
     columns.push(cell);
   }
   const records: CsvRow[] = [];
@@ -221,5 +225,5 @@ export function parseCsv(text: string, file: string): CsvResult {
     records.push({ fields, position: rowSpan(index, file, row), fieldPositions });
   }
 
-  return { header, rows: records, diagnostics };
+  return { header, headerPositions, rows: records, diagnostics };
 }

@@ -46,6 +46,7 @@ const FROZEN: Shape = {
     "fields": "Readonly<Record<string, unknown>>",
     "position": "RecordPos",
     "fieldPositions": "Readonly<Record<string, RecordPos>>",
+    "keyPositions": "?Readonly<Record<string, RecordPos>>",
     "normalizedDates": "?Readonly<Record<string, string>>",
   },
   DataStats: {

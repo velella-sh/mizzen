@@ -12,6 +12,13 @@ A site built from data reports findings with the same envelope as every other fi
 A record that fails its schema is left out of the site; `collections.<name>.onInvalid` decides whether that fails the
 build (`error`, the default) or only warns (`skip`). Either way the build ends with `data.records-skipped`.
 
+A `data.record-invalid` finding may also carry a `fix`: a safe replacement of one source span. It names the value span
+for a near-miss enum value, or for a number or boolean written as a string; it names the key — or the CSV header cell —
+for a near-miss field name. A fix is offered only when the record still validates with the corrected value and the
+replacement reads back the same in the source's format (a JSON string keeps its quotes, and a YAML string is quoted so
+`true`, `null`, and `1` stay strings). Otherwise the finding carries `help` only, and a date never gets a guessed fix:
+its help names the two accepted formats.
+
 ## Sources
 
 | ID | Meaning | Fix |

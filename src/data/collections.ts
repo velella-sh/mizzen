@@ -28,9 +28,10 @@ import { checkFieldSizes, checkRecordCount, checkSourceBytes, dataLimitsOf } fro
 import { readLock, type DataLock } from "./lock.ts";
 import { resolveNpmSource } from "./package-source.ts";
 import { skippedSummary } from "./policy.ts";
-import { fieldPositionsOf, keyText, lineIndex, mappingPairs, nodePos, sourcePosOf } from "./positions.ts";
+import { fieldPositionsOf, keyPositionsOf, keyText, lineIndex, mappingPairs, nodePos, sourcePosOf } from "./positions.ts";
 import { readRemoteSource } from "./remote-source.ts";
 import { compileSchemas, validateRecords } from "./schema.ts";
+import type { SourceFormat } from "./schema-fix.ts";
 
 /** What {@link loadCollections} read. */
 export interface CollectionsResult {
@@ -121,6 +122,11 @@ function idOf(fields: Readonly<Record<string, unknown>>, idField: string): strin
   return typeof value === "string" || typeof value === "number" ? String(value) : undefined;
 }
 
+/** The format a source's fix suggestions are written in; a source that loaded has one of the three kinds. */
+function formatOf(source: string): SourceFormat {
+  return kindOf(source) ?? "yaml";
+}
+
 /** The source kind from an address or path, ignoring a URL's query and fragment. */
 function kindOf(source: string): "csv" | "yaml" | "json" | undefined {
   const path = source.split(/[?#]/, 1)[0] ?? source;
@@ -191,6 +197,7 @@ function recordsOfDocument(
         fields,
         position: nodePos(index, file, item),
         fieldPositions: fieldPositionsOf(index, file, item),
+        keyPositions: keyPositionsOf(index, file, item),
       });
     }
     return records;
@@ -218,6 +225,7 @@ function recordsOfDocument(
         fields,
         position: nodePos(index, file, valueNode),
         fieldPositions: fieldPositionsOf(index, file, valueNode),
+        keyPositions: keyPositionsOf(index, file, valueNode),
       });
     }
     return records;
@@ -311,7 +319,13 @@ function readText(
         });
         continue;
       }
-      records.push({ id, fields: { ...row.fields }, position: row.position, fieldPositions: row.fieldPositions });
+      records.push({
+        id,
+        fields: { ...row.fields },
+        position: row.position,
+        fieldPositions: row.fieldPositions,
+        keyPositions: parsed.headerPositions,
+      });
     }
     return records;
   }
@@ -366,6 +380,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
   const configPositions: Record<string, SourcePos> = {};
   for (const name of names) configPositions[name] = configPosition(root, config.collections[name]!.source);
   const schemas = compileSchemas(root, config, configPositions, diagnostics);
+  let read = 0;
   let skipped = 0;
 
   let lock: DataLock | undefined;
@@ -484,10 +499,11 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       continue;
     }
     diagnostics.push(...checkFieldSizes(name, records, limits));
+    read += records.length;
     let kept: readonly DataRecord[] = records;
     const schema = schemas.schemas[name];
     if (schema !== undefined) {
-      const validated = validateRecords(name, kept, schema, entry, diagnostics);
+      const validated = validateRecords(name, kept, schema, entry, formatOf(source), diagnostics);
       kept = validated.records;
       skipped += validated.skipped;
     }
@@ -511,7 +527,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     stats: {
       collections: names.length,
       loaded: Object.keys(collections).length,
-      records: Object.values(collections).reduce((total, collection) => total + collection.records.length, 0),
+      records: read,
       skipped,
       schemas: Object.keys(schemas.schemas).length,
       unchecked: schemas.unchecked,

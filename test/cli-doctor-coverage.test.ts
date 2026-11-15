@@ -216,7 +216,7 @@ test("a missing source still runs the theme check and skips only what depends on
       runtime: "passed",
       config: "passed",
       content: "skipped",
-      data: "skipped",
+      data: "passed",
       theme: "failed",
       render: "skipped",
       output: "skipped",

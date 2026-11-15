@@ -304,3 +304,70 @@ test("doctor reports a data finding in text, JSON, and SARIF at the data file", 
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("data is checked even when the page source folder is missing", async () => {
+  const root = tree({
+    "mizzen.yml":
+      "title: Demo\nsource: docs\n" +
+      "collections:\n  items:\n    source: data/items.yml\n    schema: schemas/items.json\n",
+    "data/items.yml": "- id: one\n",
+    "schemas/items.json": DATA_SCHEMA,
+  });
+  try {
+    const report = await doctorReport({
+      root,
+      themeRoot: THEME,
+      defaultLayout: "doc",
+      nodeVersion: `${MIN_NODE_MAJOR}.0.0`,
+    });
+    assert.equal(statesOf(report).content, "skipped", "the pages folder is still missing");
+    assert.equal(statesOf(report).data, "failed", "its own input is enough to check the records");
+    const finding = report.diagnostics.find((diagnostic) => diagnostic.id === "data.record-invalid");
+    assert.equal(finding?.pos?.file, "data/items.yml");
+    const summary = report.diagnostics.find((diagnostic) => diagnostic.id === "doctor.data-summary");
+    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 1 record, 1 skipped, 1 schema\./);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a broken content source and a broken collection fail their own checks, independently", async () => {
+  const root = tree({
+    ...DATA_FILES,
+    "_data/items.yml": "- id: one\n",
+    "a.md": "---\npermalink: /same/\n---\n# A\n",
+    "b.md": "---\npermalink: /same/\n---\n# B\n",
+  });
+  try {
+    const report = await doctorReport({
+      root,
+      themeRoot: THEME,
+      defaultLayout: "doc",
+      nodeVersion: `${MIN_NODE_MAJOR}.0.0`,
+    });
+    assert.equal(statesOf(report).content, "failed");
+    assert.equal(statesOf(report).data, "failed");
+    const ids = report.diagnostics.map((diagnostic) => diagnostic.id);
+    assert.ok(ids.includes("page.duplicate-url"));
+    assert.ok(ids.includes("data.record-invalid"));
+    assert.ok(ids.includes("doctor.data-summary"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the data summary counts the records read, and the invalid one among them", async () => {
+  const root = tree({ ...DATA_FILES, "_data/items.yml": "- id: one\n  title: First\n- id: two\n" });
+  try {
+    const report = await doctorReport({
+      root,
+      themeRoot: THEME,
+      defaultLayout: "doc",
+      nodeVersion: `${MIN_NODE_MAJOR}.0.0`,
+    });
+    const summary = report.diagnostics.find((diagnostic) => diagnostic.id === "doctor.data-summary");
+    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 2 records, 1 skipped, 1 schema\./);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

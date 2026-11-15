@@ -1,12 +1,16 @@
 /**
- * What a schema finding can suggest: `help` in prose for people, and `fix` as a span replacement only when the
- * replacement is safe in every source format. Nothing here applies a fix; the diagnostic only carries it.
+ * What a schema finding can suggest: `help` in prose for people, and `fix` as a span replacement only when that
+ * replacement is safe in the source's own format. Nothing here applies a fix; the diagnostic only carries it.
  *
- * A replacement is offered only when the new text is a bare token that reads the same in YAML, JSON, and CSV: a
- * word for YAML and CSV, or a quoted-safe number. A quoted, escaped, or nested value gets prose instead, so an
- * applied fix can never change a value's meaning.
+ * A replacement is written for the format it lands in: a JSON string keeps its quotes, and a YAML string is quoted so
+ * `"true"`, `"null"`, or `"1"` stay strings; a CSV cell is always text. A number or boolean is offered only when the
+ * caller proves the record still validates with the converted value, so a finding never suggests a fix that would
+ * change a value's type or break the file.
  */
 import type { DiagnosticFix, RecordPos } from "../contracts/index.ts";
+
+/** The source format a fix is written for. */
+export type SourceFormat = "csv" | "json" | "yaml";
 
 /** What a finding suggests, if anything. */
 export interface Suggestion {
@@ -30,9 +34,18 @@ export interface SuggestionInput {
   readonly knownFields?: readonly string[];
   /** The type the schema expects, for a missing or mistyped field. */
   readonly expectedType?: string;
-  /** Where the field's value sits, when it has a place. */
+  /** The format the replacement is written for. */
+  readonly format: SourceFormat;
+  /** Where the field's value sits, for a value replacement. */
   readonly pos?: RecordPos;
+  /** Where the field's key sits, for a rename; never the value's span. */
+  readonly keyPos?: RecordPos;
+  /** Validates the record with this field set to a candidate value, so a conversion is offered only when it passes. */
+  readonly accepts?: (value: unknown) => boolean;
 }
+
+/** A token that needs no quoting or escaping in any of the three formats. */
+const TOKEN = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 
 /** The edit distance between two strings, counted in code points. */
 export function editDistance(a: string, b: string): number {
@@ -66,17 +79,44 @@ export function closest(value: string, candidates: readonly string[]): string | 
   return best;
 }
 
-/** A replacement for a value's span when `text` is a bare token that no source format would read differently. */
-function tokenFix(token: string, pos: RecordPos | undefined): DiagnosticFix | undefined {
-  if (pos === undefined || !/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(token)) return undefined;
+/** A replacement of one span, when the text is safe and the span is known. */
+function spanFix(pos: RecordPos | undefined, text: string): DiagnosticFix | undefined {
+  if (pos === undefined || (!TOKEN.test(text) && !/^"[^"\\]*"$/.test(text))) return undefined;
   return {
     file: pos.file,
     line: pos.startLine,
     column: pos.startColumn,
     endLine: pos.endLine,
     endColumn: pos.endColumn,
-    text: token,
+    text,
   };
+}
+
+/**
+ * The text that reads back as the string `token` in `format`: JSON and YAML get a quoted string, so a value such as
+ * `true`, `null`, or `1` stays text; a CSV cell is text either way, so it stays bare.
+ */
+function stringText(token: string, format: SourceFormat): string | undefined {
+  if (!TOKEN.test(token)) return undefined;
+  return format === "csv" ? token : JSON.stringify(token);
+}
+
+/** The text that reads back as the key `token` in `format`; a JSON key keeps its quotes. */
+function keyText(token: string, format: SourceFormat): string | undefined {
+  if (!TOKEN.test(token)) return undefined;
+  return format === "json" ? JSON.stringify(token) : token;
+}
+
+/** The value a string spells in a format that has typed scalars, or `undefined` when it is not that scalar. */
+function convertedValue(value: string, type: string): number | boolean | undefined {
+  if (type === "boolean") {
+    if (value === "true") return true;
+    if (value === "false") return false;
+    return undefined;
+  }
+  if (type === "integer" && /^-?(?:0|[1-9]\d*)$/.test(value)) return Number(value);
+  if (type === "number" && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) return Number(value);
+  return undefined;
 }
 
 /** An example value of the type a schema names, for a missing field's help. */
@@ -107,14 +147,18 @@ export function suggestionFor(input: SuggestionInput): Suggestion {
     if (typeof value !== "string" || allowed.length === 0) return {};
     const match = closest(value, allowed);
     if (match === undefined) return {};
-    const fix = tokenFix(match, input.pos);
+    const text = stringText(match, input.format);
+    const fix = text === undefined ? undefined : spanFix(input.pos, text);
     return { help: `Did you mean "${match}"?`, ...(fix === undefined ? {} : { fix }) };
   }
 
   if (input.keyword === "additionalProperties") {
     const known = input.knownFields ?? [];
     const match = closest(input.field, known);
-    return match === undefined ? {} : { help: `Did you mean "${match}"?` };
+    if (match === undefined) return {};
+    const text = keyText(match, input.format);
+    const fix = text === undefined ? undefined : spanFix(input.keyPos, text);
+    return { help: `Did you mean "${match}"?`, ...(fix === undefined ? {} : { fix }) };
   }
 
   if (input.keyword === "required") {
@@ -125,16 +169,16 @@ export function suggestionFor(input: SuggestionInput): Suggestion {
   }
 
   if (input.keyword === "type" && typeof value === "string" && input.expectedType !== undefined) {
-    const wantsNumber = input.expectedType === "number" || input.expectedType === "integer";
-    if (wantsNumber && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)) {
-      const fix = tokenFix(value, input.pos);
-      return { help: `Write the number without quotes: ${value}.`, ...(fix === undefined ? {} : { fix }) };
-    }
-    if (input.expectedType === "boolean" && (value === "true" || value === "false")) {
-      const fix = tokenFix(value, input.pos);
-      return { help: `Write the boolean without quotes: ${value}.`, ...(fix === undefined ? {} : { fix }) };
-    }
-    return { help: `Write the value as ${/^[aeiou]/.test(input.expectedType) ? "an" : "a"} ${input.expectedType}.` };
+    const generic = `Write the value as ${/^[aeiou]/.test(input.expectedType) ? "an" : "a"} ${input.expectedType}.`;
+    const converted = convertedValue(value, input.expectedType);
+    // A CSV cell is always text, so no cell replacement can turn it into a typed value.
+    if (converted === undefined || input.format === "csv") return { help: generic };
+    const noun = typeof converted === "boolean" ? "boolean" : "number";
+    const help = `Write the ${noun} without quotes: ${String(converted)}.`;
+    // The fix is offered only when the whole record validates with the converted value.
+    if (input.accepts?.(converted) !== true) return { help };
+    const fix = spanFix(input.pos, String(converted));
+    return { help, ...(fix === undefined ? {} : { fix }) };
   }
 
   return {};

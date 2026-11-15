@@ -134,3 +134,72 @@ test("a collection without a schema is unchecked, and its records load without f
   assert.deepEqual(result.stats.unchecked, ["items"]);
   assert.equal(result.stats.records, 1);
 });
+
+test("wrong type, missing required, and bad enum point at exact YAML, JSON, and CSV positions", async () => {
+  const schemaText = JSON.stringify({
+    type: "object",
+    required: ["title"],
+    properties: {
+      id: { type: "string" },
+      title: { type: "string" },
+      count: { type: "integer" },
+      status: { type: "string", enum: ["stable", "beta"] },
+    },
+  });
+
+  const cases: { name: string; config: string; file: string; text: string; expected: [number, number][] }[] = [
+    {
+      name: "YAML",
+      config: CONFIG,
+      file: "_data/items.yml",
+      text: "- id: one\n  title: T\n  count: \"three\"\n- id: two\n  count: 2\n  status: shipped\n",
+      expected: [[3, 10], [4, 3], [6, 11]],
+    },
+    {
+      name: "JSON",
+      config: "collections:\n  items:\n    source: _data/items.json\n    schema: _data/items.schema.json\n",
+      file: "_data/items.json",
+      text: '[{"id":"one","title":"T","count":"three"},{"id":"two","count":2,"status":"shipped"}]',
+      expected: [[1, 34], [1, 43], [1, 74]],
+    },
+    {
+      name: "CSV",
+      config: "collections:\n  items:\n    source: _data/items.csv\n    schema: _data/items.schema.json\n",
+      file: "_data/items.csv",
+      text: "id,count,status\none,three,shipped\ntwo,2,beta\n",
+      expected: [[2, 1], [2, 5], [2, 11], [3, 1], [3, 5]],
+    },
+  ];
+
+  for (const { name, config, file, text, expected } of cases) {
+    const result = await loadSite({ "mizzen.yml": config, "_data/items.schema.json": schemaText, [file]: text });
+    const found = result.diagnostics.filter((diagnostic) => diagnostic.id === "data.record-invalid");
+    assert.deepEqual(
+      found.map((diagnostic) => [diagnostic.pos?.line, diagnostic.pos?.column]),
+      expected,
+      `${name}: one exact position per finding`,
+    );
+    assert.equal(found.every((diagnostic) => diagnostic.pos?.file === file), true, name);
+  }
+});
+
+test("a boolean schema is valid: true accepts every record, false rejects each one", async () => {
+  const accepted = await loadSite({
+    "mizzen.yml": CONFIG,
+    "_data/items.schema.json": "true",
+    "_data/items.yml": "- id: one\n- id: two\n",
+  });
+  assert.deepEqual(accepted.diagnostics, []);
+  assert.equal(accepted.collections["items"]!.records.length, 2);
+  assert.equal(accepted.stats.schemas, 1);
+
+  const rejected = await loadSite({
+    "mizzen.yml": CONFIG,
+    "_data/items.schema.json": "false",
+    "_data/items.yml": "- id: one\n- id: two\n",
+  });
+  assert.equal(rejected.diagnostics.some((diagnostic) => diagnostic.id === "data.schema-invalid"), false);
+  assert.equal(rejected.diagnostics.filter((diagnostic) => diagnostic.id === "data.record-invalid").length, 2);
+  assert.equal(rejected.collections["items"]!.records.length, 0);
+  assert.equal(rejected.stats.skipped, 2);
+});

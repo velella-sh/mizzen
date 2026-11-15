@@ -22,7 +22,7 @@ import type {
 } from "../contracts/index.ts";
 import { policyOf } from "./policy.ts";
 import { sourcePosOf } from "./positions.ts";
-import { suggestionFor, type Suggestion } from "./schema-fix.ts";
+import { suggestionFor, type SourceFormat, type Suggestion } from "./schema-fix.ts";
 
 // ajv is CommonJS: its default export is the class at run time, but its types name it.
 const Ajv2020 = createRequire(import.meta.url)("ajv/dist/2020.js") as typeof Ajv2020Class;
@@ -136,13 +136,14 @@ export function compileSchemas(
       });
       continue;
     }
-    if (typeof document !== "object" || document === null || Array.isArray(document)) {
+    // A boolean is a valid JSON Schema: `true` accepts every record and `false` rejects every one.
+    if (typeof document !== "boolean" && (typeof document !== "object" || document === null || Array.isArray(document))) {
       diagnostics.push({
         id: "data.schema-invalid",
         severity: "error",
-        message: `Schema ${file} must be a JSON object.`,
+        message: `Schema ${file} must be a JSON object or boolean.`,
         pos: atSchema(file),
-        help: "Start the schema with `{` and name its fields under `properties`.",
+        help: "Start the schema with `{` and name its fields under `properties`, or write `true` or `false`.",
       });
       continue;
     }
@@ -247,6 +248,7 @@ function messageOf(error: ErrorObject, record: DataRecord, collection: string, p
     return `${subject} has an unknown field "${field}".`;
   }
   const where = `Field "${path.join(".")}" of record "${record.id}" in "${collection}"`;
+  if (error.keyword === "required") return `${where} is required.`;
   switch (error.keyword) {
     case "type":
       return `${where} must be ${typePhrase(String(error.params["type"] ?? "the right type"))}.`;
@@ -283,35 +285,58 @@ function messageOf(error: ErrorObject, record: DataRecord, collection: string, p
   }
 }
 
-/** One finding for a field group, with the suggestion the schema makes possible. */
+/** The identity of a fix, so one header cell shared by many rows is offered once. */
+function fixKey(fix: NonNullable<Diagnostic["fix"]>): string {
+  return `${fix.file}\u0000${fix.line}\u0000${fix.column}\u0000${fix.endLine}\u0000${fix.endColumn}\u0000${fix.text}`;
+}
+
+/**
+ * One finding for a field group, with the suggestion the schema makes possible. A suggestion for a required field
+ * nested under another one is left out: only the root schema is known here, so its name and type would be the parent's.
+ */
 function findingOf(
   error: ErrorObject,
   record: DataRecord,
   collection: string,
   schema: CollectionSchema,
+  format: SourceFormat,
+  offered: Set<string>,
 ): Omit<Diagnostic, "severity"> {
   const path = pathOf(error);
   const field = path[0];
   const pos = posOf(record, field);
   const value = field === undefined ? undefined : record.fields[field];
   const allowed = allowedOf(error);
-  const expectedType = field === undefined ? undefined : expectedTypeOf(error, field, schema);
-  const suggestion: Suggestion = suggestionFor({
-    keyword: error.keyword,
-    field: field ?? "",
-    ...(value === undefined ? {} : { value }),
-    ...(allowed === undefined ? {} : { allowed }),
-    ...(schema.properties.length === 0 ? {} : { knownFields: schema.properties }),
-    ...(expectedType === undefined ? {} : { expectedType }),
-    pos,
-  });
+  const expectedType = error.keyword === "required" && path.length > 1 ? undefined : expectedTypeOf(error, path.at(-1) ?? "", schema);
+  // A required or unknown field below the root has no span of its own here: only the root schema and its keys are known.
+  const nested = path.length > 1 && (error.keyword === "required" || error.keyword === "additionalProperties");
+  const suggestion: Suggestion = nested
+    ? {}
+    : suggestionFor({
+        keyword: error.keyword,
+        field: field ?? "",
+        ...(value === undefined ? {} : { value }),
+        ...(allowed === undefined ? {} : { allowed }),
+        ...(schema.properties.length === 0 ? {} : { knownFields: schema.properties }),
+        ...(expectedType === undefined ? {} : { expectedType }),
+        format,
+        pos,
+        ...(field === undefined || record.keyPositions?.[field] === undefined ? {} : { keyPos: record.keyPositions[field] }),
+        ...(field === undefined
+          ? {}
+          : { accepts: (candidate: unknown) => schema.validate({ ...record.fields, [field]: candidate }) }),
+      });
+  const fix = suggestion.fix;
+  const key = fix === undefined ? undefined : fixKey(fix);
+  const first = key === undefined || !offered.has(key);
+  if (key !== undefined) offered.add(key);
   const message = messageOf(error, record, collection, path);
   return {
     id: "data.record-invalid",
     message,
     pos: sourcePosOf(pos),
     ...(suggestion.help === undefined ? {} : { help: suggestion.help }),
-    ...(suggestion.fix === undefined ? {} : { fix: suggestion.fix }),
+    ...(fix === undefined || !first ? {} : { fix }),
   };
 }
 
@@ -325,17 +350,19 @@ export function validateRecords(
   records: readonly DataRecord[],
   schema: CollectionSchema,
   config: CollectionConfig | undefined,
+  format: SourceFormat,
   diagnostics: Diagnostic[],
 ): ValidationResult {
   const severity = policyOf(config) === "skip" ? "warning" : "error";
   const kept: DataRecord[] = [];
+  const offered = new Set<string>();
 
   for (const record of records) {
     if (schema.validate(record.fields)) {
       kept.push(record);
       continue;
     }
-    const errors = schema.validate.errors ?? [];
+    const errors = [...(schema.validate.errors ?? [])];
     if (errors.length === 0) {
       diagnostics.push({
         id: "data.record-invalid",
@@ -346,7 +373,7 @@ export function validateRecords(
       continue;
     }
     for (const error of groupsOf(errors).values()) {
-      const finding = findingOf(error, record, collection, schema);
+      const finding = findingOf(error, record, collection, schema, format, offered);
       diagnostics.push({ ...finding, severity, message: `${finding.message} The record was skipped.` });
     }
   }

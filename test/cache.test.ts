@@ -545,3 +545,49 @@ test("a build that throws writes no whole-build entry", async () => {
     clean(root, theme, parent);
   }
 });
+
+test("changing a collection schema misses the cache, and the warm build matches a cold one", async () => {
+  const root = tree({
+    "mizzen.yml":
+      "title: Data\nsource: docs\n" +
+      "collections:\n  items:\n    source: data/items.yml\n    schema: schemas/items.json\n",
+    "docs/index.md": "---\ntitle: Home\n---\n# Home\n",
+    "data/items.yml": "- id: one\n  count: 2\n",
+    "schemas/items.json": JSON.stringify({
+      type: "object",
+      properties: { id: { type: "string" }, count: { type: "integer" } },
+    }),
+  });
+  const theme = makeTheme("one");
+  const { parent, out, cacheDir } = scratch();
+  const buildAt = (folder: string, cache = true) =>
+    build({ root, out: join(parent, folder), themeRoot: theme, defaultLayout: "doc", ...(cache ? { cache: true, cacheDir } : {}) });
+  try {
+    const first = await buildAt("first");
+    assert.equal(first.diagnostics.some((diagnostic) => diagnostic.id === "data.record-invalid"), false);
+    const hit = await buildAt("hit");
+    assert.deepEqual(hit.diagnostics, first.diagnostics, "the same schema is a cache hit");
+
+    writeFileSync(
+      join(root, "schemas/items.json"),
+      JSON.stringify({
+        type: "object",
+        required: ["title"],
+        properties: { id: { type: "string" }, title: { type: "string" }, count: { type: "integer" } },
+      }),
+    );
+    const warm = await buildAt("warm");
+    assert.ok(
+      warm.diagnostics.some((diagnostic) => diagnostic.id === "data.record-invalid"),
+      "a tightened schema is not answered by the entry the old schema wrote",
+    );
+
+    const cold = await buildAt("cold", false);
+    assert.deepEqual(warm.diagnostics, cold.diagnostics, "the warm build reports what a cold build reports");
+    assert.deepEqual(snapshot(join(parent, "warm")), snapshot(join(parent, "cold")), "and writes the same bytes");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(theme, { recursive: true, force: true });
+    rmSync(parent, { recursive: true, force: true });
+  }
+});

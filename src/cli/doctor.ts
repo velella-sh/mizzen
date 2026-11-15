@@ -15,7 +15,8 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadConfig } from "../config/load.ts";
-import type { DataStats, Diagnostic } from "../contracts/index.ts";
+import { loadCollections } from "../data/collections.ts";
+import type { DataStats, Diagnostic, SiteConfig } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
 import { build } from "../pipeline/build.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
@@ -172,11 +173,13 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
   const root = resolve(options.root);
   const themeRoot = options.themeRoot === undefined ? undefined : resolve(options.themeRoot);
 
+  let config: SiteConfig | undefined;
   let source: string | undefined;
   let sourceName: string | undefined;
   try {
     const loaded = loadConfig(root);
     publish(loaded.diagnostics);
+    config = loaded.config;
     sourceName = loaded.config.source;
     source = resolve(root, loaded.config.source);
     checks.push(loaded.diagnostics.some(isError) ? failed("config", "the site config has errors") : passed("config"));
@@ -191,27 +194,39 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
   const missingSource = `the source folder "${sourceName ?? ""}" does not exist`;
 
   if (source === undefined) {
-    checks.push(skipped("content", SKIP_CONFIG), skipped("data", SKIP_CONFIG));
+    checks.push(skipped("content", SKIP_CONFIG));
   } else if (!sourceExists) {
     diagnostics.error("doctor.source-missing", `The source folder "${sourceName ?? ""}" does not exist under "${root}".`, {
       help: "Create it, or set `source` in mizzen.yml to the folder that holds the site's pages.",
     });
-    checks.push(skipped("content", missingSource), skipped("data", missingSource));
+    checks.push(skipped("content", missingSource));
   } else {
     try {
       const model = await buildModel(root);
       publish(model.diagnostics);
-      const dataErrors = model.diagnostics.filter((found) => isError(found) && found.id.startsWith("data."));
       const contentErrors = model.diagnostics.some(
         (found) => isError(found) && !found.id.startsWith("config.") && !found.id.startsWith("data."),
       );
       checks.push(contentErrors ? failed("content", "the content check found errors") : passed("content"));
-      checks.push(dataErrors.length > 0 ? failed("data", "the data check found errors") : passed("data"));
-      const summary = dataSummary(model.collectionStats);
-      if (summary !== undefined) publish([summary]);
     } catch (err) {
       diagnostics.error("doctor.content-failed", `The content check could not run: ${messageOf(err)}`, { help: CHECK_HELP });
       checks.push(failed("content", "the content check could not run"));
+    }
+  }
+
+  // Data is checked from the config alone, so a missing pages folder cannot skip it: collections are their own input.
+  if (config === undefined) {
+    checks.push(skipped("data", SKIP_CONFIG));
+  } else {
+    try {
+      const collected = await loadCollections({ root, config });
+      publish(collected.diagnostics);
+      const dataErrors = collected.diagnostics.some(isError);
+      checks.push(dataErrors ? failed("data", "the data check found errors") : passed("data"));
+      const summary = dataSummary(collected.stats);
+      if (summary !== undefined) publish([summary]);
+    } catch (err) {
+      diagnostics.error("doctor.data-failed", `The data check could not run: ${messageOf(err)}`, { help: CHECK_HELP });
       checks.push(failed("data", "the data check could not run"));
     }
   }

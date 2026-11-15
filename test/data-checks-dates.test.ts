@@ -47,6 +47,7 @@ test("an impossible day, a locale format, and a non-text value are each one erro
   for (const diagnostic of found) {
     assert.match(diagnostic.help ?? "", /YYYY-MM-DD/);
     assert.match(diagnostic.help ?? "", /ISO 8601/);
+    assert.equal("fix" in diagnostic, false, "the help names the accepted formats; a guess is never offered as a fix");
   }
 });
 

@@ -22,6 +22,8 @@ export interface DataRecord {
   readonly position: RecordPos;
   /** Where each top-level field's value sits, keyed by field name. */
   readonly fieldPositions: Readonly<Record<string, RecordPos>>;
+  /** Where each top-level field's key sits, keyed by field name: the YAML/JSON key, or the CSV header cell. */
+  readonly keyPositions?: Readonly<Record<string, RecordPos>>;
   /** Each date field's normalized form, keyed by field name: `YYYY-MM-DD` as written, an instant as UTC ISO 8601. */
   readonly normalizedDates?: Readonly<Record<string, string>>;
 }
@@ -32,7 +34,7 @@ export interface DataStats {
   readonly collections: number;
   /** Collections that loaded. */
   readonly loaded: number;
-  /** Records the site keeps. */
+  /** Records the sources read, before validation left any out. */
   readonly records: number;
   /** Records left out because they failed validation. */
   readonly skipped: number;
