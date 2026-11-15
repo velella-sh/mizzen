@@ -109,3 +109,12 @@ runs used the machine above with Node 24.22.2.
   build prunes the old generation.
 - Timing numbers are per machine. There is no asserted performance budget for incremental builds: the checked-in
   budget covers shipped bytes (`docs/performance.md` in Lateen) and the deterministic output identity, not wall time.
+
+## Font preloads
+
+A stylesheet face with `font-display: optional` is preloaded, because a font like that is used only when it is there
+at the first paint. A theme that replaces a shipped family still declares the face as a fallback, but it can ask the
+engine to leave that family out of this page's preload links through `LayoutProps.hints.skipFontPreload(family)`. The
+name compares without case; the family that was not replaced keeps its preload, and a site without the hint gets the
+same links as before. The hint is per page and part of the render cache entry, so a cached page suppresses the same
+families it did when it was rendered.

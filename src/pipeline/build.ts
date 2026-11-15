@@ -353,13 +353,24 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
 
   /** Links the page's stylesheets just before `</head>`; the render stage is synchronous, so this happens after it. */
   const usedIslands = new Set<string>();
-  const withCss = async (rendered: { html: string; css: readonly string[]; islands?: readonly { src: string }[] }): Promise<string> => {
+  const withCss = async (rendered: {
+    html: string;
+    css: readonly string[];
+    islands?: readonly { src: string }[];
+    skipFontPreloads?: readonly string[];
+  }): Promise<string> => {
     for (const island of rendered.islands ?? []) usedIslands.add(island.src);
     const { base, page } = await bundler.page(rendered.css);
     const used = [base, page].filter((b): b is CssBundle => b !== undefined && b.css !== "");
     for (const b of used) bundles.set(b.path, b);
     if (used.length === 0) return rendered.html;
-    const preloads = base === undefined ? [] : optionalFonts(base.css).map((href) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="${href}">`);
+    const skipped = new Set((rendered.skipFontPreloads ?? []).map((family) => family.toLowerCase()));
+    const preloads =
+      base === undefined
+        ? []
+        : optionalFontFaces(base.css)
+            .filter((face) => !skipped.has(face.family.toLowerCase()))
+            .map((face) => `<link rel="preload" as="font" type="font/woff2" crossorigin href="${face.url}">`);
     const links = used.map((b) => `<link rel="stylesheet" href="${site.config.base}/${b.path}">`).join("");
     return rendered.html.replace(/<\/head>/i, () => `${preloads.join("")}${links}</head>`);
   };
@@ -471,6 +482,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           html: cached.html,
           css: cached.css,
           ...(cached.islands === undefined ? {} : { islands: cached.islands }),
+          ...(cached.skipFontPreloads === undefined ? {} : { skipFontPreloads: cached.skipFontPreloads }),
         });
       }
       const rendered =
@@ -482,6 +494,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           html: rendered.html,
           css: rendered.css,
           ...(rendered.islands === undefined ? {} : { islands: rendered.islands }),
+          ...(rendered.skipFontPreloads === undefined ? {} : { skipFontPreloads: rendered.skipFontPreloads }),
           diagnostics: rendered.diagnostics,
         });
       }
@@ -609,17 +622,36 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   }
 }
 
+/** One shipped font file a page would preload: the face's family and the woff2 it names. */
+export interface OptionalFontFace {
+  /** The `font-family` of the `@font-face`, without its quotes. */
+  readonly family: string;
+  /** The first woff2 URL in the face. */
+  readonly url: string;
+}
+
 /**
- * The font files a stylesheet declares with `font-display: optional`. A font like that is used only when it is
- * there at the first paint, so a page preloads them: otherwise a slow connection never shows the font, and a late one
- * lays the text out twice.
+ * The font files a stylesheet declares with `font-display: optional`, with the family that declares
+ * each. A font like that is used only when it is there at the first paint, so a page preloads them:
+ * otherwise a slow connection never shows the font, and a late one lays the text out twice. A face
+ * without a family or a woff2 URL is left out; one file declared twice is one entry.
  */
-export function optionalFonts(css: string): string[] {
-  const found: string[] = [];
+export function optionalFontFaces(css: string): OptionalFontFace[] {
+  const found: OptionalFontFace[] = [];
+  const seen = new Set<string>();
   for (const face of css.match(/@font-face\s*\{[^}]*\}/g) ?? []) {
     if (!/font-display:\s*optional/.test(face)) continue;
     const url = /url\(\s*["']?([^"')]+\.woff2)["']?\s*\)/.exec(face)?.[1];
-    if (url !== undefined && !found.includes(url)) found.push(url);
+    const family = /font-family:\s*(?:"([^"]+)"|'([^']+)'|([^;]+))/.exec(face);
+    const name = (family?.[1] ?? family?.[2] ?? family?.[3] ?? "").trim();
+    if (url === undefined || name === "" || seen.has(url)) continue;
+    seen.add(url);
+    found.push({ family: name, url });
   }
   return found;
+}
+
+/** The woff2 files a stylesheet declares with `font-display: optional`, once each. */
+export function optionalFonts(css: string): string[] {
+  return optionalFontFaces(css).map((face) => face.url);
 }

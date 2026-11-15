@@ -8,6 +8,7 @@ import { loadConfig } from "../src/config/load.ts";
 import type { Diagnostic } from "../src/contracts/index.ts";
 import { version } from "../src/index.ts";
 import { build } from "../src/pipeline/build.ts";
+import { renderCache } from "../src/pipeline/render-cache.ts";
 import {
   CACHE_FORMAT,
   cacheKey,
@@ -702,5 +703,21 @@ test("a URL lock change is never answered by an entry built before it", async ()
     assert.ok(corrupt.diagnostics.some((diagnostic) => diagnostic.id === "data.urls-lock-invalid"));
   } finally {
     clean(root, theme, parent);
+  }
+});
+
+test("the render cache keeps the families a page skipped and refuses a malformed list", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "render-cache-"));
+  try {
+    const key = "a".repeat(64);
+    const cache = renderCache(dir);
+    await cache.set(key, { html: "<p>x</p>", css: [], skipFontPreloads: ["geist"], diagnostics: [] });
+    assert.deepEqual((await cache.get(key))?.skipFontPreloads, ["geist"]);
+    writeFileSync(join(dir, `${key}.json`), JSON.stringify({ version: 2, html: "", css: [], skipFontPreloads: "Geist", diagnostics: [] }));
+    assert.equal(await cache.get(key), undefined, "a string is not a list of families");
+    writeFileSync(join(dir, `${key}.json`), JSON.stringify({ version: 1, html: "", css: [], diagnostics: [] }));
+    assert.equal(await cache.get(key), undefined, "an entry from the previous format is not trusted");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });

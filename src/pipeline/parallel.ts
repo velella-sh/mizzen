@@ -56,6 +56,8 @@ export interface RenderedPage {
   readonly layout?: string;
   /** Islands the page loads: the chrome parts' and those of the components it used. Absent when the page could not be laid out. */
   readonly islands?: readonly Island[];
+  /** Shipped font families whose optional-face preloads the layout left out, sorted. */
+  readonly skipFontPreloads?: readonly string[];
   /** Findings from rendering the page; an empty list when it rendered cleanly. */
   readonly diagnostics: readonly Diagnostic[];
 }
@@ -233,7 +235,15 @@ export function renderOnePage(
     ...(record === undefined ? {} : { record }),
   });
   const css = registered.css === undefined ? result.css : [registered.css, ...result.css];
-  return { url: page.url, html: result.html, css, islands: result.islands, diagnostics: result.diagnostics, layout: name };
+  return {
+    url: page.url,
+    html: result.html,
+    css,
+    islands: result.islands,
+    ...(result.skipFontPreloads === undefined ? {} : { skipFontPreloads: result.skipFontPreloads }),
+    diagnostics: result.diagnostics,
+    layout: name,
+  };
 }
 
 /** The message of a thrown value, for a diagnostic. */
@@ -323,6 +333,12 @@ export function renderReplyProblem(pages: readonly Page[], reply: unknown): stri
     }
     if (rendered.islands !== undefined && (!Array.isArray(rendered.islands) || !rendered.islands.every(isIsland))) {
       return `the islands for ${page.url} are not a list of islands`;
+    }
+    if (
+      rendered.skipFontPreloads !== undefined &&
+      (!Array.isArray(rendered.skipFontPreloads) || rendered.skipFontPreloads.some((family) => typeof family !== "string"))
+    ) {
+      return `the skipped font families for ${page.url} are not a list of strings`;
     }
   }
   return undefined;
@@ -684,7 +700,7 @@ class WorkerPool implements RenderPool {
       message: `Page ${page.url} could not be rendered in a worker thread (${reason}); it was rendered in the main thread.`,
       pos: page.source,
     };
-    return { url: rendered.url, html: rendered.html, css: rendered.css, ...(rendered.islands === undefined ? {} : { islands: rendered.islands }), diagnostics: [diagnostic, ...rendered.diagnostics] };
+    return { url: rendered.url, html: rendered.html, css: rendered.css, ...(rendered.islands === undefined ? {} : { islands: rendered.islands }), ...(rendered.skipFontPreloads === undefined ? {} : { skipFontPreloads: rendered.skipFontPreloads }), diagnostics: [diagnostic, ...rendered.diagnostics] };
   }
 
   #resolve(entry: Entry, result: RenderedPage): void {

@@ -43,6 +43,8 @@ export interface RenderResult {
   readonly islands: readonly Island[];
   /** CSS identifiers of components that appeared on the page, in name order. */
   readonly css: readonly string[];
+  /** Shipped font families whose optional-face preloads the layout asked the build to leave out, sorted. */
+  readonly skipFontPreloads?: readonly string[];
   /** Findings from resolving components (unknown names, bad props). */
   readonly diagnostics: readonly Diagnostic[];
 }
@@ -260,12 +262,20 @@ export function renderPage(options: RenderOptions): RenderResult {
     if (entry.css !== undefined) css.push(entry.css);
   }
   const resolvedPage: Page = { ...page, html: resolved.html };
-  const node = layout({ site, page: resolvedPage, trail, pager, head, islands, ...(options.record === undefined ? {} : { record: options.record }) });
+  const skipFontPreloads = new Set<string>();
+  const hints = {
+    skipFontPreload(family: string): void {
+      const name = family.trim().toLowerCase();
+      if (name !== "") skipFontPreloads.add(name);
+    },
+  };
+  const node = layout({ site, page: resolvedPage, trail, pager, head, islands, hints, ...(options.record === undefined ? {} : { record: options.record }) });
   const body = typeof node === "string" ? node : renderToString(node as VNode);
   return {
     html: withDocument(body, page),
     islands,
     css,
+    ...(skipFontPreloads.size === 0 ? {} : { skipFontPreloads: [...skipFontPreloads].sort(byCodePoint) }),
     diagnostics: resolved.diagnostics,
   };
 }

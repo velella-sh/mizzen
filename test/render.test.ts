@@ -178,3 +178,36 @@ test("a page with no components collects no islands or CSS", () => {
   assert.deepEqual(result.css, []);
   assert.match(result.html, /<p data-src="a\.md:1">plain<\/p>/);
 });
+
+test("a layout can skip a replaced font's preload, and the engine normalizes the family", () => {
+  const hinted: Layout = ({ page: p, hints }) => {
+    hints?.skipFontPreload(" Geist ");
+    hints?.skipFontPreload("GEIST");
+    hints?.skipFontPreload("   ");
+    return h("html", null, h("head", null, h("title", null, p.title)), h("body", null, h("main", { dangerouslySetInnerHTML: { __html: p.html } })));
+  };
+  const result = renderPage({
+    site,
+    page: page("<p>plain</p>"),
+    layout: hinted,
+    components: {},
+    trail: [],
+    pager: {},
+    head,
+  });
+  assert.deepEqual(result.skipFontPreloads, ["geist"]);
+  assert.equal(result.html, renderPage({ site, page: page("<p>plain</p>"), layout, components: {}, trail: [], pager: {}, head }).html);
+});
+
+test("a layout that asks for nothing leaves the preload list absent", () => {
+  const result = renderPage({
+    site,
+    page: page("<p>plain</p>"),
+    layout,
+    components: {},
+    trail: [],
+    pager: {},
+    head,
+  });
+  assert.equal(result.skipFontPreloads, undefined);
+});
