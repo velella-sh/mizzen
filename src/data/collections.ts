@@ -15,16 +15,22 @@ import { isMap, isSeq, parseDocument, LineCounter, type Document, type Node } fr
 import type {
   Collection,
   DataRecord,
+  DataStats,
   Diagnostic,
   SiteConfig,
   SourcePos,
 } from "../contracts/index.ts";
+import { applyDates } from "./checks/dates.ts";
+import { checkReferences } from "./checks/references.ts";
+import { checkUnique } from "./checks/unique.ts";
 import { parseCsv } from "./csv.ts";
 import { checkFieldSizes, checkRecordCount, checkSourceBytes, dataLimitsOf } from "./limits.ts";
 import { readLock, type DataLock } from "./lock.ts";
 import { resolveNpmSource } from "./package-source.ts";
+import { skippedSummary } from "./policy.ts";
 import { fieldPositionsOf, keyText, lineIndex, mappingPairs, nodePos, sourcePosOf } from "./positions.ts";
 import { readRemoteSource } from "./remote-source.ts";
+import { compileSchemas, validateRecords } from "./schema.ts";
 
 /** What {@link loadCollections} read. */
 export interface CollectionsResult {
@@ -32,6 +38,8 @@ export interface CollectionsResult {
   readonly collections: Readonly<Record<string, Collection>>;
   /** Every finding, in the order it was made. */
   readonly diagnostics: readonly Diagnostic[];
+  /** What the build read and left out, for `doctor` and the build summary. */
+  readonly stats: DataStats;
 }
 
 /** Options of {@link loadCollections}. */
@@ -355,6 +363,10 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
   const diagnostics: Diagnostic[] = [];
   const collections: Record<string, Collection> = {};
   const names = Object.keys(config.collections);
+  const configPositions: Record<string, SourcePos> = {};
+  for (const name of names) configPositions[name] = configPosition(root, config.collections[name]!.source);
+  const schemas = compileSchemas(root, config, configPositions, diagnostics);
+  let skipped = 0;
 
   let lock: DataLock | undefined;
   let lockInvalid = false;
@@ -368,7 +380,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
   for (const name of names) {
     const entry = config.collections[name]!;
     const limits = dataLimitsOf(name, entry);
-    const configPos = configPosition(root, entry.source);
+    const configPos = configPositions[name]!;
     const idField = entry.id ?? "id";
     const source = entry.source;
     let display: string;
@@ -472,15 +484,39 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       continue;
     }
     diagnostics.push(...checkFieldSizes(name, records, limits));
+    let kept: readonly DataRecord[] = records;
+    const schema = schemas.schemas[name];
+    if (schema !== undefined) {
+      const validated = validateRecords(name, kept, schema, entry, diagnostics);
+      kept = validated.records;
+      skipped += validated.skipped;
+    }
+    checkUnique(name, kept, entry, diagnostics);
+    kept = applyDates(name, kept, entry.dates ?? [], diagnostics);
     collections[name] = {
       name,
       source,
-      records,
+      records: kept,
       ...(packageInfo === undefined ? {} : { package: packageInfo }),
     };
   }
 
-  return { collections, diagnostics };
+  checkReferences(collections, config, diagnostics);
+  const summary = skippedSummary(skipped);
+  if (summary !== undefined) diagnostics.push(summary);
+
+  return {
+    collections,
+    diagnostics,
+    stats: {
+      collections: names.length,
+      loaded: Object.keys(collections).length,
+      records: Object.values(collections).reduce((total, collection) => total + collection.records.length, 0),
+      skipped,
+      schemas: Object.keys(schemas.schemas).length,
+      unchecked: schemas.unchecked,
+    },
+  };
 }
 
 /** SHA-256 of bytes, imported here to keep `collections.ts` independent of the lock's shape. */

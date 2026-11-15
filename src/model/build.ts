@@ -11,7 +11,7 @@ import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
 import { permalink } from "../content/permalink.ts";
 import { resolveTitle } from "../content/title.ts";
-import type { Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
+import type { DataStats, Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { navFromFolders, type FolderPage } from "../nav/from-folders.ts";
@@ -29,6 +29,8 @@ export interface ModelResult {
   readonly diagnostics: readonly Diagnostic[];
   /** Markdown pages parsed on this run; pages read from the page cache are not counted. */
   readonly parsedPages: number;
+  /** What the build read from the collections the config declares. */
+  readonly collectionStats: DataStats;
 }
 
 /** Options of {@link buildModel}. */
@@ -288,5 +290,6 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     site: applied.site,
     diagnostics: sortDiagnostics(diagnostics.all),
     parsedPages,
+    collectionStats: collected.stats,
   };
 }

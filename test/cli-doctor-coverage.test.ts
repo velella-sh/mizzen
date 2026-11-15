@@ -74,7 +74,7 @@ const NO_THEME: Record<string, string> = {
   "index.md": "# Hello\n",
 };
 
-test("a clean site accounts for all six checks and adds no coverage findings", async () => {
+test("a clean site accounts for all seven checks and adds no coverage findings", async () => {
   const root = tree(VALID);
   try {
     const report = await doctorReport({ root, themeRoot: THEME, defaultLayout: "doc" });
@@ -83,6 +83,7 @@ test("a clean site accounts for all six checks and adds no coverage findings", a
       runtime: "passed",
       config: "passed",
       content: "passed",
+      data: "passed",
       theme: "passed",
       render: "passed",
       output: "passed",
@@ -105,6 +106,7 @@ test("malformed content fails its own check without failing the later ones", asy
       runtime: "passed",
       config: "passed",
       content: "failed",
+      data: "passed",
       theme: "passed",
       render: "passed",
       output: "passed",
@@ -126,6 +128,7 @@ test("runtime and config failures are attributed to their own checks", async () 
       runtime: "passed",
       config: "failed",
       content: "passed",
+      data: "passed",
       theme: "passed",
       render: "passed",
       output: "passed",
@@ -141,6 +144,7 @@ test("runtime and config failures are attributed to their own checks", async () 
       runtime: "failed",
       config: "passed",
       content: "passed",
+      data: "passed",
       theme: "passed",
       render: "passed",
       output: "passed",
@@ -161,6 +165,7 @@ test("a missing theme skips three checks, keeps the content finding, and says so
       runtime: "passed",
       config: "passed",
       content: "failed",
+      data: "passed",
       theme: "skipped",
       render: "skipped",
       output: "skipped",
@@ -211,6 +216,7 @@ test("a missing source still runs the theme check and skips only what depends on
       runtime: "passed",
       config: "passed",
       content: "skipped",
+      data: "skipped",
       theme: "failed",
       render: "skipped",
       output: "skipped",
@@ -239,6 +245,7 @@ test("a throwing layout keeps the content findings and marks the unverified stag
       runtime: "passed",
       config: "passed",
       content: "failed",
+      data: "passed",
       theme: "passed",
       render: "skipped",
       output: "skipped",

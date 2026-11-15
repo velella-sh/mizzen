@@ -4,7 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { doctor, MIN_NODE_MAJOR, runtimeDiagnostic } from "../src/cli/doctor.ts";
+import { doctor, doctorReport, MIN_NODE_MAJOR, runtimeDiagnostic } from "../src/cli/doctor.ts";
+import type { DoctorReport } from "../src/cli/doctor-report.ts";
 import { COMMANDS, main, NAME, parseArgs, usage } from "../src/cli/index.ts";
 
 const THEME = fileURLToPath(new URL("../../lateen", import.meta.url));
@@ -17,6 +18,11 @@ function tree(files: Record<string, string>): string {
     writeFileSync(join(root, path), text);
   }
   return root;
+}
+
+/** The state of every check in a report, keyed by check id. */
+function statesOf(report: DoctorReport): Record<string, string> {
+  return Object.fromEntries(report.checks.map((check) => [check.id, check.state]));
 }
 
 function capture() {
@@ -202,6 +208,98 @@ test("doctor reports the runtime check through the same diagnostics", async () =
   try {
     const diagnostics = await doctor({ root, themeRoot: THEME, defaultLayout: "doc", nodeVersion: "22.11.0" });
     assert.deepEqual(diagnostics.map((d) => d.id), ["doctor.node-version"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+const DATA_SCHEMA = JSON.stringify({
+  type: "object",
+  required: ["title"],
+  properties: { id: { type: "string" }, title: { type: "string" } },
+});
+
+const DATA_FILES: Record<string, string> = {
+  "mizzen.yml":
+    "title: Demo\nurl: https://example.com\n" +
+    "defaults:\n  - path: \"\"\n    values:\n      layout: doc\n" +
+    "collections:\n  items:\n    source: _data/items.yml\n    schema: _data/items.schema.json\n",
+  "index.md": "# Hello\n",
+  "_data/items.schema.json": DATA_SCHEMA,
+};
+
+test("the data check passes and fails on its own, and doctor reports the counts", async () => {
+  const good = tree({ ...DATA_FILES, "_data/items.yml": "- id: one\n  title: First\n" });
+  const bad = tree({ ...DATA_FILES, "_data/items.yml": "- id: one\n" });
+  try {
+    const passed = await doctorReport({
+      root: good,
+      themeRoot: THEME,
+      defaultLayout: "doc",
+      nodeVersion: `${MIN_NODE_MAJOR}.0.0`,
+    });
+    assert.deepEqual(statesOf(passed), {
+      runtime: "passed",
+      config: "passed",
+      content: "passed",
+      data: "passed",
+      theme: "passed",
+      render: "passed",
+      output: "passed",
+    });
+    const summary = passed.diagnostics.find((diagnostic) => diagnostic.id === "doctor.data-summary");
+    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 1 record, 0 skipped, 1 schema\./);
+    assert.equal(summary?.severity, "info");
+
+    const failed = await doctorReport({
+      root: bad,
+      themeRoot: THEME,
+      defaultLayout: "doc",
+      nodeVersion: `${MIN_NODE_MAJOR}.0.0`,
+    });
+    assert.equal(statesOf(failed).content, "passed", "a data finding never fails the content check");
+    assert.equal(statesOf(failed).data, "failed");
+    const finding = failed.diagnostics.find((diagnostic) => diagnostic.id === "data.record-invalid");
+    assert.equal(finding?.pos?.file, "_data/items.yml", "the data file is the location");
+    assert.match(
+      failed.diagnostics.find((diagnostic) => diagnostic.id === "doctor.data-summary")?.message ?? "",
+      /1 skipped/,
+    );
+  } finally {
+    rmSync(good, { recursive: true, force: true });
+    rmSync(bad, { recursive: true, force: true });
+  }
+});
+
+test("doctor reports a data finding in text, JSON, and SARIF at the data file", async () => {
+  const root = tree({ ...DATA_FILES, "_data/items.yml": "- id: one\n" });
+  try {
+    const text = capture();
+    assert.equal(await main(["doctor", root, "--theme", THEME], text.io), 1);
+    assert.match(text.logs.join("\n"), /_data\/items\.yml:\d+:\d+\s+data\.record-invalid/);
+
+    const json = capture();
+    assert.equal(await main(["doctor", root, "--theme", THEME, "--format", "json"], json.io), 1);
+    const report = JSON.parse(json.logs.join("\n")) as {
+      diagnostics: { id: string; pos?: { file: string } }[];
+    };
+    const finding = report.diagnostics.find((diagnostic) => diagnostic.id === "data.record-invalid");
+    assert.equal(finding?.pos?.file, "_data/items.yml");
+
+    const sarif = capture();
+    assert.equal(await main(["doctor", root, "--theme", THEME, "--format", "sarif"], sarif.io), 1);
+    const log = JSON.parse(sarif.logs.join("\n")) as {
+      runs: {
+        tool: { driver: { rules: { id: string }[] } };
+        results: { ruleId: string; locations?: { physicalLocation: { artifactLocation: { uri: string } } }[] }[];
+      }[];
+    };
+    const run = log.runs[0]!;
+    assert.ok(run.tool.driver.rules.some((rule) => rule.id === "data.record-invalid"));
+    assert.equal(
+      run.results.find((result) => result.ruleId === "data.record-invalid")?.locations?.[0]?.physicalLocation.artifactLocation.uri,
+      "_data/items.yml",
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

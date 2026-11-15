@@ -204,6 +204,29 @@
           "minLength": 1,
           "description": "JSON Schema file that validates every record, relative to the site root."
         },
+        "unique": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Fields whose values must be unique in the collection; a duplicate is an error naming both records."
+        },
+        "references": {
+          "type": "object",
+          "default": {},
+          "additionalProperties": { "type": "string", "minLength": 1 },
+          "description": "Fields that hold a reference to another collection's record id, keyed by field name."
+        },
+        "dates": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Fields that hold a date, written YYYY-MM-DD or as a full ISO 8601 instant."
+        },
+        "onInvalid": {
+          "enum": ["error", "skip"],
+          "default": "error",
+          "description": "What an invalid record does: error fails the build; skip leaves it out of the site with a warning."
+        },
         "limits": {
           "$ref": "#/$defs/dataLimits",
           "description": "Limits on this collection's source."

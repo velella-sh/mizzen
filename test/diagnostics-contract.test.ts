@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { createRequire } from "node:module";
 import { test } from "node:test";
 import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
@@ -358,4 +358,28 @@ test("JSON and SARIF keep the same stable order and lose no help or fix", () => 
 test("the schema is draft 2020-12 and closed", () => {
   assert.equal(schema.$schema, "https://json-schema.org/draft/2020-12/schema");
   assert.equal(schema.additionalProperties, false);
+});
+
+/** Every `data.` id a source file writes as a diagnostic id. */
+function dataIdsIn(source: string): string[] {
+  return [...source.matchAll(/["'](data\.[a-z0-9-]+)["']/g)].map((match) => match[1]!);
+}
+
+test("every data diagnostic id used in src is documented, and every documented id is used", () => {
+  const root = new URL("../src/", import.meta.url);
+  const used = new Set<string>();
+  for (const file of readdirSync(root, { recursive: true, encoding: "utf8" })) {
+    if (!file.endsWith(".ts")) continue;
+    for (const id of dataIdsIn(readFileSync(new URL(file, root), "utf8"))) used.add(id);
+  }
+  const docs = readFileSync(new URL("../site/data/validation.md", import.meta.url), "utf8");
+  const documented = new Set([...docs.matchAll(/^\|\s*`(data\.[a-z0-9-]+)`\s*\|/gm)].map((match) => match[1]!));
+
+  assert.ok(used.size > 0, "the scan finds data ids");
+  assert.deepEqual([...used].sort(), [...documented].sort(), "the data findings page lists every id and nothing else");
+  assert.equal(
+    [...used].every((id) => id.startsWith("data.")),
+    true,
+    "every data diagnostic lives under the data. prefix",
+  );
 });

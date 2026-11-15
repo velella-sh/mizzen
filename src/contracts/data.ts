@@ -22,6 +22,24 @@ export interface DataRecord {
   readonly position: RecordPos;
   /** Where each top-level field's value sits, keyed by field name. */
   readonly fieldPositions: Readonly<Record<string, RecordPos>>;
+  /** Each date field's normalized form, keyed by field name: `YYYY-MM-DD` as written, an instant as UTC ISO 8601. */
+  readonly normalizedDates?: Readonly<Record<string, string>>;
+}
+
+/** What a build read from the collections a site declares. */
+export interface DataStats {
+  /** Collections the config declares. */
+  readonly collections: number;
+  /** Collections that loaded. */
+  readonly loaded: number;
+  /** Records the site keeps. */
+  readonly records: number;
+  /** Records left out because they failed validation. */
+  readonly skipped: number;
+  /** Collection schemas compiled and used. */
+  readonly schemas: number;
+  /** Collections with no schema, so their records were not checked. */
+  readonly unchecked: readonly string[];
 }
 
 /** One collection: its name, the records it was read into, and the source file they came from. */

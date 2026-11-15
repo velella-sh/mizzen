@@ -2,7 +2,7 @@
 export type { SourcePos } from "./source.ts";
 export type { Diagnostic, DiagnosticFix, Severity } from "./diagnostic.ts";
 export type { CollectionConfig, DataLimitsConfig, DefaultsEntry, Direction, LanguageConfig, RepositoryConfig, SearchConfig, SiteConfig, ThemeConfig } from "./config.ts";
-export type { Collection, DataRecord, ListGroup, ListPagination, ListProps, PageRecord, RecordPos, RecordProps } from "./data.ts";
+export type { Collection, DataRecord, DataStats, ListGroup, ListPagination, ListProps, PageRecord, RecordPos, RecordProps } from "./data.ts";
 export type { AgentInstructions, FrontMatter, Heading, Page, PageKind, PageStatus, Site } from "./content.ts";
 export type { NavGroup, NavItem, NavLink, NavTree, Pager, Trail } from "./nav.ts";
 export type { Output, OutputContext, OutputFile } from "./output.ts";

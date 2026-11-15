@@ -15,7 +15,7 @@ import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadConfig } from "../config/load.ts";
-import type { Diagnostic } from "../contracts/index.ts";
+import type { DataStats, Diagnostic } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
 import { build } from "../pipeline/build.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
@@ -96,6 +96,29 @@ function skipped(id: DoctorCheckId, reason: string): DoctorCheck {
   return { id, state: "skipped", reason };
 }
 
+/** Counts a noun, so a summary line reads `1 record` and `2 records`. */
+function counted(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+/**
+ * One `info` finding that says what the build read from the collections, and which collections have no schema. It is
+ * left out for a site that declares no collection, so a clean site's report stays empty.
+ */
+function dataSummary(stats: DataStats): Diagnostic | undefined {
+  if (stats.collections === 0) return undefined;
+  const unchecked =
+    stats.unchecked.length === 0
+      ? ""
+      : ` No schema, so unchecked: ${stats.unchecked.map((name) => `"${name}"`).join(", ")}.`;
+  return {
+    id: "doctor.data-summary",
+    severity: "info",
+    message: `Data: ${counted(stats.collections, "collection")}, ${stats.loaded} loaded, ${counted(stats.records, "record")}, ${stats.skipped} skipped, ${counted(stats.schemas, "schema")}.${unchecked}`,
+    help: "Set `collections.<name>.schema` to check a collection's records, and `onInvalid: skip` to build without an invalid one.",
+  };
+}
+
 /** Sorted findings, with a help line on every config finding that has none. */
 function finalize(all: readonly Diagnostic[]): readonly Diagnostic[] {
   return sortDiagnostics(
@@ -118,10 +141,12 @@ export async function doctor(options: DoctorOptions): Promise<readonly Diagnosti
  * Checks the site at `options.root` without writing to it and accounts for every declared check.
  *
  * The runtime, config, content, and theme checks run first and independently: a missing theme still leaves the content
- * checked, and a missing source still leaves the theme checked. The render and output checks run together in one build
- * into a temporary folder, so a finding from either stage is reported once. A check whose input is missing, or whose
- * stage throws, is marked `skipped` with a stable reason, and that reason is also an `info` finding so text, JSON, and
- * SARIF say what did not run. Findings come back sorted, so all three formats stay stable.
+ * checked, and a missing source still leaves the theme checked. Content and data are separate checks: a config, page,
+ * or theme finding fails `content`, while a collection finding fails `data` and leaves `content` alone. An `info`
+ * summary says how many collections and records were read and how many have a schema. The render and output checks run
+ * together in one build into a temporary folder, so a finding from either stage is reported once. A check whose input
+ * is missing, or whose stage throws, is marked `skipped` with a stable reason, and that reason is also an `info`
+ * finding so text, JSON, and SARIF say what did not run. Findings come back sorted, so all three formats stay stable.
  */
 export async function doctorReport(options: DoctorOptions): Promise<DoctorReport> {
   const diagnostics = createDiagnostics();
@@ -166,21 +191,28 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
   const missingSource = `the source folder "${sourceName ?? ""}" does not exist`;
 
   if (source === undefined) {
-    checks.push(skipped("content", SKIP_CONFIG));
+    checks.push(skipped("content", SKIP_CONFIG), skipped("data", SKIP_CONFIG));
   } else if (!sourceExists) {
     diagnostics.error("doctor.source-missing", `The source folder "${sourceName ?? ""}" does not exist under "${root}".`, {
       help: "Create it, or set `source` in mizzen.yml to the folder that holds the site's pages.",
     });
-    checks.push(skipped("content", missingSource));
+    checks.push(skipped("content", missingSource), skipped("data", missingSource));
   } else {
     try {
       const model = await buildModel(root);
       publish(model.diagnostics);
-      const contentErrors = model.diagnostics.some((found) => isError(found) && !found.id.startsWith("config."));
+      const dataErrors = model.diagnostics.filter((found) => isError(found) && found.id.startsWith("data."));
+      const contentErrors = model.diagnostics.some(
+        (found) => isError(found) && !found.id.startsWith("config.") && !found.id.startsWith("data."),
+      );
       checks.push(contentErrors ? failed("content", "the content check found errors") : passed("content"));
+      checks.push(dataErrors.length > 0 ? failed("data", "the data check found errors") : passed("data"));
+      const summary = dataSummary(model.collectionStats);
+      if (summary !== undefined) publish([summary]);
     } catch (err) {
       diagnostics.error("doctor.content-failed", `The content check could not run: ${messageOf(err)}`, { help: CHECK_HELP });
       checks.push(failed("content", "the content check could not run"));
+      checks.push(failed("data", "the data check could not run"));
     }
   }
 
