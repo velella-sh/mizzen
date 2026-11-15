@@ -27,5 +27,13 @@ node -e '
 
 npx mizzen build site --out out
 test -s out/index.html
-grep -q 'class="mermaid-diagram"' out/components/mermaid/index.html
+mermaid_page=out/components/mermaid/index.html
+if grep -q 'class="mermaid-fallback"' "$mermaid_page"; then
+  echo "smoke: the Mermaid diagram fell back to text instead of an inline SVG" >&2
+  exit 1
+fi
+if ! grep -q 'class="mermaid-diagram"' "$mermaid_page"; then
+  echo "smoke: $mermaid_page has no rendered Mermaid diagram" >&2
+  exit 1
+fi
 echo "packages build the Lateen site from node_modules"
