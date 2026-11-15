@@ -15,6 +15,7 @@ import {
 } from "yaml";
 import type {
   CollectionConfig,
+  CollectionViewConfig,
   DefaultsEntry,
   Diagnostic,
   Direction,
@@ -190,6 +191,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const unique = fieldsFrom(entry.unique);
     const references = referencesFrom(entry.references);
     const dates = fieldsFrom(entry.dates);
+    const views = viewsFrom(entry.views);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
@@ -205,9 +207,25 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(isPlainObject(entry) && typeof entry.llms === "boolean" ? { llms: entry.llms } : {}),
       ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
+      ...(views === undefined ? {} : { views }),
     };
   }
   return collections;
+}
+
+/** The named views of one collection, keeping only those that name a template and a URL pattern. */
+function viewsFrom(value: unknown): Readonly<Record<string, CollectionViewConfig>> | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const views: Record<string, CollectionViewConfig> = {};
+  for (const [name, view] of Object.entries(value)) {
+    if (!isPlainObject(view) || typeof view.template !== "string" || typeof view.permalink !== "string") continue;
+    views[name] = {
+      template: view.template,
+      permalink: view.permalink,
+      ...(typeof view.layout === "string" ? { layout: view.layout } : {}),
+    };
+  }
+  return views;
 }
 
 /** A list of field names, keeping only the strings; `undefined` when the key is not a list. */

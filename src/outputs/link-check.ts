@@ -193,7 +193,10 @@ function indexOf(site: Site): Index {
   for (const page of site.pages) {
     const key = urlKey(page.url, base);
     if (key !== undefined && !pages.has(key)) pages.set(key, page);
-    if (page.record !== undefined) records.set(`${page.record.collection}/${page.record.id}`, page);
+    // A `record:` address names the record's main page, never one of its views.
+    if (page.record !== undefined && page.record.view === undefined) {
+      records.set(`${page.record.collection}/${page.record.id}`, page);
+    }
 
     const source = siteSource(page, prefix);
     if (source === "" || source === "." || source.startsWith("../")) continue;

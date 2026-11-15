@@ -249,5 +249,6 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
     url: page.url,
     fields,
     links,
+    ...(record.views === undefined ? {} : { views: record.views }),
   };
 }

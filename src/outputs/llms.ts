@@ -68,6 +68,8 @@ export const llms: Output = {
       if (listed.has(link.url)) return;
       const page = pages.get(link.url);
       if (page === undefined || page.kind !== "doc" || isAppPage(link.url, options)) return;
+      // A view is another rendering of a record, not another page of the docs.
+      if (page.record?.view !== undefined) return;
       const href = twinUrl(link.url);
       if (href === undefined) return;
       listed.add(link.url);

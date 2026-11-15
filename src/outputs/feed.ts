@@ -194,7 +194,7 @@ export async function changesFeed(site: Site, root: string = process.cwd()): Pro
   const git = gitDatesAt(root);
   const entries: Entry[] = [];
   for (const page of site.pages) {
-    if (page.kind !== "doc") continue;
+    if (page.kind !== "doc" || page.record?.view !== undefined) continue;
     const updated = dateOfPage(page, site, git);
     if (updated === undefined) continue;
     const summary = typeof page.frontMatter.description === "string" ? page.frontMatter.description.trim() : "";

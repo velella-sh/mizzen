@@ -53,6 +53,16 @@ export interface DataLimitsConfig {
   readonly field?: number;
 }
 
+/** One extra rendering of every record page of a collection. */
+export interface CollectionViewConfig {
+  /** Markdown template under `_templates/`, relative to the source folder. */
+  readonly template: string;
+  /** URL pattern of a view page, such as `/items/{id}/print/`. */
+  readonly permalink: string;
+  /** Layout of a view page. Default: the view template's `layout`, else `record`. */
+  readonly layout?: string;
+}
+
 /** One data collection: where its records come from, and how its pages are built. */
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root. */
@@ -79,6 +89,8 @@ export interface CollectionConfig {
   readonly onInvalid?: "error" | "skip";
   /** Limits on this collection's source. */
   readonly limits?: DataLimitsConfig;
+  /** Extra named pages built from every record, each with its own template, URL pattern, and layout. Default `{}`. */
+  readonly views?: Readonly<Record<string, CollectionViewConfig>>;
 }
 
 /**

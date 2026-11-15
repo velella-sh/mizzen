@@ -289,6 +289,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     config,
     collections: collected.collections,
     templates: loadedTemplates.templates,
+    views: loadedTemplates.views,
     filePrefix: repositoryFolder(config.repository?.dir),
   });
   for (const d of records.diagnostics) diagnostics.report(d);
@@ -303,7 +304,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const navRel = relative(siteRoot, navFile).split("\\").join("/");
   const collections: Record<string, Record<string, { title: string; url: string; fields: Readonly<Record<string, unknown>> }[]>> = {};
   for (const page of pages) {
-    if (page.record === undefined) continue;
+    // A view is another rendering of a record, not another entry in a collection's navigation list.
+    if (page.record === undefined || page.record.view !== undefined) continue;
     const record = collected.collections[page.record.collection]?.records.find(
       (candidate) => candidate.id === page.record?.id,
     );

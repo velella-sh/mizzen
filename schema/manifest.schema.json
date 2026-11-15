@@ -114,6 +114,11 @@
           "type": "string",
           "pattern": "^/",
           "description": "The page's output URL, including the site's `base`, such as `/quickstart/` or `/guide/install/`."
+        },
+        "view": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The view this page renders, when it is a named view of a record rather than the record's main page."
         }
       },
       "additionalProperties": false
