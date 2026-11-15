@@ -71,6 +71,8 @@ const FROZEN: Shape = {
     "template": "string",
     "templateLine": "number",
     "fallbacks": "readonly string[]",
+    "view": "?string",
+    "views": "?Readonly<Record<string, string>>",
   },
   RecordProps: {
     "collection": "string",
@@ -78,6 +80,7 @@ const FROZEN: Shape = {
     "url": "string",
     "fields": "Readonly<Record<string, unknown>>",
     "links": "Readonly<Record<string, string>>",
+    "views": "?Readonly<Record<string, string>>",
   },
   ListGroup: {
     "key": "string",

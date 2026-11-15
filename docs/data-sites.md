@@ -77,6 +77,12 @@ id, the record's position, the template, and the fields that fell back to the de
 carries the fields in the page's language and a `links` map that resolves each configured reference field to the URL of
 the record it points at.
 
+A collection may declare `views`: extra named pages built from the same record, each with its own template, URL pattern,
+and layout. A view page's canonical URL is the record's main page, and the main page's `Page.record.views` (also
+`LayoutProps.record.views`) maps each view name to its URL. View pages stay out of navigation, the search index, the
+sitemap, the feeds, and `llms.txt`/`llms-full.txt`; their manifest entry names the view. A view never changes the record
+and is not built when the record's main page is not built.
+
 With `languages` configured, every record gets one page per language: `<template>.<lang>.md` is used when it exists,
 `<field>.<lang>` is read from a mapping and falls back to the default language, and pages that share a record carry the
 same `translation_key`. `collections.<name>.llms: false` keeps a collection's pages out of `llms-full.txt`.
@@ -96,8 +102,8 @@ limit and the key, never a silently truncated file.
 - A record page uses the layout named in its template's front matter, else the layout `record`. A list
   page uses the layout named in its front matter, else the layout `list`. Both are layout names, not
   page kinds: the page itself stays a `doc` page.
-- `LayoutProps.record` on a record page: the collection's name, the record's id, its URL, and its
-  fields as data.
+- `LayoutProps.record` on a record page: the collection's name, the record's id, its URL, its
+  fields as data, and on the main page the URL of each named view.
 - `LayoutProps.list` on a list page: the records selected for that page, the groups, and the page's
   number, total, and previous and next URLs.
 - `Site.collections` on every page: each collection's records with their ids and positions. A collection read

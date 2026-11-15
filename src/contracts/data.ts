@@ -72,6 +72,10 @@ export interface PageRecord {
   readonly templateLine: number;
   /** Fields whose value came from the default language because this language has no translation. */
   readonly fallbacks: readonly string[];
+  /** The named view this page renders, when it is a view of the record rather than the record's main page. */
+  readonly view?: string;
+  /** URL of every view of this record, keyed by view name; present on the main page only. */
+  readonly views?: Readonly<Record<string, string>>;
 }
 
 /** A record as a layout receives it: its identity, its URL, and the fields the page asked for. */
@@ -86,6 +90,8 @@ export interface RecordProps {
   readonly fields: Readonly<Record<string, unknown>>;
   /** Reference fields resolved to the URL of the record page they point at, keyed by field name. */
   readonly links: Readonly<Record<string, string>>;
+  /** URL of every view of this record, keyed by view name; present on the main page only. */
+  readonly views?: Readonly<Record<string, string>>;
 }
 
 /** One group of a list page. */

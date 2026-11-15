@@ -34,6 +34,7 @@ import { markdownFieldBlocks } from "./markdown-field.ts";
 import { recordSourcePos, recordUrl } from "./permalink.ts";
 import { localizeFields, prefixed, prefixOfLang, type RecordScope } from "./record-context.ts";
 import type { Template } from "./template.ts";
+import { viewUrls, viewsOf } from "./views.ts";
 
 /** What {@link buildRecordPages} needs. */
 export interface RecordPagesOptions {
@@ -42,6 +43,8 @@ export interface RecordPagesOptions {
   readonly config: SiteConfig;
   readonly collections: Readonly<Record<string, Collection>>;
   readonly templates: Readonly<Record<string, Template>>;
+  /** Templates of named views, keyed by collection then view name. */
+  readonly views: Readonly<Record<string, Readonly<Record<string, Template>>>>;
   /** Repository folder in front of every displayed data path, such as `docs`; `""` when the site is the root. */
   readonly filePrefix?: string;
 }
@@ -350,12 +353,27 @@ function firstHeadingText(tree: Root): string {
   return text.trim();
 }
 
+/** One rendering of a record: the record's main page or one named view of it. */
+interface Rendering {
+  /** The template this rendering instantiates. */
+  readonly template: Template;
+  /** Layout named by the config; the template's own `layout` wins when this is absent. */
+  readonly layout?: string;
+  /** The view's name, when this page is a view. */
+  readonly view?: string;
+  /** The main page's URL, when this page is a view. */
+  readonly canonical?: string;
+  /** The URL of every view, on the main page. */
+  readonly views?: Readonly<Record<string, string>>;
+}
+
 /**
  * Builds the record pages of every collection that names both a template and a URL pattern, in config order. A
- * collection without either builds no pages, so an ordinary data collection is untouched.
+ * collection without either builds no pages, so an ordinary data collection is untouched. Every named view of a
+ * collection builds one more page per record; a view is left out when the record's main page has no URL.
  */
 export async function buildRecordPages(options: RecordPagesOptions): Promise<RecordPagesResult> {
-  const { root, config, collections, templates, filePrefix } = options;
+  const { root, config, collections, templates, views, filePrefix } = options;
   const diagnostics: Diagnostic[] = [];
   const pages: Page[] = [];
   const sourceLines = new Map<string, readonly string[]>();
@@ -369,112 +387,170 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     const template = templates[name];
     const collection = collections[name];
     if (template === undefined || collection === undefined) continue;
+    const namedViews = viewsOf(entry, views[name] ?? {});
     const schemaFields = await schemaFieldsOf(root, entry);
     const markdownFields = new Set(entry.markdown ?? []);
 
-    for (const language of languages) {
-      const source: Template = template.localized[language.code] ?? template;
+    /** Builds one page from one record, with its fields already localized. */
+    const pageOf = async (
+      rendering: Rendering,
+      url: string,
+      record: DataRecord,
+      language: PageLanguage,
+      fields: Readonly<Record<string, unknown>>,
+      fallbacks: readonly string[],
+    ): Promise<Page> => {
+      const source: Template = rendering.template.localized[language.code] ?? rendering.template;
       const parsed = await parseMarkdown(source.body, source.bodyLine);
+      const scope: RecordScope = {
+        collection: name,
+        record,
+        recordFields: fields,
+        fields,
+        collections,
+        ...(schemaFields === undefined ? {} : { schemaFields }),
+        markdownFields,
+        lang: language.code,
+        defaultLang: config.lang,
+        ...(filePrefix === undefined || filePrefix === "" ? {} : { filePrefix }),
+        file: source.path,
+      };
+      const filled = substituteFrontMatter(source.frontMatter, {
+        fields,
+        file: source.path,
+        line: 1,
+        ...(schemaFields === undefined ? {} : { schemaFields }),
+      });
+      diagnostics.push(...filled.diagnostics);
+
+      // A template may set its language from a field (`lang: "{lang}"`); the page's language and direction follow
+      // the substituted front matter, and fall back to the language this build pass is making.
+      const declaredLang = typeof filled.data.lang === "string" ? filled.data.lang.trim() : "";
+      const pageLangCode = declaredLang === "" ? language.code : declaredLang;
+      const pagePrefix = prefixOfLang(config, pageLangCode);
+
+      const tree = structuredClone(parsed) as Root;
+      const build: Build = { scope, depth: 0, diagnostics, sourceLines, root, filePrefix };
+      tree.children = await rewriteChildren(tree.children, build);
+      applyRecordLinks(tree, {
+        collections,
+        config: config.collections,
+        base: config.base,
+        prefix: pagePrefix,
+        lang: pageLangCode,
+        defaultLang: config.lang,
+        file: source.path,
+      });
+
+      const rendered = await markdownToHtml(tree, source.path);
+      const markdown = twinOf(parsed.children, source.body, scope);
+      const frontMatter: Record<string, unknown> = {
+        ...filled.data,
+        layout: rendering.layout ?? (typeof filled.data.layout === "string" ? filled.data.layout : "record"),
+      };
+      // A view is not a translation of the main page, so it gets no shared key of its own.
+      if (languages.length > 1 && rendering.view === undefined && frontMatter.translation_key === undefined) {
+        frontMatter.translation_key = `${name}:${record.id}`;
+      }
+      if (rendering.view !== undefined) {
+        frontMatter.search = false;
+        frontMatter.sitemap = false;
+        if (rendering.canonical !== undefined) frontMatter.canonical_url = rendering.canonical;
+      }
+      const title =
+        typeof frontMatter.title === "string"
+          ? frontMatter.title
+          : typeof frontMatter.title === "number"
+            ? String(frontMatter.title)
+            : firstHeadingText(tree) || record.id;
+      const dir =
+        frontMatter.dir === "ltr" || frontMatter.dir === "rtl" ? frontMatter.dir : directionFromLang(pageLangCode);
+      const sourcePosition = recordSourcePos({
+        ...record.position,
+        file: prefixed(record.position.file, filePrefix),
+      });
+
+      return {
+        url,
+        source: sourcePosition,
+        frontMatter: frontMatter as Page["frontMatter"],
+        title,
+        lang: pageLangCode,
+        dir,
+        headings: headingsOf(tree, rendered.headings, prefixed(source.path, filePrefix)),
+        html: rendered.html,
+        markdown,
+        kind: "doc",
+        record: {
+          collection: name,
+          id: record.id,
+          position: {
+            ...record.position,
+            file: prefixed(record.position.file, filePrefix),
+          },
+          template: prefixed(source.path, filePrefix),
+          templateLine: source.bodyLine,
+          fallbacks,
+          ...(rendering.view === undefined ? {} : { view: rendering.view }),
+          ...(rendering.views === undefined ? {} : { views: rendering.views }),
+        },
+      };
+    };
+
+    for (const language of languages) {
       for (const record of collection.records) {
         const localized = localizeFields(record.fields, language.code, config.lang);
         const fields =
           localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
-        const scope: RecordScope = {
-          collection: name,
-          record,
-          recordFields: fields,
-          fields,
-          collections,
-          ...(schemaFields === undefined ? {} : { schemaFields }),
-          markdownFields,
-          lang: language.code,
-          defaultLang: config.lang,
-          ...(filePrefix === undefined || filePrefix === "" ? {} : { filePrefix }),
-          file: source.path,
-        };
-        const filled = substituteFrontMatter(source.frontMatter, {
-          fields,
-          file: source.path,
-          line: 1,
-          ...(schemaFields === undefined ? {} : { schemaFields }),
-        });
-        diagnostics.push(...filled.diagnostics);
-
-        // A template may set its language from a field (`lang: "{lang}"`); the page's language and direction follow
-        // the substituted front matter, and fall back to the language this build pass is making.
-        const declaredLang = typeof filled.data.lang === "string" ? filled.data.lang.trim() : "";
-        const pageLangCode = declaredLang === "" ? language.code : declaredLang;
-        const pagePrefix = prefixOfLang(config, pageLangCode);
-
-        const url = recordUrl(name, record.id, fields, entry, {
+        const main = recordUrl(name, record.id, fields, entry, {
           base: config.base,
           prefix: language.prefix,
           position: record.position,
         });
-        if (url.diagnostic !== undefined) {
-          diagnostics.push(url.diagnostic);
+        if (main.diagnostic !== undefined) {
+          diagnostics.push(main.diagnostic);
           continue;
         }
-        if (url.url === undefined) continue;
+        if (main.url === undefined) continue;
 
-        const tree = structuredClone(parsed) as Root;
-        const build: Build = { scope, depth: 0, diagnostics, sourceLines, root, filePrefix };
-        tree.children = await rewriteChildren(tree.children, build);
-        applyRecordLinks(tree, {
-          collections,
-          config: config.collections,
-          base: config.base,
-          prefix: pagePrefix,
-          lang: pageLangCode,
-          defaultLang: config.lang,
-          file: source.path,
-        });
+        const urls = viewUrls(
+          namedViews,
+          name,
+          record,
+          fields,
+          { base: config.base, prefix: language.prefix },
+          diagnostics,
+        );
 
-        const rendered = await markdownToHtml(tree, source.path);
-        const markdown = twinOf(parsed.children, source.body, scope);
-        const frontMatter: Record<string, unknown> = {
-          ...filled.data,
-          layout: typeof filled.data.layout === "string" ? filled.data.layout : "record",
-        };
-        if (languages.length > 1 && frontMatter.translation_key === undefined) {
-          frontMatter.translation_key = `${name}:${record.id}`;
+        pages.push(
+          await pageOf(
+            { template, ...(Object.keys(urls).length === 0 ? {} : { views: urls }) },
+            main.url,
+            record,
+            language,
+            fields,
+            localized.fallbacks,
+          ),
+        );
+        for (const view of namedViews) {
+          const url = urls[view.name];
+          if (url === undefined) continue;
+          pages.push(
+            await pageOf(
+              {
+                template: view.template,
+                ...(view.layout === undefined ? {} : { layout: view.layout }),
+                view: view.name,
+                canonical: main.url,
+              },
+              url,
+              record,
+              language,
+              fields,
+              localized.fallbacks,
+            ),
+          );
         }
-        const title =
-          typeof frontMatter.title === "string"
-            ? frontMatter.title
-            : typeof frontMatter.title === "number"
-              ? String(frontMatter.title)
-              : firstHeadingText(tree) || record.id;
-        const dir =
-          frontMatter.dir === "ltr" || frontMatter.dir === "rtl" ? frontMatter.dir : directionFromLang(pageLangCode);
-        const sourcePosition = recordSourcePos({
-          ...record.position,
-          file: prefixed(record.position.file, filePrefix),
-        });
-
-        pages.push({
-          url: url.url,
-          source: sourcePosition,
-          frontMatter: frontMatter as Page["frontMatter"],
-          title,
-          lang: pageLangCode,
-          dir,
-          headings: headingsOf(tree, rendered.headings, prefixed(source.path, filePrefix)),
-          html: rendered.html,
-          markdown,
-          kind: "doc",
-          record: {
-            collection: name,
-            id: record.id,
-            position: {
-              ...record.position,
-              file: prefixed(record.position.file, filePrefix),
-            },
-            template: prefixed(source.path, filePrefix),
-            templateLine: source.bodyLine,
-            fallbacks: localized.fallbacks,
-          },
-        });
       }
     }
   }

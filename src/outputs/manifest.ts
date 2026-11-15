@@ -60,6 +60,8 @@ interface ManifestPage {
   readonly outputs: readonly string[];
   /** SHA-256 of the page's source body and of its rendered body. */
   readonly hashes: Readonly<Record<string, string>>;
+  /** The view this page renders, when it is a named view of a record rather than the record's main page. */
+  readonly view?: string;
 }
 
 /** Which page owns an output path, for the collision message. */
@@ -129,6 +131,7 @@ export const manifest: Output = {
         layout: page.frontMatter.layout ?? null,
         outputs: outputs.sort(byCodePoint),
         hashes: { source: hashOf(page.markdown), html: hashOf(page.html) },
+        ...(page.record?.view === undefined ? {} : { view: page.record.view }),
       });
     }
 

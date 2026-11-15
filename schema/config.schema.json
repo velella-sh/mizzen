@@ -241,6 +241,35 @@
         "limits": {
           "$ref": "#/$defs/dataLimits",
           "description": "Limits on this collection's source."
+        },
+        "views": {
+          "type": "object",
+          "default": {},
+          "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "additionalProperties": { "$ref": "#/$defs/view" },
+          "description": "Extra named pages built from every record, each with its own template, URL pattern, and layout. Default {}."
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["template", "permalink"],
+      "properties": {
+        "template": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Markdown template under _templates/, relative to the source folder."
+        },
+        "permalink": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "URL pattern of a view page, such as /items/{id}/print/."
+        },
+        "layout": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Layout of a view page. Default: the view template's layout, else record."
         }
       }
     },
