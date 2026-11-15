@@ -1,14 +1,15 @@
 /**
  * `:count{from=… where=…}`: shows how many records of a collection match a filter, in a sentence on an ordinary page.
  *
- * `from` names exactly one collection; `where` is one `field=value` pair, compared as text, like the same key on
- * `:::records`. The model applies {@link applyDataCount} after the page cache, and writes the number into the page's
- * Markdown twin, so a data change rebuilds the page with the count it now shows.
+ * `from` names exactly one collection; `where` is one `field=value` pair and is matched by the same `equals` test a
+ * list uses ({@link matchesCondition}), so a list field such as `tags: [news]` counts for `where="tags=news"`. The model
+ * applies {@link applyDataCount} after the page cache, and writes the number into the page's Markdown twin, so a data
+ * change rebuilds the page with the count it now shows.
  */
 import type { Root } from "mdast";
 import type { Plugin } from "unified";
 import type { Diagnostic } from "../../contracts/index.ts";
-import { resolveIn, scalarText } from "../../data/record-context.ts";
+import { matchesCondition, type Condition, type Row } from "../../data/query.ts";
 import { directivePos, type DataDirectiveContext } from "../../data/directive-context.ts";
 
 export const name = "count";
@@ -66,7 +67,12 @@ export function applyDataCount(
     };
   }
 
-  let selected = collection.records;
+  const rows: Row[] = collection.records.map((record) => ({
+    id: record.id,
+    fields: record.fields,
+    ...(record.normalizedDates === undefined ? {} : { dates: record.normalizedDates }),
+  }));
+  let selected = rows;
   const where = (attributes["where"] ?? "").trim();
   if (where !== "") {
     const separator = where.indexOf("=");
@@ -84,10 +90,8 @@ export function applyDataCount(
     }
     const field = where.slice(0, separator).trim();
     const expected = where.slice(separator + 1).trim().replace(/^["']|["']$/g, "");
-    selected = collection.records.filter((record) => {
-      const found = resolveIn(record.fields, field);
-      return found.found && scalarText(found.value) === expected;
-    });
+    const condition: Condition = { field, kind: "equals", text: expected };
+    selected = rows.filter((row) => matchesCondition(row, condition));
   }
 
   const count = String(selected.length);

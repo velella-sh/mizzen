@@ -60,6 +60,21 @@ test("a list page selects and sorts records, and page two carries the rest", asy
   );
 });
 
+test("a repeated value in a grouped list appears once in the group and in its twin", async () => {
+  await withSite(
+    {
+      ...files("list:\n  collection: posts\n  group: tags\n  fields: [title]\n"),
+      "_data/posts.yml": "- id: a\n  title: Alpha\n  status: published\n  tags: [news, news]\n",
+    },
+    (_root, result) => {
+      assert.deepEqual(result.diagnostics, []);
+      const page = pageAt(result, "/blog/")!;
+      assert.deepEqual(page.list?.groups.map((group) => [group.key, group.records.length]), [["news", 1]]);
+      assert.equal((page.markdown.match(/\[Alpha\]/g) ?? []).length, 1);
+    },
+  );
+});
+
 test("a list without the key leaves the page an ordinary page", async () => {
   await withSite(
     {
@@ -110,9 +125,35 @@ test("an empty list is a warning that names the filter, and still writes the pag
 test("a where, sort, or group field no record holds is a warning at the list key", async () => {
   await withSite(files("list:\n  collection: posts\n  where: { nope: x }\n  sort: nope\n  group: absent\n"), (_root, result) => {
     const findings = result.diagnostics.filter((diagnostic) => diagnostic.id === "data.list-field");
-    assert.deepEqual(findings.map((finding) => finding.severity), ["warning", "warning", "warning"]);
-    assert.match(findings[0]!.message, /"nope"/);
-    assert.match(findings[2]!.message, /"absent"/);
+    assert.deepEqual(findings.map((finding) => finding.severity), ["warning", "warning"]);
+    assert.match(findings.map((finding) => finding.message).join("\n"), /"nope"/);
+    assert.match(findings.map((finding) => finding.message).join("\n"), /"absent"/);
+  });
+});
+
+test("fields and expand.field that no record holds are warnings at the list key", async () => {
+  await withSite(
+    files(
+      "list:\n" +
+        "  collection: posts\n" +
+        "  fields: [nope]\n" +
+        "  expand:\n" +
+        "    field: absent\n" +
+        '    permalink: "/tags/{value}/"\n',
+    ),
+    (_root, result) => {
+      const findings = result.diagnostics.filter((diagnostic) => diagnostic.id === "data.list-field");
+      assert.deepEqual(findings.map((finding) => finding.severity), ["warning", "warning"]);
+      assert.match(findings.map((finding) => finding.message).join("\n"), /"nope"/);
+      assert.match(findings.map((finding) => finding.message).join("\n"), /"absent"/);
+      assert.ok(findings.every((finding) => finding.pos?.line === 3));
+    },
+  );
+});
+
+test("a sort direction that is not asc or desc is a sort error, not a missing field", async () => {
+  await withSite(files("list:\n  collection: posts\n  sort: title descending\n"), (_root, result) => {
+    assert.deepEqual(ids(result), ["data.list-sort"]);
   });
 });
 

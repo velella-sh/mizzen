@@ -170,14 +170,24 @@ function compareValues(left: unknown, right: unknown): number {
   return compareCodePoint(scalarText(left) ?? "", scalarText(right) ?? "");
 }
 
-/** Sorts rows by every key in turn, then by id, then by source order. */
+/** Sorts rows by every key in turn, then by id, then by source order.
+ *
+ * A record without a value for a key always sorts last, ascending or descending; only the order of the values that
+ * exist is reversed by `desc`.
+ */
 export function sortRows<T extends Row>(rows: readonly T[], keys: readonly SortKey[]): T[] {
   if (keys.length === 0) return [...rows];
   return rows
     .map((row, index) => ({ row, index }))
     .sort((a, b) => {
       for (const key of keys) {
-        const order = compareValues(valueOf(a.row, key.field), valueOf(b.row, key.field));
+        const left = valueOf(a.row, key.field);
+        const right = valueOf(b.row, key.field);
+        if (left === undefined || right === undefined) {
+          if (left === undefined && right === undefined) continue;
+          return left === undefined ? 1 : -1;
+        }
+        const order = compareValues(left, right);
         if (order !== 0) return key.desc ? -order : order;
       }
       return compareCodePoint(a.row.id, b.row.id) || a.index - b.index;
@@ -205,14 +215,20 @@ function parseSort(raw: unknown, diagnostics: Diagnostic[], pos: SourcePos | und
   const keys: SortKey[] = [];
   for (const item of list as string[]) {
     const parts = item.trim().split(/\s+/).filter((part) => part !== "");
-    const direction = parts.at(-1);
-    const desc = direction === "desc";
-    const field = desc || direction === "asc" ? parts.slice(0, -1).join(" ") : parts.join(" ");
-    if (field === "") {
-      fail(`The sort key "${item}" names no field.`);
+    if (parts.length === 0) {
+      fail("The sort key names no field.");
       continue;
     }
-    keys.push({ field, desc });
+    if (parts.length > 2) {
+      fail(`The sort key "${item}" is a field followed by \`asc\` or \`desc\`, not a sentence.`);
+      continue;
+    }
+    const direction = parts.length === 2 ? parts[1]! : undefined;
+    if (direction !== undefined && direction !== "asc" && direction !== "desc") {
+      fail(`The sort direction "${direction}" in "${item}" is not \`asc\` or \`desc\`.`);
+      continue;
+    }
+    keys.push({ field: parts[0]!, desc: direction === "desc" });
   }
   return keys;
 }

@@ -277,7 +277,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       headings = headingsOf(tree, out.headings, rel);
     }
 
-    const page = await hookPage({
+    const draft: Page = {
       url,
       source: posOf(rel, fm.bodyLine),
       frontMatter,
@@ -288,10 +288,14 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       html,
       markdown: directives.markdown,
       kind: "doc",
-    });
+    };
+    // A page that declares a list is hooked once its list pages exist, so each generated page, including page one, gets
+    // exactly one `content` hook and the declaring page is never hooked twice.
+    const declaresList = draft.frontMatter.list !== undefined;
+    const page = declaresList ? draft : await hookPage(draft);
     add(page, file.path, page.frontMatter.order);
     // A page a duplicate URL kept out of the model declares no list either.
-    if (page.frontMatter.list !== undefined && pages.at(-1) === page) {
+    if (declaresList && pages.at(-1) === page) {
       listDeclarations.push({ page, text, file: rel });
     }
   }
@@ -326,22 +330,30 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     listPages.push({ original: declaration.page, pages: built.pages });
   }
   for (const { original, pages: built } of listPages) {
-    const index = pages.indexOf(original);
-    if (index >= 0 && built[0] !== undefined) pages[index] = built[0]!;
-  }
-  for (const { pages: built } of listPages) {
-    for (const extra of built.slice(1)) {
-      const first = seen.get(extra.url);
-      if (first !== undefined) {
+    const [first, ...rest] = built;
+    if (first !== undefined) {
+      const hooked = await hookPage(first);
+      const index = pages.indexOf(original);
+      if (index >= 0) {
+        pages[index] = hooked;
+        // The folder navigation reads the title the page ended with, exactly as a hook on an ordinary page would leave it.
+        const folder = folderPages.findIndex((entry) => entry.url === original.url);
+        if (folder >= 0) folderPages[folder] = { ...folderPages[folder]!, title: hooked.title };
+      }
+    }
+    for (const extra of rest) {
+      const known = seen.get(extra.url);
+      if (known !== undefined) {
         diagnostics.error(
           "page.duplicate-url",
-          `Two pages have the URL ${extra.url}: ${first.file} and ${extra.source.file}.`,
-          { pos: extra.source, help: `Change the \`permalink\` or rename one of them. The other page is ${first.file}.` },
+          `Two pages have the URL ${extra.url}: ${known.file} and ${extra.source.file}.`,
+          { pos: extra.source, help: `Change the \`permalink\` or rename one of them. The other page is ${known.file}.` },
         );
         continue;
       }
-      seen.set(extra.url, extra.source);
-      pages.push(extra);
+      const hooked = await hookPage(extra);
+      seen.set(hooked.url, hooked.source);
+      pages.push(hooked);
     }
   }
 

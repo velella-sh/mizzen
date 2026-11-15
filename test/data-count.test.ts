@@ -30,6 +30,22 @@ test("a count of an empty result is zero", async () => {
   );
 });
 
+test("a count matches a list field the same way a list does, in HTML and in the twin", async () => {
+  await withSite(
+    {
+      ...FILES,
+      "_data/posts.yml": "- id: a\n  status: published\n  tags: [news]\n- id: b\n  status: draft\n  tags: [release]\n- id: c\n  status: published\n  tags: [news, release]\n",
+      "about.md": "---\ntitle: About\n---\n:count{from=posts where=\"tags=news\"} news posts.\n",
+    },
+    (_root, result) => {
+      assert.deepEqual(result.diagnostics, []);
+      const page = result.site.pages.find((candidate) => candidate.url === "/about/")!;
+      assert.match(page.html, />2 news posts\./);
+      assert.match(page.markdown, /2 news posts\./);
+    },
+  );
+});
+
 test("an unknown collection and a malformed where are findings at the directive", async () => {
   await withSite(
     {

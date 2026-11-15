@@ -50,6 +50,28 @@ test("an expanded list builds one page per value and keeps an index with counts 
   });
 });
 
+test("a repeated value expands to one group, one page, and one count", async () => {
+  await withSite(
+    {
+      ...FILES,
+      "_data/posts.yml": "- id: a\n  title: Alpha\n  tags: [news, news]\n- id: b\n  title: Beta\n  tags: [ui]\n",
+    },
+    (_root, result) => {
+      assert.deepEqual(result.diagnostics, []);
+      const index = pageAt(result, "/blog/")!;
+      assert.deepEqual(
+        index.list?.groups.map((group) => [group.key, group.count]),
+        [
+          ["news", 1],
+          ["ui", 1],
+        ],
+      );
+      assert.match(index.markdown, /\[news\]\(\/tags\/news\/\) \| 1/);
+      assert.equal(pageAt(result, "/tags/news/")?.list?.records.length, 1);
+    },
+  );
+});
+
 test("a value that another value slugs to the same URL is a duplicate-URL error", async () => {
   await withSite(
     {

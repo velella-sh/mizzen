@@ -1,10 +1,10 @@
 /**
  * The grouping half of a list page: one group per value of a field, or per year or month of a date field.
  *
- * A record with a list value joins every group the list names, a record without a value is kept in one named group
- * rather than dropped, and groups are ordered by key by default or by size (largest first, then key), so the order never
- * depends on the source. A date group reads the record's normalized date, so `January` is the same group however the
- * date was written in the source.
+ * A record with a list value joins every group the list names, once per value however often the list names it; a record
+ * without a value is kept in one named group rather than dropped, and groups are ordered by key by default or by size
+ * (largest first, then key), so the order never depends on the source. A date group reads the record's normalized date,
+ * so `January` is the same group however the date was written in the source.
  */
 import type { Diagnostic, SourcePos } from "../contracts/index.ts";
 import { resolveIn, scalarText } from "./record-context.ts";
@@ -71,7 +71,8 @@ function keysOf(row: Row, spec: GroupSpec): readonly string[] {
   if (!found.found || found.value === undefined || found.value === null) return [spec.missing];
   const values = Array.isArray(found.value) ? found.value : [found.value];
   const keys = values.map((value) => scalarText(value)).filter((text): text is string => text !== undefined && text !== "");
-  return keys.length === 0 ? [spec.missing] : keys;
+  // A list field may name one value twice; the record still joins that group once.
+  return keys.length === 0 ? [spec.missing] : [...new Set(keys)];
 }
 
 /** Groups rows by the spec, with a record in a list field joining every group it names. */

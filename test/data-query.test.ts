@@ -55,6 +55,27 @@ test("a record without the sort field sorts last", () => {
   assert.deepEqual(select(undefined, "date"), ["a", "c", "b"]);
 });
 
+test("a record without the sort field sorts last, ascending and descending", () => {
+  const ranked: Row[] = [
+    { id: "a", fields: { rank: 2 } },
+    { id: "b", fields: { rank: 1 } },
+    { id: "c", fields: {} },
+  ];
+  const read = (sort: string) => {
+    const query = parseQuery(undefined, sort, { file: "blog.md", collection: "posts" });
+    assert.deepEqual(query.diagnostics, []);
+    return sortRows(ranked, query.sort).map((row) => row.id);
+  };
+  assert.deepEqual(read("rank"), ["b", "a", "c"]);
+  assert.deepEqual(read("rank desc"), ["a", "b", "c"]);
+});
+
+test("a sort direction that is not asc or desc is an error, not a field name", () => {
+  const query = parseQuery(undefined, "title descending", { file: "blog.md", collection: "posts" });
+  assert.deepEqual(query.diagnostics.map((finding) => finding.id), ["data.list-sort"]);
+  assert.deepEqual(query.sort, []);
+});
+
 test("a malformed where or sort is one finding and leaves the records alone", () => {
   const where = parseQuery({ status: { near: "stable" } }, undefined, { file: "blog.md", collection: "posts" });
   assert.deepEqual(where.diagnostics.map((finding) => finding.id), ["data.list-where"]);

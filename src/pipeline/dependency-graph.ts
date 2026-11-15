@@ -441,11 +441,16 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     return undefined;
   };
 
-  const pageByPath = new Map<string, Page>();
+  // One source page can produce several outputs: page one of a list, its later pages, and its expanded pages. Every
+  // one of them is an output node, so a data change marks each of them instead of only the last page built from the file.
+  const pagesByPath = new Map<string, Page[]>();
   for (const page of options.site.pages) {
     if (page.kind !== "doc") continue;
     const path = sourcePathOf(page.source.file, pagePaths);
-    if (path !== undefined) pageByPath.set(path, page);
+    if (path === undefined) continue;
+    const known = pagesByPath.get(path);
+    if (known === undefined) pagesByPath.set(path, [page]);
+    else known.push(page);
   }
 
   const addAssetEdge = (from: string, image: string, pos?: SourcePos): void => {
@@ -567,17 +572,19 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     addDataEdges(path, front.body, front.bodyLine);
   }
 
-  for (const [path, page] of pageByPath) {
-    const outputId = outputNodeId(page.url);
-    addNode({ id: outputId, kind: "output", path: page.url });
-    addEdge(outputId, fileNodeId(path));
-    addEdge(outputId, navigationId);
-    for (const dataId of blanketDataIds) addEdge(outputId, dataId);
+  for (const [path, pages] of pagesByPath) {
+    for (const page of pages) {
+      const outputId = outputNodeId(page.url);
+      addNode({ id: outputId, kind: "output", path: page.url });
+      addEdge(outputId, fileNodeId(path));
+      addEdge(outputId, navigationId);
+      for (const dataId of blanketDataIds) addEdge(outputId, dataId);
+    }
   }
 
   // Navigation built from folders reads every page's title, so it depends on all of them. A navigation file does not.
   if (!hasNavigation) {
-    for (const path of pageByPath.keys()) addEdge(navigationId, fileNodeId(path));
+    for (const path of pagesByPath.keys()) addEdge(navigationId, fileNodeId(path));
   }
 
   const graphNodes = [...nodes.values()].sort(compareNodes);

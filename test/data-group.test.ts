@@ -18,6 +18,15 @@ test("a plain field groups records by value and keeps a record in each of its li
   ]);
 });
 
+test("a repeated value in a list field joins its group once", () => {
+  const spec = parseGroup({ field: "tags" }, undefined).spec!;
+  const repeated: Row[] = [{ id: "a", fields: { tags: ["news", "news", "ui"] } }];
+  assert.deepEqual(groupRows(repeated, spec).map((group) => [group.key, group.rows.length]), [
+    ["news", 1],
+    ["ui", 1],
+  ]);
+});
+
 test("month and year groups read the normalized date", () => {
   const month = parseGroup({ field: "date", by: "month" }, undefined).spec!;
   assert.deepEqual(groupRows(rows, month).map((group) => group.key), ["2026-01", "2026-02"]);

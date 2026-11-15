@@ -332,11 +332,14 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
   });
 
   const whereFields = isMapping(spec.where) ? Object.keys(spec.where) : [];
-  for (const field of [
+  const namedFields = new Set([
     ...whereFields,
     ...query.sort.map((key) => key.field),
     ...(spec.group === undefined ? [] : [spec.group.field]),
-  ]) {
+    ...(spec.fields ?? []),
+    ...(spec.expand === undefined ? [] : [spec.expand.field]),
+  ]);
+  for (const field of namedFields) {
     if (rows.some((row) => resolveIn(row.fields, field).found)) continue;
     diagnostics.push({
       id: "data.list-field",
