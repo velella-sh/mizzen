@@ -35,7 +35,9 @@ export interface DataStats {
   /** Collections that loaded. */
   readonly loaded: number;
   /** Records the sources read, before validation left any out. */
-  readonly records: number;
+  readonly read: number;
+  /** Records the site keeps, after validation left the invalid ones out. */
+  readonly kept: number;
   /** Records left out because they failed validation. */
   readonly skipped: number;
   /** Collection schemas compiled and used. */

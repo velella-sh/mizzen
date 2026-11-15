@@ -115,7 +115,7 @@ function dataSummary(stats: DataStats): Diagnostic | undefined {
   return {
     id: "doctor.data-summary",
     severity: "info",
-    message: `Data: ${counted(stats.collections, "collection")}, ${stats.loaded} loaded, ${counted(stats.records, "record")}, ${stats.skipped} skipped, ${counted(stats.schemas, "schema")}.${unchecked}`,
+    message: `Data: ${counted(stats.collections, "collection")}, ${stats.loaded} loaded, ${stats.read} read, ${counted(stats.kept, "record")} kept, ${stats.skipped} skipped, ${counted(stats.schemas, "schema")}.${unchecked}`,
     help: "Set `collections.<name>.schema` to check a collection's records, and `onInvalid: skip` to build without an invalid one.",
   };
 }

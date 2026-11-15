@@ -527,7 +527,8 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     stats: {
       collections: names.length,
       loaded: Object.keys(collections).length,
-      records: read,
+      read,
+      kept: Object.values(collections).reduce((total, collection) => total + collection.records.length, 0),
       skipped,
       schemas: Object.keys(schemas.schemas).length,
       unchecked: schemas.unchecked,

@@ -132,7 +132,8 @@ test("a collection without a schema is unchecked, and its records load without f
   });
   assert.deepEqual(result.diagnostics, []);
   assert.deepEqual(result.stats.unchecked, ["items"]);
-  assert.equal(result.stats.records, 1);
+  assert.equal(result.stats.read, 1);
+  assert.equal(result.stats.kept, 1);
 });
 
 test("wrong type, missing required, and bad enum point at exact YAML, JSON, and CSV positions", async () => {

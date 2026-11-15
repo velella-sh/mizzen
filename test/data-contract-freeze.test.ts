@@ -52,7 +52,8 @@ const FROZEN: Shape = {
   DataStats: {
     "collections": "number",
     "loaded": "number",
-    "records": "number",
+    "read": "number",
+    "kept": "number",
     "skipped": "number",
     "schemas": "number",
     "unchecked": "readonly string[]",

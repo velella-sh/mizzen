@@ -248,7 +248,7 @@ test("the data check passes and fails on its own, and doctor reports the counts"
       output: "passed",
     });
     const summary = passed.diagnostics.find((diagnostic) => diagnostic.id === "doctor.data-summary");
-    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 1 record, 0 skipped, 1 schema\./);
+    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 1 read, 1 record kept, 0 skipped, 1 schema\./);
     assert.equal(summary?.severity, "info");
 
     const failed = await doctorReport({
@@ -325,7 +325,7 @@ test("data is checked even when the page source folder is missing", async () => 
     const finding = report.diagnostics.find((diagnostic) => diagnostic.id === "data.record-invalid");
     assert.equal(finding?.pos?.file, "data/items.yml");
     const summary = report.diagnostics.find((diagnostic) => diagnostic.id === "doctor.data-summary");
-    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 1 record, 1 skipped, 1 schema\./);
+    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 1 read, 0 records kept, 1 skipped, 1 schema\./);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -366,7 +366,7 @@ test("the data summary counts the records read, and the invalid one among them",
       nodeVersion: `${MIN_NODE_MAJOR}.0.0`,
     });
     const summary = report.diagnostics.find((diagnostic) => diagnostic.id === "doctor.data-summary");
-    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 2 records, 1 skipped, 1 schema\./);
+    assert.match(summary?.message ?? "", /Data: 1 collection, 1 loaded, 2 read, 1 record kept, 1 skipped, 1 schema\./);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
