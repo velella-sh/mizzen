@@ -36,7 +36,7 @@ function normalize(path: string): string {
 }
 
 /** Files at the site root that describe the build rather than the site, so they are never pages or copied. */
-const SITE_METADATA = new Set(["mizzen.lock.json"]);
+const SITE_METADATA = new Set(["mizzen.lock.json", "urls.lock.json"]);
 
 function covers(list: ReadonlySet<string>, path: string): boolean {
   for (const entry of list) {

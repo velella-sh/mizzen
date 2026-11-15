@@ -62,6 +62,23 @@ its help names the two accepted formats.
 | `data.records-where` | A `:::records` block's `where` is not one `field=field` pair. | Write `where="parent=id"`, or remove it. |
 | `data.records-limit` | A `:::records` block's `limit` is not a whole number of at least 1. | Write `limit=3`, or remove it. |
 | `data.permalink-field` | A URL pattern names a field the record does not hold as a scalar. | Add the field, or change `collections.<name>.permalink`. |
+| `data.permalink-filter` | A URL pattern names a filter that does not exist. | The only filter is `slug`, written `{name|slug}`. |
+| `data.permalink-slug` | The `slug` filter turns a field into an empty string. | Give the record a value with a letter or digit, or drop the filter. |
+| `data.permalink-disambiguator` | The collection's `disambiguate` field is missing or has no letters or digits. | Add the field to the record, or change `collections.<name>.disambiguate`. |
+| `data.permalink-collision` | Two records of one collection build the same URL. | Set `collections.<name>.disambiguate`, or put another field in the URL pattern. |
+
+## Stable URLs
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.urls-lock-invalid` | `urls.lock.json` cannot be read or does not have the expected shape. | Fix the file, or run `mizzen build --update-urls` to write it again. |
+| `urls.url-changed` | A record page's URL differs from the one in the lock. | Run `mizzen build --update-urls` to keep the old URL redirecting, or restore the old URL. |
+| `urls.url-updated` | Info: `--update-urls` accepted a changed URL and kept the old one as a redirect. | Nothing; the lock and the redirects now agree. |
+| `urls.new-records` | Info: records the lock does not hold yet. | Run `mizzen build --update-urls` to write them to the lock. |
+| `urls.removed` | A record the lock published is no longer in its collection, and the collection's `onRemoved` is `error` or unset. | Add the record back, or set `collections.<name>.onRemoved`. |
+| `urls.id-reused` | A record takes the id of one that was removed from a published URL. | Give the record another id, or run `mizzen build --update-urls` to publish it under that id. |
+| `urls.alias-unaddressed` | A record's `aliases` field names an earlier id, but the URL pattern does not use the id. | Name the id in the pattern, or write the earlier address as a path. |
+
 
 ## CSV
 

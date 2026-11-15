@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/urls.schema.json",
+  "title": "Mizzen record URL map",
+  "description": "Every record id and the URL of its page. The file only ever gains fields: a field it has today keeps its meaning.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "engine", "data", "collections"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The format version; only 1 exists."
+    },
+    "engine": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The Mizzen version that wrote the file."
+    },
+    "data": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the record ids and fields the map describes, so a reader can tell a stale file from a fresh one."
+    },
+    "collections": {
+      "type": "object",
+      "description": "Record ids by collection name. Each value is the page's absolute URL when the site sets url, and a path otherwise.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": { "type": "string", "pattern": "^(/|https?://)" }
+      }
+    }
+  }
+}

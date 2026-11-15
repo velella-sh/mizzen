@@ -135,6 +135,35 @@ test("a collection keeps its keys, and a bad name points at the key", () => {
   assert.equal(d.pos?.column, 3);
 });
 
+test("a collection keeps its URL keys, and a bad onRemoved is reported", () => {
+  const src = [
+    "collections:",
+    "  pages:",
+    "    source: _data/pages.yml",
+    "    disambiguate: id",
+    "    aliases: aka",
+    "    onRemoved:",
+    "      redirect: /pages/",
+    "",
+  ].join("\n");
+  const { config, diagnostics } = loadConfigText(src, F, "site");
+  assert.deepEqual(diagnostics, []);
+  assert.deepEqual(config.collections["pages"], {
+    source: "_data/pages.yml",
+    disambiguate: "id",
+    aliases: "aka",
+    onRemoved: { redirect: "/pages/" },
+  });
+  const bad = loadConfigText(
+    "collections:\n  pages:\n    source: _data/pages.yml\n    onRemoved:\n      redirect: pages\n",
+    F,
+    "site",
+  );
+  assert.deepEqual(bad.config.collections, { pages: { source: "_data/pages.yml" } });
+  assert.ok(bad.diagnostics.some((x) => x.id === "config.invalid"));
+  assert.equal(loadConfigText("collections:\n  pages:\n    source: _data/pages.yml\n    onRemoved: gone\n", F, "site").config.collections["pages"]?.onRemoved, "gone");
+});
+
 test("a bad redirect key keeps ajv's path rule", () => {
   const src = "title: Docs\nredirects:\n  old: /new/\n";
   const { diagnostics } = loadConfigText(src, F, "site");

@@ -11,6 +11,8 @@ import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts"
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
 import { dataFetch } from "./data.ts";
+import { buildModel } from "../model/build.ts";
+import { urlsReport } from "./urls.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
 import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-verify.ts";
 import { pack } from "./pack.ts";
@@ -21,7 +23,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["build", "check", "data", "dev", "doctor", "edit", "pack", "verify", "watch"] as const;
+export const COMMANDS = ["build", "check", "data", "dev", "doctor", "edit", "pack", "urls", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -68,13 +70,14 @@ Commands:
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
+  urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   watch [dir]               Rebuild the site whenever a source or theme file changes
 
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text or json for edit apply and edit verify; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text or json for edit apply, edit verify, and urls check; markdown or json for pack
   --hash <hex>         Expected build hash for verify (default: the manifest's)
   --site <dir>         Site root for edit verify (default: .)
   --doctor             Rerun the doctor for edit verify
@@ -82,6 +85,7 @@ Options:
   --host <host>        Host for dev (default: 127.0.0.1)
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
+  --update-urls        For build: accept changed record URLs and write urls.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
@@ -107,6 +111,7 @@ type BuildOpts = {
   readonly out: string;
   readonly theme?: string;
   readonly workers?: number;
+  readonly updateUrls?: boolean;
 };
 
 type CheckOpts = {
@@ -170,6 +175,12 @@ type DataFetchOpts = {
   readonly check: boolean;
 };
 
+type UrlsCheckOpts = {
+  readonly command: "urls";
+  readonly root: string;
+  readonly format: "text" | "json";
+};
+
 type EditApplyOpts = {
   readonly command: "edit-apply";
   readonly root: string;
@@ -194,7 +205,8 @@ type Parsed =
         | PackOpts
         | VerifyOpts
         | WatchOpts
-        | DataFetchOpts;
+        | DataFetchOpts
+        | UrlsCheckOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -360,6 +372,29 @@ function parseData(args: readonly string[]): Parsed {
   return { options: { command: "data-fetch", root: root ?? ".", check } };
 }
 
+/** Parses `urls check [dir] [--format text|json]`. */
+function parseUrls(args: readonly string[]): Parsed {
+  const [subcommand, ...rest] = args;
+  if (subcommand === undefined) return { error: "urls needs a subcommand: check" };
+  if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
+  if (subcommand !== "check") return { error: `unknown urls subcommand: ${subcommand}` };
+
+  let root: string | undefined;
+  let format: "text" | "json" = "text";
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--format") {
+      const raw = rest[++i];
+      if (raw !== "text" && raw !== "json") return { error: `--format for urls check must be text or json, not ${raw ?? ""}` };
+      format = raw;
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  return { options: { command: "urls", root: root ?? ".", format } };
+}
+
 /** Parses `argv` after the process name. */
 export function parseArgs(args: readonly string[]): Parsed {
   const [command, ...rest] = args;
@@ -372,6 +407,7 @@ export function parseArgs(args: readonly string[]): Parsed {
     return parseEditApply(rest);
   }
   if (command === "data") return parseData(rest);
+  if (command === "urls") return parseUrls(rest);
   if (
     command !== "build" &&
     command !== "check" &&
@@ -396,6 +432,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let budget: number | undefined;
   let request: string | undefined;
   let packFormat: PackFormat | undefined;
+  let updateUrls = false;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -460,6 +497,9 @@ export function parseArgs(args: readonly string[]): Parsed {
           }
           workers = parsed;
         }
+      } else if (arg === "--update-urls") {
+        if (command !== "build") return { error: "--update-urls is only valid for build" };
+        updateUrls = true;
       } else if (arg === "--topic") {
         if (command !== "pack") return { error: "--topic is only valid for pack" };
         const raw = value().trim();
@@ -467,8 +507,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         topic = raw;
       } else if (arg === "--request") {
         if (command !== "pack") return { error: "--request is only valid for pack" };
-        const next = rest[++i];
-        if (next === undefined || (next.startsWith("-") && next !== "-")) {
+        const next = rest[++i];        if (next === undefined || (next.startsWith("-") && next !== "-")) {
           return { error: "--request needs a file path or -" };
         }
         request = next;
@@ -501,6 +540,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         out: out ?? "dist",
         ...(theme === undefined ? {} : { theme }),
         ...(workers === undefined ? {} : { workers }),
+        ...(updateUrls ? { updateUrls: true } : {}),
       },
     };
   }
@@ -607,6 +647,21 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   }
 
   const { options } = parsed;
+
+  if (options.command === "urls") {
+    try {
+      const model = await buildModel(resolve(options.root));
+      const report = urlsReport(model.urls, options.format, model.diagnostics);
+      write(report.output);
+      for (const finding of model.diagnostics) {
+        if (finding.severity === "error") error(`${finding.id}: ${finding.message}`);
+      }
+      return report.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
 
   if (options.command === "verify") {
     try {
@@ -812,6 +867,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         defaultLayout: DEFAULT_LAYOUT,
         cache: true,
         ...(options.workers === undefined ? {} : { workers: options.workers }),
+        ...(options.updateUrls === true ? { updateUrls: true } : {}),
       });
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);
       return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;

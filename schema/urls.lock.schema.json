@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/urls.lock.schema.json",
+  "title": "Mizzen URL lock",
+  "description": "Every URL a record page has published. mizzen build --update-urls writes it; every build checks against it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "collections"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The format version; only 1 exists."
+    },
+    "collections": {
+      "type": "object",
+      "description": "Record ids by collection name, then by record id.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": { "$ref": "#/$defs/url" }
+      }
+    }
+  },
+  "$defs": {
+    "url": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "previous"],
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "The record page's current URL, including base."
+        },
+        "previous": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^/" },
+          "description": "Earlier URLs, oldest first; each redirects to url."
+        },
+        "removed": {
+          "const": true,
+          "description": "The record is no longer in its collection; the id and URL are kept so a new record cannot take them."
+        }
+      }
+    }
+  }
+}

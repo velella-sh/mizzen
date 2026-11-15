@@ -44,16 +44,23 @@ export function viewUrls(
   collection: string,
   record: { readonly id: string; readonly position: RecordPos },
   fields: Readonly<Record<string, unknown>>,
-  options: { readonly base: string; readonly prefix: string },
+  options: { readonly base: string; readonly prefix: string; readonly suffix?: string },
   diagnostics: Diagnostic[],
 ): Readonly<Record<string, string>> {
   const urls: Record<string, string> = {};
   for (const view of views) {
-    const filled = recordUrl(collection, record.id, fields, { permalink: view.permalink }, {
-      base: options.base,
-      prefix: options.prefix,
-      position: record.position,
-    });
+    const filled = recordUrl(
+      collection,
+      record.id,
+      fields,
+      { permalink: view.permalink },
+      {
+        base: options.base,
+        prefix: options.prefix,
+        position: record.position,
+        ...(options.suffix === undefined ? {} : { suffix: options.suffix }),
+      },
+    );
     if (filled.diagnostic !== undefined) {
       diagnostics.push(filled.diagnostic);
       continue;

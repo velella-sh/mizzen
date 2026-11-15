@@ -76,6 +76,8 @@ export interface PageRecord {
   readonly view?: string;
   /** URL of every view of this record, keyed by view name; present on the main page only. */
   readonly views?: Readonly<Record<string, string>>;
+  /** Earlier URLs of this record page, each of which redirects to it; present when `urls.lock.json` holds one or the record names an alias. */
+  readonly previousUrls?: readonly string[];
 }
 
 /** A record as a layout receives it: its identity, its URL, and the fields the page asked for. */

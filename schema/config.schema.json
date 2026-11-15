@@ -199,6 +199,16 @@
           "pattern": "^/",
           "description": "URL pattern of a record page, such as /items/{id}/."
         },
+        "disambiguate": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Field appended to a record URL when another record's pattern gives the same one, such as id."
+        },
+        "aliases": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Field that holds earlier ids or paths of a record, each of which redirects to the record's page."
+        },
         "schema": {
           "type": "string",
           "minLength": 1,
@@ -237,6 +247,24 @@
           "enum": ["error", "skip"],
           "default": "error",
           "description": "What an invalid record does: error fails the build; skip leaves it out of the site with a warning."
+        },
+        "onRemoved": {
+          "oneOf": [
+            { "enum": ["error", "gone"] },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["redirect"],
+              "properties": {
+                "redirect": {
+                  "type": "string",
+                  "pattern": "^/",
+                  "description": "A page on the site the removed record's URLs redirect to."
+                }
+              }
+            }
+          ],
+          "description": "What a record that was published and is no longer in the collection does: error fails the build, gone writes a removed notice, or redirect sends readers to a page. Default error once urls.lock.json exists."
         },
         "limits": {
           "$ref": "#/$defs/dataLimits",

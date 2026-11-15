@@ -83,6 +83,33 @@ and layout. A view page's canonical URL is the record's main page, and the main 
 sitemap, the feeds, and `llms.txt`/`llms-full.txt`; their manifest entry names the view. A view never changes the record
 and is not built when the record's main page is not built.
 
+## URLs that do not move
+
+A URL pattern may filter a field with `|slug`: `{name|slug}` lowercases the value, keeps the letters and digits of every
+script, and turns each run of anything else into one hyphen. Nothing is transliterated, and a slug never holds a `/`, so
+`{scope|slug}/{name|slug}` gives a scoped name two segments with no other change.
+
+Two records a pattern cannot tell apart would write one file, so both are reported. `collections.<name>.disambiguate`
+names a field, such as `id`, that is appended to the URL of each record whose pattern gives the same URL as another
+record's: a record with an address of its own keeps it, so adding a colliding record does not move the pages already
+published. `/items/jane/` becomes `/items/jane-42/` for the records that collided, and the result does not depend on the
+order of the records.
+
+`urls.lock.json` holds every record page's current URL and the ones it had before. Every build checks against it: a
+changed URL is an error until `mizzen build --update-urls` accepts it and keeps the old one as a redirect, and a removed
+record is an error unless the collection says what its absence means. `urls check` prints the same comparison as text or
+JSON without writing anything. `Page.record.previousUrls` carries each record page's earlier URLs, which the redirects
+output writes as one-hop redirects; a lock entry a record no longer occupies keeps its id and URL, so a new record cannot
+take the address over.
+
+`collections.<name>.aliases` names a field whose string or list values are earlier ids or paths of a record; each one
+redirects to the record's page without the lock file. `collections.<name>.onRemoved` is `error` (the default once a lock
+file exists), `gone` (a notice at each old URL that says the record was removed), or a `redirect` to a page on the site.
+
+`urls.json` maps each collection's record ids to their page URLs, absolute when the site sets `url`, and carries the
+engine version and a hash of the data. Only the default language names a record in it. Like the rest of the data
+contract, the file only gains fields.
+
 With `languages` configured, every record gets one page per language: `<template>.<lang>.md` is used when it exists,
 `<field>.<lang>` is read from a mapping and falls back to the default language, and pages that share a record carry the
 same `translation_key`. `collections.<name>.llms: false` keeps a collection's pages out of `llms-full.txt`.

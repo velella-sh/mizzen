@@ -67,13 +67,14 @@ Commands:
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
+  urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   watch [dir]               Rebuild the site whenever a source or theme file changes
 
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text or json for edit apply and edit verify; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text or json for edit apply, edit verify, and urls check; markdown or json for pack
   --hash <hex>         Expected build hash for verify (default: the manifest's)
   --site <dir>         Site root for edit verify (default: .)
   --doctor             Rerun the doctor for edit verify
@@ -81,6 +82,7 @@ Options:
   --host <host>        Host for dev (default: 127.0.0.1)
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
+  --update-urls        For build: accept changed record URLs and write urls.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
@@ -254,6 +256,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `translations` | `translations.json`, each page's status in every configured language. |
 | `trust` | `trust.json`, each doc page's trust level, reasons, and last reviewer. |
 | `twins` | One Markdown twin per document page: the same URL with `.md` in place of the HTML file. |
+| `urls` | `urls.json`, each collection's record ids and their page URLs, with the engine version and a hash of the data. |
 | `variables` | `variables.json`, every variable placeholder a page uses and its declaration. |
 | `version-diff` | `diff/<version>/<path>.json` for each adjacent pair of versions whose page sections differ. |
 | `versions` | `versions.json`, the versions each page path exists in and how it differs from the newest. |

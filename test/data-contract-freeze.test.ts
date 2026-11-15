@@ -73,6 +73,7 @@ const FROZEN: Shape = {
     "fallbacks": "readonly string[]",
     "view": "?string",
     "views": "?Readonly<Record<string, string>>",
+    "previousUrls": "?readonly string[]",
   },
   RecordProps: {
     "collection": "string",
