@@ -193,9 +193,26 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(typeof entry.template === "string" ? { template: entry.template } : {}),
       ...(typeof entry.permalink === "string" ? { permalink: entry.permalink } : {}),
       ...(typeof entry.schema === "string" ? { schema: entry.schema } : {}),
+      ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
     };
   }
   return collections;
+}
+
+/** Reads the three numeric limits a collection may set; a bad value falls back to the default. */
+function limitsFrom(value: Record<string, unknown>): NonNullable<CollectionConfig["limits"]> {
+  const limit = (key: string): number | undefined => {
+    const raw = value[key];
+    return typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0 ? raw : undefined;
+  };
+  const bytes = limit("bytes");
+  const records = limit("records");
+  const field = limit("field");
+  return {
+    ...(bytes === undefined ? {} : { bytes }),
+    ...(records === undefined ? {} : { records }),
+    ...(field === undefined ? {} : { field }),
+  };
 }
 
 function isCollectionsName(error: ErrorObject): boolean {

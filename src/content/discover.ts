@@ -31,6 +31,9 @@ function normalize(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, "");
 }
 
+/** Files at the site root that describe the build rather than the site, so they are never pages or copied. */
+const SITE_METADATA = new Set(["mizzen.lock.json"]);
+
 function covers(list: ReadonlySet<string>, path: string): boolean {
   for (const entry of list) {
     if (path === entry || path.startsWith(`${entry}/`)) return true;
@@ -68,6 +71,7 @@ export async function discover(source: string, options: DiscoverOptions = {}): P
 
     for (const entry of entries) {
       const path = rel === "" ? entry.name : `${rel}/${entry.name}`;
+      if (rel === "" && SITE_METADATA.has(entry.name)) continue;
       if (covers(exclude, path)) continue;
       const kept = covers(include, path);
       if (!kept) {

@@ -240,6 +240,10 @@ export function planInvalidation(options: InvalidationPlanOptions): Invalidation
     }
   }
 
+  for (const detail of options.graph.incomplete ?? []) {
+    addReason("unknown", detail, { kind: "unknown", node: "unknown:data", label: "unresolved data directive" });
+  }
+
   for (const kind of new Set(options.global ?? [])) {
     addReason(kind, GLOBAL_DETAIL[kind], { kind: "global", node: `global:${kind}`, label: kind });
   }

@@ -10,6 +10,7 @@ import { build } from "../pipeline/build.ts";
 import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts";
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
+import { dataFetch } from "./data.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
 import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-verify.ts";
 import { pack } from "./pack.ts";
@@ -20,7 +21,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["build", "check", "dev", "doctor", "edit", "pack", "verify", "watch"] as const;
+export const COMMANDS = ["build", "check", "data", "dev", "doctor", "edit", "pack", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -60,6 +61,7 @@ export const usage = `Usage: ${NAME} <command> [dir] [options]
 Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
+  data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
   edit apply <patch.json> [dir]
@@ -79,6 +81,7 @@ Options:
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
+  --check              For data fetch: compare with mizzen.lock.json without writing
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
@@ -161,6 +164,12 @@ type WatchOpts = {
   readonly theme?: string;
 };
 
+type DataFetchOpts = {
+  readonly command: "data-fetch";
+  readonly root: string;
+  readonly check: boolean;
+};
+
 type EditApplyOpts = {
   readonly command: "edit-apply";
   readonly root: string;
@@ -184,7 +193,8 @@ type Parsed =
         | EditVerifyOpts
         | PackOpts
         | VerifyOpts
-        | WatchOpts;
+        | WatchOpts
+        | DataFetchOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -331,6 +341,25 @@ function parseEditVerify(args: readonly string[]): Parsed {
   return { options: { command: "edit-verify", proof, site, doctor, format } };
 }
 
+/** Parses `data fetch [dir] [--check]`. */
+function parseData(args: readonly string[]): Parsed {
+  const [subcommand, ...rest] = args;
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch" };
+  if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
+  if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
+
+  let root: string | undefined;
+  let check = false;
+  for (const arg of rest) {
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--check") check = true;
+    else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  return { options: { command: "data-fetch", root: root ?? ".", check } };
+}
+
 /** Parses `argv` after the process name. */
 export function parseArgs(args: readonly string[]): Parsed {
   const [command, ...rest] = args;
@@ -342,6 +371,7 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (subcommand === "verify") return parseEditVerify(rest);
     return parseEditApply(rest);
   }
+  if (command === "data") return parseData(rest);
   if (
     command !== "build" &&
     command !== "check" &&
@@ -671,6 +701,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   }
 
   const root = resolve(options.root);
+  if (options.command === "data-fetch") {
+    try {
+      const result = await dataFetch({ root, ...(options.check ? { check: true } : {}) });
+      for (const message of result.messages) log(message);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   if (options.command === "doctor") {
     try {
       const themeRoot = await resolveThemeRoot(root, options.theme);

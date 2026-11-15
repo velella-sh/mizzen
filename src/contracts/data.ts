@@ -28,10 +28,12 @@ export interface DataRecord {
 export interface Collection {
   /** Collection name, as the config key writes it. */
   readonly name: string;
-  /** Source path relative to the site root, as the collection was read. */
+  /** Source as the config writes it: a path relative to the site root, an `npm:` address, or an `https:` URL. */
   readonly source: string;
   /** Records in source order. */
   readonly records: readonly DataRecord[];
+  /** The installed package a collection was read from, when its source is `npm:`. */
+  readonly package?: { readonly name: string; readonly version: string };
 }
 
 /** The record a page was built from, as the site model carries it. */

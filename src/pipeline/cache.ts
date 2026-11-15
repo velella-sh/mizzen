@@ -27,7 +27,7 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { CONFIG_FILE } from "../config/load.ts";
 import type { Diagnostic, SiteConfig } from "../contracts/index.ts";
@@ -36,6 +36,8 @@ import { parseFrontMatter } from "../content/frontmatter.ts";
 import { repositoryStateKey } from "../model/reviewers.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { version } from "../index.ts";
+import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
+import { resolveNpmSource } from "../data/package-source.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
 export const CACHE_FORMAT = 2;
@@ -410,6 +412,38 @@ interface KeyInput {
 }
 
 /**
+ * The files a collection source contributes to a cache key: a local file, an installed package's file and version, or
+ * the stored bytes of a pinned URL. A package source comes back as real paths the resolver proved are inside the
+ * package folder, never as a path built with `join`, so a link cannot make the key read outside it. A site with no
+ * collections contributes nothing, so its key stays exactly what 0.2.0 produced. The lock file itself is an input
+ * whenever collections exist, because it decides which bytes a remote or package source reads.
+ */
+async function collectionInputs(options: { readonly root: string; readonly config: SiteConfig }): Promise<KeyInput[]> {
+  const names = Object.keys(options.config.collections);
+  if (names.length === 0) return [];
+  const inputs: KeyInput[] = [{ label: "data-lock", path: join(options.root, LOCK_FILE) }];
+  const lock = (await readLock(options.root).catch(() => undefined))?.lock;
+  for (const name of names.sort(byCodePoint)) {
+    const source = options.config.collections[name]!.source;
+    if (source.startsWith("npm:")) {
+      const resolved = await resolveNpmSource(options.root, source).catch(() => undefined);
+      if (resolved?.source === undefined) continue;
+      inputs.push({ label: `collection/${name}/package`, path: resolved.source.packageFile });
+      inputs.push({ label: `collection/${name}/source`, path: resolved.source.file });
+    } else if (/^https:\/\//.test(source)) {
+      const pinned = lock?.sources[source];
+      if (pinned !== undefined) inputs.push({ label: `collection/${name}/source`, path: storedPath(options.root, pinned.sha256) });
+    } else if (!/^[a-z][a-z\d+.-]*:/i.test(source)) {
+      const path = resolve(options.root, source);
+      const rel = relative(options.root, path);
+      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) continue;
+      inputs.push({ label: `collection/${name}/source`, path });
+    }
+  }
+  return inputs;
+}
+
+/**
  * The digest of a symbolic link: its target path relative to `root` and the target's bytes, or a marker when the link
  * is broken, leaves `root`, or cannot be read. The target is read through its resolved path, so a link replaced after
  * the check cannot redirect the read, and the markers never equal a file digest, so an unusable link can never alias
@@ -449,6 +483,7 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
 
   // The navigation file may live outside the source folder, so it is hashed on its own as well.
   inputs.push({ label: "navigation", path: resolve(options.root, options.config.navigation) });
+  inputs.push(...(await collectionInputs(options)));
 
   for (const file of await filesUnder(options.themeRoot)) {
     inputs.push({
@@ -570,6 +605,7 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   }
 
   inputs.push({ label: "navigation", path: resolve(options.root, options.config.navigation) });
+  inputs.push(...(await collectionInputs(options)));
 
   for (const file of await filesUnder(options.themeRoot)) {
     inputs.push({

@@ -47,6 +47,22 @@ no product and no data set. The types it refers to are in [`src/contracts/data.t
 8. **Adding is allowed; removing is not.** A contract field, a config key, or an output file may gain
    a field in a later version. An existing name keeps its meaning.
 
+## Showing data in a page
+
+- `:data[path]` shows one value as text. `path` is dot-separated and is read from `_data` first, where a number
+  indexes a list; when that finds nothing, the first segment may name a collection and the second a record id, so
+  `components.button.name` reads one field of one record. The resolved text is written into the Markdown twin too.
+- `::data-table{from=… columns=…}` renders records as the table a Markdown table produces. `columns` is a
+  comma-separated list of field paths, `sort` names one field, and `where` filters on one pair written with its value
+  quoted: `where="status=stable"`. Every collection row carries the record's own id as `id`, so `columns=id` works for
+  a list and for a mapping of id to record; equal sort values fall back to the id and then to source order.
+
+## Limits
+
+A collection source is bounded by default at 2 MiB, 10,000 records, and 100,000 characters per field. Raise one
+limit with `collections.<name>.limits.bytes`, `.records`, or `.field`; a source over a limit is one error naming the
+limit and the key, never a silently truncated file.
+
 ## What the theme receives
 
 - A record page uses the layout named in its template's front matter, else the layout `record`. A list
@@ -56,7 +72,8 @@ no product and no data set. The types it refers to are in [`src/contracts/data.t
   fields as data.
 - `LayoutProps.list` on a list page: the records selected for that page, the groups, and the page's
   number, total, and previous and next URLs.
-- `Site.collections` on every page: each collection's records with their ids and positions.
+- `Site.collections` on every page: each collection's records with their ids and positions. A collection read
+  from an `npm:` source also carries `package.name` and `package.version`.
 - `Page.record` on a record page: the collection name, the record id, and the record's position.
 - The ordinary contract, unchanged: navigation, pager, head, islands, and the site model.
 

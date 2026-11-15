@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/data-lock.schema.json",
+  "title": "Mizzen data lock",
+  "description": "`mizzen.lock.json`: the address, version, byte size, and SHA-256 of every remote or package collection source.",
+  "type": "object",
+  "required": ["version", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The format version. Only 1 exists."
+    },
+    "sources": {
+      "type": "object",
+      "description": "Pinned sources keyed by the address the site config writes.",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/source"
+      }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "description": "One pinned source, with the bytes a build may read.",
+      "required": ["address", "bytes", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The source address as the config writes it."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The installed package version, for an `npm:` source."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Byte size of the source."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the source's bytes, as 64 lowercase hex characters."
+        }
+      }
+    }
+  }
+}
