@@ -66,6 +66,12 @@ export interface PageRecord {
   readonly id: string;
   /** Where the record sits in the data file. */
   readonly position: RecordPos;
+  /** The template the page was built from, relative to the site root. */
+  readonly template: string;
+  /** 1-based line of the template where its body starts. */
+  readonly templateLine: number;
+  /** Fields whose value came from the default language because this language has no translation. */
+  readonly fallbacks: readonly string[];
 }
 
 /** A record as a layout receives it: its identity, its URL, and the fields the page asked for. */
@@ -78,6 +84,8 @@ export interface RecordProps {
   readonly url: string;
   /** The record's fields, or only those the page named. */
   readonly fields: Readonly<Record<string, unknown>>;
+  /** Reference fields resolved to the URL of the record page they point at, keyed by field name. */
+  readonly links: Readonly<Record<string, string>>;
 }
 
 /** One group of a list page. */

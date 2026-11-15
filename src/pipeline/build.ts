@@ -431,6 +431,17 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const renderedHtml = new Map<string, Promise<string>>();
   let renderedPages = 0;
   let cachedPages = 0;
+  const reportedLayouts = new Set<string>();
+  /** Reports a page's rendering findings, once per missing layout rather than once per record page. */
+  const reportRendered = (rendered: { readonly layout?: string; readonly diagnostics: readonly Diagnostic[] }): void => {
+    for (const diagnostic of rendered.diagnostics) {
+      if (diagnostic.id === "render.unknown-layout" && rendered.layout !== undefined) {
+        if (reportedLayouts.has(rendered.layout)) continue;
+        reportedLayouts.add(rendered.layout);
+      }
+      diagnostics.report(diagnostic);
+    }
+  };
   const renderPaged = async (page: Page): Promise<string> => {
     const known = renderedHtml.get(page.url);
     if (known !== undefined) return known;
@@ -438,7 +449,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       const cached = cachedRenders.get(page.url);
       if (cached !== undefined) {
         cachedPages += 1;
-        for (const d of cached.diagnostics) diagnostics.report(d);
+        reportRendered(cached);
         return withCss({
           html: cached.html,
           css: cached.css,
@@ -448,7 +459,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       const rendered =
         pool === undefined ? renderOnePage(registry, renderSite, page, options.defaultLayout) : await pool.render(page);
       renderedPages += 1;
-      for (const d of rendered.diagnostics) diagnostics.report(d);
+      reportRendered(rendered);
       if (renderStore !== undefined && settingsKey !== undefined) {
         await renderStore.set(renderPageKey(settingsKey, page, options.defaultLayout, evidenceByUrl.get(page.url) ?? ""), {
           html: rendered.html,

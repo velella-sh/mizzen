@@ -4,6 +4,13 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+### Added
+
+- **Data pages** build one page per record from a collection's Markdown template: `:field[…]`, `:::if`,
+  `:::each`, and `:::records` directives, front matter and URL patterns filled from fields, Markdown fields,
+  per-language pages, collection navigation, `record:` links, data-file edit links and agent instructions, and
+  span edits that refuse to make a record unparseable or invalid.
+
 ## 0.2.0 — 2026-11-13
 
 This release makes the engine's claims checkable: the CLI reports what it actually does, an agent edit is

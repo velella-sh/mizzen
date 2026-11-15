@@ -15,6 +15,10 @@ export interface EditLink {
   readonly source: string;
   /** The page's file on the repository's web editor at the configured branch. */
   readonly editUrl: string;
+  /** First line of the record a record page was built from, when the page is a record page. */
+  readonly line?: number;
+  /** Last line of the record a record page was built from, when the page is a record page. */
+  readonly endLine?: number;
 }
 
 /** Compares by code point, never by locale. */
@@ -92,7 +96,17 @@ export function editLinksOf(site: Site): readonly EditLink[] {
     if (page.kind !== "doc") continue;
     const source = sourcePath(page.source.file);
     if (source.trim() === "") continue;
-    links.push({ url: page.url, source, editUrl: editUrlOf(root, host, branch, source) });
+    const record = page.record;
+    const line = record?.position.startLine;
+    const endLine = record?.position.endLine;
+    const edit = editUrlOf(root, host, branch, source);
+    links.push({
+      url: page.url,
+      source,
+      editUrl: line === undefined ? edit : `${edit}#L${line}${endLine === undefined || endLine === line ? "" : `-L${endLine}`}`,
+      ...(line === undefined ? {} : { line }),
+      ...(endLine === undefined ? {} : { endLine }),
+    });
   }
 
   return links.sort((a, b) => byCodePoint(a.url, b.url) || byCodePoint(a.source, b.source));

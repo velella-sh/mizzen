@@ -18,6 +18,8 @@ interface Section {
   readonly id: string;
   /** Heading level, 1 to 6. */
   readonly level: number;
+  /** The file the heading is written in: the data file for a field, the template for shared wording. */
+  readonly file: string;
   /** 1-based line in the source file, front matter included. */
   readonly line: number;
   /** 1-based column where the heading starts. */
@@ -82,6 +84,8 @@ interface PageEntry {
   readonly url: string;
   /** The source file, relative to the repository root, with forward slashes. */
   readonly source: string;
+  /** The template a record page was instantiated from, when the page is a record page. */
+  readonly template?: string;
   /** Headings in document order. */
   readonly sections: readonly Section[];
   /** Links in document order. */
@@ -216,8 +220,8 @@ function isMarkdown(page: Page): boolean {
 }
 
 /** A page's source file, relative to the repository root, with forward slashes on every platform. */
-function sourcePath(page: Page): string {
-  return page.source.file.replace(/\\/g, "/");
+function sourcePath(page: Page, file = page.source.file): string {
+  return file.replace(/\\/g, "/");
 }
 
 /**
@@ -262,6 +266,7 @@ export const sourcemap: Output = {
       const sections: Section[] = page.headings.map((heading) => ({
         id: heading.id,
         level: heading.depth,
+        file: heading.pos.file.replace(/\\/g, "/"),
         line: heading.pos.line,
         column: heading.pos.column,
         endLine: heading.pos.endLine,
@@ -269,11 +274,22 @@ export const sourcemap: Output = {
         text: heading.text,
       }));
 
-      const tree = isMarkdown(page) ? await parseMarkdown(page.markdown, page.source.line) : undefined;
-      const links = tree === undefined ? [] : linksOf(tree, { ...page.source, file: sourcePath(page) }, ctx.report);
-      const claims = tree === undefined ? [] : claimsOf(page, tree, ctx.report);
+      // A record page's twin is its template with fields filled in, so its links are read at the template's body.
+      const source = page.record === undefined
+        ? page.source
+        : { ...page.source, file: page.record.template, line: page.record.templateLine };
+      const tree = isMarkdown(page) || page.record !== undefined ? await parseMarkdown(page.markdown, source.line) : undefined;
+      const links = tree === undefined ? [] : linksOf(tree, { ...source, file: sourcePath(page, source.file) }, ctx.report);
+      const claims = tree === undefined ? [] : claimsOf({ ...page, source }, tree, ctx.report);
 
-      pages.push({ url: page.url, source: sourcePath(page), sections, links, claims });
+      pages.push({
+        url: page.url,
+        source: sourcePath(page),
+        ...(page.record === undefined ? {} : { template: sourcePath(page, page.record.template) }),
+        sections,
+        links,
+        claims,
+      });
     }
 
     const json = `${JSON.stringify({ version: 0, pages }, null, 2)}\n`;

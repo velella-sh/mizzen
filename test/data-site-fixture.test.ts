@@ -42,9 +42,24 @@ test("the fixture loads with the config loader and names its three collections",
   const { config, diagnostics } = loadConfig(ROOT);
   assert.deepEqual(diagnostics, []);
   assert.equal(config.title, "Sample catalogue");
-  assert.deepEqual(config.collections["components"], { source: "_data/components.yml", id: "slug" });
-  assert.deepEqual(config.collections["releases"], { source: "_data/releases.json" });
-  assert.deepEqual(config.collections["regions"], { source: "_data/regions.csv" });
+  assert.deepEqual(config.collections["components"], {
+    source: "_data/components.yml",
+    id: "slug",
+    template: "_templates/components.md",
+    permalink: "/components/{slug}/",
+    markdown: ["summary"],
+  });
+  assert.deepEqual(config.collections["releases"], {
+    source: "_data/releases.json",
+    template: "_templates/releases.md",
+    permalink: "/releases/{id}/",
+    markdown: ["summary"],
+  });
+  assert.deepEqual(config.collections["regions"], {
+    source: "_data/regions.csv",
+    template: "_templates/regions.md",
+    permalink: "/regions/{id}/",
+  });
 });
 
 test("the fixture holds thirty records with unique ids and resolvable references", () => {

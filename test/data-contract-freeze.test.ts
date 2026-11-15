@@ -68,12 +68,16 @@ const FROZEN: Shape = {
     "collection": "string",
     "id": "string",
     "position": "RecordPos",
+    "template": "string",
+    "templateLine": "number",
+    "fallbacks": "readonly string[]",
   },
   RecordProps: {
     "collection": "string",
     "id": "string",
     "url": "string",
     "fields": "Readonly<Record<string, unknown>>",
+    "links": "Readonly<Record<string, string>>",
   },
   ListGroup: {
     "key": "string",

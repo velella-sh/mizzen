@@ -62,6 +62,8 @@ function stampSources(tree: Root, sourcePath: string): void {
   visit(tree, (node) => {
     if (!SOURCED.has(node.type) || !node.position) return;
     const data = (node.data ??= {}) as { hProperties?: Record<string, unknown> };
+    // A block a data field placed already names the data file; the page's own source must not overwrite it.
+    if (typeof data.hProperties?.["data-src"] === "string") return;
     data.hProperties = {
       ...data.hProperties,
       "data-src": formatSpan(spanFromPosition(sourcePath, node.position)),

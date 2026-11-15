@@ -222,6 +222,17 @@
           "items": { "type": "string", "minLength": 1 },
           "description": "Fields that hold a date, written YYYY-MM-DD or as a full ISO 8601 instant."
         },
+        "markdown": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Fields that hold Markdown, rendered through the page pipeline with their positions in the data file."
+        },
+        "llms": {
+          "type": "boolean",
+          "default": true,
+          "description": "false keeps the collection's record pages out of llms-full.txt."
+        },
         "onInvalid": {
           "enum": ["error", "skip"],
           "default": "error",

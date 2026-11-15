@@ -171,6 +171,7 @@ function render(site: Site, ctx: OutputContext): string {
     `- A folder named after a language's URL prefix (for example \`fa/\` for the prefix \`/fa\`) holds that language's pages.`,
     ``,
     ...pageRules,
+    ...dataPages(site),
     `## How to add a page`,
     ``,
     `1. Create \`${folderPrefix}<folder>/<page>.md\`. The file name sets the page's address.`,
@@ -208,6 +209,20 @@ function render(site: Site, ctx: OutputContext): string {
     ``,
   ];
   return lines.join("\n");
+}
+
+/** The guidance for collections that build record pages, and nothing when the site has none. */
+function dataPages(site: Site): readonly string[] {
+  const collections = Object.entries(site.config.collections).filter(([, entry]) => entry.template !== undefined);
+  if (collections.length === 0) return [];
+  return [
+    `## Pages built from data`,
+    ``,
+    ...collections.map(([name, entry]) =>
+      `- Collection \`${name}\` builds one page per record from the template \`${entry.template}\`. Edit a page's own wording in its record in \`${entry.source}\`; edit wording every page of the collection shares in the template. A record page's agent.json names the data file, the record's lines, and the template.`,
+    ),
+    ``,
+  ];
 }
 
 /**

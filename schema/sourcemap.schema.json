@@ -68,6 +68,11 @@
             "pattern": "^([a-zA-Z]:)?[\\\\/]|(^|/)\\.\\.(/|$)|\\\\"
           }
         },
+        "template": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The template a record page was instantiated from, when the page is a record page."
+        },
         "url": {
           "type": "string",
           "pattern": "^/",
@@ -85,6 +90,11 @@
         "text"
       ],
       "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The file the heading is written in: the data file for a field, the template for shared wording. Absent means the page's source."
+        },
         "column": {
           "$ref": "#/$defs/column",
           "description": "1-based column where the heading starts. Absent at the level-0 and level-1 maps."

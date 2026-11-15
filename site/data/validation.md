@@ -45,6 +45,24 @@ its help names the two accepted formats.
 | `data.template-missing` | The template a collection names does not exist. | Create the file under `_templates/`, or fix `collections.<name>.template`. |
 | `data.template-unreadable` | The template exists but cannot be read. | Point `collections.<name>.template` at a readable Markdown file. |
 
+## Record pages
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.frontmatter-missing-field` | A template's front matter names a field the record does not hold as a scalar. | Add the field to the record, or remove the placeholder. |
+| `data.frontmatter-unknown-field` | A template's front matter names a field the collection's schema does not declare. | Use a declared field, or write `{{` for a literal brace. |
+| `data.frontmatter-empty` | A front matter value is empty once filled. | Point it at a field with text, or set a literal value. |
+| `data.field-path` | A `:field[…]` directive has no field name. | Write the name inside the brackets. |
+| `data.unknown-field` | A `:field[…]` names a field the collection's schema does not declare. | Use a declared field, or add it to the schema and the data. |
+| `data.block-field` | An `:::if` or `:::each` block has no `field` attribute. | Write `{field=<name>}`. |
+| `data.each-not-list` | An `:::each` block names a field that is not a list. | Point it at a list field. |
+| `data.block-nesting` | A template block is nested more than one level deep. | Nest one block inside another, not more. |
+| `data.records-from` | A `:::records` block has no `from` collection. | Write `{from=<collection>}`. |
+| `data.unknown-collection` | A `:::records` block names a collection the site does not have. | Name a collection the config declares. |
+| `data.records-where` | A `:::records` block's `where` is not one `field=field` pair. | Write `where="parent=id"`, or remove it. |
+| `data.records-limit` | A `:::records` block's `limit` is not a whole number of at least 1. | Write `limit=3`, or remove it. |
+| `data.permalink-field` | A URL pattern names a field the record does not hold as a scalar. | Add the field, or change `collections.<name>.permalink`. |
+
 ## CSV
 
 | ID | Meaning | Fix |

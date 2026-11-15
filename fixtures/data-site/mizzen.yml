@@ -5,7 +5,15 @@ collections:
   components:
     source: _data/components.yml
     id: slug
+    template: _templates/components.md
+    permalink: /components/{slug}/
+    markdown: [summary]
   releases:
     source: _data/releases.json
+    template: _templates/releases.md
+    permalink: /releases/{id}/
+    markdown: [summary]
   regions:
     source: _data/regions.csv
+    template: _templates/regions.md
+    permalink: /regions/{id}/

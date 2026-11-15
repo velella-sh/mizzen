@@ -12,14 +12,18 @@
  * `edit.generated-target` error, never a guess.
  */
 import type { Heading, Page, Site, SourcePos } from "../contracts/index.ts";
-import { hashSource, PatchError, sliceBySpan, type Patch, type PatchSpan } from "./patch.ts";
+import { compileSchemas } from "../data/schema.ts";
+import { parseDocument } from "yaml";
+import { applyPatch, hashSource, PatchError, sliceBySpan, type Patch, type PatchSpan } from "./patch.ts";
 
 /** Why a heading edit could not be planned. Each code names one situation, so a caller can act on it. */
 export type EditPlanErrorCode =
   | "edit.unknown-page"
   | "edit.generated-target"
   | "edit.ambiguous-target"
-  | "edit.source-mismatch";
+  | "edit.source-mismatch"
+  | "edit.unparseable"
+  | "edit.invalid-record";
 
 /** A refused edit plan. `url` and `headingId` echo the request, so a caller can report it. */
 export class EditPlanError extends Error {
@@ -196,4 +200,125 @@ export function planHeadingEdit(options: PlanHeadingEditOptions): Patch {
     replacement: `${"#".repeat(heading.depth)} ${newText}${newline}`,
     beforeHash: hashSource(source),
   };
+}
+
+/** What {@link planRecordFieldEdit} needs. */
+export interface PlanRecordFieldEditOptions {
+  /** The site model the record page comes from. */
+  readonly site: Site;
+  /** The site root, used to compile the collection's schema when it has one. */
+  readonly root: string;
+  /** The data file as text, including line endings. */
+  readonly source: string;
+  /** The record page's output URL. */
+  readonly url: string;
+  /** The top-level field to replace. */
+  readonly field: string;
+  /** The field's new value, written as the data file writes it. */
+  readonly newText: string;
+}
+
+/** Reads the edited record's fields from a parsed data file, by the id the collection uses. */
+function fieldsOfDocument(document: unknown, idField: string, id: string): Readonly<Record<string, unknown>> | undefined {
+  const value: unknown = document;
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) continue;
+      const fields = entry as Record<string, unknown>;
+      if (String(fields[idField] ?? fields["id"] ?? "") === id) return fields;
+    }
+    return undefined;
+  }
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const fields = (value as Record<string, unknown>)[id];
+    return typeof fields === "object" && fields !== null && !Array.isArray(fields)
+      ? (fields as Record<string, unknown>)
+      : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Plans the single patch that changes one field of a record, and refuses a change the data file cannot hold.
+ *
+ * The page is found by `url` and must be a record page. The field's span is the one the collection read, so only that
+ * value changes and the rest of the file keeps its bytes. After the patch the module parses the file again: a file that
+ * no longer parses is `edit.unparseable`, and a record the collection's schema rejects is `edit.invalid-record`. A
+ * collection without a schema is checked for a parse and an id only, because it has no other rule to apply.
+ */
+export function planRecordFieldEdit(options: PlanRecordFieldEditOptions): Patch {
+  const { site, root, source, url, field, newText } = options;
+  const page = pageAt(site, url);
+  if (page === undefined) {
+    throw new EditPlanError("edit.unknown-page", `No page has the URL ${JSON.stringify(url)}.`, { url, headingId: field });
+  }
+  const record = page.record;
+  if (record === undefined) {
+    throw new EditPlanError(
+      "edit.generated-target",
+      `${JSON.stringify(url)} is not a record page, so it has no field to edit.`,
+      { url, headingId: field },
+    );
+  }
+  const position = site.collections[record.collection]?.records.find((entry) => entry.id === record.id)?.fieldPositions[field];
+  if (position === undefined) {
+    throw new EditPlanError(
+      "edit.generated-target",
+      `The record ${record.collection}.${record.id} has no top-level field ${JSON.stringify(field)} with a span.`,
+      { url, headingId: field },
+    );
+  }
+  const span: PatchSpan = {
+    file: position.file,
+    line: position.startLine,
+    column: position.startColumn,
+    endLine: position.endLine,
+    endColumn: position.endColumn,
+  };
+  let expected: string;
+  try {
+    expected = sliceBySpan(source, span);
+  } catch (error) {
+    if (!(error instanceof PatchError)) throw error;
+    throw new EditPlanError(
+      "edit.source-mismatch",
+      `The field ${JSON.stringify(field)} of ${record.collection}.${record.id} points outside the data file given: ${error.message}`,
+      { url, headingId: field, span },
+    );
+  }
+
+  const patch: Patch = { span, expected, replacement: newText, beforeHash: hashSource(source) };
+  const after = applyPatch(source, patch);
+  const entry = site.config.collections[record.collection];
+  if (entry === undefined || !/\.(ya?ml|json)$/i.test(position.file)) {
+    // CSV has no nested parse to check; the span edit is all the format gives.
+    return patch;
+  }
+  const document = parseDocument(after, { uniqueKeys: false });
+  if (document.errors.length > 0) {
+    throw new EditPlanError(
+      "edit.unparseable",
+      `The edit would make ${position.file} unparseable: ${document.errors[0]?.message.split("\n")[0] ?? "parse error"}.`,
+      { url, headingId: field, span },
+    );
+  }
+  const idField = entry.id ?? "id";
+  const fields = fieldsOfDocument(document.toJS(), idField, record.id);
+  if (fields === undefined) {
+    throw new EditPlanError(
+      "edit.invalid-record",
+      `The edit would leave ${record.collection} without the record ${record.id}.`,
+      { url, headingId: field, span },
+    );
+  }
+  const schema = compileSchemas(root, site.config, {}, []).schemas[record.collection];
+  if (schema !== undefined && !schema.validate(fields)) {
+    const first = schema.validate.errors?.[0];
+    throw new EditPlanError(
+      "edit.invalid-record",
+      `The edit would make ${record.collection}.${record.id} invalid${first === undefined ? "" : `: ${first.instancePath || "/"} ${first.message ?? ""}`}.`,
+      { url, headingId: field, span },
+    );
+  }
+  return patch;
 }
