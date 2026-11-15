@@ -80,6 +80,8 @@ interface Index {
   readonly sourceOf: ReadonlyMap<string, string>;
   /** Addresses redirects answer, as comparable URL keys. */
   readonly redirects: ReadonlySet<string>;
+  /** Record pages by `<collection>/<id>`, for a `record:` address. */
+  readonly records: ReadonlyMap<string, Page>;
 }
 
 /** A link resolution: what it names, or that it leaves the site and is not checked. */
@@ -185,11 +187,13 @@ function indexOf(site: Site): Index {
   const pages = new Map<string, Page>();
   const sources = new Map<string, Page>();
   const sourceOf = new Map<string, string>();
+  const records = new Map<string, Page>();
   const prefix = sourcePrefix(site);
 
   for (const page of site.pages) {
     const key = urlKey(page.url, base);
     if (key !== undefined && !pages.has(key)) pages.set(key, page);
+    if (page.record !== undefined) records.set(`${page.record.collection}/${page.record.id}`, page);
 
     const source = siteSource(page, prefix);
     if (source === "" || source === "." || source.startsWith("../")) continue;
@@ -224,7 +228,7 @@ function indexOf(site: Site): Index {
     }
   }
 
-  return { base, pages, sources, sourceOf, redirects };
+  return { base, pages, sources, sourceOf, redirects, records };
 }
 
 /** The key of an old path from `redirects` or `redirect_from`, or `undefined` when it is not a safe path. */
@@ -318,7 +322,12 @@ function isAsset(path: string): boolean {
 
 /** Resolves one link against the index, or says it is not a page this check can judge. */
 function resolve(href: string, page: Page, index: Index): Resolution {
-  if (href === "" || EXTERNAL.test(href)) return { kind: "ignore" };
+  if (href === "" || EXTERNAL.test(href)) {
+    if (!href.startsWith("record:")) return { kind: "ignore" };
+    const address = href.slice("record:".length);
+    const target = index.records.get(address);
+    return target === undefined ? { kind: "missing", target: href } : { kind: "page", page: target, anchor: "" };
+  }
 
   const parts = split(href);
   if (parts.path === "" && parts.query !== "") return { kind: "ignore" };
@@ -453,11 +462,24 @@ export function checkLinks(site: Site): LinkFinding[] {
   const findings: LinkFinding[] = [];
   for (const page of site.pages) {
     if (page.kind !== "doc" || page.markdown.trim() === "") continue;
+    // A record page's twin comes from its template, so a link's position names the template, not the data file.
+    const linkPage: Page =
+      page.record === undefined
+        ? page
+        : {
+            ...page,
+            source: {
+              ...page.source,
+              file: page.record.template,
+              line: page.record.templateLine,
+              endLine: page.record.templateLine,
+            },
+          };
     for (const candidate of candidatesOf(page.markdown)) {
       const href = candidate.href.trim();
       const resolution = resolve(href, page, index);
       if (resolution.kind === "ignore" || resolution.kind === "redirect") continue;
-      const pos = sourcePos(candidate.node, page);
+      const pos = sourcePos(candidate.node, linkPage);
 
       if (resolution.kind === "self") {
         if (resolution.anchor === "" || ids(page).has(resolution.anchor)) continue;

@@ -15,14 +15,14 @@ The site has one config file and three sources under `_data/`, thirty records in
 
 ## `collections` in `mizzen.yml`
 
-| Collection | `source` | `id` | Why |
-| --- | --- | --- | --- |
-| `components` | `_data/components.yml` | `slug` | The id is a field, named by the config rather than the default `id`. |
-| `releases` | `_data/releases.json` | — | The id is the mapping key. |
-| `regions` | `_data/regions.csv` | — | The id is the `id` column. |
+| Collection | `source` | `id` | Template | URL pattern | Why |
+| --- | --- | --- | --- | --- | --- |
+| `components` | `_data/components.yml` | `slug` | `_templates/components.md` | `/components/{slug}/` | The id is a field, named by the config rather than the default `id`. |
+| `releases` | `_data/releases.json` | — | `_templates/releases.md` | `/releases/{id}/` | The id is the mapping key. |
+| `regions` | `_data/regions.csv` | — | `_templates/regions.md` | `/regions/{id}/` | The id is the `id` column. |
 
-Templates, URL patterns, and schemas arrive with the epics that build pages and validate records; this
-fixture only carries the sources and the config that reads them.
+`components` and `releases` mark `summary` as Markdown, so the field is rendered through the page pipeline and keeps
+its line in the data file.
 
 ## `_data/components.yml`
 

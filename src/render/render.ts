@@ -4,6 +4,7 @@ import type { Page, Site } from "../contracts/content.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
 import type { Pager, Trail } from "../contracts/nav.ts";
 import type { Component, Head, Island, Layout } from "../contracts/render.ts";
+import type { RecordProps } from "../contracts/data.ts";
 import type { SourcePos } from "../contracts/source.ts";
 import { parseSpan } from "../source/spans.ts";
 
@@ -30,6 +31,8 @@ export interface RenderOptions {
   readonly trail: Trail;
   readonly pager: Pager;
   readonly head: Head;
+  /** The record of a record page; unset on every other page. */
+  readonly record?: RecordProps;
 }
 
 /** The HTML document plus the islands and CSS the page actually used. */
@@ -257,7 +260,7 @@ export function renderPage(options: RenderOptions): RenderResult {
     if (entry.css !== undefined) css.push(entry.css);
   }
   const resolvedPage: Page = { ...page, html: resolved.html };
-  const node = layout({ site, page: resolvedPage, trail, pager, head, islands });
+  const node = layout({ site, page: resolvedPage, trail, pager, head, islands, ...(options.record === undefined ? {} : { record: options.record }) });
   const body = typeof node === "string" ? node : renderToString(node as VNode);
   return {
     html: withDocument(body, page),

@@ -47,6 +47,21 @@ export interface NavFromYamlOptions {
    * Navigation URLs are written without it and the engine adds it.
    */
   readonly base?: string;
+  /**
+   * Record pages by language and collection name, so an entry may write `collection: <name>` and expand to the pages
+   * of the list's language. `docs` and `main` use {@link NavFromYamlOptions.defaultLang}; `docs_fa` and `main_fa` use
+   * `fa`. Each entry names the page's title, URL, and localized fields, which `order` sorts.
+   */
+  readonly collections?: Readonly<Record<string, Readonly<Record<string, readonly CollectionNavEntry[]>>>>;
+  /** The site's default language, whose pages fill `docs` and `main`. Default `""`. */
+  readonly defaultLang?: string;
+}
+
+/** One record page a `collection:` navigation entry can list. */
+export interface CollectionNavEntry {
+  readonly title: string;
+  readonly url: string;
+  readonly fields: Readonly<Record<string, unknown>>;
 }
 
 /** What {@link navFromYaml} read from a navigation file. */
@@ -63,6 +78,8 @@ interface Context {
   readonly lineCounter: LineCounter;
   readonly pages: ReadonlySet<string> | undefined;
   readonly base: string;
+  readonly collections: Readonly<Record<string, Readonly<Record<string, readonly CollectionNavEntry[]>>>> | undefined;
+  readonly defaultLang: string;
   readonly diagnostics: Diagnostics;
 }
 
@@ -150,14 +167,89 @@ function link(ctx: Context, map: YAMLMap): (NavLink & Tabbed) | undefined {
   };
 }
 
-/** Reads one entry of a list: a link, or a group of links. Returns undefined after reporting why it is neither. */
-function entry(ctx: Context, node: Node): NavItem | undefined {
+/** The value at a dot-separated path in a navigation entry's fields, with own keys only. */
+function fieldIn(fields: Readonly<Record<string, unknown>>, path: string): unknown {
+  let current: unknown = fields;
+  for (const segment of path.split(".").map((part) => part.trim()).filter((part) => part !== "")) {
+    if (typeof current !== "object" || current === null) return undefined;
+    if (!Object.prototype.hasOwnProperty.call(current, segment)) return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+/** The text of a value, for sorting and comparing. */
+function textOfValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") return String(value);
+  return "";
+}
+
+/**
+ * Reads an entry written as `collection: <name>`: one group whose children are that collection's record pages, in URL
+ * order or in the order `order` names, cut to `limit`. Only a collection the build has pages for expands; a missing
+ * name, an unknown key, and a bad limit are errors at the entry.
+ */
+function collectionEntry(ctx: Context, map: YAMLMap, lang: string): NavGroup | undefined {
+  const allowed = new Set(["title", "collection", "order", "limit"]);
+  for (const pair of map.items) {
+    const key = textOf(pair.key) ?? "";
+    if (!allowed.has(key)) {
+      ctx.diagnostics.error("nav.unknown-key", `Unknown key \`${key}\` in a collection entry.`, {
+        pos: posOf(ctx, pair.key as Node),
+        help: "A collection entry has `collection`, an optional `title`, `order`, and `limit`.",
+      });
+    }
+  }
+  const name = textOf(valueOf(map, "collection")) ?? "";
+  const listed = ctx.collections?.[lang]?.[name];
+  if (listed === undefined) {
+    ctx.diagnostics.error(
+      "nav.unknown-collection",
+      `The navigation names the collection \`${name}\`, which has no pages${lang === "" ? "" : ` in \`${lang}\``}.`,
+      {
+        pos: posOf(ctx, valueOf(map, "collection") as Node),
+        help: "Name a collection the config declares with a `template` and a `permalink`.",
+      },
+    );
+    return undefined;
+  }
+  const title = textOf(valueOf(map, "title")) ?? name;
+  const order = textOf(valueOf(map, "order"));
+  const entries = [...listed];
+  if (order !== undefined && order.trim() !== "") {
+    entries.sort((a, b) => {
+      const left = textOfValue(fieldIn(a.fields, order));
+      const right = textOfValue(fieldIn(b.fields, order));
+      return left < right ? -1 : left > right ? 1 : a.url < b.url ? -1 : a.url > b.url ? 1 : 0;
+    });
+  } else {
+    entries.sort((a, b) => (a.url < b.url ? -1 : a.url > b.url ? 1 : 0));
+  }
+  const limitNode = valueOf(map, "limit");
+  const limit = isScalar(limitNode) && typeof limitNode.value === "number" ? limitNode.value : textOf(limitNode);
+  let kept = entries;
+  if (limitNode !== undefined) {
+    const value = typeof limit === "number" ? limit : limit === undefined ? NaN : Number(limit);
+    if (!Number.isInteger(value) || value < 1) {
+      ctx.diagnostics.error("nav.invalid-limit", "`limit` is a whole number of at least 1.", { pos: posOf(ctx, limitNode) });
+      return undefined;
+    }
+    kept = entries.slice(0, value);
+  }
+  return { title, children: kept.map((entry) => ({ title: entry.title, url: entry.url })) };
+}
+
+/** Reads one entry of a list: a collection, a link, or a group of links. Returns undefined after reporting why it is none. */
+function entry(ctx: Context, node: Node, lang: string): NavItem | undefined {
   if (!isMap(node)) {
     ctx.diagnostics.error("nav.invalid-item", "Each navigation entry is a mapping with `title` and `url`, or `title` and `children`.", {
       pos: posOf(ctx, node),
     });
     return undefined;
   }
+
+  if (valueOf(node, "collection") !== undefined) return collectionEntry(ctx, node, lang);
 
   const childrenNode = valueOf(node, "children");
   if (childrenNode === undefined) return link(ctx, node);
@@ -227,6 +319,8 @@ export function navFromYaml(text: string, file: string, options: NavFromYamlOpti
     lineCounter,
     pages: options.pages,
     base: options.base ?? "",
+    collections: options.collections,
+    defaultLang: options.defaultLang ?? "",
     diagnostics: createDiagnostics(),
   };
 
@@ -273,8 +367,10 @@ export function navFromYaml(text: string, file: string, options: NavFromYamlOpti
       continue;
     }
     const items: NavItem[] = [];
+    const suffix = /^[a-z]+_([a-z]{2,3})$/.exec(name)?.[1];
+    const lang = suffix ?? ctx.defaultLang;
     for (const item of list.items) {
-      const found = entry(ctx, item as Node);
+      const found = entry(ctx, item as Node, lang);
       if (found !== undefined) items.push(found);
     }
     nav[name] = items;

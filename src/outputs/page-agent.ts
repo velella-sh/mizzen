@@ -114,6 +114,14 @@ export interface PageAgent {
     /** SHA-256 of the page's source body, the manifest's `hashes.source` value. */
     readonly hash: string;
   };
+  /** The record the page was built from, and the template it was instantiated from. */
+  readonly record?: {
+    readonly collection: string;
+    readonly id: string;
+    readonly template: string;
+    readonly line: number;
+    readonly endLine: number;
+  };
   readonly agent: AgentBlock;
 }
 
@@ -169,7 +177,9 @@ export const pageAgent: Output = {
       if (url === undefined) continue;
       const block = readAgentBlock(page, (diagnostic) => ctx.report(diagnostic));
       const agent = orderedAgent(block);
-      if (Object.keys(agent).length === 0) continue;
+      // A record page's agent file is written without an `agent:` block too: it names the data file and the record's
+      // lines, which is the page's edit target.
+      if (Object.keys(agent).length === 0 && page.record === undefined) continue;
       const body: PageAgent = {
         url: page.url,
         source: sourceOf(page),
@@ -177,6 +187,17 @@ export const pageAgent: Output = {
         dir: page.dir,
         version: versions.get(page.url) ?? null,
         build: { engine: version, hash: hashOf(page.markdown) },
+        ...(page.record === undefined
+          ? {}
+          : {
+              record: {
+                collection: page.record.collection,
+                id: page.record.id,
+                template: page.record.template,
+                line: page.record.position.startLine,
+                endLine: page.record.position.endLine,
+              },
+            }),
         agent,
       };
       files.push({

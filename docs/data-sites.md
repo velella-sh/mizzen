@@ -57,6 +57,34 @@ no product and no data set. The types it refers to are in [`src/contracts/data.t
   quoted: `where="status=stable"`. Every collection row carries the record's own id as `id`, so `columns=id` works for
   a list and for a mapping of id to record; equal sort values fall back to the id and then to source order.
 
+## Record pages
+
+A collection that names both `template` and `permalink` builds one page per record. The template is Markdown under
+`_templates/`; its body may use these directives, and its front matter fills `{field}` placeholders from the record
+(`{{` and `}}` are literal braces):
+
+- `:field[path]` shows one field, with `data-src` naming the value's line in the data file. A dotted path reads a nested
+  value; an absent optional field renders nothing. A field the schema does not declare, or a value that is not a scalar,
+  is an error at the directive. A field under `collections.<name>.markdown` is rendered through the Markdown pipeline and
+  keeps each block's line in the data file.
+- `:::if{field=path}` keeps its body only when the field has a value. `:::each{field=path}` repeats its body once per
+  item of a list, with the item's own fields first. A template may nest one block inside another, not more.
+- `:::records{from=collection where="field=field" sort=field limit=n}` repeats its body for records of one other
+  collection; `where` compares a candidate field with a field of the current record.
+
+A record page's front matter layout is the template's `layout`, else `record`. Its `Page.record` names the collection, the
+id, the record's position, the template, and the fields that fell back to the default language. `LayoutProps.record`
+carries the fields in the page's language and a `links` map that resolves each configured reference field to the URL of
+the record it points at.
+
+With `languages` configured, every record gets one page per language: `<template>.<lang>.md` is used when it exists,
+`<field>.<lang>` is read from a mapping and falls back to the default language, and pages that share a record carry the
+same `translation_key`. `collections.<name>.llms: false` keeps a collection's pages out of `llms-full.txt`.
+
+A navigation entry `- collection: <name>` expands to that collection's record pages, optionally ordered by `order`,
+cut to `limit`, and titled by `title`. A link written `record:<collection>/<id>` becomes the record page's URL; a link to
+a missing record is a broken link at its position in the page or template.
+
 ## Limits
 
 A collection source is bounded by default at 2 MiB, 10,000 records, and 100,000 characters per field. Raise one

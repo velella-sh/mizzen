@@ -199,6 +199,10 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(unique === undefined ? {} : { unique }),
       ...(references === undefined ? {} : { references }),
       ...(dates === undefined ? {} : { dates }),
+      ...(isPlainObject(entry) && Array.isArray(entry.markdown)
+        ? { markdown: entry.markdown.filter((field): field is string => typeof field === "string") }
+        : {}),
+      ...(isPlainObject(entry) && typeof entry.llms === "boolean" ? { llms: entry.llms } : {}),
       ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
     };

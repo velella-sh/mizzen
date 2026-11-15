@@ -1,6 +1,7 @@
 import type { Link, LinkReference, Nodes, Root } from "mdast";
 import { posix } from "node:path";
 import { permalink } from "../../content/permalink.ts";
+import { urlOfRecord } from "../../data/record-context.ts";
 import type { Plugin } from "unified";
 
 /**
@@ -82,6 +83,96 @@ function markExternal(node: Link | LinkReference): void {
 
 export const name = "links";
 export const order = 10;
+
+/** What {@link applyRecordLinks} knows about the site. */
+export interface RecordLinkContext {
+  /** Collections by name, so an address names a real record. */
+  readonly collections: Parameters<typeof urlOfRecord>[0];
+  /** The collections' config, for the URL pattern. */
+  readonly config: Parameters<typeof urlOfRecord>[1];
+  /** Site `base`. */
+  readonly base: string;
+  /** The page language's URL prefix. */
+  readonly prefix: string;
+  /** The page's language, so the target's pattern fills from localized fields. */
+  readonly lang: string;
+  /** The site's default language, the fallback for a missing translation. */
+  readonly defaultLang: string;
+  /** The file the link is written in, for diagnostics. */
+  readonly file: string;
+}
+
+/** Removes `external` from a link's `rel`, keeping any other relationship it had. */
+function internal(node: { readonly data?: unknown }): void {
+  const data = node.data as { hProperties?: Record<string, unknown> } | undefined;
+  const props = data?.hProperties;
+  if (props === undefined) return;
+  const rel = props["rel"];
+  if (typeof rel !== "string") return;
+  const kept = rel.split(/\s+/).filter((token) => token !== "" && token !== "external");
+  if (kept.length === 0) delete props["rel"];
+  else props["rel"] = kept.join(" ");
+}
+
+/** A `record:<collection>/<id>` address, split into its two parts. */
+function recordAddress(url: string): { readonly collection: string; readonly id: string } | undefined {
+  if (!url.startsWith("record:")) return undefined;
+  const address = url.slice("record:".length);
+  const at = address.indexOf("/");
+  if (at <= 0 || at === address.length - 1) return undefined;
+  return { collection: address.slice(0, at), id: address.slice(at + 1) };
+}
+
+/**
+ * Rewrites `record:<collection>/<id>` links to the record page's URL, in links and in reference definitions. The
+ * address names no page when the collection or the record is missing; it is left as written so the link check reports
+ * it at the same position.
+ */
+export function applyRecordLinks(tree: Root, ctx: RecordLinkContext): void {
+  const recordDefinitions = new Set<string>();
+  visit(tree, (node) => {
+    if (node.type !== "definition") return;
+    const address = recordAddress(node.url);
+    if (address === undefined) return;
+    recordDefinitions.add(node.identifier);
+    const url = urlOfRecord(
+      ctx.collections,
+      ctx.config,
+      ctx.base,
+      ctx.prefix,
+      address.collection,
+      address.id,
+      ctx.lang,
+      ctx.defaultLang,
+    );
+    // An address with no page becomes an empty link in the HTML; the original address stays in the page's Markdown,
+    // where the link check reports it at its position.
+    node.url = url ?? "";
+  });
+  visit(tree, (node) => {
+    if (node.type === "linkReference") {
+      if (recordDefinitions.has(node.identifier)) internal(node);
+      return;
+    }
+    if (node.type !== "link") return;
+    const address = recordAddress(node.url);
+    if (address === undefined) return;
+    const url = urlOfRecord(
+      ctx.collections,
+      ctx.config,
+      ctx.base,
+      ctx.prefix,
+      address.collection,
+      address.id,
+      ctx.lang,
+      ctx.defaultLang,
+    );
+    // The address no longer leaves the site, so the external marker the links plugin added must go.
+    internal(node);
+    node.url = url ?? "";
+  });
+}
+
 export const plugin: Plugin<[], Root> = () => (tree) => {
   // Reference-style links resolve through their definitions at HTML time, so definitions are
   // rewritten first and the references read the rewritten target to decide `rel`.

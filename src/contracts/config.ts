@@ -71,6 +71,10 @@ export interface CollectionConfig {
   readonly references?: Readonly<Record<string, string>>;
   /** Fields that hold a date, written `YYYY-MM-DD` or as a full ISO 8601 instant. Default `[]`. */
   readonly dates?: readonly string[];
+  /** Fields that hold Markdown, rendered through the page pipeline with their positions in the data file. Default `[]`. */
+  readonly markdown?: readonly string[];
+  /** `false` keeps the collection's record pages out of `llms-full.txt`. Default `true`. */
+  readonly llms?: boolean;
   /** What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. Default `error`. */
   readonly onInvalid?: "error" | "skip";
   /** Limits on this collection's source. */

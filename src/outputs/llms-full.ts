@@ -61,7 +61,10 @@ function navList(site: Site): readonly NavItem[] {
 function readingOrder(site: Site): Page[] {
   const docs = new Map<string, Page>();
   for (const page of site.pages) {
-    if (page.kind === "doc" && !isAppPage(page.url, { pages: site.pages })) docs.set(page.url, page);
+    if (page.kind !== "doc" || isAppPage(page.url, { pages: site.pages })) continue;
+    // A collection may opt out of the full text; its pages still build and still have twins.
+    if (page.record !== undefined && site.config.collections[page.record.collection]?.llms === false) continue;
+    docs.set(page.url, page);
   }
 
   const ordered: Page[] = [];

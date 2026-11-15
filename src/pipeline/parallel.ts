@@ -39,6 +39,7 @@ import { navState } from "../nav/tree.ts";
 import { hreflangLinks } from "../outputs/hreflang.ts";
 import { opensearchLink } from "../outputs/opensearch.ts";
 import { loadRegistry, type ThemeRegistry } from "../render/registry.ts";
+import { recordPropsOf } from "../data/record-context.ts";
 import { renderPage, type ThemeComponent } from "../render/render.ts";
 import { islandUrl } from "../render/islands.ts";
 import type { Island } from "../contracts/render.ts";
@@ -51,6 +52,8 @@ export interface RenderedPage {
   readonly html: string;
   /** Theme-relative CSS files the page needs besides the shared ones: its layout's and its components'. */
   readonly css: readonly string[];
+  /** The layout the page was rendered with, when it named one. */
+  readonly layout?: string;
   /** Islands the page loads: the chrome parts' and those of the components it used. Absent when the page could not be laid out. */
   readonly islands?: readonly Island[];
   /** Findings from rendering the page; an empty list when it rendered cleanly. */
@@ -212,10 +215,12 @@ export function renderOnePage(
           help: "Use a layout from the theme's layouts/ folder.",
         },
       ],
+      layout: name,
     };
   }
   const { trail, pager } = placeOf(site, page);
   const registered = registry.layouts[name]!;
+  const record = recordPropsOf(site, page);
   const result = renderPage({
     site,
     page,
@@ -225,9 +230,10 @@ export function renderOnePage(
     trail,
     pager,
     head: headOf(site, page),
+    ...(record === undefined ? {} : { record }),
   });
   const css = registered.css === undefined ? result.css : [registered.css, ...result.css];
-  return { url: page.url, html: result.html, css, islands: result.islands, diagnostics: result.diagnostics };
+  return { url: page.url, html: result.html, css, islands: result.islands, diagnostics: result.diagnostics, layout: name };
 }
 
 /** The message of a thrown value, for a diagnostic. */

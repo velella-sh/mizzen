@@ -50,7 +50,7 @@ const page: Page = {
   html: '<h1 data-source="docs/guide/install.md:3">Install</h1>',
   markdown: "# Install\n",
   kind: "doc",
-  record: { collection: "components", id: "button", position: recordPos },
+  record: { collection: "components", id: "button", position: recordPos, template: "docs/_templates/button.md", templateLine: 4, fallbacks: [] },
 };
 
 const nav: NavTree = {
@@ -94,7 +94,7 @@ const plugin: Plugin = {
 };
 const code: CodeConfig = { plugins: [plugin] };
 
-const recordProps: RecordProps = { collection: "components", id: "button", url: page.url, fields: record.fields };
+const recordProps: RecordProps = { collection: "components", id: "button", url: page.url, fields: record.fields, links: {} };
 const listProps: ListProps = {
   collection: "components",
   records: [recordProps],

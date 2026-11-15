@@ -28,6 +28,8 @@ export interface Template {
   readonly body: string;
   /** 1-based line of the template file where `body` starts. */
   readonly bodyLine: number;
+  /** One template per language that has its own file, named `<template>.<lang>.md`, keyed by language code. */
+  readonly localized: Readonly<Record<string, Template>>;
 }
 
 /** What {@link loadTemplates} read. */
@@ -154,12 +156,55 @@ export async function loadTemplates(options: LoadTemplatesOptions): Promise<Temp
 
     const parsed = parseFrontMatter(text, display);
     diagnostics.push(...parsed.diagnostics);
+    const localized: Record<string, Template> = {};
+    // A language gets its own template when `<name>.<lang>.md` exists beside the declared one. A missing localized
+    // file falls back to the declared template, which is the ordinary case for a one-language site.
+    for (const language of config.languages) {
+      if (language.code === config.lang) continue;
+      const name = /^(.*?)(\.[^./]+)$/.exec(value);
+      if (name === null) continue;
+      const localizedValue = `${name[1]}.${language.code}${name[2]}`;
+      const localizedFile = resolve(sourceDir, localizedValue);
+      const localizedDisplay = relative(root, localizedFile).split(sep).join("/");
+      // The name is derived, but the file may still be a link out of the site; refuse it before it is read.
+      const localizedReal = await realpath(localizedFile).catch(() => undefined);
+      if (localizedReal !== undefined) {
+        const sourceReal = await realpath(sourceDir).catch(() => undefined);
+        const templatesReal = await realpath(resolve(sourceDir, "_templates")).catch(() => undefined);
+        if (
+          sourceReal === undefined ||
+          templatesReal === undefined ||
+          !insideRoot(sourceReal, localizedReal) ||
+          !insideRoot(templatesReal, localizedReal)
+        ) {
+          diagnostics.push(pathFinding(collection, localizedValue, pos, "resolves outside `_templates/` in the source folder."));
+          continue;
+        }
+      }
+      let localizedText: string;
+      try {
+        localizedText = await readFile(localizedFile, "utf8");
+      } catch {
+        continue;
+      }
+      const localizedParsed = parseFrontMatter(localizedText, localizedDisplay);
+      diagnostics.push(...localizedParsed.diagnostics);
+      localized[language.code] = {
+        collection,
+        path: localizedDisplay,
+        frontMatter: localizedParsed.data,
+        body: localizedParsed.body,
+        bodyLine: localizedParsed.bodyLine,
+        localized: {},
+      };
+    }
     templates[collection] = {
       collection,
       path: display,
       frontMatter: parsed.data,
       body: parsed.body,
       bodyLine: parsed.bodyLine,
+      localized,
     };
   }
 
