@@ -54,6 +54,18 @@ function rowsOf(from: string, ctx: DataDirectiveContext): readonly Record<string
   return undefined;
 }
 
+/** Compares two strings by Unicode code point, never by locale or UTF-16 unit. */
+function compareCodePoint(a: string, b: string): number {
+  const left = Array.from(a);
+  const right = Array.from(b);
+  const length = Math.min(left.length, right.length);
+  for (let index = 0; index < length; index++) {
+    const difference = left[index]!.codePointAt(0)! - right[index]!.codePointAt(0)!;
+    if (difference !== 0) return difference;
+  }
+  return left.length - right.length;
+}
+
 /** A value's text for a cell; a non-scalar keeps its JSON text, and an absent value is empty. */
 function cellText(value: unknown): string {
   const text = scalarText(value);
@@ -176,10 +188,10 @@ export function applyDataTable(
     selected = [...selected].sort((a, b) => {
       const left = text(a.entry);
       const right = text(b.entry);
-      if (left !== right) return left < right ? -1 : 1;
+      if (left !== right) return compareCodePoint(left, right);
       const leftId = id(a.entry);
       const rightId = id(b.entry);
-      if (leftId !== rightId) return leftId < rightId ? -1 : 1;
+      if (leftId !== rightId) return compareCodePoint(leftId, rightId);
       return a.index - b.index;
     });
   }
