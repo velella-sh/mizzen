@@ -77,6 +77,29 @@ test("--format json prints the whole report", async () => {
   }
 });
 
+test("an unreadable lock fails the command and appears in text and JSON", async () => {
+  const locks = [
+    ["{ not json\n", "data.urls-lock-invalid"],
+    ['{"version":2,"collections":{}}\n', "data.urls-lock-invalid"],
+  ];
+  for (const [contents, id] of locks) {
+    const root = site({ ...FILES, [URLS_LOCK_FILE]: contents! });
+    try {
+      const text = await run(["urls", "check", root]);
+      assert.equal(text.code, 1);
+      assert.match(text.errors.join("\n"), new RegExp(id!));
+
+      const json = await run(["urls", "check", root, "--format", "json"]);
+      assert.equal(json.code, 1);
+      const report = JSON.parse(json.out) as { lock: boolean; errors: { id: string }[] };
+      assert.equal(report.lock, true);
+      assert.ok(report.errors.some((finding) => finding.id === id), `${id} is in the JSON report`);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+});
+
 test("--update-urls belongs to build only", async () => {
   assert.equal((await run(["check", "--update-urls"])).code, 2);
   assert.equal((await run(["urls", "check", "--update-urls"])).code, 2);

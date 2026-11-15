@@ -6,6 +6,7 @@
  * with no redirect or a removed record with no `onRemoved` policy.
  */
 import type { UrlsPlan } from "../data/urls-lock.ts";
+import type { Diagnostic } from "../contracts/index.ts";
 
 /** What {@link urlsReport} found, ready for the CLI to print. */
 export interface UrlsCheckResult {
@@ -20,9 +21,17 @@ function counted(count: number, word: string): string {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
 
-/** The report for a site, in the requested format. */
-export function urlsReport(plan: UrlsPlan, format: "text" | "json"): UrlsCheckResult {
-  const errors = plan.diagnostics.filter((finding) => finding.severity === "error");
+/**
+ * The report for a site, in the requested format. `diagnostics` is the model's whole list, not only the URL check's:
+ * a lock file that cannot be read and a record whose pattern cannot be filled are both errors, and both must fail the
+ * command and appear in its JSON.
+ */
+export function urlsReport(
+  plan: UrlsPlan,
+  format: "text" | "json",
+  diagnostics: readonly Diagnostic[],
+): UrlsCheckResult {
+  const errors = diagnostics.filter((finding) => finding.severity === "error");
   const code = errors.length === 0 ? 0 : 1;
   if (format === "json") {
     return {

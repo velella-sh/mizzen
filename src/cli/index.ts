@@ -651,7 +651,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "urls") {
     try {
       const model = await buildModel(resolve(options.root));
-      const report = urlsReport(model.urls, options.format);
+      const report = urlsReport(model.urls, options.format, model.diagnostics);
       write(report.output);
       for (const finding of model.diagnostics) {
         if (finding.severity === "error") error(`${finding.id}: ${finding.message}`);
