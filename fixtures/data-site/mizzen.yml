@@ -1,0 +1,11 @@
+title: Sample catalogue
+description: A small site built from three data files, shared by tests and themes.
+lang: en
+collections:
+  components:
+    source: _data/components.yml
+    id: slug
+  releases:
+    source: _data/releases.json
+  regions:
+    source: _data/regions.csv

@@ -17,6 +17,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -27,7 +28,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
 }
 
 function site(overrides: Partial<SiteConfig> = {}): Site {
-  return { config: config(overrides), pages: [], nav: {}, data: {} };
+  return { config: config(overrides), pages: [], nav: {}, collections: {}, data: {} };
 }
 
 /** A context that keeps every diagnostic, so a test can check the output reported nothing. */

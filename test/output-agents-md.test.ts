@@ -21,6 +21,7 @@ function site(overrides: Partial<Site["config"]> = {}, pages: readonly Page[] = 
       include: [],
       exclude: [],
       navigation: "_data/navigation.yml",
+      collections: {},
       defaults: [],
       theme: { options: {} },
       search: {},
@@ -30,6 +31,7 @@ function site(overrides: Partial<Site["config"]> = {}, pages: readonly Page[] = 
     },
     pages,
     nav,
+    collections: {},
     data: {},
   };
 }

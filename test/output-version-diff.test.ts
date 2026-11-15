@@ -17,6 +17,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -45,7 +46,7 @@ function page(file: string, markdown: string, overrides: Partial<Page> = {}): Pa
 }
 
 function site(pages: readonly Page[], overrides: Partial<SiteConfig> = {}): Site {
-  return { config: config(overrides), pages, nav: {}, data: {} };
+  return { config: config(overrides), pages, nav: {}, collections: {}, data: {} };
 }
 
 /** The output reads no render host; the report list records any path collision. */

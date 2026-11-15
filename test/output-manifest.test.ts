@@ -38,6 +38,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -63,7 +64,7 @@ function page(url: string, kind: Page["kind"] = "doc", frontMatter: Page["frontM
 }
 
 function site(pages: readonly Page[], overrides: Partial<SiteConfig> = {}): Site {
-  return { config: config(overrides), pages, nav: {}, data: {} };
+  return { config: config(overrides), pages, nav: {}, collections: {}, data: {} };
 }
 
 /** The manifest reads only the model, so rendering a page here would be a bug. */

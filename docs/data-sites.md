@@ -1,0 +1,80 @@
+# Data sites
+
+This note fixes the words and the rules a site built from data uses. It describes any site; it names
+no product and no data set. The types it refers to are in [`src/contracts/data.ts`](../src/contracts/data.ts).
+
+## Terms
+
+- **Source** is one data file the site owns or pulls in, such as a YAML, JSON, or CSV file. A source is
+  read; it is never written by a build.
+- **Collection** is one source, read into records, and given the rules that turn it into pages: the
+  field that is the record's id, its template, its URL pattern, and its schema. A collection has a
+  name, lowercase letters, digits, and hyphens.
+- **Record** is one mapping inside a collection: an `id` and its fields. The fields are data. A record
+  is keyed by its id, compared by code point, without case folding.
+- **Position** is where a record, or one of its fields, sits in its source: the file, the start line
+  and column, and the end line and column, inclusive. Positions count Unicode code points, so an
+  astral character is one column.
+- **Template** is a Markdown page under `_templates/` with front matter and body. It is not a page and
+  not an asset: it is instantiated, once per record, into a page.
+- **Record page** is one page built from one record and its collection's template.
+- **List page** is one page that shows records of a collection: filtered, sorted, grouped, and
+  paginated. It is an ordinary page whose front matter asks for the list.
+
+## Rules
+
+1. **Records are data.** A record's fields are values, not HTML. The engine hands them to the layout;
+   the theme decides how they look. A field the config marks as Markdown is rendered by the same
+   Markdown pipeline as a page body.
+2. **A record page keeps the position of its record.** The page's source is the record's position in
+   the data file, and every value the page renders carries the position of the field it came from.
+   That is what makes a data page editable by an agent: the page names the file and the span to edit.
+3. **The template is the place for shared wording.** Text that every page of a collection shares lives
+   in the template; text that differs lives in the record. An edit that changes one page changes the
+   record; an edit that changes all of them changes the template.
+4. **Nothing reads the clock.** Not the current time, not the current date, not a file's modification
+   time, and not the build's start. A date in output comes from the config or from a record field, so
+   two builds of the same input, on different days, give the same bytes.
+5. **Order is fixed.** Records keep their source order unless a query names a sort; a sort falls back
+   to the id for ties; files are written sorted by path. Two builds of the same input are byte for
+   byte the same site.
+6. **A content problem is a diagnostic, not a crash.** A missing field, a broken reference, an invalid
+   record, a colliding URL, or an unreadable source carries its file and span. A throw is a bug in the
+   engine.
+7. **A build reads only what it can prove.** Local sources are read in place; a remote source is read
+   from the store the lock file names, and a build never opens a network connection. The cache key
+   covers every source that was read.
+8. **Adding is allowed; removing is not.** A contract field, a config key, or an output file may gain
+   a field in a later version. An existing name keeps its meaning.
+
+## What the theme receives
+
+- A record page uses the layout named in its template's front matter, else the layout `record`. A list
+  page uses the layout named in its front matter, else the layout `list`. Both are layout names, not
+  page kinds: the page itself stays a `doc` page.
+- `LayoutProps.record` on a record page: the collection's name, the record's id, its URL, and its
+  fields as data.
+- `LayoutProps.list` on a list page: the records selected for that page, the groups, and the page's
+  number, total, and previous and next URLs.
+- `Site.collections` on every page: each collection's records with their ids and positions.
+- `Page.record` on a record page: the collection name, the record id, and the record's position.
+- The ordinary contract, unchanged: navigation, pager, head, islands, and the site model.
+
+The theme does not receive HTML built from field values, and it does not receive the template's
+source. It may rely on the field names a site declared, never on a fixed list of fields.
+
+## What stays in the engine
+
+- Reading sources, keeping positions, validating records against a schema, and checking unique ids
+  and references.
+- Choosing which records become pages, filling URL patterns, detecting collisions, and keeping the
+  URL lock file.
+- Queries: filters, sorts, grouping, pagination, and the reference date that replaces the clock.
+- The generated artifacts: Markdown twins, page JSON, feeds, sitemap entries, search metadata, and
+  the source map, each of which names the data file and the record's span.
+- Every diagnostic and every token of the cache and dependency graph.
+
+## Frozen on
+
+Frozen on 2026-11-15. The contract in `src/contracts/data.ts` is guarded by
+`test/data-contract-freeze.test.ts`; a field is removed or retyped only with a new note here.

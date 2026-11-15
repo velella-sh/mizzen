@@ -21,6 +21,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -46,7 +47,7 @@ function page(url: string, kind: Page["kind"] = "doc", markdown = ""): Page {
 }
 
 function site(pages: readonly Page[], overrides: Partial<SiteConfig> = {}): Site {
-  return { config: config(overrides), pages, nav: {}, data: {} };
+  return { config: config(overrides), pages, nav: {}, collections: {}, data: {} };
 }
 
 /** The twins output reads no render host and reports nothing. */

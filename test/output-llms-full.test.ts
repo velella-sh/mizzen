@@ -20,6 +20,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -51,7 +52,7 @@ function page(
 }
 
 function site(pages: readonly Page[], nav: NavTree, overrides: Partial<SiteConfig> = {}): Site {
-  return { config: config(overrides), pages, nav, data: {} };
+  return { config: config(overrides), pages, nav, collections: {}, data: {} };
 }
 
 /** The render host is not read by the llms-full output, so it answers nothing. */

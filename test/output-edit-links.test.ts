@@ -17,6 +17,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -43,7 +44,7 @@ function page(url: string, overrides: Partial<Page> = {}): Page {
 }
 
 function site(pages: readonly Page[], repository?: RepositoryConfig): Site {
-  return { config: config(repository === undefined ? {} : { repository }), pages, nav: {}, data: {} };
+  return { config: config(repository === undefined ? {} : { repository }), pages, nav: {}, collections: {}, data: {} };
 }
 
 const GITHUB = "https://github.com/acme/site";

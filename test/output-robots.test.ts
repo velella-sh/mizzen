@@ -18,6 +18,7 @@ function site(url: string | undefined, base: string): Site {
       include: [],
       exclude: [],
       navigation: "_data/navigation.yml",
+      collections: {},
       defaults: [],
       theme: { options: {} },
       search: {},
@@ -26,6 +27,7 @@ function site(url: string | undefined, base: string): Site {
     },
     pages: [],
     nav: {},
+    collections: {},
     data: {},
   };
 }

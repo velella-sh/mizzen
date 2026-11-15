@@ -23,6 +23,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -49,7 +50,7 @@ function page(url: string, overrides: Partial<Page> = {}): Page {
 }
 
 function site(pages: readonly Page[], data: Readonly<Record<string, unknown>> = {}): Site {
-  return { config: config(), pages, nav: {}, data };
+  return { config: config(), pages, nav: {}, collections: {}, data };
 }
 
 interface Run {

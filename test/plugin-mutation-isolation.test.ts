@@ -21,6 +21,7 @@ function config(): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -48,7 +49,7 @@ function page(url = "/install/"): Page {
 /** A site model with nested page, navigation, and `_data` content. */
 function site(pages: readonly Page[] = [page()]): Site {
   const nav: NavTree = { main: [{ title: "Install", url: "/install/" }] };
-  return { config: config(), pages, nav, data: { team: { members: ["ada"] } } };
+  return { config: config(), pages, nav, collections: {}, data: { team: { members: ["ada"] } } };
 }
 
 /** Output files with text and bytes, the two contents a hook can change in place. */

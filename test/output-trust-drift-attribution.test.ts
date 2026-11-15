@@ -25,6 +25,7 @@ function config(): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -50,7 +51,7 @@ function page(url: string, markdown: string, file: string): Page {
 }
 
 function site(pages: readonly Page[]): Site {
-  return { config: config(), pages, nav: {}, data: {} };
+  return { config: config(), pages, nav: {}, collections: {}, data: {} };
 }
 
 /** The single `trust.json` file the report writes. */

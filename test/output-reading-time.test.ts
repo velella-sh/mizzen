@@ -29,6 +29,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -55,7 +56,7 @@ function page(url: string, overrides: Partial<Page> = {}): Page {
 }
 
 function site(pages: readonly Page[], overrides: Partial<SiteConfig> = {}): Site {
-  return { config: config(overrides), pages, nav: {}, data: {} };
+  return { config: config(overrides), pages, nav: {}, collections: {}, data: {} };
 }
 
 const ctx: OutputContext = {

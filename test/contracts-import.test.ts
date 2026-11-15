@@ -62,10 +62,13 @@ test("a consumer typechecks against the built entry points", () => {
   writeFileSync(
     consumer,
     `import { version } from "@velella/mizzen";
-import type { Chrome, Component, Diagnostic, Layout, Output, Page, Plugin, Site, SiteConfig, SourcePos } from "@velella/mizzen/contracts";
+import type {
+  Chrome, Collection, Component, DataRecord, Diagnostic, Layout, ListProps, Output, Page, PageRecord, Plugin, RecordPos, RecordProps, Site, SiteConfig, SourcePos,
+} from "@velella/mizzen/contracts";
 
 export const engine: string = version;
 export type Surface = [SourcePos, Diagnostic, SiteConfig, Page, Site, Output, Plugin, Layout, Chrome, Component];
+export type Data = [Collection, DataRecord, RecordPos, PageRecord, RecordProps, ListProps];
 `,
   );
   try {

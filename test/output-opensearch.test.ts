@@ -24,6 +24,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -49,7 +50,7 @@ function page(url: string): Page {
 }
 
 function site(overrides: Partial<SiteConfig> = {}, pages: readonly Page[] = [page("/guide/install/")]): Site {
-  return { config: config(overrides), pages, nav: {}, data: {} };
+  return { config: config(overrides), pages, nav: {}, collections: {}, data: {} };
 }
 
 /** A context that keeps every diagnostic reported to it, so a test can read them back. */

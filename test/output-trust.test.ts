@@ -42,6 +42,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -68,7 +69,7 @@ function page(url: string, markdown = "# Page\n", file = POS.file): Page {
 }
 
 function site(pages: readonly Page[], data: Readonly<Record<string, unknown>> = {}): Site {
-  return { config: config(), pages, nav: {}, data };
+  return { config: config(), pages, nav: {}, collections: {}, data };
 }
 
 /** The single `trust.json` file the report writes. */

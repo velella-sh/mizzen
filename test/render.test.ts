@@ -20,6 +20,7 @@ const site: Site = {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -28,6 +29,7 @@ const site: Site = {
   },
   pages: [],
   nav: {},
+  collections: {},
   data: {},
 };
 

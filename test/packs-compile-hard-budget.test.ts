@@ -39,6 +39,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -102,6 +103,7 @@ function twoPageSite(): Site {
       page("/guide/deploy/", DEPLOY, "Deploy the site", "guide/deploy.md"),
     ],
     nav: {},
+    collections: {},
     data: {},
   };
 }

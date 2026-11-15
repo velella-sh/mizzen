@@ -24,6 +24,7 @@ function site(pages: readonly Page[], data: Readonly<Record<string, unknown>> = 
       include: [],
       exclude: [],
       navigation: "_data/navigation.yml",
+      collections: {},
       defaults: [],
       theme: { options: {} },
       search: {},
@@ -32,6 +33,7 @@ function site(pages: readonly Page[], data: Readonly<Record<string, unknown>> = 
     },
     pages,
     nav: {},
+    collections: {},
     data,
   };
 }

@@ -28,6 +28,7 @@ function config(): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -53,7 +54,7 @@ function page(url: string): Page {
 
 function site(pages: readonly Page[]): Site {
   const nav: NavTree = { lists: [] };
-  return { config: config(), pages, nav, data: {} };
+  return { config: config(), pages, nav, collections: {}, data: {} };
 }
 
 /** A site folder holding the given files; the caller removes it when the test ends. */

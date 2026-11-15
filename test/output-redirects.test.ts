@@ -26,6 +26,7 @@ function site(options: {
       include: [],
       exclude: [],
       navigation: "_data/navigation.yml",
+      collections: {},
       defaults: [],
       theme: { options: {} },
       search: {},
@@ -34,6 +35,7 @@ function site(options: {
     },
     pages: options.pages ?? [],
     nav: {},
+    collections: {},
     data: {},
   };
 }

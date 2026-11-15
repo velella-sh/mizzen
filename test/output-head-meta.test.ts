@@ -20,6 +20,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -30,7 +31,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
 }
 
 function site(cfg: SiteConfig = config()): Site {
-  return { config: cfg, pages: [], nav: {}, data: {} };
+  return { config: cfg, pages: [], nav: {}, collections: {}, data: {} };
 }
 
 function page(url: string, frontMatter: FrontMatter = {}, overrides: Partial<Page> = {}): Page {
