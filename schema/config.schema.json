@@ -281,6 +281,60 @@
           "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
           "additionalProperties": { "$ref": "#/$defs/view" },
           "description": "Extra named pages built from every record, each with its own template, URL pattern, and layout. Default {}."
+        },
+        "search": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "meta": {
+              "type": "array",
+              "default": [],
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Fields written as result metadata under the field's own name. Default []."
+            },
+            "filters": {
+              "type": "array",
+              "default": [],
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Fields a reader can filter by; a list field gives one filter value per item. Default []."
+            },
+            "sort": {
+              "type": "array",
+              "default": [],
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Fields results can be ordered by: dates, numbers, or short text. Default []."
+            },
+            "aliases": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Field that holds other names of a record, indexed so a search for one finds the page."
+            }
+          },
+          "description": "How the collection's record pages take part in search."
+        },
+        "index": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fields"],
+          "properties": {
+            "fields": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Fields each row carries, in this order, before the record's URL."
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 100000,
+              "description": "Largest chunk, in bytes of the written JSON. Default 100000."
+            }
+          },
+          "description": "A compact JSON index of the collection's records for the theme, written under data/."
         }
       }
     },

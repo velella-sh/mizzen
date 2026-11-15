@@ -1,17 +1,23 @@
 import * as pagefind from "pagefind";
-import type { Page, Site } from "../contracts/content.ts";
+import type { Page, Site } from "../contracts/index.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
+import {
+  byCodePoint,
+  escapeAttribute,
+  filterPlan,
+  searchableRecords,
+  sortPlan,
+  sortValue,
+  textOf,
+  valuesOf,
+  type SearchableRecord,
+} from "./search-shared.ts";
 
 /** The folder the index lands in, relative to the output folder; the search client loads `/pagefind/pagefind.js`. */
 const FOLDER = "pagefind";
 
 /** The section a page that sits at the site root belongs to, like `llms.ts` does for links outside a group. */
 const ROOT_SECTION = "Pages";
-
-/** Compares by code point, never by locale. */
-function byCodePoint(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 /**
  * Strips the site `base` from a page URL, along whole path segments only. Every URL the model carries includes
@@ -37,13 +43,9 @@ function sectionOf(url: string, base: string): string {
   return segments[0] ?? ROOT_SECTION;
 }
 
-/** Escapes a value for use inside a double-quoted HTML attribute. */
-function escapeAttribute(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+/** One `<meta>` tag with the given attributes and a `content` value, escaped for a double-quoted attribute. */
+function contentMeta(attributes: string, value: string): string {
+  return `<meta ${attributes} content="${escapeAttribute(value)}">`;
 }
 
 /**
@@ -51,14 +53,49 @@ function escapeAttribute(value: string): string {
  * the theme's chrome never enters the index, plus the title as metadata and the section as a filter for the result
  * list. The language comes from the page, so Pagefind splits `fa` pages into their own index. Rendering the page
  * again through the theme would repeat its layout diagnostics, so the model's already-rendered body is used.
+ *
+ * A record page also carries its declared metadata, filters, sort values, and aliases. They are `<meta>` tags in the
+ * head, so they are searchable and returned to the theme without becoming page text.
  */
-function documentOf(page: Page, section: string): string {
+function documentOf(
+  page: Page,
+  section: string,
+  record: SearchableRecord | undefined,
+  skipped: readonly string[],
+  sorts: Readonly<Record<string, string>>,
+): string {
+  const head = [
+    contentMeta('data-pagefind-meta="title[content]"', page.title),
+    contentMeta('data-pagefind-filter="section[content]"', section),
+  ];
+  const description = textOf(page.frontMatter.description);
+  if (description !== undefined) {
+    head.push(contentMeta('name="description" data-pagefind-meta="description[content]"', description));
+  }
+  if (record !== undefined) {
+    head.push(contentMeta('data-pagefind-filter="collection[content]"', record.collection));
+    for (const field of record.config.filters ?? []) {
+      if (skipped.includes(field)) continue;
+      for (const value of valuesOf(record.fields[field])) {
+        head.push(contentMeta(`data-pagefind-filter="${escapeAttribute(field)}[content]"`, value));
+      }
+    }
+    for (const field of record.config.meta ?? []) {
+      const value = valuesOf(record.fields[field]).join(", ");
+      if (value !== "") head.push(contentMeta(`data-pagefind-meta="${escapeAttribute(field)}[content]"`, value));
+    }
+    for (const field of Object.keys(sorts)) {
+      const value = sortValue(record, field);
+      if (value !== undefined) head.push(`<meta data-pagefind-sort="${escapeAttribute(field)}:${escapeAttribute(value)}">`);
+    }
+    const aliases = valuesOf(record.config.aliases === undefined ? undefined : record.fields[record.config.aliases]);
+    if (aliases.length > 0) head.push(contentMeta('data-pagefind-meta="aliases[content]"', aliases.join(" ")));
+  }
   return [
     "<!DOCTYPE html>",
     `<html lang="${escapeAttribute(page.lang)}" dir="${page.dir}">`,
     "<head>",
-    `<meta data-pagefind-meta="title[content]" content="${escapeAttribute(page.title)}">`,
-    `<meta data-pagefind-filter="section[content]" content="${escapeAttribute(section)}">`,
+    ...head,
     "</head>",
     `<body><article data-pagefind-body>${page.html}</article></body>`,
     "</html>",
@@ -85,6 +122,10 @@ function reportErrors(ctx: OutputContext, page: Page | undefined, errors: readon
  * groups results by. A page with `search: false` in its front matter is left out, and `search: false` in the site
  * config writes no index at all.
  *
+ * A collection's `search` settings add record metadata, filters, sort values, and aliases. A record whose own `search`
+ * field is `false`, and a named view of a record, stays out. A free-text filter or a sort field that is not a date,
+ * number, or short text is reported once and left out.
+ *
  * Pagefind writes to disk, so the index is built and read back in memory as the output contract asks; files come
  * back under `pagefind/`, sorted by path. Pagefind errors are diagnostics, not throws.
  */
@@ -93,8 +134,18 @@ export const search: Output = {
   async run(site: Site, ctx: OutputContext): Promise<readonly OutputFile[]> {
     if (site.config.search === false) return [];
 
-    const pages = site.pages.filter((p) => p.kind === "doc" && p.frontMatter.search !== false);
+    const records = searchableRecords(site);
+    const byUrl = new Map(records.map((record) => [record.page.url, record]));
+    const pages = site.pages.filter(
+      (page) =>
+        page.kind === "doc" &&
+        page.frontMatter.search !== false &&
+        (page.record === undefined || byUrl.has(page.url)),
+    );
     if (pages.length === 0) return [];
+
+    const filters = filterPlan(site, records, (diagnostic) => ctx.report(diagnostic));
+    const sorts = sortPlan(site, records, (diagnostic) => ctx.report(diagnostic));
 
     const created = await pagefind.createIndex();
     if (created.index === undefined) {
@@ -106,7 +157,14 @@ export const search: Output = {
     try {
       const index = created.index;
       for (const page of pages) {
-        const content = documentOf(page, sectionOf(page.url, site.config.base));
+        const record = byUrl.get(page.url);
+        const content = documentOf(
+          page,
+          sectionOf(page.url, site.config.base),
+          record,
+          record === undefined ? [] : (filters.skipped[record.collection] ?? []),
+          record === undefined ? {} : (sorts[record.collection] ?? {}),
+        );
         const added = await index.addHTMLFile({ url: page.url, content });
         reportErrors(ctx, page, added.errors);
       }
