@@ -1,7 +1,7 @@
 /**
  * `https:` collection sources: a build reads the bytes a person fetched into `.mizzen/data/` and pinned in
  * `mizzen.lock.json`. It never opens a network connection, accepts no scheme but `https:`, and trusts no stored file
- * whose hash or size differs from the lock.
+ * whose hash or size differs from the lock. A stored path that cannot be read is one diagnostic, never a throw.
  */
 import { readFile, stat } from "node:fs/promises";
 import { relative, sep } from "node:path";
@@ -115,7 +115,20 @@ export async function readRemoteSource(
     };
   }
 
-  const bytes = await readFile(stored);
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(stored);
+  } catch {
+    return {
+      diagnostic: {
+        id: "data.store-unreadable",
+        severity: "error",
+        message: `The stored bytes for "${address}" cannot be read from ${display}.`,
+        pos: { file: display, line: 1, column: 1, endLine: 1, endColumn: 1 },
+        help: "Run `mizzen data fetch` to store them again.",
+      },
+    };
+  }
   if (bytes.byteLength !== entry.bytes || sha256(bytes) !== entry.sha256) {
     return {
       diagnostic: {
@@ -132,7 +145,7 @@ export async function readRemoteSource(
     source: {
       address,
       display,
-      text: bytes.toString("utf8"),
+      text: new TextDecoder().decode(bytes),
       sha256: entry.sha256,
       bytes: entry.bytes,
     },

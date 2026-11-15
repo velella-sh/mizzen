@@ -1,7 +1,7 @@
 /**
  * `npm:<package>/<path>` collection sources: a file inside an installed dependency, read from the site's
- * `node_modules`. Nothing is installed, nothing is fetched, and the resolved file must stay inside the package folder
- * even through a symbolic link.
+ * `node_modules`. Nothing is installed, nothing is fetched, and the resolved file and `package.json` must stay inside
+ * the package folder even through a symbolic link.
  */
 import { access, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, sep } from "node:path";
@@ -17,8 +17,10 @@ export interface NpmSource {
   readonly subpath: string;
   /** The installed version from the package's own `package.json`. */
   readonly version: string;
-  /** Absolute path of the file. */
+  /** Absolute path of the file, resolved through links and inside the package folder. */
   readonly file: string;
+  /** Absolute path of the package's own `package.json`, resolved inside the package folder. */
+  readonly packageFile: string;
   /** The file's path relative to the site root, for diagnostics and positions. */
   readonly display: string;
 }
@@ -60,13 +62,6 @@ function inside(parent: string, child: string): boolean {
   return rel === "" || (!rel.startsWith(`..${sep}`) && rel !== ".." && !isAbsolute(rel));
 }
 
-/** The absolute file a valid `npm:` address names, before resolving links; `undefined` for a malformed address. */
-export function npmSourcePath(root: string, address: string): string | undefined {
-  const split = splitNpmAddress(address);
-  if (split === undefined) return undefined;
-  return join(root, "node_modules", split.name, split.subpath);
-}
-
 /**
  * Resolves an `npm:` source from `root/node_modules`. A malformed address, a missing package or file, a missing
  * version, and a file that resolves outside the package through a link each come back as one diagnostic.
@@ -99,9 +94,13 @@ export async function resolveNpmSource(root: string, address: string): Promise<N
     };
   }
 
+  let packageFile: string;
   let version: string;
   try {
-    const manifest = JSON.parse(await readFile(join(packageReal, "package.json"), "utf8")) as { version?: unknown };
+    packageFile = await realpath(join(packageReal, "package.json"));
+    // A package.json link may point anywhere; the metadata a build reads must stay inside the package.
+    if (!inside(packageReal, packageFile)) throw new Error("outside");
+    const manifest = JSON.parse(await readFile(packageFile, "utf8")) as { version?: unknown };
     if (typeof manifest.version !== "string" || manifest.version === "") throw new Error("no version");
     version = manifest.version;
   } catch {
@@ -162,6 +161,7 @@ export async function resolveNpmSource(root: string, address: string): Promise<N
       subpath: split.subpath,
       version,
       file: fileReal,
+      packageFile,
       display: `node_modules/${split.name}/${split.subpath}`,
     },
   };

@@ -54,7 +54,8 @@ no product and no data set. The types it refers to are in [`src/contracts/data.t
   `components.button.name` reads one field of one record. The resolved text is written into the Markdown twin too.
 - `::data-table{from=… columns=…}` renders records as the table a Markdown table produces. `columns` is a
   comma-separated list of field paths, `sort` names one field, and `where` filters on one pair written with its value
-  quoted: `where="status=stable"`.
+  quoted: `where="status=stable"`. Every collection row carries the record's own id as `id`, so `columns=id` works for
+  a list and for a mapping of id to record; equal sort values fall back to the id and then to source order.
 
 ## Limits
 

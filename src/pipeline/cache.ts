@@ -37,7 +37,7 @@ import { repositoryStateKey } from "../model/reviewers.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { version } from "../index.ts";
 import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
-import { splitNpmAddress } from "../data/package-source.ts";
+import { resolveNpmSource } from "../data/package-source.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
 export const CACHE_FORMAT = 2;
@@ -413,9 +413,10 @@ interface KeyInput {
 
 /**
  * The files a collection source contributes to a cache key: a local file, an installed package's file and version, or
- * the stored bytes of a pinned URL. A site with no collections contributes nothing, so its key stays exactly what
- * 0.2.0 produced. The lock file itself is an input whenever collections exist, because it decides which bytes a
- * remote or package source reads.
+ * the stored bytes of a pinned URL. A package source comes back as real paths the resolver proved are inside the
+ * package folder, never as a path built with `join`, so a link cannot make the key read outside it. A site with no
+ * collections contributes nothing, so its key stays exactly what 0.2.0 produced. The lock file itself is an input
+ * whenever collections exist, because it decides which bytes a remote or package source reads.
  */
 async function collectionInputs(options: { readonly root: string; readonly config: SiteConfig }): Promise<KeyInput[]> {
   const names = Object.keys(options.config.collections);
@@ -425,11 +426,10 @@ async function collectionInputs(options: { readonly root: string; readonly confi
   for (const name of names.sort(byCodePoint)) {
     const source = options.config.collections[name]!.source;
     if (source.startsWith("npm:")) {
-      const split = splitNpmAddress(source);
-      if (split === undefined) continue;
-      const packagePath = join(options.root, "node_modules", split.name);
-      inputs.push({ label: `collection/${name}/package`, path: join(packagePath, "package.json") });
-      inputs.push({ label: `collection/${name}/source`, path: join(packagePath, split.subpath) });
+      const resolved = await resolveNpmSource(options.root, source).catch(() => undefined);
+      if (resolved?.source === undefined) continue;
+      inputs.push({ label: `collection/${name}/package`, path: resolved.source.packageFile });
+      inputs.push({ label: `collection/${name}/source`, path: resolved.source.file });
     } else if (/^https:\/\//.test(source)) {
       const pinned = lock?.sources[source];
       if (pinned !== undefined) inputs.push({ label: `collection/${name}/source`, path: storedPath(options.root, pinned.sha256) });

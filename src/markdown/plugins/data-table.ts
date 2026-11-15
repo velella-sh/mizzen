@@ -1,7 +1,8 @@
 /**
  * `::data-table{from=… columns=…}`: renders records from `_data` or a collection as the same table a Markdown table
  * produces, so the theme's table styles apply with no new markup. `sort` names one field, `where` filters on one
- * `field=value` pair, and `columns` is a comma-separated list of field paths.
+ * `field=value` pair, and `columns` is a comma-separated list of field paths. Every collection row carries the
+ * record's real id, and equal sort values fall back to that id and then to source order.
  *
  * The model applies {@link applyDataTable} after the page cache. The `plugin` export exists because every file in this
  * folder is discovered as a Markdown plugin; it has no work of its own.
@@ -35,7 +36,7 @@ export interface DataTableResult {
 /** The rows a `from` value names, each as a field mapping. */
 function rowsOf(from: string, ctx: DataDirectiveContext): readonly Record<string, unknown>[] | undefined {
   const collection = ctx.collections[from];
-  if (collection !== undefined) return collection.records.map((record) => record.fields);
+  if (collection !== undefined) return collection.records.map((record) => ({ ...record.fields, id: record.id }));
 
   const path = from.startsWith("_data.") ? from.slice("_data.".length) : from;
   const found = resolveDataPath(path, ctx);
@@ -168,10 +169,17 @@ export function applyDataTable(
       const found = resolveInValue(entry, sort);
       return found.found ? cellText(found.value) : "";
     };
+    const id = (entry: Record<string, unknown>): string => {
+      const found = resolveInValue(entry, "id");
+      return found.found ? cellText(found.value) : "";
+    };
     selected = [...selected].sort((a, b) => {
       const left = text(a.entry);
       const right = text(b.entry);
       if (left !== right) return left < right ? -1 : 1;
+      const leftId = id(a.entry);
+      const rightId = id(b.entry);
+      if (leftId !== rightId) return leftId < rightId ? -1 : 1;
       return a.index - b.index;
     });
   }

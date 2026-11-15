@@ -4,8 +4,8 @@
  * point at the exact cell that needs a change.
  *
  * The parser never throws on content: a bad row is one diagnostic and is left out, while the sound rows before and
- * after it still load. A missing or duplicate header, an unclosed quote, and a row whose cell count differs from the
- * header are reported with their position.
+ * after it still load. A missing, empty, or duplicate header, an unclosed quote, and a row whose cell count differs
+ * from the header are reported with their position.
  */
 import type { Diagnostic, RecordPos } from "../contracts/index.ts";
 import { lineIndex, sourcePosOf, spanOf, type LineIndex } from "./positions.ts";
@@ -176,6 +176,16 @@ export function parseCsv(text: string, file: string): CsvResult {
   for (let cell = 0; cell < headerRow.cells.length; cell++) {
     const value = headerRow.cells[cell]!.value;
     const at = spanOf(index, file, headerRow.cells[cell]!.start, headerRow.cells[cell]!.end + 1);
+    if (value === "") {
+      diagnostics.push({
+        id: "data.csv-empty-header",
+        severity: "error",
+        message: `CSV collection ${file} has a header cell with no name.`,
+        pos: sourcePosOf(at),
+        help: "Name every column, or remove the empty one.",
+      });
+      continue;
+    }
     if (header.includes(value)) {
       diagnostics.push({
         id: "data.csv-duplicate-header",
@@ -189,16 +199,6 @@ export function parseCsv(text: string, file: string): CsvResult {
     header.push(value);
     columns.push(cell);
   }
-  if (header.includes("")) {
-    diagnostics.push({
-      id: "data.csv-empty-header",
-      severity: "error",
-      message: `CSV collection ${file} has a header cell with no name.`,
-      pos: sourcePosOf(spanOf(index, file, headerRow.cells[0]!.start, headerRow.cells[0]!.end + 1)),
-      help: "Name every column, or remove the empty one.",
-    });
-  }
-
   const records: CsvRow[] = [];
   for (const row of rows) {
     if (row.cells.length !== headerRow.cells.length) {

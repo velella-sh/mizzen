@@ -8,7 +8,8 @@
  *
  * The graph is a superset of the truth where the engine cannot narrow it: a layout may read any `_data` value, so
  * every output depends on every ordinary data file. A collection source is narrower: a page that shows a record has
- * an edge to that one file, and a directive the graph cannot resolve statically keeps every data edge for its page.
+ * an edge to that one file, including a package file and the stored bytes of a pinned URL. When a directive cannot be
+ * resolved statically the graph is incomplete, and the invalidation plan asks for a full build instead of guessing.
  *
  * Sources are read through the existing `expandIncludes` and `parseFrontMatter`, so include rules (fences, nesting,
  * cycles) stay in one place. The graph is not wired into `build`; it is a standalone unit the integration issue uses.
@@ -23,6 +24,9 @@ import { discover, type DiscoveredFile } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { expandIncludes } from "../content/includes.ts";
 import type { Diagnostic, Page, Site, SourcePos } from "../contracts/index.ts";
+import type { DataLock } from "../data/lock.ts";
+import { readLock, storedPath } from "../data/lock.ts";
+import { resolveNpmSource } from "../data/package-source.ts";
 import { sortDiagnostics } from "./diagnostics.ts";
 
 /** What a node stands for. A file has one kind: its role in the build, with discovery's role winning. */
@@ -58,6 +62,8 @@ export interface DependencyGraph {
   readonly nodes: readonly DependencyNode[];
   /** Every edge, sorted by `from`, then `to`, then position; duplicate edges are collapsed. */
   readonly edges: readonly DependencyEdge[];
+  /** Data directives the graph could not resolve; any of them makes a complete invalidation the only safe answer. */
+  readonly incomplete?: readonly string[];
 }
 
 /** What {@link buildDependencyGraph} needs. */
@@ -389,14 +395,33 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
   }
 
   // A collection source is a data file whose pages the graph can name: a page that shows a record carries an edge
-  // to that one file, not to every file under `_data`. A layout may still read all of `_data`, so non-collection data
-  // files keep their blanket edge.
+  // to that one file, not to every file under `_data`. A package source is the installed file, and a remote source is
+  // the stored bytes the lock names, so both can be watched even though neither is discovered. A layout may still
+  // read all of `_data`, so non-collection data files keep their blanket edge.
   const collectionPaths = new Map<string, string>();
   const collectionIds = new Set<string>();
+  const incomplete: string[] = [];
+  let lock: DataLock | undefined;
+  let lockRead = false;
   for (const [name, collection] of Object.entries(options.site.collections)) {
-    if (/^[a-z][a-z\d+.-]*:/i.test(collection.source)) continue;
-    const path = normalize(relative(sourceDir, resolve(options.root, collection.source)).split(sep).join("/"));
-    if (path.startsWith("../") || path === "..") continue;
+    const source = collection.source;
+    let path: string | undefined;
+    if (source.startsWith("npm:")) {
+      const resolved = await resolveNpmSource(options.root, source).catch(() => undefined);
+      if (resolved?.source !== undefined) path = relative(sourceDir, resolved.source.file).split(sep).join("/");
+    } else if (/^https:\/\//.test(source)) {
+      if (!lockRead) {
+        lockRead = true;
+        lock = (await readLock(options.root).catch(() => undefined))?.lock;
+      }
+      const pinned = lock?.sources[source];
+      if (pinned !== undefined) path = relative(sourceDir, storedPath(options.root, pinned.sha256)).split(sep).join("/");
+    } else if (!/^[a-z][a-z\d+.-]*:/i.test(source)) {
+      path = relative(sourceDir, resolve(options.root, source)).split(sep).join("/");
+      if (path.startsWith("../") || path === "..") continue;
+    }
+    if (path === undefined) continue;
+    path = normalize(path);
     collectionPaths.set(name, path);
     collectionIds.add(fileNodeId(path));
     if (!filePaths.has(path)) {
@@ -404,7 +429,7 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
       addNode({ id: fileNodeId(path), kind: "data", path });
     }
   }
-  const blanketDataIds = dataIds.filter((id, index) => id !== navigationId && !collectionIds.has(id));
+  const blanketDataIds = dataIds.filter((id) => !collectionIds.has(id));
 
   /** The source-relative path a `_data` key names, such as `components` or `guides.install.steps`. */
   const dataKeyPath = (key: string): string | undefined => {
@@ -478,11 +503,9 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
         else edge(target, index + 1, (match.index ?? 0) + 1, (match.index ?? 0) + match[0].length);
       }
     }
-    // A directive the graph cannot resolve statically makes this page conservative: it keeps every data edge, so a
-    // change can never leave a stale page behind.
-    if (unresolved) {
-      for (const path of [...dataPaths, ...collectionPaths.values()]) edge(path, 1, 1, 1);
-    }
+    // A directive the graph cannot resolve statically makes the whole graph unreliable for narrowing, so the plan
+    // asks for a full build instead of keeping guessed edges.
+    if (unresolved) incomplete.push(`A data directive in "${from}" cannot be resolved statically.`);
   };
 
   for (const path of pagePaths) {
@@ -584,8 +607,9 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     });
   }
 
+  const unresolved = [...new Set(incomplete)].sort(byCodePoint);
   return {
-    graph: { nodes: graphNodes, edges: graphEdges },
+    graph: { nodes: graphNodes, edges: graphEdges, ...(unresolved.length === 0 ? {} : { incomplete: unresolved }) },
     diagnostics: sortDiagnostics(diagnostics),
   };
 }
@@ -605,6 +629,9 @@ export function affectedNodes(graph: DependencyGraph, changed: readonly string[]
     }
   }
   if (seeds.size === 0) return [];
+  if (graph.incomplete !== undefined && graph.incomplete.length > 0) {
+    return graph.nodes.filter((node) => node.kind === "output").map((node) => node.id);
+  }
 
   const dependents = new Map<string, string[]>();
   for (const edge of graph.edges) {

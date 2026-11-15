@@ -69,3 +69,40 @@ test("a missing source or missing attributes is one error and leaves the page re
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a mapping collection's real id is a column and equal sort values fall back to the id", async () => {
+  const root = tree({
+    "mizzen.yml": "collections:\n  releases:\n    source: _data/releases.yml\n",
+    "_data/releases.yml": "z:\n  name: Zulu\n  rank: 1\na:\n  name: Alpha\n  rank: 1\n",
+    "page.md": "::data-table{from=releases columns=id,name sort=rank}\n",
+  });
+  try {
+    const { site, diagnostics } = await buildModel(root);
+    assert.deepEqual(diagnostics, []);
+    const page = site.pages[0]!;
+    assert.deepEqual([...page.html.matchAll(/<td>([az])<\/td>/g)].map((match) => match[1]), ["a", "z"]);
+    assert.equal(
+      page.markdown,
+      "| id | name |\n| --- | --- |\n| a | Alpha |\n| z | Zulu |\n",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a list collection uses its configured id field for columns=id", async () => {
+  const root = tree({
+    "mizzen.yml": "collections:\n  items:\n    source: _data/items.yml\n    id: slug\n",
+    "_data/items.yml": "- slug: second\n  name: Second\n- slug: first\n  name: First\n",
+    "page.md": "::data-table{from=items columns=id,name}\n",
+  });
+  try {
+    const { site, diagnostics } = await buildModel(root);
+    assert.deepEqual(diagnostics, []);
+    assert.match(site.pages[0]!.html, /<td>second<\/td>/);
+    assert.match(site.pages[0]!.html, /<td>first<\/td>/);
+    assert.doesNotMatch(site.pages[0]!.html, /data\.table-unknown-column/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

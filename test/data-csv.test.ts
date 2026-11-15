@@ -67,3 +67,12 @@ test("a duplicate header, a missing header, an unclosed quote, and a wrong row l
   assert.deepEqual(ids(short.diagnostics), ["data.csv-row-length"]);
   assert.deepEqual(short.rows.map((row) => row.fields), [{ id: "2", note: "two" }]);
 });
+
+test("an empty header cell is reported at that cell and the sound row still loads", () => {
+  const result = parseCsv("id,,name\n1,x,Alpha\n", "empty-header.csv");
+  assert.deepEqual(ids(result.diagnostics), ["data.csv-empty-header"]);
+  assert.equal(result.diagnostics[0]!.pos?.line, 1);
+  assert.equal(result.diagnostics[0]!.pos?.column, 4);
+  assert.deepEqual(result.header, ["id", "name"]);
+  assert.deepEqual(result.rows.map((row) => row.fields), [{ id: "1", name: "Alpha" }]);
+});

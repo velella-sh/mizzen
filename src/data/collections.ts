@@ -252,7 +252,18 @@ async function localBytes(
     diagnostics.push(tooLarge);
     return undefined;
   }
-  return readFile(file, "utf8");
+  try {
+    return await readFile(file, "utf8");
+  } catch {
+    diagnostics.push({
+      id: "data.source-unreadable",
+      severity: "error",
+      message: `Collection "${collection}" cannot read ${display}.`,
+      pos,
+      help: "Point the collection at a readable file.",
+    });
+    return undefined;
+  }
 }
 
 /** Reads a CSV or YAML/JSON source into records, adding every finding to `diagnostics`. */
@@ -402,7 +413,19 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
         });
         continue;
       }
-      const bytes = await readFile(resolved.source.file);
+      let bytes: Uint8Array;
+      try {
+        bytes = await readFile(resolved.source.file);
+      } catch {
+        diagnostics.push({
+          id: "data.source-unreadable",
+          severity: "error",
+          message: `Collection "${name}" cannot read ${display}.`,
+          pos: configPos,
+          help: "Point the collection at a readable file inside the package.",
+        });
+        continue;
+      }
       if (pinned.version !== resolved.source.version || pinned.bytes !== bytes.byteLength || pinned.sha256 !== sha256Of(bytes)) {
         diagnostics.push({
           id: "data.lock-mismatch",
@@ -413,7 +436,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
         });
         continue;
       }
-      text = bytes.toString("utf8");
+      text = new TextDecoder().decode(bytes);
     } else if (isAddress(source)) {
       if (lockInvalid) continue;
       const result = await readRemoteSource(root, source, lock ?? { version: 1, sources: {} }, limits);

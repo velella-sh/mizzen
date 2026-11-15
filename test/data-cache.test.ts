@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "../src/config/load.ts";
+import { loadCollections } from "../src/data/collections.ts";
 import { sha256, storedPath, writeLock } from "../src/data/lock.ts";
 import { build } from "../src/pipeline/build.ts";
 import { cacheKey } from "../src/pipeline/cache.ts";
@@ -136,5 +137,30 @@ test("a data change reaches the build hash when it changes a page", async () => 
     assert.notEqual(two.build.hash, one.build.hash);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a package file that links outside is refused, is not read, and does not change the key", async () => {
+  const outside = mkdtempSync(join(tmpdir(), "data-cache-outside-"));
+  const secret = join(outside, "secret.yml");
+  writeFileSync(secret, "- id: before\n");
+  const root = tree({
+    "mizzen.yml": "collections:\n  items:\n    source: npm:pkg/items.yml\n",
+    "index.md": "# Hi\n",
+    "node_modules/pkg/package.json": JSON.stringify({ name: "pkg", version: "1.0.0" }),
+  });
+  try {
+    symlinkSync(secret, join(root, "node_modules/pkg/items.yml"));
+    const before = await keyOf(root);
+    const { config } = loadConfig(root);
+    const result = await loadCollections({ root, config });
+    assert.deepEqual(result.diagnostics.map((diagnostic) => diagnostic.id), ["data.package-escape"]);
+    assert.deepEqual(result.collections, {});
+
+    writeFileSync(secret, "- id: after\n");
+    assert.equal(await keyOf(root), before);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
