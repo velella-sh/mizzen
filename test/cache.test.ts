@@ -600,3 +600,107 @@ test("changing a collection schema misses the cache, and the warm build matches 
     rmSync(parent, { recursive: true, force: true });
   }
 });
+
+test("a record URL lock is a cache input, so creating, changing, and corrupting it all miss", async () => {
+  const root = tree({
+    "mizzen.yml": "title: Data\ncollections:\n  pages:\n    source: _data/pages.yml\n",
+    "_data/pages.yml": "- id: a\n  name: Alpha\n",
+    "_data/navigation.yml": "main:\n  - title: Home\n    url: /\n",
+  });
+  const theme = tree({ "src/index.ts": 'export const theme = { name: "cache" };\n' });
+  const outputs = tree({ "html.ts": 'export const html = { name: "html", run: () => [] };\n' });
+  const options = {
+    root,
+    sourceDir: root,
+    config: loadConfig(root).config,
+    themeRoot: theme,
+    outputsDir: outputs,
+    defaultLayout: "doc",
+  };
+  const lockPath = join(root, "urls.lock.json");
+  const lock = (url: string): string =>
+    `${JSON.stringify({ version: 1, collections: { pages: { a: { url, previous: [] } } } })}\n`;
+  try {
+    const missing = await cacheKey(options);
+    writeFileSync(lockPath, lock("/pages/alpha/"));
+    const created = await cacheKey(options);
+    assert.notEqual(created, missing, "creating the lock misses");
+
+    writeFileSync(lockPath, lock("/pages/other/"));
+    const changed = await cacheKey(options);
+    assert.notEqual(changed, created, "changing the lock misses");
+
+    writeFileSync(lockPath, "{ not json\n");
+    assert.notEqual(await cacheKey(options), changed, "corrupting the lock misses");
+
+    rmSync(lockPath);
+    assert.equal(await cacheKey(options), missing, "deleting it returns to the key of no lock");
+  } finally {
+    clean(root, theme, outputs);
+  }
+});
+
+test("a URL lock change is never answered by an entry built before it", async () => {
+  const lock = (url: string, previous: readonly string[] = []): string =>
+    `${JSON.stringify({ version: 1, collections: { pages: { a: { url, previous } } } })}\n`;
+  const root = tree({
+    "mizzen.yml":
+      "title: Data\n" +
+      "collections:\n" +
+      "  pages:\n" +
+      "    source: _data/pages.yml\n" +
+      "    template: _templates/page.md\n" +
+      "    permalink: /pages/{name|slug}/\n",
+    "_data/pages.yml": "- id: a\n  name: Beta\n",
+    "_templates/page.md": "---\ntitle: \"{name}\"\nlayout: doc\n---\n# :field[name]\n",
+    "urls.lock.json": lock("/pages/alpha/"),
+  });
+  const theme = makeTheme("one");
+  const { parent, cacheDir } = scratch();
+  const buildAt = (folder: string, extra: { updateUrls?: boolean; cache?: boolean } = {}) =>
+    build({
+      root,
+      out: join(parent, folder),
+      themeRoot: theme,
+      defaultLayout: "doc",
+      cache: extra.cache ?? true,
+      cacheDir,
+      ...(extra.updateUrls === true ? { updateUrls: true } : {}),
+    });
+  const redirectAt = (folder: string): string => join(parent, folder, "pages/alpha/index.html");
+  try {
+    // 1. A changed URL is an error, and no redirect is written.
+    const first = await buildAt("first");
+    assert.ok(first.diagnostics.some((diagnostic) => diagnostic.id === "urls.url-changed"));
+    assert.equal(existsSync(redirectAt("first")), false);
+
+    // 2. `--update-urls` accepts it, writes the lock, and writes the redirect.
+    const updated = await buildAt("updated", { updateUrls: true });
+    assert.equal(updated.diagnostics.some((diagnostic) => diagnostic.severity === "error"), false);
+    const written = JSON.parse(readFileSync(join(root, "urls.lock.json"), "utf8")) as {
+      collections: { pages: { a: { url: string; previous: string[] } } };
+    };
+    assert.deepEqual(written.collections.pages.a, { url: "/pages/beta/", previous: ["/pages/alpha/"] });
+    assert.equal(existsSync(redirectAt("updated")), true);
+
+    // 3. The ordinary build after it must not replay the entry from step 1: no old error, and the redirect stays.
+    const after = await buildAt("after");
+    assert.equal(after.diagnostics.some((diagnostic) => diagnostic.id === "urls.url-changed"), false);
+    assert.match(readFileSync(redirectAt("after"), "utf8"), /\/pages\/beta\//);
+    const cold = await buildAt("cold", { cache: false });
+    assert.deepEqual(after.diagnostics, cold.diagnostics, "the warm build reports what a cold build reports");
+    assert.deepEqual(snapshot(join(parent, "after")), snapshot(join(parent, "cold")), "and writes the same bytes");
+
+    // 4. Changing the lock alone (the source is untouched) misses the entry that matched the old lock.
+    writeFileSync(join(root, "urls.lock.json"), lock("/pages/beta/", ["/pages/alpha/", "/pages/older/"]));
+    const changed = await buildAt("changed");
+    assert.equal(existsSync(join(parent, "changed", "pages/older/index.html")), true, "the new earlier URL redirects");
+
+    // 5. A corrupt lock is reported, never hidden behind a clean cached entry.
+    writeFileSync(join(root, "urls.lock.json"), "{ not json\n");
+    const corrupt = await buildAt("corrupt");
+    assert.ok(corrupt.diagnostics.some((diagnostic) => diagnostic.id === "data.urls-lock-invalid"));
+  } finally {
+    clean(root, theme, parent);
+  }
+});

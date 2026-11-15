@@ -37,6 +37,7 @@ import { repositoryStateKey } from "../model/reviewers.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { version } from "../index.ts";
 import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
+import { URLS_LOCK_FILE } from "../data/urls-lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
@@ -416,13 +417,17 @@ interface KeyInput {
  * or the stored bytes of a pinned URL — and its schema file, which decides which records reach a page. A package source
  * comes back as real paths the resolver proved are inside the package folder, never as a path built with `join`, so a
  * link cannot make the key read outside it. A site with no collections contributes nothing, so its key stays exactly
- * what 0.2.0 produced. The lock file itself is an input whenever collections exist, because it decides which bytes a
- * remote or package source reads.
+ * what 0.2.0 produced. Both lock files are inputs whenever collections exist: `mizzen.lock.json` decides which bytes a
+ * remote or package source reads, and `urls.lock.json` decides which record URLs are accepted, which ones redirect, and
+ * which findings a build reports. A lock file's absence is part of the key too, so creating or deleting one misses.
  */
 async function collectionInputs(options: { readonly root: string; readonly config: SiteConfig }): Promise<KeyInput[]> {
   const names = Object.keys(options.config.collections);
   if (names.length === 0) return [];
-  const inputs: KeyInput[] = [{ label: "data-lock", path: join(options.root, LOCK_FILE) }];
+  const inputs: KeyInput[] = [
+    { label: "data-lock", path: join(options.root, LOCK_FILE) },
+    { label: "urls-lock", path: join(options.root, URLS_LOCK_FILE) },
+  ];
   const lock = (await readLock(options.root).catch(() => undefined))?.lock;
   for (const name of names.sort(byCodePoint)) {
     const source = options.config.collections[name]!.source;
