@@ -221,6 +221,7 @@ export function renderOnePage(
   const { trail, pager } = placeOf(site, page);
   const registered = registry.layouts[name]!;
   const record = recordPropsOf(site, page);
+  const list = page.list;
   const result = renderPage({
     site,
     page,
@@ -231,6 +232,7 @@ export function renderOnePage(
     pager,
     head: headOf(site, page),
     ...(record === undefined ? {} : { record }),
+    ...(list === undefined ? {} : { list }),
   });
   const css = registered.css === undefined ? result.css : [registered.css, ...result.css];
   return { url: page.url, html: result.html, css, islands: result.islands, diagnostics: result.diagnostics, layout: name };

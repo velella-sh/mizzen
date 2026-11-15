@@ -70,6 +70,8 @@ export const llms: Output = {
       if (page === undefined || page.kind !== "doc" || isAppPage(link.url, options)) return;
       // A view is another rendering of a record, not another page of the docs.
       if (page.record?.view !== undefined) return;
+      // Only a list's first page belongs in llms.txt; later pages are the same list, continued.
+      if (page.list !== undefined && page.list.pagination.page > 1) return;
       const href = twinUrl(link.url);
       if (href === undefined) return;
       listed.add(link.url);

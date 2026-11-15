@@ -100,8 +100,12 @@ export interface RecordProps {
 export interface ListGroup {
   /** The group's key, as the list grouped it. */
   readonly key: string;
-  /** The records in this group. */
+  /** The records in this group; empty on the index page of an expanded list. */
   readonly records: readonly RecordProps[];
+  /** URL of this group's own page, when the list expands one page per group value. */
+  readonly url?: string;
+  /** How many records the group holds, including on the index page where `records` is empty. */
+  readonly count?: number;
 }
 
 /** Where a list page sits in its pagination. */

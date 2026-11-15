@@ -86,6 +86,8 @@ const FROZEN: Shape = {
   ListGroup: {
     "key": "string",
     "records": "readonly RecordProps[]",
+    "url": "?string",
+    "count": "?number",
   },
   ListPagination: {
     "page": "number",

@@ -204,6 +204,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(unique === undefined ? {} : { unique }),
       ...(references === undefined ? {} : { references }),
       ...(dates === undefined ? {} : { dates }),
+      ...(typeof entry.referenceDate === "string" ? { referenceDate: entry.referenceDate } : {}),
       ...(isPlainObject(entry) && Array.isArray(entry.markdown)
         ? { markdown: entry.markdown.filter((field): field is string => typeof field === "string") }
         : {}),

@@ -441,11 +441,16 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     return undefined;
   };
 
-  const pageByPath = new Map<string, Page>();
+  // One source page can produce several outputs: page one of a list, its later pages, and its expanded pages. Every
+  // one of them is an output node, so a data change marks each of them instead of only the last page built from the file.
+  const pagesByPath = new Map<string, Page[]>();
   for (const page of options.site.pages) {
     if (page.kind !== "doc") continue;
     const path = sourcePathOf(page.source.file, pagePaths);
-    if (path !== undefined) pageByPath.set(path, page);
+    if (path === undefined) continue;
+    const known = pagesByPath.get(path);
+    if (known === undefined) pagesByPath.set(path, [page]);
+    else known.push(page);
   }
 
   const addAssetEdge = (from: string, image: string, pos?: SourcePos): void => {
@@ -502,6 +507,13 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
         if (target === undefined) unresolved = true;
         else edge(target, index + 1, (match.index ?? 0) + 1, (match.index ?? 0) + match[0].length);
       }
+      // A count reads a collection's records exactly as a list does, so the page depends on that source.
+      for (const match of line.matchAll(/:count\{([^}]*)\}/g)) {
+        const fromMatch = /(?:^|\s)from=([^\s]+)/.exec(match[1] ?? "");
+        const target = fromMatch === null ? undefined : directiveTarget(fromMatch[1]!.replace(/^["']|["']$/g, ""));
+        if (target === undefined) unresolved = true;
+        else edge(target, index + 1, (match.index ?? 0) + 1, (match.index ?? 0) + match[0].length);
+      }
     }
     // A directive the graph cannot resolve statically makes the whole graph unreliable for narrowing, so the plan
     // asks for a full build instead of keeping guessed edges.
@@ -526,6 +538,13 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
       diagnostics.push(diagnostic);
     }
     addDataEdges(path, included.body, front.bodyLine);
+    // A list page reads one collection's records, so its output depends on that source and no other data file.
+    const declared = front.data.list;
+    if (typeof declared === "object" && declared !== null && !Array.isArray(declared)) {
+      const name = (declared as Record<string, unknown>).collection;
+      const target = typeof name === "string" ? collectionPaths.get(name) : undefined;
+      if (target !== undefined) addEdge(fileNodeId(path), fileNodeId(target), atFile(path));
+    }
     for (const dependency of included.includes) {
       addNode({
         id: fileNodeId(dependency.path),
@@ -553,17 +572,19 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     addDataEdges(path, front.body, front.bodyLine);
   }
 
-  for (const [path, page] of pageByPath) {
-    const outputId = outputNodeId(page.url);
-    addNode({ id: outputId, kind: "output", path: page.url });
-    addEdge(outputId, fileNodeId(path));
-    addEdge(outputId, navigationId);
-    for (const dataId of blanketDataIds) addEdge(outputId, dataId);
+  for (const [path, pages] of pagesByPath) {
+    for (const page of pages) {
+      const outputId = outputNodeId(page.url);
+      addNode({ id: outputId, kind: "output", path: page.url });
+      addEdge(outputId, fileNodeId(path));
+      addEdge(outputId, navigationId);
+      for (const dataId of blanketDataIds) addEdge(outputId, dataId);
+    }
   }
 
   // Navigation built from folders reads every page's title, so it depends on all of them. A navigation file does not.
   if (!hasNavigation) {
-    for (const path of pageByPath.keys()) addEdge(navigationId, fileNodeId(path));
+    for (const path of pagesByPath.keys()) addEdge(navigationId, fileNodeId(path));
   }
 
   const graphNodes = [...nodes.values()].sort(compareNodes);

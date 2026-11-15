@@ -8,6 +8,7 @@
  */
 import type { Root, RootContent } from "mdast";
 import type { Diagnostic } from "../contracts/index.ts";
+import { applyDataCount } from "../markdown/plugins/data-count.ts";
 import { applyDataTable } from "../markdown/plugins/data-table.ts";
 import { applyDataValue } from "../markdown/plugins/data-value.ts";
 import type { DataDirectiveContext, DirectiveEdit } from "./directive-context.ts";
@@ -56,6 +57,13 @@ function transform(
     const child = children[index] as DirectiveNode;
     if (child.type === "textDirective" && child.name === "data") {
       const result = applyDataValue(child, ctx);
+      diagnostics.push(...result.diagnostics);
+      if (result.twin !== undefined) addEdit(edits, child, result.twin);
+      children[index] = result.replacement as RootContent;
+      continue;
+    }
+    if (child.type === "textDirective" && child.name === "count") {
+      const result = applyDataCount(child, ctx);
       diagnostics.push(...result.diagnostics);
       if (result.twin !== undefined) addEdit(edits, child, result.twin);
       children[index] = result.replacement as RootContent;

@@ -57,6 +57,72 @@
       "minLength": 1,
       "description": "The theme layout that renders the page. Unset, it comes from `defaults`, then the theme's default layout. An unknown name is an error."
     },
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collection"],
+      "description": "Shows records of a collection on this page, filtered, sorted, grouped, and paginated. Unset, the page is an ordinary page.",
+      "properties": {
+        "collection": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the collection whose records the page lists."
+        },
+        "where": {
+          "type": "object",
+          "description": "All conditions must match: a scalar is equality, a list is one of, and a mapping holds `exists`, `before`, or `after`. A date is written YYYY-MM-DD or `reference` with an optional `+Nd`, `-Nd`, `+Nm`, or `-Nm`."
+        },
+        "sort": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1, "maxItems": 2 }
+          ],
+          "description": "One or two fields, each optionally followed by `asc` or `desc`, such as `date desc`. Ties fall back to the record id."
+        },
+        "group": {
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["field"],
+              "properties": {
+                "field": { "type": "string", "minLength": 1 },
+                "by": { "enum": ["value", "year", "month"] },
+                "order": { "enum": ["key", "size"] },
+                "missing": { "type": "string" }
+              }
+            }
+          ],
+          "description": "Group by a field's value, or by the year or month of a date field. Unset, the list is not grouped."
+        },
+        "perPage": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Records on each page. Page two onwards is written at `<url>page/<n>/`."
+        },
+        "splitGroups": {
+          "type": "boolean",
+          "description": "`true` lets a page split a group across pages; by default a group stays whole."
+        },
+        "fields": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Fields handed to the layout and written to the twin; unset, every field."
+        },
+        "expand": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["field", "permalink"],
+          "description": "Builds one list page per value of a field, and keeps an index of the values on this page.",
+          "properties": {
+            "field": { "type": "string", "minLength": 1 },
+            "permalink": { "type": "string", "pattern": "^/" },
+            "title": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
     "og": {
       "type": "boolean",
       "description": "`false` drops the page's Open Graph and Twitter card tags and the image in its structured data."

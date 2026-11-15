@@ -57,8 +57,44 @@ no product and no data set. The types it refers to are in [`src/contracts/data.t
   quoted: `where="status=stable"`. Every collection row carries the record's own id as `id`, so `columns=id` works for
   a list and for a mapping of id to record; equal sort values fall back to the id and then to source order.
 
-## Record pages
+## List pages
 
+An ordinary page becomes a list page when its front matter declares `list`:
+
+```yaml
+list:
+  collection: posts
+  where:
+    status: published
+    tags: [news, release]
+    date: { after: reference-30d }
+  sort: [date desc, title]
+  group: { field: date, by: month, order: key, missing: Undated }
+  perPage: 10
+  splitGroups: false
+  fields: [title, date]
+  expand: { field: tags, permalink: /tags/{value|slug}/, title: Tagged {value} }
+```
+
+`where` keeps the records every entry matches: a scalar is equality, a list is "one of", and a mapping is `exists`,
+`before`, or `after`. A date is `YYYY-MM-DD`, an ISO 8601 instant, or `reference` with an optional `+Nd`, `-Nd`, `+Nm`,
+or `-Nm`; `reference` is `collections.<name>.referenceDate`, either a fixed date or the dot path of a `_data` value, so a
+query never reads the clock. `sort` names one or two fields, each optionally followed by `asc` or `desc`; text compares
+by code point, a record without the field sorts last, and ties fall back to the id and then to source order.
+
+`group` builds one group per value of a field, or per `year` or `month` of a date field. A record with a list value joins
+every group it names, and a record without a value stays in the group named by `missing` (default `(missing)`). Groups
+order by `key` or, with `order: size`, largest first and then by key. `perPage` writes page two onwards at
+`<url>page/<n>/`; a grouped page keeps each group whole unless `splitGroups` is true. `fields` is what the layout and the
+Markdown twin receive, so the props stay small.
+
+`expand` builds one page per value of a field at its own pattern, and the declaring page keeps an index of the values
+with their counts. A value that has no records gets no page, and two values that fill one URL are a duplicate-URL error.
+Each list page defaults to the layout `list` (or the page's own `layout`), receives `LayoutProps.list`, and gets a
+Markdown twin whose table holds the fields the page named. Only a list's first page enters `llms.txt`, and list pages are
+left out of `llms-full.txt` because their records are already there.
+
+## Record pages
 A collection that names both `template` and `permalink` builds one page per record. The template is Markdown under
 `_templates/`; its body may use these directives, and its front matter fills `{field}` placeholders from the record
 (`{{` and `}}` are literal braces):
@@ -132,7 +168,8 @@ limit and the key, never a silently truncated file.
 - `LayoutProps.record` on a record page: the collection's name, the record's id, its URL, its
   fields as data, and on the main page the URL of each named view.
 - `LayoutProps.list` on a list page: the records selected for that page, the groups, and the page's
-  number, total, and previous and next URLs.
+  number, total, and previous and next URLs. A group of an expanded list also carries the URL of its own
+  page and its count, which is how the index page links to each value.
 - `Site.collections` on every page: each collection's records with their ids and positions. A collection read
   from an `npm:` source also carries `package.name` and `package.version`.
 - A record's `keyPositions`: where each field's key sits, so a rename can point at the key and never at the value — the
