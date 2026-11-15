@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -138,6 +138,95 @@ test("a relative source folder resolves templates against it, with paths from th
     const result = await loadTemplates({ root, config });
     assert.deepEqual(result.diagnostics, []);
     assert.equal(result.templates["items"]!.path, "docs/_templates/items.md");
+  } finally {
+    rmSync(root, { recursive: true });
+  }
+});
+
+test("a template symlink that points outside the site is refused before it is read", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "data-template-link-"));
+  const site = join(parent, "site");
+  const outside = join(parent, "outside");
+  mkdirSync(join(site, "_templates"), { recursive: true });
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(
+    join(site, "mizzen.yml"),
+    "collections:\n  components:\n    source: _data/components.yml\n    template: _templates/components.md\n",
+  );
+  writeFileSync(join(outside, "components.md"), "---\nlayout: outside\n---\nOutside.\n");
+  symlinkSync(join(outside, "components.md"), join(site, "_templates", "components.md"));
+  try {
+    const { config } = loadConfig(site);
+    const result = await loadTemplates({ root: site, config });
+    assert.deepEqual(result.diagnostics.map((diagnostic) => diagnostic.id), ["data.template-path"]);
+    assert.match(result.diagnostics[0]!.message, /resolves outside `_templates\/`/);
+    assert.equal(result.diagnostics[0]!.pos?.line, 4);
+    assert.deepEqual(result.templates, {}, "the outside template is never read");
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("a symlinked parent folder that leaves _templates is refused", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "data-template-link-parent-"));
+  const site = join(parent, "site");
+  const outside = join(parent, "outside");
+  mkdirSync(join(site, "_templates"), { recursive: true });
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(
+    join(site, "mizzen.yml"),
+    "collections:\n  components:\n    source: _data/components.yml\n    template: _templates/linked/components.md\n",
+  );
+  writeFileSync(join(outside, "components.md"), "---\nlayout: outside\n---\nOutside.\n");
+  symlinkSync(outside, join(site, "_templates", "linked"));
+  try {
+    const { config } = loadConfig(site);
+    const result = await loadTemplates({ root: site, config });
+    assert.deepEqual(result.diagnostics.map((diagnostic) => diagnostic.id), ["data.template-path"]);
+    assert.match(result.diagnostics[0]!.message, /resolves outside `_templates\/`/);
+    assert.deepEqual(result.templates, {});
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("a template that is not Markdown is refused", async () => {
+  for (const name of ["components.txt", "components.mdx", "components.md.txt"]) {
+    const root = tree({
+      "mizzen.yml":
+        "collections:\n  components:\n    source: _data/components.yml\n" + `    template: _templates/${name}\n`,
+      [`_templates/${name}`]: "# Not a template.\n",
+    });
+    try {
+      const { config } = loadConfig(root);
+      const result = await loadTemplates({ root, config });
+      assert.deepEqual(result.diagnostics.map((diagnostic) => diagnostic.id), ["data.template-path"], name);
+      assert.match(result.diagnostics[0]!.message, /not a Markdown file/, name);
+      assert.deepEqual(result.templates, {});
+    } finally {
+      rmSync(root, { recursive: true });
+    }
+  }
+});
+
+test("valid .md and .markdown templates load, in any case", async () => {
+  const root = tree({
+    "mizzen.yml":
+      "collections:\n" +
+      "  one:\n    source: _data/one.yml\n    template: _templates/one.md\n" +
+      "  two:\n    source: _data/two.yml\n    template: _templates/two.markdown\n" +
+      "  three:\n    source: _data/three.yml\n    template: _templates/three.MD\n",
+    "_templates/one.md": "---\nlayout: one\n---\nOne.\n",
+    "_templates/two.markdown": "Two.\n",
+    "_templates/three.MD": "Three.\n",
+  });
+  try {
+    const { config } = loadConfig(root);
+    const result = await loadTemplates({ root, config });
+    assert.deepEqual(result.diagnostics, []);
+    assert.deepEqual(Object.keys(result.templates), ["one", "two", "three"]);
+    assert.equal(result.templates["two"]!.body, "Two.\n");
+    assert.equal(result.templates["three"]!.body, "Three.\n");
   } finally {
     rmSync(root, { recursive: true });
   }

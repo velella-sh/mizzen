@@ -19,7 +19,7 @@ export interface CopyAssetsOptions {
   readonly source: string;
   /** Absolute path of the output folder; created when missing. */
   readonly out: string;
-  /** Files discovery found. `asset` and `app` files are copied; `doc` and `data` files are not. */
+  /** Files discovery found. `asset` and `app` files are copied; `doc`, `data`, and `template` files are not. */
   readonly files: readonly DiscoveredFile[];
   /** Absolute path of the theme's root folder. */
   readonly themeRoot?: string;

@@ -22,7 +22,8 @@ export interface DiscoverOptions {
   readonly exclude?: readonly string[];
 }
 
-const MARKDOWN = /\.(md|markdown)$/i;
+/** Markdown file names: the template check and page discovery accept the same two extensions. */
+export const MARKDOWN = /\.(md|markdown)$/i;
 const HTML = /\.html?$/i;
 
 /** Compares by code point, never by locale. */

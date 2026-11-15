@@ -7,10 +7,11 @@
  * out and reported at the `template` key that named it.
  */
 import { readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { LineCounter, parseDocument, type Node } from "yaml";
 import { CONFIG_FILE } from "../config/load.ts";
+import { MARKDOWN } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import type { Diagnostic, SiteConfig, SourcePos } from "../contracts/index.ts";
 import { lineIndex, nodePos, sourcePosOf } from "./positions.ts";
@@ -52,6 +53,23 @@ function normalize(path: string): string {
   return path.replace(/\\/g, "/").replace(/^\.\//, "");
 }
 
+/** True when `file` sits inside `root`; both are already resolved real paths. */
+function insideRoot(root: string, file: string): boolean {
+  const path = relative(root, file);
+  return path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path);
+}
+
+/** One template-path finding at the `template` key, whatever made the path unusable. */
+function pathFinding(collection: string, template: string, pos: SourcePos, reason: string): Diagnostic {
+  return {
+    id: "data.template-path",
+    severity: "error",
+    message: `Collection "${collection}" names template "${template}", which ${reason}`,
+    pos,
+    help: "Point `collections.<name>.template` at a `.md` or `.markdown` file under `_templates/` in the source folder.",
+  };
+}
+
 /** Where a collection's `template` value is written in `mizzen.yml`, so a bad path points at its config line. */
 function templatePosition(root: string, collection: string): SourcePos {
   let text: string;
@@ -83,20 +101,35 @@ export async function loadTemplates(options: LoadTemplatesOptions): Promise<Temp
     const file = resolve(sourceDir, value);
     const inside = relative(sourceDir, file);
     const relativeToSource = inside.split(sep).join("/");
+    if (!MARKDOWN.test(value)) {
+      diagnostics.push(pathFinding(collection, entry.template, pos, "is not a Markdown file."));
+      continue;
+    }
     if (
       inside === ".." ||
       inside.startsWith(`..${sep}`) ||
       isAbsolute(inside) ||
       !relativeToSource.startsWith("_templates/")
     ) {
-      diagnostics.push({
-        id: "data.template-path",
-        severity: "error",
-        message: `Collection "${collection}" names template "${entry.template}", which is not a file under \`_templates/\` in the source folder.`,
-        pos,
-        help: "Move the template under `_templates/` and write its path relative to the source folder.",
-      });
+      diagnostics.push(pathFinding(collection, entry.template, pos, "is not a file under `_templates/` in the source folder."));
       continue;
+    }
+
+    // Links are resolved before the read, so a link that leaves `_templates` or the source folder is refused
+    // without opening the file it points at.
+    const real = await realpath(file).catch(() => undefined);
+    if (real !== undefined) {
+      const sourceReal = await realpath(sourceDir).catch(() => undefined);
+      const templatesReal = await realpath(resolve(sourceDir, "_templates")).catch(() => undefined);
+      if (
+        sourceReal === undefined ||
+        templatesReal === undefined ||
+        !insideRoot(sourceReal, real) ||
+        !insideRoot(templatesReal, real)
+      ) {
+        diagnostics.push(pathFinding(collection, entry.template, pos, "resolves outside `_templates/` in the source folder."));
+        continue;
+      }
     }
 
     const display = relative(root, file).split(sep).join("/");
