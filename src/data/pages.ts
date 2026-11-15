@@ -32,7 +32,7 @@ import { markdownToHtml } from "../markdown/to-html.ts";
 import { parseSpan } from "../source/spans.ts";
 import { substituteFrontMatter } from "./frontmatter.ts";
 import { markdownFieldBlocks } from "./markdown-field.ts";
-import { recordSourcePos, recordUrl } from "./permalink.ts";
+import { recordSourcePos, recordUrl, recordUrlsOf } from "./permalink.ts";
 import { localizeFields, prefixed, prefixOfLang, type RecordScope } from "./record-context.ts";
 import type { Template } from "./template.ts";
 import { viewUrls, viewsOf } from "./views.ts";
@@ -553,52 +553,43 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     };
 
     for (const language of languages) {
-      // Two records whose pattern gives one URL would write one file, so both are reported and neither is built.
-      const claimed = new Map<string, DataRecord[]>();
-      for (const record of collection.records) {
+      // Every URL of the collection in this language, computed once: the page, its views, and a `record:` link all
+      // read the same decision, so a URL that needed the disambiguator is never spelled two ways.
+      const prepared = collection.records.map((record) => {
         const localized = localizeFields(record.fields, language.code, config.lang);
         const fields =
           localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
-        const url = recordUrl(name, record.id, fields, entry, {
-          base: config.base,
-          prefix: language.prefix,
-          position: record.position,
-        }).url;
-        if (url === undefined) continue;
-        const seen = claimed.get(url);
-        claimed.set(url, seen === undefined ? [record] : [...seen, record]);
+        return { record, fields, fallbacks: localized.fallbacks };
+      });
+      const urlMap = recordUrlsOf(
+        name,
+        prepared.map(({ record, fields }) => ({ id: record.id, fields, position: record.position })),
+        entry,
+        { base: config.base, prefix: language.prefix },
+      );
+      for (const { record } of prepared) {
+        const finding = urlMap.urls.get(record.id)?.diagnostic;
+        if (finding !== undefined) diagnostics.push(finding);
       }
-      const collided = new Set<string>();
-      for (const [url, records] of claimed) {
-        if (records.length < 2) continue;
-        const ids = records.map((record) => `"${record.id}"`).join(", ");
-        for (const record of records) collided.add(record.id);
+      for (const collision of urlMap.collisions) {
+        const ids = collision.ids.map((id) => `"${id}"`).join(", ");
         diagnostics.push({
           id: "data.permalink-collision",
           severity: "error",
-          message: `The records ${ids} of ${name} all build the URL "${url}".`,
-          pos: recordSourcePos(records[0]!.position),
+          message: `The records ${ids} of ${name} all build the URL "${collision.url}".`,
+          pos: recordSourcePos(collision.position),
           help: "Set `collections.<name>.disambiguate` to a field that tells them apart, or put another field in the URL pattern.",
         });
       }
+      const collided = new Set(urlMap.collisions.flatMap((collision) => collision.ids));
 
-      for (const record of collection.records) {
+      for (const { record, fields, fallbacks } of prepared) {
         if (collided.has(record.id)) continue;
-        const localized = localizeFields(record.fields, language.code, config.lang);
-        const fields =
-          localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
-        const main = recordUrl(name, record.id, fields, entry, {
-          base: config.base,
-          prefix: language.prefix,
-          position: record.position,
-        });
-        if (main.diagnostic !== undefined) {
-          diagnostics.push(main.diagnostic);
-          continue;
-        }
-        if (main.url === undefined) continue;
+        const main = urlMap.urls.get(record.id);
+        if (main?.url === undefined) continue;
 
-        const urls = viewUrls(
+        const suffix = urlMap.suffixes.get(record.id);
+        const viewPaths = viewUrls(
           namedViews,
           name,
           record,
@@ -606,23 +597,23 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
           {
             base: config.base,
             prefix: language.prefix,
-            ...(entry.disambiguate === undefined ? {} : { disambiguate: entry.disambiguate }),
+            ...(suffix === undefined ? {} : { suffix }),
           },
           diagnostics,
         );
 
         pages.push(
           await pageOf(
-            { template, ...(Object.keys(urls).length === 0 ? {} : { views: urls }) },
+            { template, ...(Object.keys(viewPaths).length === 0 ? {} : { views: viewPaths }) },
             main.url,
             record,
             language,
             fields,
-            localized.fallbacks,
+            fallbacks,
           ),
         );
         for (const view of namedViews) {
-          const url = urls[view.name];
+          const url = viewPaths[view.name];
           if (url === undefined) continue;
           pages.push(
             await pageOf(
@@ -636,7 +627,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
               record,
               language,
               fields,
-              localized.fallbacks,
+              fallbacks,
             ),
           );
         }

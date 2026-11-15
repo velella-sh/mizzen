@@ -90,8 +90,10 @@ script, and turns each run of anything else into one hyphen. Nothing is translit
 `{scope|slug}/{name|slug}` gives a scoped name two segments with no other change.
 
 Two records a pattern cannot tell apart would write one file, so both are reported. `collections.<name>.disambiguate`
-names a field, such as `id`, that is appended to every record URL; then `/items/jane/` becomes `/items/jane-42/`, and the
-result does not depend on the order of the records.
+names a field, such as `id`, that is appended to the URL of each record whose pattern gives the same URL as another
+record's: a record with an address of its own keeps it, so adding a colliding record does not move the pages already
+published. `/items/jane/` becomes `/items/jane-42/` for the records that collided, and the result does not depend on the
+order of the records.
 
 `urls.lock.json` holds every record page's current URL and the ones it had before. Every build checks against it: a
 changed URL is an error until `mizzen build --update-urls` accepts it and keeps the old one as a redirect, and a removed

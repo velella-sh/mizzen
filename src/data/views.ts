@@ -44,7 +44,7 @@ export function viewUrls(
   collection: string,
   record: { readonly id: string; readonly position: RecordPos },
   fields: Readonly<Record<string, unknown>>,
-  options: { readonly base: string; readonly prefix: string; readonly disambiguate?: string },
+  options: { readonly base: string; readonly prefix: string; readonly suffix?: string },
   diagnostics: Diagnostic[],
 ): Readonly<Record<string, string>> {
   const urls: Record<string, string> = {};
@@ -53,15 +53,14 @@ export function viewUrls(
       collection,
       record.id,
       fields,
+      { permalink: view.permalink },
       {
-        permalink: view.permalink,
-        ...(options.disambiguate === undefined ? {} : { disambiguate: options.disambiguate }),
+        base: options.base,
+        prefix: options.prefix,
+        position: record.position,
+        ...(options.suffix === undefined ? {} : { suffix: options.suffix }),
       },
-      {
-      base: options.base,
-      prefix: options.prefix,
-      position: record.position,
-    });
+    );
     if (filled.diagnostic !== undefined) {
       diagnostics.push(filled.diagnostic);
       continue;

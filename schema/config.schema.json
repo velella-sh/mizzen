@@ -202,7 +202,7 @@
         "disambiguate": {
           "type": "string",
           "minLength": 1,
-          "description": "Field appended to every record URL, such as id, so two records a pattern cannot tell apart still have one URL each."
+          "description": "Field appended to a record URL when another record's pattern gives the same one, such as id."
         },
         "aliases": {
           "type": "string",

@@ -82,7 +82,7 @@ export interface CollectionConfig {
   readonly template?: string;
   /** URL pattern of a record page, such as `/items/{id}/`. */
   readonly permalink?: string;
-  /** Field appended to every record URL, such as `id`, so two records a pattern cannot tell apart still have one URL each. */
+  /** Field appended to a record URL when another record's pattern gives the same one, such as `id`. */
   readonly disambiguate?: string;
   /** Field that holds earlier ids or paths of a record, each of which redirects to the record's page. */
   readonly aliases?: string;

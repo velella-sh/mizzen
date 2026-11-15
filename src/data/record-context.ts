@@ -17,7 +17,7 @@ import type {
   SiteConfig,
   SourcePos,
 } from "../contracts/index.ts";
-import { recordUrl } from "./permalink.ts";
+import { recordUrlsOf, type RecordUrlMap } from "./permalink.ts";
 
 /** What one record page's directives read. */
 export interface RecordScope {
@@ -203,14 +203,55 @@ export function urlOfRecord(
   defaultLang?: string,
 ): string | undefined {
   const entry = config[collection];
-  const record = collections[collection]?.records.find((candidate) => candidate.id === id);
-  if (entry === undefined || record === undefined) return undefined;
-  const localized =
-    lang === undefined || defaultLang === undefined
-      ? record.fields
-      : localizeFields(record.fields, lang, defaultLang).fields;
-  const fields = localized["id"] === undefined ? { ...localized, id: record.id } : localized;
-  return recordUrl(collection, id, fields, entry, { base, prefix, position: record.position }).url;
+  if (entry === undefined) return undefined;
+  return urlsOfCollection(collections, entry, base, prefix, collection, lang, defaultLang)?.urls.get(id)?.url;
+}
+
+/** A collection's URL set and the data it was computed from, so a changed collection or config entry is never reused. */
+interface CachedUrls {
+  readonly source: Collection;
+  readonly entry: CollectionConfig;
+  readonly map: RecordUrlMap;
+}
+
+/**
+ * One URL set per collection and language, kept for the lifetime of the site model. Computing it needs every record of
+ * the collection, so a page with many `record:` links would otherwise repeat that work for each link. The cache is
+ * keyed by the collections object, which is rebuilt for each build, so a result never outlives the data it describes.
+ */
+const urlSets = new WeakMap<Readonly<Record<string, Collection>>, Map<string, CachedUrls>>();
+
+function urlsOfCollection(
+  collections: Readonly<Record<string, Collection>>,
+  entry: CollectionConfig,
+  base: string,
+  prefix: string,
+  collection: string,
+  lang: string | undefined,
+  defaultLang: string | undefined,
+): RecordUrlMap | undefined {
+  const source = collections[collection];
+  if (source === undefined) return undefined;
+  let sets = urlSets.get(collections);
+  if (sets === undefined) {
+    sets = new Map();
+    urlSets.set(collections, sets);
+  }
+  const key = `${collection}\u0000${base}\u0000${prefix}\u0000${lang ?? ""}\u0000${defaultLang ?? ""}`;
+  const cached = sets.get(key);
+  if (cached !== undefined && cached.entry === entry && cached.source === source) return cached.map;
+
+  const records = source.records.map((record) => {
+    const localized =
+      lang === undefined || defaultLang === undefined
+        ? record.fields
+        : localizeFields(record.fields, lang, defaultLang).fields;
+    const fields = localized["id"] === undefined ? { ...localized, id: record.id } : localized;
+    return { id: record.id, fields, position: record.position };
+  });
+  const map = recordUrlsOf(collection, records, entry, { base, prefix });
+  sets.set(key, { source, entry, map });
+  return map;
 }
 
 /**
