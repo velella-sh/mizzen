@@ -269,7 +269,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   // Derived facts run last, once the pages and `_data` are final, and land at `data[fact.name]`; `_data` wins.
   const applied = await applyFacts({
-    site: { config, pages, nav, data: data.data },
+    site: { config, pages, nav, data: data.data, collections: {} },
     root: siteRoot,
     sourceDir,
   });

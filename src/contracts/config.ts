@@ -43,6 +43,20 @@ export interface SearchConfig {
   readonly text?: number;
 }
 
+/** One data collection: where its records come from, and how its pages are built. */
+export interface CollectionConfig {
+  /** Data file the records are read from, relative to the site root. */
+  readonly source: string;
+  /** Field that holds a record's id; the mapping key when absent. */
+  readonly id?: string;
+  /** Markdown template under `_templates/`, relative to the source folder. */
+  readonly template?: string;
+  /** URL pattern of a record page, such as `/items/{id}/`. */
+  readonly permalink?: string;
+  /** JSON Schema file that validates every record, relative to the site root. */
+  readonly schema?: string;
+}
+
 /**
  * The site config: exactly the keys of the site config file, after the loader has checked them.
  * Every key is optional in the file; the loader fills the defaults, so the keys marked required here are always present.
@@ -70,6 +84,8 @@ export interface SiteConfig {
   readonly exclude: readonly string[];
   /** Navigation file, relative to the site root. Default `_data/navigation.yml`. */
   readonly navigation: string;
+  /** Data collections by name: where their records come from and how their pages are built. Default `{}`. */
+  readonly collections: Readonly<Record<string, CollectionConfig>>;
   /** Front matter applied by folder; later entries win over earlier ones, and a page always wins. Default `[]`. */
   readonly defaults: readonly DefaultsEntry[];
   /** Where the source lives, for edit links. */

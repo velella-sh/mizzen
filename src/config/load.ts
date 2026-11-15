@@ -14,6 +14,7 @@ import {
   type Pair,
 } from "yaml";
 import type {
+  CollectionConfig,
   DefaultsEntry,
   Diagnostic,
   Direction,
@@ -123,6 +124,8 @@ export function loadConfigText(source: string, file: string, folderTitle: string
   const raw = value as Record<string, unknown>;
   if (!validateConfig(raw) && validateConfig.errors) {
     for (const error of validateConfig.errors) {
+      // ajv reports a bad collection name twice: once for the inner keyword and once for the name itself.
+      if (isCollectionsName(error) && error.keyword !== "propertyNames") continue;
       diagnostics.push(diagnosticFromAjv(error, file, doc, lineCounter));
     }
   }
@@ -154,6 +157,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
       typeof raw.navigation === "string" && raw.navigation.length > 0
         ? raw.navigation
         : "_data/navigation.yml",
+    collections: collectionsFrom(raw.collections),
     defaults: Array.isArray(raw.defaults) ? (raw.defaults as DefaultsEntry[]) : [],
     ...(repository === undefined ? {} : { repository }),
     theme,
@@ -178,12 +182,45 @@ function searchFrom(value: unknown): false | SearchConfig {
   return typeof value.text === "number" ? { text: value.text } : {};
 }
 
+function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConfig>> {
+  if (!isPlainObject(value)) return {};
+  const collections: Record<string, CollectionConfig> = {};
+  for (const [name, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry) || typeof entry.source !== "string") continue;
+    collections[name] = {
+      source: entry.source,
+      ...(typeof entry.id === "string" ? { id: entry.id } : {}),
+      ...(typeof entry.template === "string" ? { template: entry.template } : {}),
+      ...(typeof entry.permalink === "string" ? { permalink: entry.permalink } : {}),
+      ...(typeof entry.schema === "string" ? { schema: entry.schema } : {}),
+    };
+  }
+  return collections;
+}
+
+function isCollectionsName(error: ErrorObject): boolean {
+  return error.schemaPath.startsWith("#/properties/collections/propertyNames");
+}
+
 function diagnosticFromAjv(
   error: ErrorObject,
   file: string,
   doc: Document.Parsed,
   lineCounter: LineCounter,
 ): Diagnostic {
+  if (error.keyword === "propertyNames" && isCollectionsName(error)) {
+    const key = String(error.params["propertyName"] ?? "");
+    const path = [...instancePath(error.instancePath), key];
+    const pair = getMapPair(doc, path);
+    return {
+      id: "config.invalid",
+      severity: "error",
+      message: `\`${path.map(String).join(".")}\` must be a name of lowercase letters, digits, and hyphens.`,
+      pos: pair?.key ? posFromNode(file, lineCounter, pair.key as Node) : posFromNode(file, lineCounter, doc.contents),
+      help: "Rename the key.",
+    };
+  }
+
   if (error.keyword === "additionalProperties") {
     const key = String(error.params["additionalProperty"] ?? "");
     const path = [...instancePath(error.instancePath), key];

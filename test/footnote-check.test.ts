@@ -21,6 +21,7 @@ function site(pages: readonly Page[]): Site {
       include: [],
       exclude: [],
       navigation: "_data/navigation.yml",
+      collections: {},
       defaults: [],
       theme: { options: {} },
       search: {},
@@ -29,6 +30,7 @@ function site(pages: readonly Page[]): Site {
     },
     pages,
     nav: {},
+    collections: {},
     data: {},
   };
 }

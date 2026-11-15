@@ -52,6 +52,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -78,7 +79,7 @@ function page(url: string, file = POS.file): Page {
 }
 
 function site(pages: readonly Page[], data: Readonly<Record<string, unknown>> = {}): Site {
-  return { config: config(), pages, nav: {}, data };
+  return { config: config(), pages, nav: {}, collections: {}, data };
 }
 
 /** The single `review-coverage.json` file the report writes. */

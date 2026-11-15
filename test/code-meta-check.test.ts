@@ -16,6 +16,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -42,7 +43,7 @@ function page(file: string, markdown: string, bodyLine = 1): Page {
 }
 
 function site(pages: readonly Page[]): Site {
-  return { config: config(), pages, nav: {}, data: {} };
+  return { config: config(), pages, nav: {}, collections: {}, data: {} };
 }
 
 /** A context that keeps every diagnostic, so a test can check what the output reported. */

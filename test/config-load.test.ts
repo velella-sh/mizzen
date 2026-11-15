@@ -31,6 +31,7 @@ test("a missing file uses defaults and the folder name as title", () => {
     assert.deepEqual(config.include, []);
     assert.deepEqual(config.exclude, []);
     assert.equal(config.navigation, "_data/navigation.yml");
+    assert.deepEqual(config.collections, {});
     assert.deepEqual(config.defaults, []);
     assert.equal("repository" in config, false);
     assert.deepEqual(config.theme, {});
@@ -112,6 +113,47 @@ test("a nested unknown key points at the nested key's line", () => {
   assert.match(d.message, /color/);
   assert.equal(d.pos?.line, 2);
   assert.equal(d.pos?.column, 3);
+});
+
+test("a collection keeps its keys, and a bad name points at the key", () => {
+  const src = [
+    "collections:",
+    "  components:",
+    "    source: _data/components.yml",
+    "    id: slug",
+    "  Bad_Name:",
+    "    source: _data/other.yml",
+    "",
+  ].join("\n");
+  const { config, diagnostics } = loadConfigText(src, F, "site");
+  assert.deepEqual(config.collections["components"], { source: "_data/components.yml", id: "slug" });
+  assert.equal(diagnostics.length, 1);
+  const d = diagnostics[0]!;
+  assert.equal(d.id, "config.invalid");
+  assert.match(d.message, /collections\.Bad_Name/);
+  assert.equal(d.pos?.line, 5);
+  assert.equal(d.pos?.column, 3);
+});
+
+test("a bad redirect key keeps ajv's path rule", () => {
+  const src = "title: Docs\nredirects:\n  old: /new/\n";
+  const { diagnostics } = loadConfigText(src, F, "site");
+  const d = diagnostics.find((x) => x.message.includes('"^/"'));
+  assert.ok(d);
+  assert.equal(d.pos?.line, 3);
+  assert.equal(d.pos?.column, 3);
+  assert.ok(diagnostics.every((x) => !x.message.includes("lowercase")));
+});
+
+test("an unknown key inside a collection points at its line", () => {
+  const src = "collections:\n  parts:\n    sources: _data/parts.yml\n";
+  const { config, diagnostics } = loadConfigText(src, F, "site");
+  assert.deepEqual(config.collections, {});
+  const d = diagnostics.find((x) => x.id === "config.unknown-key");
+  assert.ok(d);
+  assert.match(d.message, /sources/);
+  assert.equal(d.pos?.line, 3);
+  assert.equal(d.pos?.column, 5);
 });
 
 test("an invalid value reports its line", () => {

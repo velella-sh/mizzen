@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type {
-  Chrome, CodeConfig, Component, Diagnostic, Head, Island, Layout, NavTree, Output, Page, Pager, Plugin, Site, SiteConfig, SourcePos, Trail,
+  Chrome, CodeConfig, Collection, Component, DataRecord, Diagnostic, Head, Island, Layout, ListProps, NavTree, Output, Page, Pager, Plugin, RecordPos, RecordProps, Site, SiteConfig, SourcePos, Trail,
 } from "../src/contracts/index.ts";
 
 // These values only have to type-check (`npm run typecheck`); the runtime assertions keep the test from being empty.
@@ -19,6 +19,7 @@ const config: SiteConfig = {
   include: [".well-known"],
   exclude: [],
   navigation: "_data/navigation.yml",
+  collections: { components: { source: "_data/components.yml", id: "slug" } },
   defaults: [{ path: "", values: { layout: "doc" } }],
   repository: { url: "https://github.com/example/example", branch: "main", dir: "docs" },
   theme: { options: { logo: { light: "logo.svg" } } },
@@ -26,6 +27,17 @@ const config: SiteConfig = {
   redirects: { "/old/": "/new/" },
   outputs: { llms: false },
 };
+
+const recordPos: RecordPos = { file: "_data/components.yml", startLine: 3, startColumn: 1, endLine: 7, endColumn: 1 };
+
+const record: DataRecord = {
+  id: "button",
+  fields: { title: "Button", status: "stable" },
+  position: recordPos,
+  fieldPositions: { title: { ...recordPos, startColumn: 8 } },
+};
+
+const collection: Collection = { name: "components", source: "_data/components.yml", records: [record] };
 
 const page: Page = {
   url: "/example/guide/install/",
@@ -38,13 +50,14 @@ const page: Page = {
   html: '<h1 data-source="docs/guide/install.md:3">Install</h1>',
   markdown: "# Install\n",
   kind: "doc",
+  record: { collection: "components", id: "button", position: recordPos },
 };
 
 const nav: NavTree = {
   docs: [{ title: "Guide", children: [{ title: "Install", url: page.url, match: "/example/guide/" }] }],
 };
 
-const site: Site = { config, pages: [page], nav, data: { versions: [1, 2] } };
+const site: Site = { config, pages: [page], nav, collections: { components: collection }, data: { versions: [1, 2] } };
 const trail: Trail = [{ title: "Guide", url: "/example/guide/" }, { title: "Install", url: page.url }];
 const pager: Pager = { next: { title: "Write", url: "/example/guide/write/" } };
 const head: Head = {
@@ -57,6 +70,11 @@ const island: Island = { name: "code-tabs", src: "/example/assets/code-tabs.js" 
 const diagnostic: Diagnostic = { id: "link.broken", severity: "error", message: "No page at /missing/", pos, help: "Fix the link." };
 
 const layout: Layout = ({ page: p }) => ({ type: "main", title: p.title });
+const dataLayout: Layout = ({ record: r, list: l }) => ({
+  type: "main",
+  title: r?.fields["title"],
+  records: l?.records.length,
+});
 const chrome: Chrome = ({ site: s }) => ({ type: "header", title: s.config.title });
 const component: Component<{ kind: string }> = ({ props }) => ({ type: "aside", kind: props.kind });
 
@@ -76,6 +94,14 @@ const plugin: Plugin = {
 };
 const code: CodeConfig = { plugins: [plugin] };
 
+const recordProps: RecordProps = { collection: "components", id: "button", url: page.url, fields: record.fields };
+const listProps: ListProps = {
+  collection: "components",
+  records: [recordProps],
+  groups: [{ key: "stable", records: [recordProps] }],
+  pagination: { page: 1, total: 2, next: "/example/components/page/2/" },
+};
+
 test("example values of every contract type type-check and carry what the contracts promise", async () => {
   assert.equal(site.pages[0]?.headings[0]?.pos.file, pos.file);
   assert.equal(pager.prev, undefined);
@@ -84,6 +110,13 @@ test("example values of every contract type type-check and carry what the contra
   assert.equal(island.name, "code-tabs");
   assert.equal(code.plugins[0]?.name, "example");
   assert.deepEqual(layout({ site, page, trail, pager, head, islands: [island] }), { type: "main", title: "Install" });
+  assert.deepEqual(
+    dataLayout({ site, page, trail, pager, head, islands: [island], record: recordProps, list: listProps }),
+    { type: "main", title: "Button", records: 1 },
+  );
+  assert.equal(page.record?.position.startLine, recordPos.startLine);
+  assert.equal(site.collections["components"]?.records[0]?.fieldPositions["title"]?.startColumn, 8);
+  assert.equal(site.config.collections["components"]?.source, "_data/components.yml");
   assert.deepEqual(chrome({ site, page, trail, pager }), { type: "header", title: "Example" });
   assert.deepEqual(component({ props: { kind: "note" }, page, site, html: "" }), { type: "aside", kind: "note" });
   const reported: Diagnostic[] = [];

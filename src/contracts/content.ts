@@ -1,4 +1,5 @@
 import type { Direction, SiteConfig } from "./config.ts";
+import type { Collection, PageRecord } from "./data.ts";
 import type { NavTree } from "./nav.ts";
 import type { SourcePos } from "./source.ts";
 
@@ -88,6 +89,8 @@ export interface Page {
   readonly markdown: string;
   /** What kind of page this is. */
   readonly kind: PageKind;
+  /** The record this page was built from, when it is a record page. */
+  readonly record?: PageRecord;
 }
 
 /** The site model: everything a build knows, assembled once and read by rendering and outputs. */
@@ -100,4 +103,6 @@ export interface Site {
   readonly nav: NavTree;
   /** Files from `_data/`, keyed by file name without extension. */
   readonly data: Readonly<Record<string, unknown>>;
+  /** Data collections, keyed by name; empty when the config declares none. */
+  readonly collections: Readonly<Record<string, Collection>>;
 }

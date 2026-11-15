@@ -1,0 +1,9 @@
+id,name,code,note
+north,North,NO,The first region to get every component
+south,South,SO,
+east,East,EA,Two teams
+west,West,WE,
+central,Central,CE,
+coastal,Coastal,CO,"Harbours, and one island"
+island,Island,IS,
+highland,Highland,HI,Slow links

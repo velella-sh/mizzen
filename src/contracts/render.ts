@@ -1,4 +1,5 @@
 import type { Page, Site } from "./content.ts";
+import type { ListProps, RecordProps } from "./data.ts";
 import type { Pager, Trail } from "./nav.ts";
 
 /** What a theme's component returns; the render host turns it into HTML. The engine does not look inside it. */
@@ -58,6 +59,10 @@ export interface LayoutProps {
   readonly head: Head;
   /** Islands the page uses, to be loaded at the end of the body. */
   readonly islands: readonly Island[];
+  /** The record of a record page; unset on every other page. */
+  readonly record?: RecordProps;
+  /** The records, groups, and pagination of a list page; unset on every other page. */
+  readonly list?: ListProps;
 }
 
 /** Props of a chrome part (header, sidebar, footer, table of contents), which the layout places. */

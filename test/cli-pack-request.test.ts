@@ -461,6 +461,7 @@ test("required warnings and dependencies appear in both outputs", async () => {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -481,7 +482,7 @@ test("required warnings and dependencies appear in both outputs", async () => {
   });
   const alpha = page("/guide/alpha/", "Alpha guide", "# Alpha guide\n\nAlpha intro. See [Beta](beta.md).\n", "guide/alpha.md");
   const beta = page("/guide/beta/", "Beta guide", "# Beta guide\n\nBeta intro.\n", "guide/beta.md");
-  const site: Site = { config, pages: [alpha, beta], nav: {}, data: {} };
+  const site: Site = { config, pages: [alpha, beta], nav: {}, collections: {}, data: {} };
   const warnings: Diagnostic[] = [
     {
       id: "test.alpha-warning",

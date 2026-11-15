@@ -20,6 +20,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -50,7 +51,7 @@ function page(url: string, markdown: string, options: PageOptions = {}): Page {
 }
 
 function site(pages: readonly Page[], data: Readonly<Record<string, unknown>> = {}): Site {
-  return { config: config(), pages, nav: {}, data };
+  return { config: config(), pages, nav: {}, collections: {}, data };
 }
 
 function context(): { ctx: OutputContext; diagnostics: Diagnostic[] } {

@@ -33,6 +33,7 @@ test("every key of SiteConfig is in the schema and vice versa, at every level", 
   assert.deepEqual(sorted(Object.keys(schema.properties!)), sorted(contractKeys("SiteConfig")));
   assert.deepEqual(sorted(Object.keys(defs.language!.properties!)), sorted(contractKeys("LanguageConfig")));
   assert.deepEqual(sorted(Object.keys(defs.defaultsEntry!.properties!)), sorted(contractKeys("DefaultsEntry")));
+  assert.deepEqual(sorted(Object.keys(defs.collection!.properties!)), sorted(contractKeys("CollectionConfig")));
   assert.deepEqual(sorted(Object.keys(schema.properties!.repository!.properties!)), sorted(contractKeys("RepositoryConfig")));
   assert.deepEqual(sorted(Object.keys(schema.properties!.theme!.properties!)), sorted(contractKeys("ThemeConfig")));
   const search = (schema.properties!.search as { oneOf: Schema[] }).oneOf.find((s) => s.properties)!;
@@ -67,6 +68,7 @@ test("the defaults in the schema match the documented SiteConfig defaults", () =
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     search: {},
     redirects: {},
@@ -88,6 +90,20 @@ test("valid configs pass", () => {
     { title: "Example", base: "/example", url: "https://example.github.io", lang: "fa", dir: "rtl" },
     { languages: [{ code: "fa", name: "فارسی", prefix: "/fa" }, { code: "en", name: "English", prefix: "" }] },
     { source: "docs", include: [".well-known"], exclude: ["drafts"], navigation: "nav.yml" },
+    { collections: {} },
+    { collections: { components: { source: "_data/components.yml" } } },
+    {
+      collections: {
+        components: {
+          source: "_data/components.yml",
+          id: "slug",
+          template: "_templates/component.md",
+          permalink: "/components/{slug}/",
+          schema: "schemas/components.json",
+        },
+        "release-notes": { source: "_data/release-notes.csv" },
+      },
+    },
     { defaults: [{ path: "", values: { layout: "doc" } }, { path: "guide", values: {} }] },
     { repository: { url: "https://github.com/example/example" } },
     { repository: { url: "https://github.com/example/example", branch: "dev", dir: "docs" } },
@@ -119,7 +135,13 @@ test("invalid configs fail", () => {
     ["include not a list of strings", { include: [1] }],
     ["an empty source", { source: "" }],
     ["a defaults entry without values", { defaults: [{ path: "" }] }],
-    ["a defaults entry with a scope", { defaults: [{ scope: { path: "" }, values: {} }] }],
+    ["defaults entry with a scope", { defaults: [{ scope: { path: "" }, values: {} }] }],
+    ["collections not a map", { collections: [] }],
+    ["a collection without a source", { collections: { components: { id: "slug" } } }],
+    ["a collection with an unknown key", { collections: { components: { source: "_data/c.yml", sources: [] } } }],
+    ["a collection name with a capital", { collections: { Components: { source: "_data/c.yml" } } }],
+    ["a collection name with an underscore", { collections: { part_list: { source: "_data/c.yml" } } }],
+    ["a permalink without a leading slash", { collections: { c: { source: "_data/c.yml", permalink: "c/{id}/" } } }],
     ["repository without a url", { repository: { branch: "main" } }],
     ["repository with an unknown key", { repository: { url: "https://github.com/e/e", source_dir: "docs" } }],
     ["theme with an unknown key", { theme: { color: "red" } }],

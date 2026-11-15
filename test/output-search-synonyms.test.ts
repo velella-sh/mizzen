@@ -17,6 +17,7 @@ function site(data: Readonly<Record<string, unknown>> = {}, options: Readonly<Re
       include: [],
       exclude: [],
       navigation: "_data/navigation.yml",
+      collections: {},
       defaults: [],
       theme: { options },
       search: {},
@@ -25,6 +26,7 @@ function site(data: Readonly<Record<string, unknown>> = {}, options: Readonly<Re
     },
     pages: [],
     nav: {},
+    collections: {},
     data,
   };
 }

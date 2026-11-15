@@ -49,6 +49,7 @@ function site(): Site {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
+    collections: {},
     defaults: [],
     theme: { options: {} },
     search: {},
@@ -60,6 +61,7 @@ function site(): Site {
     config,
     pages: [page("/guide/alpha/", "guide/alpha.md", text), page("/guide/beta/", "guide/beta.md", text)],
     nav: {},
+    collections: {},
     data: {},
   };
 }

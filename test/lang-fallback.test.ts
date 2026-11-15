@@ -22,6 +22,7 @@ const CONFIG: SiteConfig = {
   include: [],
   exclude: [],
   navigation: "_data/navigation.yml",
+  collections: {},
   defaults: [],
   theme: {},
   search: {},
@@ -51,7 +52,7 @@ function page(url: string, lang: string, translationKey?: string): Page {
 }
 
 function site(pages: readonly Page[], config: Partial<SiteConfig> = {}, data: Record<string, unknown> = {}): Site {
-  return { config: { ...CONFIG, ...config }, pages, nav: {}, data };
+  return { config: { ...CONFIG, ...config }, pages, nav: {}, collections: {}, data };
 }
 
 function tree(files: Record<string, string>): string {

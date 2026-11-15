@@ -23,6 +23,7 @@ function site(pages: readonly Page[], config: false | SearchConfig = {}): Site {
       include: [],
       exclude: [],
       navigation: "_data/navigation.yml",
+      collections: {},
       defaults: [],
       theme: { options: {} },
       search: config,
@@ -31,6 +32,7 @@ function site(pages: readonly Page[], config: false | SearchConfig = {}): Site {
     },
     pages,
     nav: {},
+    collections: {},
     data: {},
   };
 }

@@ -169,6 +169,7 @@ function site(pages: readonly Page[], url?: string | null, base = "", config: Pa
       include: [],
       exclude: [],
       navigation: "_data/navigation.yml",
+      collections: {},
       defaults: [],
       theme: { options: {} },
       search: {},
@@ -178,6 +179,7 @@ function site(pages: readonly Page[], url?: string | null, base = "", config: Pa
     },
     pages,
     nav: {},
+    collections: {},
     data: {},
   };
 }

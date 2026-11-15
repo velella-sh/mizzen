@@ -64,6 +64,13 @@
       "default": "_data/navigation.yml",
       "description": "Navigation file, relative to the site root. When it does not exist, navigation is built from folders and each page's order."
     },
+    "collections": {
+      "type": "object",
+      "default": {},
+      "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+      "additionalProperties": { "$ref": "#/$defs/collection" },
+      "description": "Data collections by name: where their records come from and how their pages are built. Default {}."
+    },
     "defaults": {
       "type": "array",
       "default": [],
@@ -165,6 +172,38 @@
       "properties": {
         "path": { "type": "string", "description": "Folder relative to source; empty for every page." },
         "values": { "type": "object", "description": "Front matter keys and values to apply." }
+      }
+    },
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Data file the records are read from, relative to the site root."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Field that holds a record's id; the mapping key when absent."
+        },
+        "template": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Markdown template under _templates/, relative to the source folder."
+        },
+        "permalink": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "URL pattern of a record page, such as /items/{id}/."
+        },
+        "schema": {
+          "type": "string",
+          "minLength": 1,
+          "description": "JSON Schema file that validates every record, relative to the site root."
+        }
       }
     }
   }
