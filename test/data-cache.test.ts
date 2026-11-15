@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "../src/config/load.ts";
 import { loadCollections } from "../src/data/collections.ts";
+import { buildModel } from "../src/model/build.ts";
 import { sha256, storedPath, writeLock } from "../src/data/lock.ts";
 import { build } from "../src/pipeline/build.ts";
 import { cacheKey } from "../src/pipeline/cache.ts";
@@ -156,6 +157,10 @@ test("a package file that links outside is refused, is not read, and does not ch
     const result = await loadCollections({ root, config });
     assert.deepEqual(result.diagnostics.map((diagnostic) => diagnostic.id), ["data.package-escape"]);
     assert.deepEqual(result.collections, {});
+
+    const model = await buildModel(root);
+    assert.ok(model.diagnostics.some((diagnostic) => diagnostic.id === "data.package-escape"));
+    assert.equal(model.site.collections["items"], undefined);
 
     writeFileSync(secret, "- id: after\n");
     assert.equal(await keyOf(root), before);
