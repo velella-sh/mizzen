@@ -90,6 +90,12 @@ function sitePath(path: string, base: string): string {
   return path === "/" ? `${base}/` : `${base}${path}`;
 }
 
+/** Where a removed record's reader goes: the collection's list page when the site has one, else the home page. */
+function listOf(collection: string, site: Site): string {
+  const list = `/${collection}/`;
+  return site.pages.some((page) => underBase(page.url, site.config.base) === list) ? list : "/";
+}
+
 /**
  * The target of a config redirect: an `https` URL as written, or a path on the site made absolute when the site sets
  * `url`. A value that is neither is not a redirect target, and the caller reports it.
@@ -167,6 +173,26 @@ function redirectHtml(site: Site, target: string): string {
   ].join("\n");
 }
 
+/** The removed notice: a small page that says the record is gone and links somewhere useful. */
+function removedHtml(site: Site, target: string): string {
+  const href = escapeHtml(target);
+  return [
+    "<!doctype html>",
+    `<html lang="${escapeHtml(site.config.lang)}" dir="${escapeHtml(site.config.dir)}">`,
+    "<head>",
+    '<meta charset="utf-8">',
+    "<title>Removed</title>",
+    '<meta name="robots" content="noindex">',
+    "</head>",
+    "<body>",
+    "<p>The record this page showed has been removed.</p>",
+    `<p><a href="${href}">Continue</a></p>`,
+    "</body>",
+    "</html>",
+    "",
+  ].join("\n");
+}
+
 /** One old path and the target it sends readers to. */
 interface Claim {
   /** The old path, normalized to start with `/`. */
@@ -177,6 +203,8 @@ interface Claim {
   readonly from: string;
   /** The source position of a front matter claim, when it has one. */
   readonly pos?: SourcePos;
+  /** True for a removed record's address: the page says the record is gone instead of redirecting. */
+  readonly gone?: true;
 }
 
 /** A claim that won its old path, with the routes its two ends name for matching it against other claims. */
@@ -307,7 +335,7 @@ export const redirects: Output = {
         route: routeOf(claim.oldPath, site) ?? path,
         targetRoute: routeOf(claim.target, site),
       });
-      files.push({ path, contents: redirectHtml(site, claim.target) });
+      files.push({ path, contents: claim.gone === true ? removedHtml(site, claim.target) : redirectHtml(site, claim.target) });
     };
 
     for (const oldPath of Object.keys(site.config.redirects).sort(byCodePoint)) {
@@ -371,6 +399,55 @@ export const redirects: Output = {
           continue;
         }
         add({ oldPath: normalized, target: pageTarget(page, site), from: `the page ${quote(page.url)}`, pos: page.source });
+      }
+    }
+
+    for (const page of site.pages) {
+      const record = page.record;
+      const earlier = record?.previousUrls;
+      if (record === undefined || earlier === undefined || record.view !== undefined) continue;
+      const from = `the URL lock of ${record.collection}.${record.id}`;
+      for (const oldPath of earlier) {
+        const normalized = normalizeOldPath(underBase(oldPath, base));
+        if (normalized === undefined) {
+          ctx.report({
+            id: "redirects.invalid-old-path",
+            severity: "error",
+            message: `An earlier URL of ${quote(page.url)} is not a safe site path.`,
+            pos: page.source,
+            help: "Fix the URL in urls.lock.json, or in the record's aliases field.",
+          });
+          continue;
+        }
+        add({ oldPath: normalized, target: pageTarget(page, site), from, pos: page.source });
+      }
+    }
+
+    for (const removed of site.removed ?? []) {
+      const from = `the removal of ${removed.collection}.${removed.id}`;
+      const target =
+        removed.target === undefined ? sitePath(listOf(removed.collection, site), base) : configTarget(removed.target, site);
+      if (target === undefined) {
+        ctx.report({
+          id: "redirects.invalid-target",
+          severity: "error",
+          message: `The removed record ${removed.collection}.${removed.id} redirects to ${quote(removed.target ?? "")}, which is not a site path.`,
+          help: 'Use a path starting with "/" for `onRemoved.redirect`.',
+        });
+        continue;
+      }
+      for (const url of removed.urls) {
+        const normalized = normalizeOldPath(underBase(url, base));
+        if (normalized === undefined) {
+          ctx.report({
+            id: "redirects.invalid-old-path",
+            severity: "error",
+            message: `A removed URL of ${removed.collection}.${removed.id} is not a safe site path.`,
+            help: "Fix the URL in urls.lock.json.",
+          });
+          continue;
+        }
+        add({ oldPath: normalized, target, from, ...(removed.target === undefined ? { gone: true as const } : {}) });
       }
     }
 

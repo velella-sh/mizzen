@@ -40,6 +40,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `translations` | `translations.json`, each page's status in every configured language. |
 | `trust` | `trust.json`, each doc page's trust level, reasons, and last reviewer. |
 | `twins` | One Markdown twin per document page: the same URL with `.md` in place of the HTML file. |
+| `urls` | `urls.json`, each collection's record ids and their page URLs, with the engine version and a hash of the data. |
 | `variables` | `variables.json`, every variable placeholder a page uses and its declaration. |
 | `version-diff` | `diff/<version>/<path>.json` for each adjacent pair of versions whose page sections differ. |
 | `versions` | `versions.json`, the versions each page path exists in and how it differs from the newest. |

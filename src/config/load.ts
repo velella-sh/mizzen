@@ -192,11 +192,14 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const references = referencesFrom(entry.references);
     const dates = fieldsFrom(entry.dates);
     const views = viewsFrom(entry.views);
+    const onRemoved = onRemovedFrom(entry.onRemoved);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
       ...(typeof entry.template === "string" ? { template: entry.template } : {}),
       ...(typeof entry.permalink === "string" ? { permalink: entry.permalink } : {}),
+      ...(typeof entry.disambiguate === "string" ? { disambiguate: entry.disambiguate } : {}),
+      ...(typeof entry.aliases === "string" ? { aliases: entry.aliases } : {}),
       ...(typeof entry.schema === "string" ? { schema: entry.schema } : {}),
       ...(unique === undefined ? {} : { unique }),
       ...(references === undefined ? {} : { references }),
@@ -206,11 +209,19 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
         : {}),
       ...(isPlainObject(entry) && typeof entry.llms === "boolean" ? { llms: entry.llms } : {}),
       ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
+      ...(onRemoved === undefined ? {} : { onRemoved }),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
       ...(views === undefined ? {} : { views }),
     };
   }
   return collections;
+}
+
+/** `onRemoved` as the contract holds it: one of the words, or a redirect to a safe site path. */
+function onRemovedFrom(value: unknown): CollectionConfig["onRemoved"] | undefined {
+  if (value === "error" || value === "gone") return value;
+  if (!isPlainObject(value) || typeof value.redirect !== "string") return undefined;
+  return value.redirect.startsWith("/") ? { redirect: value.redirect } : undefined;
 }
 
 /** The named views of one collection, keeping only those that name a template and a URL pattern. */

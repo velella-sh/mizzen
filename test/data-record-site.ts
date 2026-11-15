@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import type { Diagnostic } from "../src/contracts/diagnostic.ts";
 import { buildModel, type ModelResult } from "../src/model/build.ts";
 
 /** A temporary site from a path-to-text map. */
@@ -27,7 +28,7 @@ export async function withSite(
 }
 
 /** The diagnostic ids, in order. */
-export function ids(result: ModelResult): string[] {
+export function ids(result: { readonly diagnostics: readonly Diagnostic[] }): string[] {
   return result.diagnostics.map((diagnostic) => diagnostic.id);
 }
 

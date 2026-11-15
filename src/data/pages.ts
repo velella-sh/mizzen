@@ -19,6 +19,7 @@ import type {
   Diagnostic,
   Heading,
   Page,
+  RecordPos,
   SiteConfig,
 } from "../contracts/index.ts";
 import { directionFromLang } from "../content/lang.ts";
@@ -368,6 +369,60 @@ interface Rendering {
 }
 
 /**
+ * The earlier addresses a record's `aliases` field names. A value starting with `/` is a path as written; any other
+ * value is an earlier id, and the collection's URL pattern fills it into the URL that id used to have. The current URL
+ * is never repeated, and a collection whose pattern does not name its id cannot address an earlier one: that is a
+ * warning, and the value is left out.
+ */
+export function aliasUrlsOf(
+  collection: string,
+  id: string,
+  fields: Readonly<Record<string, unknown>>,
+  config: CollectionConfig,
+  options: { readonly base: string; readonly prefix?: string; readonly position: RecordPos; readonly url: string },
+  diagnostics: Diagnostic[],
+): readonly string[] {
+  const field = config.aliases;
+  if (field === undefined) return [];
+  const raw = fields[field];
+  const values: readonly unknown[] = Array.isArray(raw) ? raw : [raw];
+  const idField = config.id ?? "id";
+  const urls: string[] = [];
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const alias = value.trim();
+    if (alias === "") continue;
+    if (alias.startsWith("/")) {
+      if (alias !== options.url) urls.push(alias);
+      continue;
+    }
+    if (config.permalink === undefined || !config.permalink.includes(`{${idField}`)) {
+      diagnostics.push({
+        id: "urls.alias-unaddressed",
+        severity: "warning",
+        message: `The record ${collection}.${id} names the earlier id "${alias}", but the collection's URL pattern does not use "${idField}".`,
+        pos: recordSourcePos(options.position),
+        help: `Name the id in \`collections.${collection}.permalink\`, such as \`{${idField}}\`, or write the earlier address as a path.`,
+      });
+      continue;
+    }
+    const filled = recordUrl(collection, id, { ...fields, [idField]: alias }, config, options);
+    if (filled.diagnostic !== undefined) {
+      diagnostics.push({
+        id: "urls.alias-unaddressed",
+        severity: "warning",
+        message: `The earlier id "${alias}" of ${collection}.${id} cannot be turned into a URL: ${filled.diagnostic.message}`,
+        pos: recordSourcePos(options.position),
+        help: "Check the record and the collection's URL pattern.",
+      });
+      continue;
+    }
+    if (filled.url !== undefined && filled.url !== options.url) urls.push(filled.url);
+  }
+  return urls;
+}
+
+/**
  * Builds the record pages of every collection that names both a template and a URL pattern, in config order. A
  * collection without either builds no pages, so an ordinary data collection is untouched. Every named view of a
  * collection builds one more page per record; a view is left out when the record's main page has no URL.
@@ -498,7 +553,37 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     };
 
     for (const language of languages) {
+      // Two records whose pattern gives one URL would write one file, so both are reported and neither is built.
+      const claimed = new Map<string, DataRecord[]>();
       for (const record of collection.records) {
+        const localized = localizeFields(record.fields, language.code, config.lang);
+        const fields =
+          localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
+        const url = recordUrl(name, record.id, fields, entry, {
+          base: config.base,
+          prefix: language.prefix,
+          position: record.position,
+        }).url;
+        if (url === undefined) continue;
+        const seen = claimed.get(url);
+        claimed.set(url, seen === undefined ? [record] : [...seen, record]);
+      }
+      const collided = new Set<string>();
+      for (const [url, records] of claimed) {
+        if (records.length < 2) continue;
+        const ids = records.map((record) => `"${record.id}"`).join(", ");
+        for (const record of records) collided.add(record.id);
+        diagnostics.push({
+          id: "data.permalink-collision",
+          severity: "error",
+          message: `The records ${ids} of ${name} all build the URL "${url}".`,
+          pos: recordSourcePos(records[0]!.position),
+          help: "Set `collections.<name>.disambiguate` to a field that tells them apart, or put another field in the URL pattern.",
+        });
+      }
+
+      for (const record of collection.records) {
+        if (collided.has(record.id)) continue;
         const localized = localizeFields(record.fields, language.code, config.lang);
         const fields =
           localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
@@ -518,7 +603,11 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
           name,
           record,
           fields,
-          { base: config.base, prefix: language.prefix },
+          {
+            base: config.base,
+            prefix: language.prefix,
+            ...(entry.disambiguate === undefined ? {} : { disambiguate: entry.disambiguate }),
+          },
           diagnostics,
         );
 

@@ -44,12 +44,20 @@ export function viewUrls(
   collection: string,
   record: { readonly id: string; readonly position: RecordPos },
   fields: Readonly<Record<string, unknown>>,
-  options: { readonly base: string; readonly prefix: string },
+  options: { readonly base: string; readonly prefix: string; readonly disambiguate?: string },
   diagnostics: Diagnostic[],
 ): Readonly<Record<string, string>> {
   const urls: Record<string, string> = {};
   for (const view of views) {
-    const filled = recordUrl(collection, record.id, fields, { permalink: view.permalink }, {
+    const filled = recordUrl(
+      collection,
+      record.id,
+      fields,
+      {
+        permalink: view.permalink,
+        ...(options.disambiguate === undefined ? {} : { disambiguate: options.disambiguate }),
+      },
+      {
       base: options.base,
       prefix: options.prefix,
       position: record.position,

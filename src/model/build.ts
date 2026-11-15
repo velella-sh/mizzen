@@ -5,8 +5,9 @@ import { loadConfig } from "../config/load.ts";
 import { loadData } from "../content/data.ts";
 import { loadCollections } from "../data/collections.ts";
 import { applyDataDirectives } from "../data/directives.ts";
-import { buildRecordPages } from "../data/pages.ts";
+import { buildRecordPages, aliasUrlsOf } from "../data/pages.ts";
 import { localizeFields, prefixOfLang } from "../data/record-context.ts";
+import { planUrls, readUrlsLock, urlKey, type PublishedUrl, type UrlsPlan } from "../data/urls-lock.ts";
 import { loadTemplates } from "../data/template.ts";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
@@ -33,6 +34,8 @@ export interface ModelResult {
   readonly diagnostics: readonly Diagnostic[];
   /** Markdown pages parsed on this run; pages read from the page cache are not counted. */
   readonly parsedPages: number;
+  /** What the URL lock check made of this build; the model is what writes `urls.lock.json` with `--update-urls`. */
+  readonly urls: UrlsPlan;
 }
 
 /** Options of {@link buildModel}. */
@@ -44,6 +47,8 @@ export interface BuildModelOptions {
   readonly pageCacheDir?: string;
   /** The site's plugins: their `content` hook runs once on every page before the site model is assembled. */
   readonly plugins?: readonly Plugin[];
+  /** Accept every current record URL, moving a changed one into `urls.lock.json`'s `previous`; `mizzen build --update-urls` sets this. */
+  readonly updateUrls?: boolean;
 }
 
 /** Compares by code point, never by locale. */
@@ -300,6 +305,69 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   pages.sort((a, b) => byCodePoint(a.url, b.url));
 
+  // The URL lock: check every record page against the URLs it published, and hand the redirects output the earlier
+  // ones. One page per record is the record's address in the lock: the default language's page.
+  const locked = await readUrlsLock(siteRoot);
+  for (const d of locked.diagnostics) diagnostics.report(d);
+  const preferred = new Map<string, Page>();
+  for (const page of pages) {
+    if (page.record === undefined || page.record.view !== undefined) continue;
+    const key = urlKey(page.record.collection, page.record.id);
+    const current = preferred.get(key);
+    if (current === undefined || (page.lang === config.lang && current.lang !== config.lang)) {
+      preferred.set(key, page);
+    }
+  }
+  const published: PublishedUrl[] = [];
+  const aliases = new Map<string, readonly string[]>();
+  const aliasDiagnostics: Diagnostic[] = [];
+  for (const [key, page] of preferred) {
+    const record = page.record!;
+    const source = collected.collections[record.collection]?.records.find((candidate) => candidate.id === record.id);
+    const entry = config.collections[record.collection];
+    if (source === undefined || entry === undefined) continue;
+    published.push({ collection: record.collection, id: record.id, url: page.url, position: source.position });
+    const localized = localizeFields(source.fields, page.lang, config.lang).fields;
+    const fields = localized["id"] === undefined ? { ...localized, id: record.id } : localized;
+    const earlier = aliasUrlsOf(
+      record.collection,
+      record.id,
+      fields,
+      entry,
+      {
+        base: config.base,
+        prefix: prefixOfLang(config, page.lang),
+        position: source.position,
+        url: page.url,
+      },
+      aliasDiagnostics,
+    );
+    if (earlier.length > 0) aliases.set(key, earlier);
+  }
+  for (const d of aliasDiagnostics) diagnostics.report(d);
+  const urls = planUrls({
+    lock: locked.lock,
+    locked: locked.found,
+    published,
+    config: config.collections,
+    update: options.updateUrls === true,
+  });
+  // A lock that could not be read is one error; its empty contents are not also a pile of new records.
+  const lockUnreadable = locked.diagnostics.some((finding) => finding.severity === "error");
+  for (const d of urls.diagnostics) {
+    if (lockUnreadable && d.id === "urls.new-records") continue;
+    diagnostics.report(d);
+  }
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i]!;
+    if (page.record === undefined || page.record.view !== undefined) continue;
+    const key = urlKey(page.record.collection, page.record.id);
+    if (preferred.get(key) !== page) continue;
+    const earlier = [...(urls.previous[key] ?? []), ...(aliases.get(key) ?? [])];
+    if (earlier.length === 0) continue;
+    pages[i] = { ...page, record: { ...page.record, previousUrls: earlier } };
+  }
+
   const navFile = resolve(siteRoot, config.navigation);
   const navRel = relative(siteRoot, navFile).split("\\").join("/");
   const collections: Record<string, Record<string, { title: string; url: string; fields: Readonly<Record<string, unknown>> }[]>> = {};
@@ -330,8 +398,23 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     Object.keys(navResult.nav).length > 0 ? navResult.nav : { docs: navFromFolders(folderPages) };
 
   // Derived facts run last, once the pages and `_data` are final, and land at `data[fact.name]`; `_data` wins.
+  const gone = urls.removed
+    .filter((entry) => entry.policy !== "error")
+    .map((entry) => ({
+      collection: entry.collection,
+      id: entry.id,
+      urls: entry.urls,
+      ...(entry.target === undefined ? {} : { target: entry.target }),
+    }));
   const applied = await applyFacts({
-    site: { config, pages, nav, data: data.data, collections: collected.collections },
+    site: {
+      config,
+      pages,
+      nav,
+      data: data.data,
+      collections: collected.collections,
+      ...(gone.length === 0 ? {} : { removed: gone }),
+    },
     root: siteRoot,
     sourceDir,
   });
@@ -341,5 +424,6 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     site: applied.site,
     diagnostics: sortDiagnostics(diagnostics.all),
     parsedPages,
+    urls,
   };
 }

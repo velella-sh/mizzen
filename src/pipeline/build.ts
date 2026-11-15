@@ -6,6 +6,7 @@ import { loadConfig } from "../config/load.ts";
 import { discover } from "../content/discover.ts";
 import type { Diagnostic, Output, OutputContext, OutputFile, Page } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
+import { writeUrlsLock } from "../data/urls-lock.ts";
 import { MANIFEST_PATH, recordBuildHash } from "../outputs/build-hash.ts";
 import { driftPagesOf, driftRoot } from "../outputs/drift-report.ts";
 import { trustAsOf, trustPagesOf, trustRoot } from "../outputs/trust.ts";
@@ -48,6 +49,11 @@ export interface BuildOptions {
    * setting, like a make job count, and `mizzen build --workers <n|auto>` is how a person sets it.
    */
   readonly workers?: number;
+  /**
+   * Accept every record page's current URL and write `urls.lock.json`: a URL that changed keeps its old one as a
+   * redirect. `mizzen build --update-urls` sets this; no other command writes the lock.
+   */
+  readonly updateUrls?: boolean;
 }
 
 /** What {@link build} wrote and found. */
@@ -224,7 +230,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   assertOutOutsideSource(sourceDir, out);
 
   const cacheRoot =
-    options.cache === true && !(await exists(join(root, CODE_CONFIG_FILE)))
+    options.cache === true && options.updateUrls !== true && !(await exists(join(root, CODE_CONFIG_FILE)))
       ? resolve(options.cacheDir ?? cacheRootOf(root))
       : undefined;
   let key: string | undefined;
@@ -277,6 +283,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const model = await buildModel(root, {
     ...(cacheRoot === undefined ? {} : { pageCacheDir: join(cacheRoot, "pages") }),
     plugins: code.plugins,
+    ...(options.updateUrls === true ? { updateUrls: true } : {}),
   });
   for (const d of model.diagnostics) diagnostics.report(d);
 
@@ -583,6 +590,10 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     if (cacheRoot !== undefined && key !== undefined) await writeCache(cacheRoot, key, staging, fileList, findings);
 
     await commit(staging, out);
+    // The lock is a promise about what this build published, so only a clean build writes it.
+    if (options.updateUrls === true && !findings.some((finding) => finding.severity === "error")) {
+      await writeUrlsLock(root, model.urls.next);
+    }
     if (settingsDir !== undefined) await writeRenderInputs(settingsDir, includeInputs);
     if (renderRoot !== undefined && settingsKey !== undefined) await pruneRenderCache(renderRoot, settingsKey);
     return {

@@ -93,6 +93,18 @@ export interface Page {
   readonly record?: PageRecord;
 }
 
+/** A record the URL lock published that its collection no longer holds. */
+export interface RemovedRecord {
+  /** The collection's name. */
+  readonly collection: string;
+  /** The record's id. */
+  readonly id: string;
+  /** Every URL the record published: its last one and the earlier ones. */
+  readonly urls: readonly string[];
+  /** Where readers go instead, from `onRemoved`; absent for the removed notice. */
+  readonly target?: string;
+}
+
 /** The site model: everything a build knows, assembled once and read by rendering and outputs. */
 export interface Site {
   /** The site config. */
@@ -105,4 +117,6 @@ export interface Site {
   readonly data: Readonly<Record<string, unknown>>;
   /** Data collections, keyed by name; empty when the config declares none. */
   readonly collections: Readonly<Record<string, Collection>>;
+  /** Records the URL lock published that their collections no longer hold, in lock order. */
+  readonly removed?: readonly RemovedRecord[];
 }

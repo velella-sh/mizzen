@@ -63,6 +63,15 @@ export interface CollectionViewConfig {
   readonly layout?: string;
 }
 
+/** What a record's disappearance from its collection does. */
+export type OnRemovedConfig =
+  | "error"
+  | "gone"
+  | {
+      /** A page on the site the removed record's URLs redirect to, such as `/items/`. */
+      readonly redirect: string;
+    };
+
 /** One data collection: where its records come from, and how its pages are built. */
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root. */
@@ -73,6 +82,10 @@ export interface CollectionConfig {
   readonly template?: string;
   /** URL pattern of a record page, such as `/items/{id}/`. */
   readonly permalink?: string;
+  /** Field appended to every record URL, such as `id`, so two records a pattern cannot tell apart still have one URL each. */
+  readonly disambiguate?: string;
+  /** Field that holds earlier ids or paths of a record, each of which redirects to the record's page. */
+  readonly aliases?: string;
   /** JSON Schema file that validates every record, relative to the site root. */
   readonly schema?: string;
   /** Fields whose values must be unique in the collection; a duplicate is an error naming both records. Default `[]`. */
@@ -87,6 +100,8 @@ export interface CollectionConfig {
   readonly llms?: boolean;
   /** What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. Default `error`. */
   readonly onInvalid?: "error" | "skip";
+  /** What a record that was published and is no longer in the collection does. Default `error` once `urls.lock.json` exists. */
+  readonly onRemoved?: OnRemovedConfig;
   /** Limits on this collection's source. */
   readonly limits?: DataLimitsConfig;
   /** Extra named pages built from every record, each with its own template, URL pattern, and layout. Default `{}`. */
