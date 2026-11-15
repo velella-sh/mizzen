@@ -502,6 +502,13 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
         if (target === undefined) unresolved = true;
         else edge(target, index + 1, (match.index ?? 0) + 1, (match.index ?? 0) + match[0].length);
       }
+      // A count reads a collection's records exactly as a list does, so the page depends on that source.
+      for (const match of line.matchAll(/:count\{([^}]*)\}/g)) {
+        const fromMatch = /(?:^|\s)from=([^\s]+)/.exec(match[1] ?? "");
+        const target = fromMatch === null ? undefined : directiveTarget(fromMatch[1]!.replace(/^["']|["']$/g, ""));
+        if (target === undefined) unresolved = true;
+        else edge(target, index + 1, (match.index ?? 0) + 1, (match.index ?? 0) + match[0].length);
+      }
     }
     // A directive the graph cannot resolve statically makes the whole graph unreliable for narrowing, so the plan
     // asks for a full build instead of keeping guessed edges.
@@ -526,6 +533,13 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
       diagnostics.push(diagnostic);
     }
     addDataEdges(path, included.body, front.bodyLine);
+    // A list page reads one collection's records, so its output depends on that source and no other data file.
+    const declared = front.data.list;
+    if (typeof declared === "object" && declared !== null && !Array.isArray(declared)) {
+      const name = (declared as Record<string, unknown>).collection;
+      const target = typeof name === "string" ? collectionPaths.get(name) : undefined;
+      if (target !== undefined) addEdge(fileNodeId(path), fileNodeId(target), atFile(path));
+    }
     for (const dependency of included.includes) {
       addNode({
         id: fileNodeId(dependency.path),

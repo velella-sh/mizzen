@@ -232,6 +232,11 @@
           "items": { "type": "string", "minLength": 1 },
           "description": "Fields that hold a date, written YYYY-MM-DD or as a full ISO 8601 instant."
         },
+        "referenceDate": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The date a list compares before or after against: YYYY-MM-DD, or the dot path of a _data value that holds one. Unset, a list cannot filter on a relative date."
+        },
         "markdown": {
           "type": "array",
           "default": [],

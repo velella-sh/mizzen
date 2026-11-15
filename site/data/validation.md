@@ -67,6 +67,22 @@ its help names the two accepted formats.
 | `data.permalink-disambiguator` | The collection's `disambiguate` field is missing or has no letters or digits. | Add the field to the record, or change `collections.<name>.disambiguate`. |
 | `data.permalink-collision` | Two records of one collection build the same URL. | Set `collections.<name>.disambiguate`, or put another field in the URL pattern. |
 
+## List pages
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.list-shape` | A `list` key is not a mapping, or `perPage`, `splitGroups`, or `fields` has the wrong shape. | Write `list: { collection: posts, perPage: 10 }`. |
+| `data.list-collection` | A `list` names a collection the site does not have. | Name a collection the config declares. |
+| `data.list-where` | A `where` value is not a scalar, a list, or a mapping of `exists`, `before`, or `after`. | Write `status: stable`, `tags: [a, b]`, or `date: { after: 2026-01-01 }`. |
+| `data.list-sort` | A `sort` is not one field or a list of one or two fields. | Write `sort: date desc`, or a list of two. |
+| `data.list-group` | A `group` is not a field name or a mapping with a valid `field`, `by`, and `order`. | Write `group: status`, or `group: { field: date, by: month }`. |
+| `data.list-field` | A `sort` or `group` names a field that no record of the collection holds. | Use a field the records hold, or remove the key. |
+| `data.list-empty` | A list matches no record. | Change `where`, or leave the list out until the collection has records. |
+| `data.list-expand` | An `expand` has no `field` and `permalink`, or its pattern does not name `{value}`. | Write `expand: { field: tags, permalink: /tags/{value|slug}/ }`. |
+| `data.reference-date` | A date filter compares against `reference`, but the collection has no usable reference date. | Set `collections.<name>.referenceDate` to a date or a `_data` path. |
+| `data.count-attributes` | A `:count` directive has no `from` collection. | Write `:count{from=<collection>}`. |
+| `data.count-where` | A `:count` directive's `where` is not one `field=value` pair. | Write `where="status=stable"`, or remove it. |
+
 ## Stable URLs
 
 | ID | Meaning | Fix |

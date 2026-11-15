@@ -6,6 +6,7 @@ import { loadData } from "../content/data.ts";
 import { loadCollections } from "../data/collections.ts";
 import { applyDataDirectives } from "../data/directives.ts";
 import { buildRecordPages, aliasUrlsOf } from "../data/pages.ts";
+import { buildListPages, keyPositionOf } from "../data/lists.ts";
 import { localizeFields, prefixOfLang } from "../data/record-context.ts";
 import { planUrls, readUrlsLock, urlKey, type PublishedUrl, type UrlsPlan } from "../data/urls-lock.ts";
 import { loadTemplates } from "../data/template.ts";
@@ -158,6 +159,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const folderPages: FolderPage[] = [];
   const seen = new Map<string, SourcePos>();
   const appRoots = new Set<string>();
+  /** Pages whose front matter declares a list, and the source text the `list` key sits in; built once records exist. */
+  const listDeclarations: { readonly page: Page; readonly text: string; readonly file: string }[] = [];
 
   const add = (page: Page, path: string, order: unknown): void => {
     const first = seen.get(page.url);
@@ -287,6 +290,10 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       kind: "doc",
     });
     add(page, file.path, page.frontMatter.order);
+    // A page a duplicate URL kept out of the model declares no list either.
+    if (page.frontMatter.list !== undefined && pages.at(-1) === page) {
+      listDeclarations.push({ page, text, file: rel });
+    }
   }
 
   const records = await buildRecordPages({
@@ -301,6 +308,41 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   for (const record of records.pages) {
     const page = await hookPage(record);
     add(page, page.record?.template ?? page.source.file, page.frontMatter.order);
+  }
+
+  // List pages are built once every record page has a URL: the props a layout receives name each record's page. The
+  // page that declared the list keeps its own URL; its later and expanded pages are added under their own.
+  const listPages: { readonly original: Page; readonly pages: readonly Page[] }[] = [];
+  for (const declaration of listDeclarations) {
+    const position = keyPositionOf(declaration.text, declaration.file, "list");
+    const built = buildListPages({
+      page: declaration.page,
+      ...(position === undefined ? {} : { position }),
+      config,
+      collections: collected.collections,
+      data: data.data,
+    });
+    for (const d of built.diagnostics) diagnostics.report(d);
+    listPages.push({ original: declaration.page, pages: built.pages });
+  }
+  for (const { original, pages: built } of listPages) {
+    const index = pages.indexOf(original);
+    if (index >= 0 && built[0] !== undefined) pages[index] = built[0]!;
+  }
+  for (const { pages: built } of listPages) {
+    for (const extra of built.slice(1)) {
+      const first = seen.get(extra.url);
+      if (first !== undefined) {
+        diagnostics.error(
+          "page.duplicate-url",
+          `Two pages have the URL ${extra.url}: ${first.file} and ${extra.source.file}.`,
+          { pos: extra.source, help: `Change the \`permalink\` or rename one of them. The other page is ${first.file}.` },
+        );
+        continue;
+      }
+      seen.set(extra.url, extra.source);
+      pages.push(extra);
+    }
   }
 
   pages.sort((a, b) => byCodePoint(a.url, b.url));

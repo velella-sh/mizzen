@@ -94,6 +94,11 @@ export interface CollectionConfig {
   readonly references?: Readonly<Record<string, string>>;
   /** Fields that hold a date, written `YYYY-MM-DD` or as a full ISO 8601 instant. Default `[]`. */
   readonly dates?: readonly string[];
+  /**
+   * The date a list compares "before" or "after" against, so no query reads the clock: `YYYY-MM-DD`, or the dot path of
+   * a `_data` value that holds one. Unset, a list cannot filter on a relative date.
+   */
+  readonly referenceDate?: string;
   /** Fields that hold Markdown, rendered through the page pipeline with their positions in the data file. Default `[]`. */
   readonly markdown?: readonly string[];
   /** `false` keeps the collection's record pages out of `llms-full.txt`. Default `true`. */

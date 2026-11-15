@@ -6,6 +6,9 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ### Added
 
+- **List pages** turn an ordinary page into a filtered, sorted, grouped, and paginated list of a collection's
+  records with `list` front matter: a reference date instead of the clock, one page per group value, `:count`
+  on ordinary pages, `LayoutProps.list`, and a Markdown twin for every page.
 - **Data pages** build one page per record from a collection's Markdown template: `:field[…]`, `:::if`,
   `:::each`, and `:::records` directives, front matter and URL patterns filled from fields, Markdown fields,
   per-language pages, collection navigation, `record:` links, data-file edit links and agent instructions, and

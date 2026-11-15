@@ -1,5 +1,5 @@
 import type { Direction, SiteConfig } from "./config.ts";
-import type { Collection, PageRecord } from "./data.ts";
+import type { Collection, ListProps, PageRecord } from "./data.ts";
 import type { NavTree } from "./nav.ts";
 import type { SourcePos } from "./source.ts";
 
@@ -91,6 +91,8 @@ export interface Page {
   readonly kind: PageKind;
   /** The record this page was built from, when it is a record page. */
   readonly record?: PageRecord;
+  /** The records, groups, and pagination of a list page; unset on every other page. */
+  readonly list?: ListProps;
 }
 
 /** A record the URL lock published that its collection no longer holds. */
