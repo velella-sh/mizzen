@@ -37,6 +37,14 @@ its help names the two accepted formats.
 | `data.record-not-mapping` | An entry of the source is not a mapping of fields. | Write each record as `field: value` pairs. |
 | `data.record-missing-id` | A record has no scalar field to use as its id. | Add the id field, or set `collections.<name>.id` to another field. |
 
+## Templates
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.template-path` | A collection's `template` is not a `.md` or `.markdown` file under `_templates/`, or it resolves outside `_templates/` or the source folder, including through a symbolic link. | Point `collections.<name>.template` at a Markdown file under `_templates/`. |
+| `data.template-missing` | The template a collection names does not exist. | Create the file under `_templates/`, or fix `collections.<name>.template`. |
+| `data.template-unreadable` | The template exists but cannot be read. | Point `collections.<name>.template` at a readable Markdown file. |
+
 ## CSV
 
 | ID | Meaning | Fix |

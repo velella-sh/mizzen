@@ -1,8 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-/** What discovery found a file to be. `data` files (under `_data`) are read by the engine and never copied. */
-export type DiscoveredKind = "doc" | "app" | "asset" | "data";
+/**
+ * What discovery found a file to be. `data` files (under `_data`) are read by the engine and never copied, and
+ * `template` files (under `_templates`) are instantiated into pages rather than built themselves.
+ */
+export type DiscoveredKind = "doc" | "app" | "asset" | "data" | "template";
 
 /** One file under the source folder. */
 export interface DiscoveredFile {
@@ -19,7 +22,8 @@ export interface DiscoverOptions {
   readonly exclude?: readonly string[];
 }
 
-const MARKDOWN = /\.(md|markdown)$/i;
+/** Markdown file names: the template check and page discovery accept the same two extensions. */
+export const MARKDOWN = /\.(md|markdown)$/i;
 const HTML = /\.html?$/i;
 
 /** Compares by code point, never by locale. */
@@ -48,9 +52,11 @@ async function hasFrontMatter(file: string): Promise<boolean> {
 }
 
 /**
- * Lists every page, asset, and data file under `source`, sorted by path.
+ * Lists every page, asset, data file, and template under `source`, sorted by path.
  *
- * Skipped: folders starting with `_` (except `_data`), names starting with `.`, `node_modules`, and paths in `exclude`.
+ * `_templates` files are `template`: kept apart so no template is ever built as a page or copied as an asset.
+ *
+ * Skipped: folders starting with `_` (except `_data` and `_templates`), names starting with `.`, `node_modules`, and paths in `exclude`.
  * A path in `include` is kept even when a rule above would skip it. A folder whose `index.html` has no front matter is an
  * app page: every file in it, at any depth, is listed as `app` and passed through untouched.
  */
@@ -59,7 +65,7 @@ export async function discover(source: string, options: DiscoverOptions = {}): P
   const exclude = new Set((options.exclude ?? []).map(normalize));
   const found: DiscoveredFile[] = [];
 
-  async function walk(dir: string, rel: string, inApp: boolean, inData: boolean): Promise<void> {
+  async function walk(dir: string, rel: string, inApp: boolean, inData: boolean, inTemplates: boolean): Promise<void> {
     const entries = await readdir(join(source, dir), { withFileTypes: true });
     entries.sort((a, b) => byCodePoint(a.name, b.name));
 
@@ -76,14 +82,21 @@ export async function discover(source: string, options: DiscoverOptions = {}): P
       const kept = covers(include, path);
       if (!kept) {
         if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-        if (entry.isDirectory() && entry.name.startsWith("_") && !(rel === "" && entry.name === "_data")) continue;
+        if (entry.isDirectory() && entry.name.startsWith("_") && !(rel === "" && (entry.name === "_data" || entry.name === "_templates"))) continue;
       }
       if (entry.isDirectory()) {
-        await walk(join(dir, entry.name), path, app, inData || (rel === "" && entry.name === "_data"));
+        await walk(
+          join(dir, entry.name),
+          path,
+          app,
+          inData || (rel === "" && entry.name === "_data"),
+          inTemplates || (rel === "" && entry.name === "_templates"),
+        );
         continue;
       }
       if (!entry.isFile()) continue;
-      if (inData) found.push({ path, kind: "data" });
+      if (inTemplates) found.push({ path, kind: "template" });
+      else if (inData) found.push({ path, kind: "data" });
       else if (app) found.push({ path, kind: "app" });
       else if (MARKDOWN.test(entry.name)) found.push({ path, kind: "doc" });
       else if (HTML.test(entry.name) && (await hasFrontMatter(join(source, dir, entry.name)))) found.push({ path, kind: "doc" });
@@ -91,6 +104,6 @@ export async function discover(source: string, options: DiscoverOptions = {}): P
     }
   }
 
-  await walk("", "", false, false);
+  await walk("", "", false, false, false);
   return found.sort((a, b) => byCodePoint(a.path, b.path));
 }
