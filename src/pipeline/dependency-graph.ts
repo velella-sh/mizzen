@@ -7,14 +7,15 @@
  * navigation, and `_data`. One node exists per file, so a snippet that is also a page is one unit rather than two.
  *
  * The graph is a superset of the truth where the engine cannot narrow it: a layout may read any `_data` value, so
- * every output depends on every data file. That is deliberate; a narrower edge would make invalidation wrong.
+ * every output depends on every ordinary data file. A collection source is narrower: a page that shows a record has
+ * an edge to that one file, and a directive the graph cannot resolve statically keeps every data edge for its page.
  *
  * Sources are read through the existing `expandIncludes` and `parseFrontMatter`, so include rules (fences, nesting,
  * cycles) stay in one place. The graph is not wired into `build`; it is a standalone unit the integration issue uses.
  */
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { posix, resolve } from "node:path";
+import { posix, relative, resolve, sep } from "node:path";
 import type { Definition, Nodes, Root } from "mdast";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
@@ -368,6 +369,7 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
   const discovered = [...files].sort((a, b) => byCodePoint(normalize(a.path), normalize(b.path)));
   const pagePaths: string[] = [];
   const dataIds: string[] = [];
+  const dataPaths: string[] = [];
   const filePaths = new Set<string>();
 
   for (const file of discovered) {
@@ -379,11 +381,40 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     } else if (file.kind === "data") {
       if (resolve(sourceDir, path) === navigationFile) continue;
       dataIds.push(fileNodeId(path));
+      dataPaths.push(path);
       addNode({ id: fileNodeId(path), kind: "data", path });
     } else {
       addNode({ id: fileNodeId(path), kind: "asset", path });
     }
   }
+
+  // A collection source is a data file whose pages the graph can name: a page that shows a record carries an edge
+  // to that one file, not to every file under `_data`. A layout may still read all of `_data`, so non-collection data
+  // files keep their blanket edge.
+  const collectionPaths = new Map<string, string>();
+  const collectionIds = new Set<string>();
+  for (const [name, collection] of Object.entries(options.site.collections)) {
+    if (/^[a-z][a-z\d+.-]*:/i.test(collection.source)) continue;
+    const path = normalize(relative(sourceDir, resolve(options.root, collection.source)).split(sep).join("/"));
+    if (path.startsWith("../") || path === "..") continue;
+    collectionPaths.set(name, path);
+    collectionIds.add(fileNodeId(path));
+    if (!filePaths.has(path)) {
+      filePaths.add(path);
+      addNode({ id: fileNodeId(path), kind: "data", path });
+    }
+  }
+  const blanketDataIds = dataIds.filter((id, index) => id !== navigationId && !collectionIds.has(id));
+
+  /** The source-relative path a `_data` key names, such as `components` or `guides.install.steps`. */
+  const dataKeyPath = (key: string): string | undefined => {
+    for (const path of dataPaths) {
+      const withoutFolder = path.replace(/^_data\//, "");
+      const withoutExtension = withoutFolder.replace(/\.[^/.]+$/, "");
+      if (withoutExtension.split("/").join(".") === key) return path;
+    }
+    return undefined;
+  };
 
   const pageByPath = new Map<string, Page>();
   for (const page of options.site.pages) {
@@ -414,6 +445,46 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
 
   const includePaths = new Set<string>();
 
+  /** The file a directive path reads: a collection name, or the `_data` file its first segment names. */
+  const directiveTarget = (path: string): string | undefined => {
+    const first = path.split(".", 1)[0] ?? "";
+    return collectionPaths.get(first) ?? dataKeyPath(first);
+  };
+
+  /** Adds edges from `from` to the data files its `:data[…]` and `::data-table{…}` directives read. */
+  const addDataEdges = (from: string, body: string, bodyLine: number): void => {
+    const edge = (target: string, line: number, column: number, endColumn: number): void => {
+      addEdge(fileNodeId(from), fileNodeId(target), {
+        file: from,
+        line: bodyLine + line - 1,
+        column,
+        endLine: bodyLine + line - 1,
+        endColumn,
+      });
+    };
+    let unresolved = false;
+    const lines = body.split(/\r\n|\r|\n/);
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index]!;
+      for (const match of line.matchAll(/:data\[([^\]]+)\]/g)) {
+        const target = directiveTarget(match[1]!.trim());
+        if (target === undefined) unresolved = true;
+        else edge(target, index + 1, (match.index ?? 0) + 1, (match.index ?? 0) + match[0].length);
+      }
+      for (const match of line.matchAll(/::data-table\{([^}]*)\}/g)) {
+        const fromMatch = /(?:^|\s)from=([^\s]+)/.exec(match[1] ?? "");
+        const target = fromMatch === null ? undefined : directiveTarget(fromMatch[1]!.replace(/^["']|["']$/g, ""));
+        if (target === undefined) unresolved = true;
+        else edge(target, index + 1, (match.index ?? 0) + 1, (match.index ?? 0) + match[0].length);
+      }
+    }
+    // A directive the graph cannot resolve statically makes this page conservative: it keeps every data edge, so a
+    // change can never leave a stale page behind.
+    if (unresolved) {
+      for (const path of [...dataPaths, ...collectionPaths.values()]) edge(path, 1, 1, 1);
+    }
+  };
+
   for (const path of pagePaths) {
     const source = await readFile(resolve(sourceDir, path), "utf8");
     const front = parseFrontMatter(source, path);
@@ -431,6 +502,7 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
       if (diagnostic.id === "include.cycle" || diagnostic.id === "include.missing") continue;
       diagnostics.push(diagnostic);
     }
+    addDataEdges(path, included.body, front.bodyLine);
     for (const dependency of included.includes) {
       addNode({
         id: fileNodeId(dependency.path),
@@ -455,6 +527,7 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     }
     const front = parseFrontMatter(source, path);
     addBodyAssetEdges(path, front.body, front.bodyLine);
+    addDataEdges(path, front.body, front.bodyLine);
   }
 
   for (const [path, page] of pageByPath) {
@@ -462,7 +535,7 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     addNode({ id: outputId, kind: "output", path: page.url });
     addEdge(outputId, fileNodeId(path));
     addEdge(outputId, navigationId);
-    for (const dataId of dataIds) addEdge(outputId, dataId);
+    for (const dataId of blanketDataIds) addEdge(outputId, dataId);
   }
 
   // Navigation built from folders reads every page's title, so it depends on all of them. A navigation file does not.

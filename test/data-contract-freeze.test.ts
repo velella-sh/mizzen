@@ -51,6 +51,7 @@ const FROZEN: Shape = {
     "name": "string",
     "source": "string",
     "records": "readonly DataRecord[]",
+    "package": "?{ readonly name: string; readonly version: string }",
   },
   PageRecord: {
     "collection": "string",

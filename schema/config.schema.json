@@ -203,6 +203,32 @@
           "type": "string",
           "minLength": 1,
           "description": "JSON Schema file that validates every record, relative to the site root."
+        },
+        "limits": {
+          "$ref": "#/$defs/dataLimits",
+          "description": "Limits on this collection's source."
+        }
+      }
+    },
+    "dataLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Limits on one collection's source: bytes, records, and the characters in one field.",
+      "properties": {
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Largest source file, in bytes. Default 2097152 (2 MiB)."
+        },
+        "records": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Largest number of records. Default 10000."
+        },
+        "field": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Largest value of one field, in characters. Default 100000."
         }
       }
     }

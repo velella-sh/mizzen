@@ -43,6 +43,16 @@ export interface SearchConfig {
   readonly text?: number;
 }
 
+/** Limits on one collection's source. Each key falls back to the default stated in `docs/data-sites.md`. */
+export interface DataLimitsConfig {
+  /** Largest source file, in bytes. Default 2097152 (2 MiB). */
+  readonly bytes?: number;
+  /** Largest number of records. Default 10000. */
+  readonly records?: number;
+  /** Largest value of one field, in characters. Default 100000. */
+  readonly field?: number;
+}
+
 /** One data collection: where its records come from, and how its pages are built. */
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root. */
@@ -55,6 +65,8 @@ export interface CollectionConfig {
   readonly permalink?: string;
   /** JSON Schema file that validates every record, relative to the site root. */
   readonly schema?: string;
+  /** Limits on this collection's source. */
+  readonly limits?: DataLimitsConfig;
 }
 
 /**

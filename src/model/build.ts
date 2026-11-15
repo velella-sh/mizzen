@@ -3,6 +3,8 @@ import { join, posix, relative, resolve } from "node:path";
 import type { Heading as MdHeading, Root } from "mdast";
 import { loadConfig } from "../config/load.ts";
 import { loadData } from "../content/data.ts";
+import { loadCollections } from "../data/collections.ts";
+import { applyDataDirectives } from "../data/directives.ts";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { expandIncludes } from "../content/includes.ts";
@@ -136,6 +138,11 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   const files: DiscoveredFile[] = await discover(sourceDir, { include: config.include, exclude: config.exclude });
 
+  const data = await loadData(sourceDir, files);
+  for (const d of data.diagnostics) diagnostics.report(d);
+  const collected = await loadCollections({ root: siteRoot, config });
+  for (const d of collected.diagnostics) diagnostics.report(d);
+
   const pages: Page[] = [];
   const folderPages: FolderPage[] = [];
   const seen = new Map<string, SourcePos>();
@@ -225,6 +232,11 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       tree = await parseMarkdown(body, fm.bodyLine);
       parsedPages += 1;
     }
+    const directives = isMarkdown
+      ? applyDataDirectives(tree, body, { data: data.data, collections: collected.collections, file: rel })
+      : { markdown: body, diagnostics: [] };
+    for (const d of directives.diagnostics) diagnostics.report(d);
+
     const { title } = resolveTitle({ frontMatter, tree, file: file.path });
     const lang = pageLang(file.path, { config, frontMatter });
     const url = permalink(file.path, {
@@ -249,7 +261,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       dir: lang.dir,
       headings,
       html,
-      markdown: body,
+      markdown: directives.markdown,
       kind: "doc",
     });
     add(page, file.path, page.frontMatter.order);
@@ -264,12 +276,9 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const nav: NavTree =
     Object.keys(navResult.nav).length > 0 ? navResult.nav : { docs: navFromFolders(folderPages) };
 
-  const data = await loadData(sourceDir, files);
-  for (const d of data.diagnostics) diagnostics.report(d);
-
   // Derived facts run last, once the pages and `_data` are final, and land at `data[fact.name]`; `_data` wins.
   const applied = await applyFacts({
-    site: { config, pages, nav, data: data.data, collections: {} },
+    site: { config, pages, nav, data: data.data, collections: collected.collections },
     root: siteRoot,
     sourceDir,
   });
