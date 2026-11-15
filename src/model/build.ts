@@ -6,6 +6,7 @@ import { loadData } from "../content/data.ts";
 import { loadCollections } from "../data/collections.ts";
 import { applyDataDirectives } from "../data/directives.ts";
 import { buildRecordPages } from "../data/pages.ts";
+import { localizeFields, prefixOfLang } from "../data/record-context.ts";
 import { loadTemplates } from "../data/template.ts";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
@@ -241,18 +242,20 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       ? applyDataDirectives(tree, body, { data: data.data, collections: collected.collections, file: rel })
       : { markdown: body, diagnostics: [] };
     for (const d of directives.diagnostics) diagnostics.report(d);
+    const lang = pageLang(file.path, { config, frontMatter });
     if (isMarkdown) {
       applyRecordLinks(tree, {
         collections: collected.collections,
         config: config.collections,
         base: config.base,
-        prefix: "",
+        prefix: prefixOfLang(config, lang.lang),
+        lang: lang.lang,
+        defaultLang: config.lang,
         file: rel,
       });
     }
 
     const { title } = resolveTitle({ frontMatter, tree, file: file.path });
-    const lang = pageLang(file.path, { config, frontMatter });
     const url = permalink(file.path, {
       base: config.base,
       ...(typeof frontMatter.permalink === "string" ? { permalink: frontMatter.permalink } : {}),
@@ -286,6 +289,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     config,
     collections: collected.collections,
     templates: loadedTemplates.templates,
+    filePrefix: repositoryFolder(config.repository?.dir),
   });
   for (const d of records.diagnostics) diagnostics.report(d);
   for (const record of records.pages) {
@@ -297,20 +301,27 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   const navFile = resolve(siteRoot, config.navigation);
   const navRel = relative(siteRoot, navFile).split("\\").join("/");
-  const collections: Record<string, { title: string; url: string; fields: Readonly<Record<string, unknown>> }[]> = {};
+  const collections: Record<string, Record<string, { title: string; url: string; fields: Readonly<Record<string, unknown>> }[]>> = {};
   for (const page of pages) {
     if (page.record === undefined) continue;
     const record = collected.collections[page.record.collection]?.records.find(
       (candidate) => candidate.id === page.record?.id,
     );
-    const list = collections[page.record.collection] ?? [];
-    list.push({ title: page.title, url: page.url, fields: record?.fields ?? {} });
-    collections[page.record.collection] = list;
+    const byCollection = collections[page.lang] ?? {};
+    const list = byCollection[page.record.collection] ?? [];
+    list.push({
+      title: page.title,
+      url: page.url,
+      fields: record === undefined ? {} : localizeFields(record.fields, page.lang, config.lang).fields,
+    });
+    byCollection[page.record.collection] = list;
+    collections[page.lang] = byCollection;
   }
   const navResult = loadNavigation(navFile, navRel, {
     pages: new Set(pages.map((p) => p.url)),
     base: config.base,
     collections,
+    defaultLang: config.lang,
   });
   for (const d of navResult.diagnostics) diagnostics.report(d);
   const nav: NavTree =

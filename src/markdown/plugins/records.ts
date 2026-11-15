@@ -6,7 +6,7 @@
  * `where="parent=id"` lists a record's children. `sort` names one field and falls back to the id and then to source
  * order; `limit` keeps the first N. Records keep source order when no sort is named.
  */
-import type { Diagnostic } from "../../contracts/index.ts";
+import type { DataRecord, Diagnostic } from "../../contracts/index.ts";
 import { resolveField, resolveIn, scalarText, type RecordScope } from "../../data/record-context.ts";
 
 export const name = "records";
@@ -17,7 +17,7 @@ export const plugin = () => () => {};
 
 /** What one `:::records` block selected. */
 export interface RecordsSelection {
-  readonly records: readonly Readonly<Record<string, unknown>>[];
+  readonly records: readonly DataRecord[];
   readonly diagnostics: readonly Diagnostic[];
 }
 
@@ -112,7 +112,7 @@ export function selectRecords(
     };
   }
 
-  let selected = collection.records.map((record) => record.fields);
+  let selected = [...collection.records];
   const where = attributes["where"]?.trim() ?? "";
   if (where !== "") {
     const separator = where.indexOf("=");
@@ -128,15 +128,20 @@ export function selectRecords(
         ],
       };
     }
-    selected = selected.filter((fields) => matches(fields, where, scope));
+    selected = selected.filter((record) => matches(record.fields, where, scope));
   }
 
   const sort = attributes["sort"]?.trim() ?? "";
   if (sort !== "") {
     selected = selected
-      .map((fields, index) => ({ fields, index, id: String(fields["id"] ?? "") }))
-      .sort((a, b) => byValue(resolveIn(a.fields, sort).value, resolveIn(b.fields, sort).value) || byCodePoint(a.id, b.id) || a.index - b.index)
-      .map((entry) => entry.fields);
+      .map((record, index) => ({ record, index, id: String(record.fields["id"] ?? "") }))
+      .sort(
+        (a, b) =>
+          byValue(resolveIn(a.record.fields, sort).value, resolveIn(b.record.fields, sort).value) ||
+          byCodePoint(a.id, b.id) ||
+          a.index - b.index,
+      )
+      .map((entry) => entry.record);
   }
 
   const rawLimit = attributes["limit"]?.trim() ?? "";

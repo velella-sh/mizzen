@@ -118,3 +118,26 @@ test("an edit that would not parse, or would make the record invalid, is refused
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("a JSON string field refuses an unquoted replacement as unparseable", async () => {
+  const root = site(files);
+  try {
+    const result = await buildModel(root);
+    const source = readFileSync(join(root, "_data/releases.json"), "utf8");
+    assert.throws(
+      () =>
+        planRecordFieldEdit({
+          site: result.site,
+          root,
+          source,
+          url: "/releases/one/",
+          field: "name",
+          newText: "First",
+        }),
+      (error: unknown) => error instanceof EditPlanError && error.code === "edit.unparseable",
+    );
+  } finally {
+    const { rmSync } = await import("node:fs");
+    rmSync(root, { recursive: true, force: true });
+  }
+});

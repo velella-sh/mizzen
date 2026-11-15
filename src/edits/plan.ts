@@ -294,16 +294,35 @@ export function planRecordFieldEdit(options: PlanRecordFieldEditOptions): Patch 
     // CSV has no nested parse to check; the span edit is all the format gives.
     return patch;
   }
-  const document = parseDocument(after, { uniqueKeys: false });
-  if (document.errors.length > 0) {
-    throw new EditPlanError(
-      "edit.unparseable",
-      `The edit would make ${position.file} unparseable: ${document.errors[0]?.message.split("\n")[0] ?? "parse error"}.`,
-      { url, headingId: field, span },
-    );
+
+  // JSON is validated as JSON, not through the YAML parser: YAML accepts a bare word where JSON needs a string, and a
+  // file that no longer parses as JSON must never pass the edit.
+  let parsedDocument: unknown;
+  if (/\.json$/i.test(position.file)) {
+    try {
+      parsedDocument = JSON.parse(after);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new EditPlanError(
+        "edit.unparseable",
+        `The edit would make ${position.file} unparseable JSON: ${detail}.`,
+        { url, headingId: field, span },
+      );
+    }
+  } else {
+    const document = parseDocument(after, { uniqueKeys: false });
+    if (document.errors.length > 0) {
+      throw new EditPlanError(
+        "edit.unparseable",
+        `The edit would make ${position.file} unparseable: ${document.errors[0]?.message.split("\n")[0] ?? "parse error"}.`,
+        { url, headingId: field, span },
+      );
+    }
+    parsedDocument = document.toJS();
   }
+
   const idField = entry.id ?? "id";
-  const fields = fieldsOfDocument(document.toJS(), idField, record.id);
+  const fields = fieldsOfDocument(parsedDocument, idField, record.id);
   if (fields === undefined) {
     throw new EditPlanError(
       "edit.invalid-record",

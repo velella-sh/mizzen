@@ -32,7 +32,7 @@ import { parseSpan } from "../source/spans.ts";
 import { substituteFrontMatter } from "./frontmatter.ts";
 import { markdownFieldBlocks } from "./markdown-field.ts";
 import { recordSourcePos, recordUrl } from "./permalink.ts";
-import { localizeFields, type RecordScope } from "./record-context.ts";
+import { localizeFields, prefixed, prefixOfLang, type RecordScope } from "./record-context.ts";
 import type { Template } from "./template.ts";
 
 /** What {@link buildRecordPages} needs. */
@@ -42,6 +42,8 @@ export interface RecordPagesOptions {
   readonly config: SiteConfig;
   readonly collections: Readonly<Record<string, Collection>>;
   readonly templates: Readonly<Record<string, Template>>;
+  /** Repository folder in front of every displayed data path, such as `docs`; `""` when the site is the root. */
+  readonly filePrefix?: string;
 }
 
 /** The record pages a build made, and every finding it made while making them. */
@@ -57,14 +59,27 @@ interface PageLanguage {
 }
 
 /** A field's directory in the data file's text, for a Markdown field's block positions. */
-async function linesOf(root: string, file: string, cache: Map<string, readonly string[]>): Promise<readonly string[]> {
+async function linesOf(
+  root: string,
+  file: string,
+  cache: Map<string, readonly string[]>,
+  filePrefix?: string,
+): Promise<readonly string[]> {
   const known = cache.get(file);
   if (known !== undefined) return known;
+  // A displayed path may carry the repository folder; the file on disk is always relative to the site root.
+  const candidates =
+    filePrefix === undefined || filePrefix === "" || !file.startsWith(`${filePrefix}/`)
+      ? [file]
+      : [file, file.slice(filePrefix.length + 1)];
   let lines: readonly string[] = [];
-  try {
-    lines = (await readFile(resolve(root, file), "utf8")).split("\n");
-  } catch {
-    lines = [];
+  for (const candidate of candidates) {
+    try {
+      lines = (await readFile(resolve(root, candidate), "utf8")).split("\n");
+      break;
+    } catch {
+      lines = [];
+    }
   }
   cache.set(file, lines);
   return lines;
@@ -97,6 +112,11 @@ function withItem(scope: RecordScope, item: Readonly<Record<string, unknown>>): 
   return { ...scope, fields: item };
 }
 
+/** A selected record as a scope: its fields come first, and its own positions name its file. */
+function withRecord(scope: RecordScope, record: DataRecord): RecordScope {
+  return { ...scope, record, fields: record.fields, recordFields: record.fields };
+}
+
 /** True for a node whose type field the page reads. */
 function isDirective(node: Nodes): node is Nodes & { readonly name: string } {
   return node.type === "textDirective" || node.type === "leafDirective" || node.type === "containerDirective";
@@ -105,6 +125,7 @@ function isDirective(node: Nodes): node is Nodes & { readonly name: string } {
 /** The page-building state shared by every record of one template and language. */
 interface Build {
   readonly root: string;
+  readonly filePrefix: string | undefined;
   readonly scope: RecordScope;
   readonly depth: number;
   readonly diagnostics: Diagnostic[];
@@ -124,7 +145,7 @@ async function rewriteField(
   const result = applyField(node, scope);
   build.diagnostics.push(...result.diagnostics);
   if (block && result.markdown !== undefined) {
-    const lines = await linesOf(build.root, result.markdown.span.file, build.sourceLines);
+    const lines = await linesOf(build.root, result.markdown.span.file, build.sourceLines, build.filePrefix);
     return markdownFieldBlocks(result.markdown.value, result.markdown.span, lines);
   }
   return result;
@@ -197,14 +218,14 @@ async function rewriteNode(node: Nodes, build: Build): Promise<RootContent[]> {
       const out: RootContent[] = [];
       for (const record of selected.records) {
         out.push(
-          ...(await rewriteChildren(children, { ...build, scope: withItem(build.scope, record), depth: build.depth + 1 })),
+          ...(await rewriteChildren(children, { ...build, scope: withRecord(build.scope, record), depth: build.depth + 1 })),
         );
       }
       return out;
     }
     (node as Nodes & { children: RootContent[] }).children = await rewriteChildren(
       (node as Nodes & { children: Nodes[] }).children,
-      { ...build, depth: build.depth + 1 },
+      build,
     );
     return [node as RootContent];
   }
@@ -264,7 +285,7 @@ function twinNode(node: Nodes, body: string, scope: RecordScope): string {
     }
     if (node.name === "records") {
       const selected = selectRecords(node as never, scope);
-      return selected.records.map((record) => twinInner(children, body, withItem(scope, record))).join("\n");
+      return selected.records.map((record) => twinInner(children, body, withRecord(scope, record))).join("\n");
     }
     return twinInner(children, body, scope);
   }
@@ -334,7 +355,7 @@ function firstHeadingText(tree: Root): string {
  * collection without either builds no pages, so an ordinary data collection is untouched.
  */
 export async function buildRecordPages(options: RecordPagesOptions): Promise<RecordPagesResult> {
-  const { root, config, collections, templates } = options;
+  const { root, config, collections, templates, filePrefix } = options;
   const diagnostics: Diagnostic[] = [];
   const pages: Page[] = [];
   const sourceLines = new Map<string, readonly string[]>();
@@ -368,6 +389,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
           markdownFields,
           lang: language.code,
           defaultLang: config.lang,
+          ...(filePrefix === undefined || filePrefix === "" ? {} : { filePrefix }),
           file: source.path,
         };
         const filled = substituteFrontMatter(source.frontMatter, {
@@ -377,6 +399,12 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
           ...(schemaFields === undefined ? {} : { schemaFields }),
         });
         diagnostics.push(...filled.diagnostics);
+
+        // A template may set its language from a field (`lang: "{lang}"`); the page's language and direction follow
+        // the substituted front matter, and fall back to the language this build pass is making.
+        const declaredLang = typeof filled.data.lang === "string" ? filled.data.lang.trim() : "";
+        const pageLangCode = declaredLang === "" ? language.code : declaredLang;
+        const pagePrefix = prefixOfLang(config, pageLangCode);
 
         const url = recordUrl(name, record.id, fields, entry, {
           base: config.base,
@@ -390,13 +418,15 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
         if (url.url === undefined) continue;
 
         const tree = structuredClone(parsed) as Root;
-        const build: Build = { scope, depth: 0, diagnostics, sourceLines, root };
+        const build: Build = { scope, depth: 0, diagnostics, sourceLines, root, filePrefix };
         tree.children = await rewriteChildren(tree.children, build);
         applyRecordLinks(tree, {
           collections,
           config: config.collections,
           base: config.base,
-          prefix: language.prefix,
+          prefix: pagePrefix,
+          lang: pageLangCode,
+          defaultLang: config.lang,
           file: source.path,
         });
 
@@ -416,24 +446,31 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
               ? String(frontMatter.title)
               : firstHeadingText(tree) || record.id;
         const dir =
-          frontMatter.dir === "ltr" || frontMatter.dir === "rtl" ? frontMatter.dir : directionFromLang(language.code);
+          frontMatter.dir === "ltr" || frontMatter.dir === "rtl" ? frontMatter.dir : directionFromLang(pageLangCode);
+        const sourcePosition = recordSourcePos({
+          ...record.position,
+          file: prefixed(record.position.file, filePrefix),
+        });
 
         pages.push({
           url: url.url,
-          source: recordSourcePos(record.position),
+          source: sourcePosition,
           frontMatter: frontMatter as Page["frontMatter"],
           title,
-          lang: language.code,
+          lang: pageLangCode,
           dir,
-          headings: headingsOf(tree, rendered.headings, source.path),
+          headings: headingsOf(tree, rendered.headings, prefixed(source.path, filePrefix)),
           html: rendered.html,
           markdown,
           kind: "doc",
           record: {
             collection: name,
             id: record.id,
-            position: record.position,
-            template: source.path,
+            position: {
+              ...record.position,
+              file: prefixed(record.position.file, filePrefix),
+            },
+            template: prefixed(source.path, filePrefix),
             templateLine: source.bodyLine,
             fallbacks: localized.fallbacks,
           },

@@ -74,3 +74,22 @@ test("a theme without the record layout is one error, not one per page", async (
     rmSync(parent, { recursive: true, force: true });
   }
 });
+
+test("two file pages with the same missing layout keep their own diagnostics", async () => {
+  const root = site({
+    "a.md": "---\ntitle: A\nlayout: nope\n---\nA.\n",
+    "b.md": "---\ntitle: B\nlayout: nope\n---\nB.\n",
+  });
+  const themeRoot = theme(false);
+  const parent = mkdtempSync(join(tmpdir(), "data-render-out-"));
+  try {
+    const result = await build({ root, out: join(parent, "site"), themeRoot, defaultLayout: "doc" });
+    const unknown = result.diagnostics.filter((diagnostic) => diagnostic.id === "render.unknown-layout");
+    assert.equal(unknown.length, 2);
+    assert.deepEqual(unknown.map((diagnostic) => diagnostic.pos?.file).sort(), ["a.md", "b.md"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(themeRoot, { recursive: true, force: true });
+    rmSync(parent, { recursive: true, force: true });
+  }
+});

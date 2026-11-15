@@ -55,3 +55,48 @@ test("an unknown collection and a bad limit are errors at the entry", async () =
     },
   );
 });
+
+test("only the list's language expands a collection entry, ordered by its localized field", async () => {
+  await withSite(
+    {
+      "mizzen.yml":
+        "languages:\n" +
+        "  - code: en\n    name: English\n    prefix: \"\"\n" +
+        "  - code: fa\n    name: فارسی\n    prefix: /fa\n" +
+        "collections:\n" +
+        "  components:\n" +
+        "    source: _data/components.yml\n" +
+        "    template: _templates/components.md\n" +
+        "    permalink: /components/{id}/\n",
+      "_data/components.yml":
+        "- id: button\n  name:\n    en: Button\n    fa: B\n- id: alert\n  name:\n    en: Alert\n    fa: A\n",
+      "_templates/components.md": "---\ntitle: \"{name}\"\nlayout: record\n---\nBody.\n",
+      "_data/navigation.yml":
+        "docs:\n  - collection: components\n    order: name\n    limit: 1\n" +
+        "main:\n  - collection: components\n    order: name\n" +
+        "docs_fa:\n  - collection: components\n    order: name\n" +
+        "main_fa:\n  - collection: components\n    order: name\n",
+    },
+    (_root, result) => {
+      assert.deepEqual(result.diagnostics, []);
+      const urls = (list: string): string[] => {
+        const items = result.site.nav[list] ?? [];
+        const group = items[0];
+        assert.ok(group !== undefined && "children" in group);
+        return group.children.map((child) => ("url" in child ? child.url : ""));
+      };
+      assert.deepEqual(urls("docs"), ["/components/alert/"]);
+      assert.deepEqual(urls("main"), ["/components/alert/", "/components/button/"]);
+      assert.deepEqual(urls("docs_fa"), ["/fa/components/alert/", "/fa/components/button/"]);
+      assert.deepEqual(urls("main_fa"), ["/fa/components/alert/", "/fa/components/button/"]);
+
+      for (const list of ["docs", "main"]) {
+        assert.equal(urls(list).some((url) => url.startsWith("/fa/")), false, `${list} holds no translation`);
+      }
+      const state = navState(result.site.nav["docs_fa"]!, "/fa/components/button/");
+      assert.deepEqual(state.trail.map((entry) => entry.title), ["components", "B"]);
+      assert.equal(state.pager.prev?.title, "A");
+      assert.equal(state.pager.next, undefined);
+    },
+  );
+});

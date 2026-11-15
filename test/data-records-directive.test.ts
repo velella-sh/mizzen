@@ -29,6 +29,8 @@ test("records repeats its body for the records that name this one", async () => 
       assert.deepEqual(result.diagnostics, []);
       const button = pageAt(result, "/components/button/")!;
       assert.deepEqual(button.markdown.trim().split("\n"), ["- Child B", "- Child A", "- Child C"]);
+      assert.match(button.html, /data-src="_data\/children\.yml:7:/);
+      assert.doesNotMatch(button.html, /data-src="_data\/components\.yml/);
       const input = pageAt(result, "/components/input/")!;
       assert.deepEqual(input.markdown.trim().split("\n"), ["- Child D"]);
     },

@@ -6,7 +6,17 @@
  * A site with languages reads `<field>.<lang>` from a mapping and falls back to the default language, marking the field
  * so a page or a layout can say the text is a fallback.
  */
-import type { Collection, CollectionConfig, DataRecord, PageRecord, RecordPos, RecordProps, Site, SourcePos } from "../contracts/index.ts";
+import type {
+  Collection,
+  CollectionConfig,
+  DataRecord,
+  PageRecord,
+  RecordPos,
+  RecordProps,
+  Site,
+  SiteConfig,
+  SourcePos,
+} from "../contracts/index.ts";
 import { recordUrl } from "./permalink.ts";
 
 /** What one record page's directives read. */
@@ -29,6 +39,8 @@ export interface RecordScope {
   readonly lang: string;
   /** The site's default language. */
   readonly defaultLang: string;
+  /** Repository-relative prefix for data files, such as `docs`; unset when the site is the repository root. */
+  readonly filePrefix?: string;
   /** The template, relative to the site root, for diagnostics. */
   readonly file: string;
 }
@@ -85,11 +97,23 @@ export function declaredField(scope: RecordScope, path: string): boolean {
   return scope.schemaFields === undefined || scope.schemaFields.has(topField(path));
 }
 
+/** A path with a repository folder in front, `/`-separated, when the site is not the repository root. */
+export function prefixed(file: string, prefix: string | undefined): string {
+  if (prefix === undefined || prefix === "") return file;
+  const path = file.replace(/\\/g, "/").replace(/^\.\//, "");
+  return path === prefix || path.startsWith(`${prefix}/`) ? path : `${prefix}/${path}`;
+}
+
+/** The URL prefix of a language, such as `/fa`; `""` for the default language or a site without languages. */
+export function prefixOfLang(config: Pick<SiteConfig, "lang" | "languages">, lang: string): string {
+  return config.languages.find((language) => language.code === lang)?.prefix ?? "";
+}
+
 /** The value's position in the data file: the top-level field's span, else the record's. */
 export function fieldPosition(scope: RecordScope, path: string): SourcePos {
   const position: RecordPos = scope.record.fieldPositions[topField(path)] ?? scope.record.position;
   return {
-    file: position.file,
+    file: prefixed(position.file, scope.filePrefix),
     line: position.startLine,
     column: position.startColumn,
     endLine: position.endLine,
@@ -164,6 +188,9 @@ export function referenceTargets(config: CollectionConfig | undefined): Readonly
 /**
  * The URL of another record's page, using the collection's pattern and the page language's prefix. `undefined` when the
  * collection has no pattern, the record is absent, or the pattern cannot be filled.
+ *
+ * With `lang` and `defaultLang`, the target record's fields are localized first, so a pattern such as
+ * `/components/{name}/` fills from that language's name and falls back to the default language.
  */
 export function urlOfRecord(
   collections: Readonly<Record<string, Collection>>,
@@ -172,11 +199,18 @@ export function urlOfRecord(
   prefix: string,
   collection: string,
   id: string,
+  lang?: string,
+  defaultLang?: string,
 ): string | undefined {
   const entry = config[collection];
   const record = collections[collection]?.records.find((candidate) => candidate.id === id);
   if (entry === undefined || record === undefined) return undefined;
-  return recordUrl(collection, id, record.fields, entry, { base, prefix, position: record.position }).url;
+  const localized =
+    lang === undefined || defaultLang === undefined
+      ? record.fields
+      : localizeFields(record.fields, lang, defaultLang).fields;
+  const fields = localized["id"] === undefined ? { ...localized, id: record.id } : localized;
+  return recordUrl(collection, id, fields, entry, { base, prefix, position: record.position }).url;
 }
 
 /**
@@ -192,12 +226,21 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
   const config = site.config.collections[record.collection];
   const localized = localizeFields(source.fields, page.lang, site.config.lang);
   const fields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
-  const prefix = site.config.languages.find((language) => language.code === page.lang)?.prefix ?? "";
+  const prefix = prefixOfLang(site.config, page.lang);
   const links: Record<string, string> = {};
   for (const [field, collection] of Object.entries(referenceTargets(config))) {
     const id = fields[field];
     if (typeof id !== "string" && typeof id !== "number") continue;
-    const url = urlOfRecord(site.collections, site.config.collections, site.config.base, prefix, collection, String(id));
+    const url = urlOfRecord(
+      site.collections,
+      site.config.collections,
+      site.config.base,
+      prefix,
+      collection,
+      String(id),
+      page.lang,
+      site.config.lang,
+    );
     if (url !== undefined) links[field] = url;
   }
   return {

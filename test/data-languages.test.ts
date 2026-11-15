@@ -35,6 +35,29 @@ test("one record builds a page in every language, with the language's template a
   });
 });
 
+test("a template's substituted lang sets Page.lang and Page.dir", async () => {
+  await withSite(
+    {
+      "mizzen.yml":
+        "lang: en\n" +
+        "collections:\n" +
+        "  components:\n" +
+        "    source: _data/components.yml\n" +
+        "    template: _templates/components.md\n" +
+        "    permalink: /components/{id}/\n",
+      "_data/components.yml": "- id: button\n  name: Button\n  lang: fa\n",
+      "_templates/components.md": "---\ntitle: \"{name}\"\nlang: \"{lang}\"\nlayout: record\n---\nBody.\n",
+    },
+    (_root, result) => {
+      assert.deepEqual(result.diagnostics, []);
+      const page = pageAt(result, "/components/button/")!;
+      assert.equal(page.frontMatter.lang, "fa");
+      assert.equal(page.lang, "fa");
+      assert.equal(page.dir, "rtl");
+    },
+  );
+});
+
 test("a missing translation falls back to the default language and says so", async () => {
   await withSite(files, (_root, result) => {
     const fa = pageAt(result, "/fa/components/input/")!;

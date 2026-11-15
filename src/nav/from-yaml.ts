@@ -48,10 +48,13 @@ export interface NavFromYamlOptions {
    */
   readonly base?: string;
   /**
-   * Record pages by collection name, so an entry may write `collection: <name>` and expand to those pages. Each
-   * entry names the page's title, URL, and fields, which `order` sorts.
+   * Record pages by language and collection name, so an entry may write `collection: <name>` and expand to the pages
+   * of the list's language. `docs` and `main` use {@link NavFromYamlOptions.defaultLang}; `docs_fa` and `main_fa` use
+   * `fa`. Each entry names the page's title, URL, and localized fields, which `order` sorts.
    */
-  readonly collections?: Readonly<Record<string, readonly CollectionNavEntry[]>>;
+  readonly collections?: Readonly<Record<string, Readonly<Record<string, readonly CollectionNavEntry[]>>>>;
+  /** The site's default language, whose pages fill `docs` and `main`. Default `""`. */
+  readonly defaultLang?: string;
 }
 
 /** One record page a `collection:` navigation entry can list. */
@@ -75,7 +78,8 @@ interface Context {
   readonly lineCounter: LineCounter;
   readonly pages: ReadonlySet<string> | undefined;
   readonly base: string;
-  readonly collections: Readonly<Record<string, readonly CollectionNavEntry[]>> | undefined;
+  readonly collections: Readonly<Record<string, Readonly<Record<string, readonly CollectionNavEntry[]>>>> | undefined;
+  readonly defaultLang: string;
   readonly diagnostics: Diagnostics;
 }
 
@@ -186,7 +190,7 @@ function textOfValue(value: unknown): string {
  * order or in the order `order` names, cut to `limit`. Only a collection the build has pages for expands; a missing
  * name, an unknown key, and a bad limit are errors at the entry.
  */
-function collectionEntry(ctx: Context, map: YAMLMap): NavGroup | undefined {
+function collectionEntry(ctx: Context, map: YAMLMap, lang: string): NavGroup | undefined {
   const allowed = new Set(["title", "collection", "order", "limit"]);
   for (const pair of map.items) {
     const key = textOf(pair.key) ?? "";
@@ -198,12 +202,16 @@ function collectionEntry(ctx: Context, map: YAMLMap): NavGroup | undefined {
     }
   }
   const name = textOf(valueOf(map, "collection")) ?? "";
-  const listed = ctx.collections?.[name];
+  const listed = ctx.collections?.[lang]?.[name];
   if (listed === undefined) {
-    ctx.diagnostics.error("nav.unknown-collection", `The navigation names the collection \`${name}\`, which has no pages.`, {
-      pos: posOf(ctx, valueOf(map, "collection") as Node),
-      help: "Name a collection the config declares with a `template` and a `permalink`.",
-    });
+    ctx.diagnostics.error(
+      "nav.unknown-collection",
+      `The navigation names the collection \`${name}\`, which has no pages${lang === "" ? "" : ` in \`${lang}\``}.`,
+      {
+        pos: posOf(ctx, valueOf(map, "collection") as Node),
+        help: "Name a collection the config declares with a `template` and a `permalink`.",
+      },
+    );
     return undefined;
   }
   const title = textOf(valueOf(map, "title")) ?? name;
@@ -233,7 +241,7 @@ function collectionEntry(ctx: Context, map: YAMLMap): NavGroup | undefined {
 }
 
 /** Reads one entry of a list: a collection, a link, or a group of links. Returns undefined after reporting why it is none. */
-function entry(ctx: Context, node: Node): NavItem | undefined {
+function entry(ctx: Context, node: Node, lang: string): NavItem | undefined {
   if (!isMap(node)) {
     ctx.diagnostics.error("nav.invalid-item", "Each navigation entry is a mapping with `title` and `url`, or `title` and `children`.", {
       pos: posOf(ctx, node),
@@ -241,7 +249,7 @@ function entry(ctx: Context, node: Node): NavItem | undefined {
     return undefined;
   }
 
-  if (valueOf(node, "collection") !== undefined) return collectionEntry(ctx, node);
+  if (valueOf(node, "collection") !== undefined) return collectionEntry(ctx, node, lang);
 
   const childrenNode = valueOf(node, "children");
   if (childrenNode === undefined) return link(ctx, node);
@@ -312,6 +320,7 @@ export function navFromYaml(text: string, file: string, options: NavFromYamlOpti
     pages: options.pages,
     base: options.base ?? "",
     collections: options.collections,
+    defaultLang: options.defaultLang ?? "",
     diagnostics: createDiagnostics(),
   };
 
@@ -358,8 +367,10 @@ export function navFromYaml(text: string, file: string, options: NavFromYamlOpti
       continue;
     }
     const items: NavItem[] = [];
+    const suffix = /^[a-z]+_([a-z]{2,3})$/.exec(name)?.[1];
+    const lang = suffix ?? ctx.defaultLang;
     for (const item of list.items) {
-      const found = entry(ctx, item as Node);
+      const found = entry(ctx, item as Node, lang);
       if (found !== undefined) items.push(found);
     }
     nav[name] = items;

@@ -94,8 +94,24 @@ export interface RecordLinkContext {
   readonly base: string;
   /** The page language's URL prefix. */
   readonly prefix: string;
+  /** The page's language, so the target's pattern fills from localized fields. */
+  readonly lang: string;
+  /** The site's default language, the fallback for a missing translation. */
+  readonly defaultLang: string;
   /** The file the link is written in, for diagnostics. */
   readonly file: string;
+}
+
+/** Removes `external` from a link's `rel`, keeping any other relationship it had. */
+function internal(node: { readonly data?: unknown }): void {
+  const data = node.data as { hProperties?: Record<string, unknown> } | undefined;
+  const props = data?.hProperties;
+  if (props === undefined) return;
+  const rel = props["rel"];
+  if (typeof rel !== "string") return;
+  const kept = rel.split(/\s+/).filter((token) => token !== "" && token !== "external");
+  if (kept.length === 0) delete props["rel"];
+  else props["rel"] = kept.join(" ");
 }
 
 /** A `record:<collection>/<id>` address, split into its two parts. */
@@ -113,20 +129,46 @@ function recordAddress(url: string): { readonly collection: string; readonly id:
  * it at the same position.
  */
 export function applyRecordLinks(tree: Root, ctx: RecordLinkContext): void {
+  const recordDefinitions = new Set<string>();
   visit(tree, (node) => {
     if (node.type !== "definition") return;
     const address = recordAddress(node.url);
     if (address === undefined) return;
-    const url = urlOfRecord(ctx.collections, ctx.config, ctx.base, ctx.prefix, address.collection, address.id);
+    recordDefinitions.add(node.identifier);
+    const url = urlOfRecord(
+      ctx.collections,
+      ctx.config,
+      ctx.base,
+      ctx.prefix,
+      address.collection,
+      address.id,
+      ctx.lang,
+      ctx.defaultLang,
+    );
     // An address with no page becomes an empty link in the HTML; the original address stays in the page's Markdown,
     // where the link check reports it at its position.
     node.url = url ?? "";
   });
   visit(tree, (node) => {
+    if (node.type === "linkReference") {
+      if (recordDefinitions.has(node.identifier)) internal(node);
+      return;
+    }
     if (node.type !== "link") return;
     const address = recordAddress(node.url);
     if (address === undefined) return;
-    const url = urlOfRecord(ctx.collections, ctx.config, ctx.base, ctx.prefix, address.collection, address.id);
+    const url = urlOfRecord(
+      ctx.collections,
+      ctx.config,
+      ctx.base,
+      ctx.prefix,
+      address.collection,
+      address.id,
+      ctx.lang,
+      ctx.defaultLang,
+    );
+    // The address no longer leaves the site, so the external marker the links plugin added must go.
+    internal(node);
     node.url = url ?? "";
   });
 }

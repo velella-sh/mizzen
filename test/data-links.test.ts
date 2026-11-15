@@ -51,3 +51,44 @@ test("a reference field resolves to the URL of the record it points at", async (
     assert.equal(props.links["component"], "/components/button/");
   });
 });
+
+const localized = {
+  "mizzen.yml":
+    "base: /docs\n" +
+    "languages:\n" +
+    "  - code: en\n    name: English\n    prefix: \"\"\n" +
+    "  - code: fa\n    name: فارسی\n    prefix: /fa\n" +
+    "collections:\n" +
+    "  components:\n" +
+    "    source: _data/components.yml\n" +
+    "    template: _templates/components.md\n" +
+    "    permalink: /components/{name}/\n" +
+    "  releases:\n" +
+    "    source: _data/releases.json\n" +
+    "    template: _templates/releases.md\n" +
+    "    permalink: /releases/{id}/\n" +
+    "    references:\n" +
+    "      component: components\n",
+  "_data/components.yml": "- id: button\n  name:\n    en: Button\n    fa: دکمه\n",
+  "_data/releases.json": '{\n  "one": { "name": "One", "component": "button" }\n}\n',
+  "_templates/components.md": "---\ntitle: \"{name}\"\nlayout: record\n---\n[Self](record:components/button)\n",
+  "_templates/releases.md": "---\ntitle: \"{name}\"\nlayout: record\n---\n:field[name]\n",
+  "fa/guide.md": "---\ntitle: Guide\n---\nSee [the button](record:components/button).\n",
+};
+
+test("record links and reference links use the page language prefix and localized target fields", async () => {
+  await withSite(localized, (_root, result) => {
+    const guide = pageAt(result, "/docs/fa/guide/")!;
+    assert.match(guide.html, /href="\/docs\/fa\/components\/%D8%AF%DA%A9%D9%85%D9%87\/"/);
+    assert.doesNotMatch(guide.html, /rel="external"/);
+
+    const component = pageAt(result, "/docs/fa/components/دکمه/")!;
+    assert.match(component.html, /href="\/docs\/fa\/components\/%D8%AF%DA%A9%D9%85%D9%87\/"/);
+
+    const release = pageAt(result, "/docs/fa/releases/one/")!;
+    assert.equal(recordPropsOf(result.site, release)!.links["component"], "/docs/fa/components/دکمه/");
+
+    const english = pageAt(result, "/docs/components/Button/")!;
+    assert.match(english.html, /href="\/docs\/components\/Button\/"/);
+  });
+});

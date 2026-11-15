@@ -45,6 +45,23 @@ test("an empty list repeats nothing, and a block nested more than one level is o
   );
 });
 
+test("an ordinary directive around blocks does not count toward the nesting limit", async () => {
+  await withSite(
+    {
+      ...FILES,
+      "_templates/components.md":
+        "---\ntitle: \"{id}\"\nlayout: record\n---\n" +
+        ":::note\n:::if{field=status}\nStatus: :field[status].\n:::\n:::each{field=tags}\nTag: :field[name].\n:::\n:::\n",
+    },
+    (_root, result) => {
+      assert.deepEqual(ids(result), []);
+      const button = pageAt(result, "/components/button/")!;
+      assert.match(button.markdown, /Status: stable\./);
+      assert.match(button.markdown, /Tag: primary\./);
+    },
+  );
+});
+
 test("each uses the item's own field, and a field that is not a list is one error", async () => {
   await withSite(
     {
