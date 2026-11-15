@@ -65,6 +65,14 @@ export interface CollectionConfig {
   readonly permalink?: string;
   /** JSON Schema file that validates every record, relative to the site root. */
   readonly schema?: string;
+  /** Fields whose values must be unique in the collection; a duplicate is an error naming both records. Default `[]`. */
+  readonly unique?: readonly string[];
+  /** Fields that hold a reference to another collection's record id, keyed by field name. Default `{}`. */
+  readonly references?: Readonly<Record<string, string>>;
+  /** Fields that hold a date, written `YYYY-MM-DD` or as a full ISO 8601 instant. Default `[]`. */
+  readonly dates?: readonly string[];
+  /** What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. Default `error`. */
+  readonly onInvalid?: "error" | "skip";
   /** Limits on this collection's source. */
   readonly limits?: DataLimitsConfig;
 }

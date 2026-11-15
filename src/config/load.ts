@@ -187,16 +187,39 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
   const collections: Record<string, CollectionConfig> = {};
   for (const [name, entry] of Object.entries(value)) {
     if (!isPlainObject(entry) || typeof entry.source !== "string") continue;
+    const unique = fieldsFrom(entry.unique);
+    const references = referencesFrom(entry.references);
+    const dates = fieldsFrom(entry.dates);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
       ...(typeof entry.template === "string" ? { template: entry.template } : {}),
       ...(typeof entry.permalink === "string" ? { permalink: entry.permalink } : {}),
       ...(typeof entry.schema === "string" ? { schema: entry.schema } : {}),
+      ...(unique === undefined ? {} : { unique }),
+      ...(references === undefined ? {} : { references }),
+      ...(dates === undefined ? {} : { dates }),
+      ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
     };
   }
   return collections;
+}
+
+/** A list of field names, keeping only the strings; `undefined` when the key is not a list. */
+function fieldsFrom(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value.filter((field): field is string => typeof field === "string");
+}
+
+/** A field-to-collection mapping, keeping only string values; `undefined` when the key is not a mapping. */
+function referencesFrom(value: unknown): Readonly<Record<string, string>> | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const references: Record<string, string> = {};
+  for (const [field, collection] of Object.entries(value)) {
+    if (typeof collection === "string") references[field] = collection;
+  }
+  return references;
 }
 
 /** Reads the three numeric limits a collection may set; a bad value falls back to the default. */

@@ -48,7 +48,7 @@
         "id": {
           "type": "string",
           "minLength": 1,
-          "description": "The stable check ID, such as `config.unknown-key`; an ID is never reused for another meaning."
+          "description": "The stable check ID, such as `config.unknown-key`; an ID is never reused for another meaning. A data finding starts with `data.` and is listed on the data findings page."
         },
         "message": {
           "type": "string",

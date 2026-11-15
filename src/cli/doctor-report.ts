@@ -8,7 +8,7 @@
 import type { Diagnostic } from "../contracts/index.ts";
 
 /** Every preflight check, in the order a report lists them. */
-export const DOCTOR_CHECKS = ["runtime", "config", "content", "theme", "render", "output"] as const;
+export const DOCTOR_CHECKS = ["runtime", "config", "content", "data", "theme", "render", "output"] as const;
 
 /** The stable id of one preflight check. */
 export type DoctorCheckId = (typeof DOCTOR_CHECKS)[number];

@@ -412,11 +412,12 @@ interface KeyInput {
 }
 
 /**
- * The files a collection source contributes to a cache key: a local file, an installed package's file and version, or
- * the stored bytes of a pinned URL. A package source comes back as real paths the resolver proved are inside the
- * package folder, never as a path built with `join`, so a link cannot make the key read outside it. A site with no
- * collections contributes nothing, so its key stays exactly what 0.2.0 produced. The lock file itself is an input
- * whenever collections exist, because it decides which bytes a remote or package source reads.
+ * The files a collection contributes to a cache key: its source — a local file, an installed package's file and version,
+ * or the stored bytes of a pinned URL — and its schema file, which decides which records reach a page. A package source
+ * comes back as real paths the resolver proved are inside the package folder, never as a path built with `join`, so a
+ * link cannot make the key read outside it. A site with no collections contributes nothing, so its key stays exactly
+ * what 0.2.0 produced. The lock file itself is an input whenever collections exist, because it decides which bytes a
+ * remote or package source reads.
  */
 async function collectionInputs(options: { readonly root: string; readonly config: SiteConfig }): Promise<KeyInput[]> {
   const names = Object.keys(options.config.collections);
@@ -438,6 +439,14 @@ async function collectionInputs(options: { readonly root: string; readonly confi
       const rel = relative(options.root, path);
       if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) continue;
       inputs.push({ label: `collection/${name}/source`, path });
+    }
+    const schema = options.config.collections[name]!.schema;
+    if (schema !== undefined) {
+      const path = resolve(options.root, schema);
+      const rel = relative(options.root, path);
+      // The schema decides whether a record reaches a page, so its bytes shape the output; it is read, never fetched.
+      if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) continue;
+      inputs.push({ label: `collection/${name}/schema`, path });
     }
   }
   return inputs;

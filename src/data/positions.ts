@@ -108,3 +108,19 @@ export function fieldPositionsOf(
   }
   return found;
 }
+
+/** Where each top-level field's key sits, keyed by field name, so a rename has its own span and never reuses the value's. */
+export function keyPositionsOf(
+  index: LineIndex,
+  file: string,
+  mapping: Node,
+): Record<string, RecordPos> {
+  const found: Record<string, RecordPos> = {};
+  for (const pair of mappingPairs(mapping)) {
+    const key = keyText(pair);
+    const node = pair.key as Node | null;
+    if (key === undefined || node === null || typeof node !== "object") continue;
+    found[key] = nodePos(index, file, node);
+  }
+  return found;
+}

@@ -135,31 +135,40 @@ test("a second build with no changes is a cache hit and writes identical bytes",
   }
 });
 
-test("a second build of fixtures/docs-site is at least three times faster than a cold one", { timeout: 120_000 }, async () => {
+test("a second build of fixtures/docs-site is at least three times faster than a cold one", { timeout: 180_000 }, async () => {
   const parent = mkdtempSync(join(tmpdir(), "cache-docs-"));
   const cacheDir = join(parent, "cache");
   const out = (name: string): string => join(parent, name);
+  const cold = () => build({ root: FIXTURE, out: out("cold"), themeRoot: THEME, defaultLayout: "doc" });
+  const hit = (index: number) =>
+    build({ root: FIXTURE, out: out(`hit-${index}`), themeRoot: THEME, defaultLayout: "doc", cache: true, cacheDir });
   try {
     // Warm the engine's module cache first, so the baseline measures the build rather than the first import.
     await build({ root: FIXTURE, out: out("warmup"), themeRoot: THEME, defaultLayout: "doc" });
 
+    // The fastest of several runs comes closest to the engine's own work: the suite runs other test files beside this
+    // one, and a busy neighbour slows both sides. Timing is the last assertion here, so a noisy machine costs a rerun.
     const coldStart = performance.now();
-    const cold = await build({ root: FIXTURE, out: out("cold"), themeRoot: THEME, defaultLayout: "doc" });
-    const coldMs = performance.now() - coldStart;
+    let first = await cold();
+    let coldMs = performance.now() - coldStart;
+    const secondColdStart = performance.now();
+    first = await cold();
+    coldMs = Math.min(coldMs, performance.now() - secondColdStart);
 
-    // Populate the cache with one cold build; the next one is the hit under test.
+    // Populate the cache with one cold build; the next ones are the hits under test.
     await build({ root: FIXTURE, out: out("populate"), themeRoot: THEME, defaultLayout: "doc", cache: true, cacheDir });
 
     let warmMs = Number.POSITIVE_INFINITY;
-    let hit = cold;
-    for (let i = 0; i < 2; i++) {
+    let faster: Awaited<ReturnType<typeof hit>> | undefined;
+    for (let attempt = 0; attempt < 5; attempt++) {
       const started = performance.now();
-      hit = await build({ root: FIXTURE, out: out(`hit-${i}`), themeRoot: THEME, defaultLayout: "doc", cache: true, cacheDir });
+      faster = await hit(attempt);
       warmMs = Math.min(warmMs, performance.now() - started);
     }
+    if (faster === undefined) throw new Error("the cache was never read");
 
-    assert.deepEqual(hit.files, cold.files);
-    assert.deepEqual(hit.diagnostics, cold.diagnostics);
+    assert.deepEqual(faster.files, first.files);
+    assert.deepEqual(faster.diagnostics, first.diagnostics);
     assert.deepEqual(snapshot(out("hit-0")), snapshot(out("cold")), "the cached build matches the cold build byte for byte");
     assert.ok(
       warmMs * 3 <= coldMs,
@@ -543,5 +552,51 @@ test("a build that throws writes no whole-build entry", async () => {
     assert.equal(entries(cacheDir).length, 0, "a build that threw wrote no whole-build entry");
   } finally {
     clean(root, theme, parent);
+  }
+});
+
+test("changing a collection schema misses the cache, and the warm build matches a cold one", async () => {
+  const root = tree({
+    "mizzen.yml":
+      "title: Data\nsource: docs\n" +
+      "collections:\n  items:\n    source: data/items.yml\n    schema: schemas/items.json\n",
+    "docs/index.md": "---\ntitle: Home\n---\n# Home\n",
+    "data/items.yml": "- id: one\n  count: 2\n",
+    "schemas/items.json": JSON.stringify({
+      type: "object",
+      properties: { id: { type: "string" }, count: { type: "integer" } },
+    }),
+  });
+  const theme = makeTheme("one");
+  const { parent, out, cacheDir } = scratch();
+  const buildAt = (folder: string, cache = true) =>
+    build({ root, out: join(parent, folder), themeRoot: theme, defaultLayout: "doc", ...(cache ? { cache: true, cacheDir } : {}) });
+  try {
+    const first = await buildAt("first");
+    assert.equal(first.diagnostics.some((diagnostic) => diagnostic.id === "data.record-invalid"), false);
+    const hit = await buildAt("hit");
+    assert.deepEqual(hit.diagnostics, first.diagnostics, "the same schema is a cache hit");
+
+    writeFileSync(
+      join(root, "schemas/items.json"),
+      JSON.stringify({
+        type: "object",
+        required: ["title"],
+        properties: { id: { type: "string" }, title: { type: "string" }, count: { type: "integer" } },
+      }),
+    );
+    const warm = await buildAt("warm");
+    assert.ok(
+      warm.diagnostics.some((diagnostic) => diagnostic.id === "data.record-invalid"),
+      "a tightened schema is not answered by the entry the old schema wrote",
+    );
+
+    const cold = await buildAt("cold", false);
+    assert.deepEqual(warm.diagnostics, cold.diagnostics, "the warm build reports what a cold build reports");
+    assert.deepEqual(snapshot(join(parent, "warm")), snapshot(join(parent, "cold")), "and writes the same bytes");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(theme, { recursive: true, force: true });
+    rmSync(parent, { recursive: true, force: true });
   }
 });

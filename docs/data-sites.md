@@ -74,6 +74,10 @@ limit and the key, never a silently truncated file.
   number, total, and previous and next URLs.
 - `Site.collections` on every page: each collection's records with their ids and positions. A collection read
   from an `npm:` source also carries `package.name` and `package.version`.
+- A record's `keyPositions`: where each field's key sits, so a rename can point at the key and never at the value — the
+  YAML or JSON key, or the CSV header cell, which every row shares.
+- A record's `normalizedDates`: each field the config marks under `dates`, written `YYYY-MM-DD` as it is in the
+  source, or as a UTC ISO 8601 instant when the source holds one. The field itself keeps the value as written.
 - `Page.record` on a record page: the collection name, the record id, and the record's position.
 - The ordinary contract, unchanged: navigation, pager, head, islands, and the site model.
 
