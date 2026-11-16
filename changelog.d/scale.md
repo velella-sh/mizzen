@@ -1,3 +1,4 @@
 - **Scale for thousands of pages.** `fixtures/data-large/generate.ts` writes a seeded data site of any size (three collections, references, two lists, one feed), and `scripts/bench-data.ts` measures cold, warm, and one-record builds.
 - **Time and memory budgets in CI.** `bench/budget.json` holds a budget for each of the six measurements, and a `data benchmark` CI job fails when one is passed, printing every measurement next to its budget in the job summary.
 - **Faster hreflang and sitemap on large sites.** The language groups of a site are computed once instead of once per page.
+- **Record nodes in the dependency graph.** Every record of a collection a build reads is a node with a hash of its id and fields, with edges from its page, from its template, and (through a collection node) from every list; `changedRecords` compares record hashes, not file hashes.

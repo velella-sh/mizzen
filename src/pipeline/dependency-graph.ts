@@ -14,6 +14,7 @@
  * Sources are read through the existing `expandIncludes` and `parseFrontMatter`, so include rules (fences, nesting,
  * cycles) stay in one place. The graph is not wired into `build`; it is a standalone unit the integration issue uses.
  */
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { posix, relative, resolve, sep } from "node:path";
@@ -30,7 +31,7 @@ import { resolveNpmSource } from "../data/package-source.ts";
 import { sortDiagnostics } from "./diagnostics.ts";
 
 /** What a node stands for. A file has one kind: its role in the build, with discovery's role winning. */
-export type DependencyNodeKind = "page" | "include" | "data" | "navigation" | "asset" | "output";
+export type DependencyNodeKind = "page" | "include" | "data" | "navigation" | "asset" | "output" | "record" | "collection";
 
 /** One unit of the build. */
 export interface DependencyNode {
@@ -44,6 +45,8 @@ export interface DependencyNode {
   readonly derived?: boolean;
   /** True when a dependency names this file but it does not exist. Such a node has an error diagnostic. */
   readonly missing?: boolean;
+  /** SHA-256 of a record's id and fields, so a change to one record is seen without comparing the file. Record nodes only. */
+  readonly hash?: string;
 }
 
 /** One dependency: `from` does not build correctly unless `to` is current. */
@@ -104,6 +107,86 @@ export function fileNodeId(path: string): string {
 /** The id of the node for a page output at `url`. */
 export function outputNodeId(url: string): string {
   return `${OUTPUT}${url}`;
+}
+
+/** Prefix of a record node id. */
+const RECORD = "record:";
+
+/** Prefix of a collection node id: the set of one collection's records, which a list or an index reads as a whole. */
+const COLLECTION = "collection:";
+
+/** The id of the node for one record. */
+export function recordNodeId(collection: string, id: string): string {
+  return `${RECORD}${collection}/${id}`;
+}
+
+/** The id of the node for one collection as a whole. */
+export function collectionNodeId(collection: string): string {
+  return `${COLLECTION}${collection}`;
+}
+
+/** Key-sorted JSON, so two equal values hash alike whatever order their keys were built in. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/**
+ * The hash of one record: its id and its fields. Positions are left out on purpose, so a record that only moved in
+ * its file is not a changed record; a page that quotes the position has its own render key.
+ */
+export function recordHash(record: { readonly id: string; readonly fields: Readonly<Record<string, unknown>> }): string {
+  return createHash("sha256").update(canonical({ id: record.id, fields: record.fields })).digest("hex");
+}
+
+/** Every record of the site by node id, with its hash. A record of a collection the config declares and a build read. */
+export function recordHashes(site: Pick<Site, "collections">): Map<string, string> {
+  const hashes = new Map<string, string>();
+  for (const [name, collection] of Object.entries(site.collections)) {
+    for (const record of collection.records) hashes.set(recordNodeId(name, record.id), recordHash(record));
+  }
+  return hashes;
+}
+
+/** What changed between two sets of record hashes, each list sorted by node id. */
+export interface RecordChanges {
+  readonly added: readonly string[];
+  readonly removed: readonly string[];
+  readonly changed: readonly string[];
+}
+
+/**
+ * Compares record hashes, not file hashes: editing one record of a file of a thousand reports that one node. Either side
+ * may be a map from {@link recordHashes} or the record nodes of a graph.
+ */
+export function changedRecords(
+  before: ReadonlyMap<string, string> | DependencyGraph,
+  after: ReadonlyMap<string, string> | DependencyGraph,
+): RecordChanges {
+  const mapOf = (value: ReadonlyMap<string, string> | DependencyGraph): ReadonlyMap<string, string> => {
+    if (value instanceof Map) return value;
+    const map = new Map<string, string>();
+    for (const node of (value as DependencyGraph).nodes) if (node.kind === "record" && node.hash !== undefined) map.set(node.id, node.hash);
+    return map;
+  };
+  const a = mapOf(before);
+  const b = mapOf(after);
+  const added: string[] = [];
+  const removed: string[] = [];
+  const changed: string[] = [];
+  for (const [id, hash] of b) {
+    const old = a.get(id);
+    if (old === undefined) added.push(id);
+    else if (old !== hash) changed.push(id);
+  }
+  for (const id of a.keys()) if (!b.has(id)) removed.push(id);
+  return { added: added.sort(byCodePoint), removed: removed.sort(byCodePoint), changed: changed.sort(byCodePoint) };
 }
 
 /** Compares by code point, never by locale. */
@@ -431,6 +514,31 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
   }
   const blanketDataIds = dataIds.filter((id) => !collectionIds.has(id));
 
+  // One node per record of a collection whose source a build reads, and one for the collection as a whole. A file no
+  // collection reads gets no record node. A record depends on its source file, so a change to the file as a whole (a
+  // schema, a lock, a re-read) still reaches every record; a changed record hash names the one that moved.
+  const recordNodes = new Set<string>();
+  for (const [name, collection] of Object.entries(options.site.collections)) {
+    const sourcePath = collectionPaths.get(name);
+    if (sourcePath === undefined) continue;
+    const collectionId = collectionNodeId(name);
+    addNode({ id: collectionId, kind: "collection", path: name });
+    addEdge(collectionId, fileNodeId(sourcePath), atFile(sourcePath));
+    for (const record of collection.records) {
+      const id = recordNodeId(name, record.id);
+      recordNodes.add(id);
+      addNode({ id, kind: "record", path: `${name}/${record.id}`, hash: recordHash(record) });
+      addEdge(id, fileNodeId(sourcePath), {
+        file: sourcePath,
+        line: record.position.startLine,
+        column: record.position.startColumn,
+        endLine: record.position.endLine,
+        endColumn: record.position.endColumn,
+      });
+      addEdge(collectionId, id);
+    }
+  }
+
   /** The source-relative path a `_data` key names, such as `components` or `guides.install.steps`. */
   const dataKeyPath = (key: string): string | undefined => {
     for (const path of dataPaths) {
@@ -582,6 +690,30 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     }
   }
 
+  // A record page reads its record and its template. A list page reads its collection as a whole, because a record
+  // that was edited to match its filter joins a page it was not on before.
+  const templateNodes = new Set<string>();
+  for (const page of options.site.pages) {
+    if (page.record === undefined && page.list === undefined) continue;
+    const outputId = outputNodeId(page.url);
+    addNode({ id: outputId, kind: "output", path: page.url });
+    if (page.record !== undefined) {
+      const recordId = recordNodeId(page.record.collection, page.record.id);
+      if (recordNodes.has(recordId)) addEdge(outputId, recordId);
+      addEdge(outputId, navigationId);
+      for (const dataId of blanketDataIds) addEdge(outputId, dataId);
+      const template = normalize(relative(sourceDir, resolve(options.root, page.record.template)).split(sep).join("/"));
+      if (!templateNodes.has(template)) {
+        templateNodes.add(template);
+        addNode({ id: fileNodeId(template), kind: "include", path: template });
+      }
+      addEdge(outputId, fileNodeId(template), { file: template, line: 1, column: 1, endLine: 1, endColumn: 1 });
+    }
+    if (page.list !== undefined && collectionPaths.has(page.list.collection)) {
+      addEdge(outputId, collectionNodeId(page.list.collection));
+    }
+  }
+
   // Navigation built from folders reads every page's title, so it depends on all of them. A navigation file does not.
   if (!hasNavigation) {
     for (const path of pagesByPath.keys()) addEdge(navigationId, fileNodeId(path));
@@ -644,21 +776,20 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
  */
 export function affectedNodes(graph: DependencyGraph, changed: readonly string[]): string[] {
   const seeds = new Set<string>();
-  for (const value of changed) {
-    for (const node of graph.nodes) {
-      if (node.id === value || node.path === value) seeds.add(node.id);
-    }
+  const wanted = new Set(changed);
+  for (const node of graph.nodes) {
+    if (wanted.has(node.id) || wanted.has(node.path)) seeds.add(node.id);
   }
   if (seeds.size === 0) return [];
   if (graph.incomplete !== undefined && graph.incomplete.length > 0) {
     return graph.nodes.filter((node) => node.kind === "output").map((node) => node.id);
   }
 
-  const dependents = new Map<string, string[]>();
+  const dependents = new Map<string, Set<string>>();
   for (const edge of graph.edges) {
     const list = dependents.get(edge.to);
-    if (list === undefined) dependents.set(edge.to, [edge.from]);
-    else if (!list.includes(edge.from)) list.push(edge.from);
+    if (list === undefined) dependents.set(edge.to, new Set([edge.from]));
+    else list.add(edge.from);
   }
 
   const affected = new Set<string>(seeds);
@@ -686,6 +817,7 @@ export function serializeDependencyGraph(graph: DependencyGraph): string {
     path: node.path,
     ...(node.derived === true ? { derived: true } : {}),
     ...(node.missing === true ? { missing: true } : {}),
+    ...(node.hash === undefined ? {} : { hash: node.hash }),
   }));
   const edges = sortedEdges(graph.edges).map((edge) => ({
     from: edge.from,
