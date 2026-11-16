@@ -13,7 +13,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
-import type { Diagnostic } from "../contracts/index.ts";
+import type { CollectionSnapshot, Diagnostic } from "../contracts/index.ts";
+import { orderedSnapshot } from "./snapshot.ts";
 
 /** The lock file name at a site root. */
 export const LOCK_FILE = "mizzen.lock.json";
@@ -39,6 +40,8 @@ export interface DataLock {
   readonly version: 1;
   /** Pinned sources by address. */
   readonly sources: Readonly<Record<string, LockedSource>>;
+  /** Where each collection's data was recorded from, by collection name; absent in a lock written before snapshots. */
+  readonly snapshots?: Readonly<Record<string, CollectionSnapshot>>;
 }
 
 /** An empty lock. */
@@ -84,7 +87,12 @@ export function lockText(lock: DataLock): string {
       sha256: entry.sha256,
     };
   }
-  return `${canonicalJson({ version: lock.version, sources })}\n`;
+  const snapshots: Record<string, CollectionSnapshot> = {};
+  for (const name of Object.keys(lock.snapshots ?? {}).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+    snapshots[name] = orderedSnapshot(lock.snapshots![name]!);
+  }
+  const hasSnapshots = Object.keys(snapshots).length > 0;
+  return `${canonicalJson({ version: lock.version, sources, ...(hasSnapshots ? { snapshots } : {}) })}\n`;
 }
 
 /** True when `value` is a lock this version may trust. */
