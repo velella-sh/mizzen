@@ -178,6 +178,22 @@
       },
       "description": "How old a collection's recorded snapshot may be. Default: none."
     },
+    "stale": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The folder a page's `covers` paths are relative to, relative to the site root. Default `.`."
+        },
+        "severity": {
+          "enum": ["info", "warning", "error"],
+          "description": "How `mizzen check` and `mizzen doctor` report a stale page. Default `warning`."
+        }
+      },
+      "description": "Stale page detection. Default: none."
+    },
     "analytics": {
       "type": "object",
       "additionalProperties": false,

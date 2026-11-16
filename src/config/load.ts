@@ -32,6 +32,7 @@ import type {
   LanguageConfig,
   NetworkConfig,
   SnapshotConfig,
+  StaleConfig,
   RepositoryConfig,
   SearchConfig,
   SiteConfig,
@@ -172,6 +173,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const network = networkFrom(raw.network);
   const snapshot = snapshotFrom(raw.snapshot);
   const social = socialFrom(raw.social);
+  const stale = staleFrom(raw.stale);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -199,6 +201,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(verify === undefined ? {} : { verify }),
     ...(network === undefined ? {} : { network }),
     ...(snapshot === undefined ? {} : { snapshot }),
+    ...(stale === undefined ? {} : { stale }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -242,6 +245,16 @@ function snapshotFrom(value: unknown): SnapshotConfig | undefined {
   if (!isPlainObject(value)) return undefined;
   const days = value.maxAgeDays;
   return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
+}
+
+/** The stale key, keeping a string `root` and a known `severity`; the schema check reports an invalid one. */
+function staleFrom(value: unknown): StaleConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const severity = value.severity;
+  const out: { root?: string; severity?: "info" | "warning" | "error" } = {};
+  if (typeof value.root === "string" && value.root !== "") out.root = value.root;
+  if (severity === "info" || severity === "warning" || severity === "error") out.severity = severity;
+  return Object.keys(out).length === 0 ? undefined : out;
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */
