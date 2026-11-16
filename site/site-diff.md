@@ -7,6 +7,49 @@ permalink: /site-diff/
 
 `mizzen diff <a> <b>` compares two built folders and reports what changed on the site: which page, which block, which URL. It reads each folder's `.mizzen/manifest.json`, so it does not rebuild anything, and because a build is deterministic every difference is a real change.
 
+## Compare two folders
+
+```bash
+mizzen build site --out base
+# change something, then:
+mizzen build site --out head
+mizzen diff base head
+```
+
+A folder without a `.mizzen/manifest.json` is a usage error (exit `2`): build the site into it first. Equal builds answer "identical" at once.
+
+## Compare with a git ref
+
+```bash
+mizzen diff --base main site
+```
+
+`--base <ref>` checks the ref out into a temporary detached worktree, builds it and your current tree, compares them, and removes the worktree and the temporary folders, whether the build succeeds or fails. Your working tree and index are never touched. Both builds share the site's build cache (`.mizzen/cache`), so a page that did not change is rendered once. The theme is resolved as for `mizzen build`; pass `--theme <dir>` to name it.
+
+## Formats
+
+`--format` picks the report:
+
+- `text` (default): a summary line, then one section per kind of change.
+- `json`: the report format below.
+- `markdown`: a pull request comment, a summary line and a table with one row per page, file, or record. `--max-entries <n>` (default 50) caps the rows and says how many it left out; `--link-base <url>` links page URLs under that base. Cell text is escaped, so page content cannot add markup to the comment. The comment starts with `<!-- mizzen-diff -->`, which the recipe uses to find and update it.
+
+## Exit codes
+
+`mizzen diff` exits `0` whenever it ran, whatever it found. `--fail-on` takes a comma-separated list of kinds and exits `1` when the report holds one of them:
+
+| Kind | Fails when |
+| --- | --- |
+| `removed-pages` | a page of the first build has no page in the second and did not move |
+| `broken-urls` | an old URL is no longer answered: a removed page, or a moved page without a redirect at its old URL |
+| `render-only` | a page's HTML changed while its Markdown did not |
+
+Exit `2` is a usage problem: a folder without a manifest, an unknown kind or format, or a ref that does not exist.
+
+## A pull request comment
+
+`recipes/site-diff.yml` is a GitHub Actions workflow. Copy it to `.github/workflows/site-diff.yml`, set `SITE` to your site folder, and it comments on every pull request and edits that one comment on each push. The job that builds the pull request's code has a read-only token; the job that posts the comment has `pull-requests: write`, runs none of the pull request's code, and does not run for forks.
+
 ## The report format
 
 `--format json` prints one JSON object that validates against `schema/site-diff.schema.json` (shipped in the package). It names the two build hashes and lists pages added, removed, changed, and moved:

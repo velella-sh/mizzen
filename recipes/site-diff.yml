@@ -1,0 +1,83 @@
+# Copy to .github/workflows/site-diff.yml.
+#
+# Comments on every pull request with what its change does to the built site: pages added, removed, changed (by
+# section), and moved, URLs that stopped answering, changed files, and changed records. One comment is kept up to
+# date; it is found by the marker `<!-- mizzen-diff -->` and edited in place on every push.
+#
+# Safe by construction:
+#   - The job that builds the pull request's code has a read-only token and no secrets. It is the only job that runs
+#     anything from the pull request.
+#   - The job that writes the comment has `pull-requests: write` but checks out nothing and runs nothing from the
+#     pull request: it posts a Markdown file as data. It does not run for pull requests from forks, whose token
+#     cannot write anyway.
+#
+# Change `SITE` to your site folder, and the Mizzen version to the one you use. Add `--fail-on removed-pages,broken-urls`
+# to the diff step to fail the check when a page is removed or an old URL would 404.
+name: site-diff
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: site-diff-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  SITE: docs
+  MIZZEN_VERSION: latest
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Install Mizzen and your theme
+        run: npm install --no-save --no-audit --no-fund "@velella/mizzen@${MIZZEN_VERSION}"
+      - name: Build the base and the pull request, and compare them
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          npx mizzen diff --base "$BASE_REF" "$SITE" --format markdown --max-entries 50 > "$RUNNER_TEMP/site-diff.md"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: site-diff
+          path: ${{ runner.temp }}/site-diff.md
+          retention-days: 3
+
+  comment:
+    needs: diff
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: site-diff
+      - name: Post or update the comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.body | contains("<!-- mizzen-diff -->"))][0].id // empty')
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" --field body=@site-diff.md
+          else
+            gh api --method POST "repos/$REPO/issues/$PR/comments" --field body=@site-diff.md
+          fi
