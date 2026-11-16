@@ -11,6 +11,7 @@ import type { Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { unsafeIdReason } from "../api/ids.ts";
 import { publishedSchema } from "../api/schemas.ts";
+import { openApiDocument } from "../api/openapi.ts";
 import { apiCollections, apiDir, apiUrl, byCodePoint, type ApiCollection, type ApiRecord } from "../api/model.ts";
 
 /** Serializes a file body: two-space indent and one final line feed. */
@@ -53,6 +54,7 @@ export const api: Output = {
       schemas.set(collection.name, schema);
       files.push({ path: `${dir}/schemas/${collection.name}.json`, contents: jsonFile(schema) });
     }
+    files.push({ path: `${dir}/openapi.json`, contents: jsonFile(openApiDocument(site, collections, schemas)) });
     files.push({
       path: `${dir}/index.json`,
       contents: jsonFile({

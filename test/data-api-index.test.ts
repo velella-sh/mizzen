@@ -14,7 +14,7 @@ const validate = new Ajv2020({ strict: true, allErrors: true }).compile(schema);
 
 test("the index validates against its schema and holds no records", async () => {
   const files = await api.run(site(), context());
-  assert.deepEqual(files.map((f) => f.path), ["api/v1/index.json", "api/v1/packages.json", "api/v1/packages.ndjson", "api/v1/packages/a.json", "api/v1/packages/b.json"]);
+  assert.deepEqual(files.map((f) => f.path), ["api/v1/index.json", "api/v1/openapi.json", "api/v1/packages.json", "api/v1/packages.ndjson", "api/v1/packages/a.json", "api/v1/packages/b.json"]);
   const text = String(files[0]!.contents);
   assert.ok(text.endsWith("\n"));
   const body = JSON.parse(text) as unknown;
