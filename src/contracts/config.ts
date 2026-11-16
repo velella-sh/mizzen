@@ -245,6 +245,14 @@ export interface SnapshotConfig {
   readonly maxAgeDays?: number;
 }
 
+/** The `stale` key: how pages that name the files they describe are checked against the review lock. */
+export interface StaleConfig {
+  /** Folder that a page's `covers` paths are relative to, relative to the site root. Default `.`. */
+  readonly root?: string;
+  /** How `mizzen check` and `mizzen doctor` report a stale page. Default `warning`; never `error` unless set. */
+  readonly severity?: "info" | "warning" | "error";
+}
+
 /** The `social` key: generated share images. Without the key no image is written. */
 export interface SocialConfig {
   /** Template used by every page that does not name its own: `_templates/social/<template>.svg` in the source folder. */
@@ -300,6 +308,8 @@ export interface SiteConfig {
   readonly network?: NetworkConfig;
   /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
   readonly snapshot?: SnapshotConfig;
+  /** Stale page detection. Default: none, and `covers` paths are relative to the site root. */
+  readonly stale?: StaleConfig;
   /** Generated social share images. Default: none, and no image is written. */
   readonly social?: SocialConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */

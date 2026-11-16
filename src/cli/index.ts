@@ -13,6 +13,8 @@ import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
 import { verifyData } from "../data/verify.ts";
 import { runNetwork } from "./network.ts";
+import { runStale } from "./stale.ts";
+import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
 import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
@@ -28,7 +30,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["build", "check", "data", "dev", "diff", "doctor", "edit", "mcp", "network", "pack", "urls", "verify", "watch"] as const;
+export const COMMANDS = ["build", "check", "data", "dev", "diff", "doctor", "edit", "mcp", "network", "pack", "stale", "urls", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -82,6 +84,8 @@ Commands:
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
   network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
+  stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
+  stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   watch [dir]               Rebuild the site whenever a source or theme file changes
@@ -217,6 +221,11 @@ type NetworkOpts = {
   readonly args: readonly string[];
 };
 
+type StaleOpts = {
+  readonly command: "stale";
+  readonly args: readonly string[];
+};
+
 type EditApplyOpts = {
   readonly command: "edit-apply";
   readonly root: string;
@@ -266,7 +275,8 @@ type Parsed =
         | DataVerifyOpts
         | UrlsCheckOpts
         | McpOpts
-        | NetworkOpts;
+        | NetworkOpts
+        | StaleOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -579,6 +589,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "network", args: rest } };
   }
+  if (command === "stale") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "stale", args: rest } };
+  }
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "diff") return parseDiff(rest);
@@ -842,6 +856,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     }
   }
 
+  if (options.command === "stale") {
+    try {
+      return await runStale(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   if (options.command === "network") {
     try {
       return await runNetwork(options.args, { log, error });
@@ -1023,12 +1046,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "doctor") {
     try {
       const themeRoot = await resolveThemeRoot(root, options.theme);
-      const diagnostics = await doctor({
-        root,
-        defaultLayout: DEFAULT_LAYOUT,
-        today: new Date().toISOString().slice(0, 10),
-        ...(themeRoot === undefined ? {} : { themeRoot }),
-      });
+      const diagnostics = [
+        ...(await doctor({
+          root,
+          defaultLayout: DEFAULT_LAYOUT,
+          today: new Date().toISOString().slice(0, 10),
+          ...(themeRoot === undefined ? {} : { themeRoot }),
+        })),
+        ...(await staleDiagnostics(root)),
+      ];
       printDiagnostics(diagnostics, options.format, log);
       return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
     } catch (err) {
@@ -1140,8 +1166,9 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       defaultLayout: DEFAULT_LAYOUT,
       ...(options.workers === undefined ? {} : { workers: options.workers }),
     });
-    printDiagnostics(result.diagnostics, options.format, log);
-    return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;
+    const diagnostics = [...result.diagnostics, ...(await staleDiagnostics(root))];
+    printDiagnostics(diagnostics, options.format, log);
+    return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
   } catch (err) {
     error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
     return 2;
