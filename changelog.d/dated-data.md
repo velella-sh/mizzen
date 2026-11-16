@@ -1,1 +1,2 @@
 - **Dated data (design).** `docs/design/dated-data.md` fixes the date kinds (day, month, year), the as-of date and its order (`--as-of`, then `asOf`, then a collection's `referenceDate`), and what a feature reports when no date is set.
+- **Partial dates.** `src/dates/parse.ts` reads `YYYY-MM-DD`, `YYYY-MM`, and `YYYY` with a precision, gives the earliest and latest day a partial date can mean, and rejects impossible dates such as `2026-02-30` with the position of the value, without `Date` strings or a time zone.
