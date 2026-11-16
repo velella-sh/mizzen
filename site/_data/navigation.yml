@@ -19,6 +19,8 @@ main:
         url: /network/
       - title: Compare two builds
         url: /site-diff/
+      - title: Performance at scale
+        url: /performance/
       - title: Plugins
         url: /plugins/
       - title: Programmatic API

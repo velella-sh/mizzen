@@ -15,6 +15,7 @@ import { loadConfig } from "../config/load.ts";
 import type { Diagnostic } from "../contracts/index.ts";
 import { build } from "../pipeline/build.ts";
 import { formatJson, formatText } from "../pipeline/diagnostics.ts";
+import { pageCounts } from "./page-counts.ts";
 
 /** Where the browser connects for reload events. Outside the site's base path, so it never collides with a page. */
 export const EVENTS_PATH = "/__mizzen/events";
@@ -93,6 +94,10 @@ export interface DevBuild {
   readonly files: readonly string[];
   /** Findings of the build, sorted. The site is written even when there are errors. */
   readonly diagnostics: readonly Diagnostic[];
+  /** Pages the build rendered. Zero when everything came from the cache, and counted only with `cache` on. */
+  readonly renderedPages: number;
+  /** Pages the build reused from the render cache instead of rendering them. */
+  readonly cachedPages: number;
 }
 
 /** Options of {@link dev}. */
@@ -253,9 +258,15 @@ export async function dev(options: DevOptions): Promise<DevServer> {
       const milliseconds = performance.now() - started;
       latestDiagnostics = result.diagnostics;
       if (result.diagnostics.length > 0) log(formatText(result.diagnostics).replace(/\n$/, ""));
-      log(`mizzen dev: ${reason} in ${Math.round(milliseconds)} ms`);
+      log(`mizzen dev: ${reason} in ${Math.round(milliseconds)} ms${pageCounts(result)}`);
       broadcast();
-      return { milliseconds, files: result.files, diagnostics: result.diagnostics };
+      return {
+        milliseconds,
+        files: result.files,
+        diagnostics: result.diagnostics,
+        renderedPages: result.renderedPages,
+        cachedPages: result.cachedPages,
+      };
     } catch (err) {
       // A build that throws still has a finding; the overlay shows it instead of an empty page after the reload.
       latestDiagnostics = [
