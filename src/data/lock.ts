@@ -32,6 +32,8 @@ export interface LockedSource {
   readonly bytes: number;
   /** SHA-256 of the source's bytes. */
   readonly sha256: string;
+  /** When a URL source was fetched, from the response's own date header and never the build clock; absent for a package. */
+  readonly fetchedAt?: string;
 }
 
 /** The whole lock file. */
@@ -85,6 +87,7 @@ export function lockText(lock: DataLock): string {
       ...(entry.version === undefined ? {} : { version: entry.version }),
       bytes: entry.bytes,
       sha256: entry.sha256,
+      ...(entry.fetchedAt === undefined ? {} : { fetchedAt: entry.fetchedAt }),
     };
   }
   const snapshots: Record<string, CollectionSnapshot> = {};

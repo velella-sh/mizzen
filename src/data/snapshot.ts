@@ -109,3 +109,41 @@ export function gitSnapshot(root: string, source: string, allowDirty: boolean): 
     },
   };
 }
+
+/** What the lock holds about one pinned source, as far as a snapshot needs it. */
+export interface PinnedSource {
+  /** The source address: an `https:` URL or `npm:<package>/<path>`. */
+  readonly address: string;
+  /** The package name, for an `npm:` source. */
+  readonly packageName?: string;
+  /** The exact installed version, for an `npm:` source. */
+  readonly version?: string;
+  /** SHA-256 of the pinned bytes. */
+  readonly sha256: string;
+  /** The date the lock stores for the fetch, for a URL. */
+  readonly fetchedAt?: string;
+}
+
+/**
+ * The snapshot of a package or URL source, built only from what the lock holds: nothing is fetched again. A package
+ * records its name and exact version as `ref`; a URL records its content hash as `ref` and the lock's fetch date as
+ * `capturedAt`, and has no date when the lock holds none.
+ */
+export function snapshotOfPinned(pinned: PinnedSource): CollectionSnapshot {
+  if (pinned.address.startsWith("npm:") && pinned.packageName !== undefined && pinned.version !== undefined) {
+    return orderedSnapshot({ source: pinned.address, ref: `${pinned.packageName}@${pinned.version}`, tool: "npm" });
+  }
+  return orderedSnapshot({
+    source: pinned.address,
+    ref: `sha256:${pinned.sha256}`,
+    ...(pinned.fetchedAt === undefined ? {} : { capturedAt: pinned.fetchedAt }),
+    tool: "mizzen",
+  });
+}
+
+/** An HTTP date header (`Last-Modified` or `Date`) as a UTC instant to the second; `undefined` when it is not a date. */
+export function instantOfHttpDate(value: string | null): string | undefined {
+  if (value === null) return undefined;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? instantOfUnix(Math.floor(time / 1000)) : undefined;
+}

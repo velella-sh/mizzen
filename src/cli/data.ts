@@ -12,7 +12,8 @@ import { loadConfig } from "../config/load.ts";
 import { dataLimitsOf } from "../data/limits.ts";
 import { LOCK_FILE, readLock, sha256, storedPath, writeLock, type DataLock, type LockedSource } from "../data/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
-import { gitSnapshot } from "../data/snapshot.ts";
+import { gitSnapshot, instantOfHttpDate, orderedSnapshot, snapshotOfPinned } from "../data/snapshot.ts";
+import type { CollectionSnapshot } from "../contracts/index.ts";
 
 /** How long one request may take. */
 export const FETCH_TIMEOUT_MS = 30_000;
@@ -48,10 +49,13 @@ interface Current {
   readonly address: string;
   readonly bytes: Uint8Array;
   readonly version?: string;
+  readonly packageName?: string;
+  /** The response's own date, for a URL. */
+  readonly fetchedAt?: string;
 }
 
 /** Reads a remote source with a bounded time, size, and redirect count. */
-async function fetchRemote(address: string, maxBytes: number, fetcher: FetchLike): Promise<Uint8Array> {
+async function fetchRemote(address: string, maxBytes: number, fetcher: FetchLike): Promise<{ readonly bytes: Uint8Array; readonly fetchedAt?: string }> {
   let current = address;
   for (let redirects = 0; redirects <= FETCH_REDIRECTS; redirects++) {
     let url: URL;
@@ -77,6 +81,8 @@ async function fetchRemote(address: string, maxBytes: number, fetcher: FetchLike
     }
     if (!response.ok) throw new Error(`HTTP ${response.status} from ${current}`);
 
+    const fetchedAt = instantOfHttpDate(response.headers.get("last-modified")) ?? instantOfHttpDate(response.headers.get("date"));
+    const withDate = (bytes: Uint8Array) => ({ bytes, ...(fetchedAt === undefined ? {} : { fetchedAt }) });
     const declared = Number(response.headers.get("content-length") ?? "");
     if (Number.isFinite(declared) && declared > maxBytes) {
       await response.body?.cancel().catch(() => undefined);
@@ -84,7 +90,7 @@ async function fetchRemote(address: string, maxBytes: number, fetcher: FetchLike
     }
 
     const reader = response.body?.getReader();
-    if (reader === undefined) return new Uint8Array(await response.arrayBuffer());
+    if (reader === undefined) return withDate(new Uint8Array(await response.arrayBuffer()));
     const chunks: Uint8Array[] = [];
     let total = 0;
     for (;;) {
@@ -104,7 +110,7 @@ async function fetchRemote(address: string, maxBytes: number, fetcher: FetchLike
       bytes.set(chunk, offset);
       offset += chunk.byteLength;
     }
-    return bytes;
+    return withDate(bytes);
   }
   throw new Error(`${address} redirects more than ${FETCH_REDIRECTS} times`);
 }
@@ -143,6 +149,7 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
   const fetcher: FetchLike = options.fetch ?? ((url, init) => globalThis.fetch(url, init));
   const current = new Map<string, Current>();
   const next = new Map<string, LockedSource>();
+  const remote = new Map<string, string>();
   let changed = false;
 
   for (const name of names) {
@@ -167,10 +174,13 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
         errors.push(`${source} is larger than the ${limits.bytes} byte limit`);
         continue;
       }
-      current.set(source, { address: source, bytes, version: resolved.source.version });
+      current.set(source, { address: source, bytes, version: resolved.source.version, packageName: resolved.source.name });
+      remote.set(name, source);
     } else if (/^https:\/\//.test(source)) {
       try {
-        current.set(source, { address: source, bytes: await fetchRemote(source, limits.bytes, fetcher) });
+        const fetched = await fetchRemote(source, limits.bytes, fetcher);
+        current.set(source, { address: source, bytes: fetched.bytes, ...(fetched.fetchedAt === undefined ? {} : { fetchedAt: fetched.fetchedAt }) });
+        remote.set(name, source);
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err));
         continue;
@@ -186,14 +196,18 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
 
   for (const [address, now] of current) {
     const bytes = now.bytes;
+    const before = pinned.lock.sources[address];
+    const hash = sha256(bytes);
+    // An unchanged source keeps the date the lock holds, so fetching it again writes the same bytes.
+    const fetchedAt = before !== undefined && before.sha256 === hash ? before.fetchedAt ?? now.fetchedAt : now.fetchedAt;
     const entry: LockedSource = {
       address,
       ...(now.version === undefined ? {} : { version: now.version }),
       bytes: bytes.byteLength,
-      sha256: sha256(bytes),
+      sha256: hash,
+      ...(fetchedAt === undefined ? {} : { fetchedAt }),
     };
     next.set(address, entry);
-    const before = pinned.lock.sources[address];
     let same = before !== undefined && before.sha256 === entry.sha256 && before.bytes === entry.bytes && before.version === entry.version;
     // A matching lock is not enough for a remote source: its stored bytes must still be there and still hash right.
     if (same && before !== undefined && /^https:\/\//.test(address)) {
@@ -223,6 +237,31 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
     }
   }
 
+  // Each package or URL collection gets its snapshot from what the lock now holds; a file collection keeps the one
+  // `mizzen data snapshot` wrote, and a collection the config no longer declares loses its entry.
+  const snapshots: Record<string, CollectionSnapshot> = {};
+  for (const name of names) {
+    const address = remote.get(name);
+    const locked = address === undefined ? undefined : next.get(address);
+    const now = address === undefined ? undefined : current.get(address);
+    if (address !== undefined && locked !== undefined && now !== undefined) {
+      snapshots[name] = snapshotOfPinned({
+        address,
+        ...(now.packageName === undefined ? {} : { packageName: now.packageName }),
+        ...(locked.version === undefined ? {} : { version: locked.version }),
+        sha256: locked.sha256,
+        ...(locked.fetchedAt === undefined ? {} : { fetchedAt: locked.fetchedAt }),
+      });
+    } else if (!/^(https:\/\/|npm:)/.test(config.collections[name]!.source) && pinned.lock.snapshots?.[name] !== undefined) {
+      snapshots[name] = orderedSnapshot(pinned.lock.snapshots[name]!);
+    }
+  }
+  const sameSnapshots = JSON.stringify(Object.entries(snapshots)) === JSON.stringify(Object.entries(pinned.lock.snapshots ?? {}).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, v]) => [k, orderedSnapshot(v)]));
+  if (!sameSnapshots) {
+    changed = true;
+    messages.push("snapshots updated");
+  }
+
   if (options.check === true) {
     return { code: changed ? 1 : 0, messages, errors };
   }
@@ -234,7 +273,7 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, now.bytes);
   }
-  const lock: DataLock = { version: 1, sources: sortedSources(next) };
+  const lock: DataLock = { version: 1, sources: sortedSources(next), ...(Object.keys(snapshots).length > 0 ? { snapshots } : {}) };
   await writeLock(root, lock);
   messages.push(`wrote ${LOCK_FILE}`);
   return { code: 0, messages, errors };
