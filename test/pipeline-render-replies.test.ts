@@ -133,10 +133,17 @@ test("a missing, extra, duplicate, wrong-URL, or malformed reply is refused with
     ["diagnostic not a finding", [{ ...good[0], diagnostics: [{}] }, good[1]], "the diagnostics for /a/ are not a list of findings"],
     ["islands not a list", [{ ...good[0], islands: "a.js" }, good[1]], "the islands for /a/ are not a list of islands"],
     ["island without a name", [{ ...good[0], islands: [{ src: "/a.js" }] }, good[1]], "the islands for /a/ are not a list of islands"],
+    ["skipped fonts not a list", [{ ...good[0], skipFontPreloads: "Geist" }, good[1]], "the skipped font families for /a/ are not a list of strings"],
+    ["skipped font not a string", [{ ...good[0], skipFontPreloads: [1] }, good[1]], "the skipped font families for /a/ are not a list of strings"],
   ];
   for (const [label, reply, expected] of cases) {
     assert.equal(renderReplyProblem(pages, reply), expected, label);
   }
+  assert.equal(
+    renderReplyProblem(pages, [{ ...good[0], skipFontPreloads: ["Geist"] }, good[1]]),
+    undefined,
+    "a well-formed list of skipped families is accepted",
+  );
 });
 
 /**

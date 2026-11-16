@@ -221,11 +221,17 @@ test("islandUrl puts the module under the site's base", () => {
 });
 
 test("optionalFonts lists the woff2 files of faces declared font-display: optional, once each", async () => {
-  const { optionalFonts } = await import("../src/pipeline/build.ts");
+  const { optionalFontFaces, optionalFonts } = await import("../src/pipeline/build.ts");
   const css =
     '@font-face{font-family:A;font-display:optional;src:url(/f/a.woff2)format("woff2")}' +
     '@font-face{font-family:B;font-display:swap;src:url(/f/b.woff2)format("woff2")}' +
+    '@font-face{font-family:"Geist Mono";font-display: optional;src:url("/f/c.woff2") format("woff2")}' +
     '@font-face{font-family:A;font-display: optional;src:url("/f/a.woff2") format("woff2")}';
-  assert.deepEqual(optionalFonts(css), ["/f/a.woff2"]);
+  assert.deepEqual(optionalFonts(css), ["/f/a.woff2", "/f/c.woff2"]);
   assert.deepEqual(optionalFonts("body{color:red}"), []);
+  assert.deepEqual(optionalFontFaces(css), [
+    { family: "A", url: "/f/a.woff2" },
+    { family: "Geist Mono", url: "/f/c.woff2" },
+  ]);
+  assert.deepEqual(optionalFontFaces("body{color:red}"), []);
 });

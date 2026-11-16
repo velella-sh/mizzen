@@ -45,6 +45,20 @@ export interface Island {
   readonly src: string;
 }
 
+/**
+ * Requests a layout makes of the engine while it renders one page. They change only what the engine
+ * adds around the page's own HTML, never the layout's output.
+ */
+export interface RenderHints {
+  /**
+   * Leaves the shipped `font-display: optional` faces of `family` out of this page's preload links.
+   * A theme calls it when the page loads its own family in place of a shipped one: the shipped face is
+   * still declared in the stylesheet and stays a fallback, but a reader does not download it before
+   * the page needs it. The name compares without case, and an empty name is ignored.
+   */
+  skipFontPreload(family: string): void;
+}
+
 /** Props of a layout, which renders one whole page. */
 export interface LayoutProps {
   /** The whole site model. */
@@ -59,6 +73,8 @@ export interface LayoutProps {
   readonly head: Head;
   /** Islands the page uses, to be loaded at the end of the body. */
   readonly islands: readonly Island[];
+  /** Requests to the engine for this page, such as skipping a replaced font's preload. */
+  readonly hints?: RenderHints;
   /** The record of a record page; unset on every other page. */
   readonly record?: RecordProps;
   /** The records, groups, and pagination of a list page; unset on every other page. */

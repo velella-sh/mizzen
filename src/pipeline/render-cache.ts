@@ -18,7 +18,7 @@ import { join } from "node:path";
 import type { Diagnostic, Page } from "../contracts/index.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
-export const RENDER_CACHE_FORMAT = 1;
+export const RENDER_CACHE_FORMAT = 2;
 
 /** The largest entry read or written; a page's HTML is far below this, and a larger file is not ours. */
 export const MAX_RENDER_ENTRY_BYTES = 8 * 1024 * 1024;
@@ -28,6 +28,7 @@ export interface RenderCacheEntry {
   readonly html: string;
   readonly css: readonly string[];
   readonly islands?: readonly { readonly src: string }[] | undefined;
+  readonly skipFontPreloads?: readonly string[] | undefined;
   readonly diagnostics: readonly Diagnostic[];
 }
 
@@ -68,6 +69,8 @@ function isEntry(value: unknown): value is RenderCacheEntry & { readonly version
     (entry.islands === undefined ||
       (Array.isArray(entry.islands) &&
         entry.islands.every((island) => typeof (island as { src?: unknown }).src === "string"))) &&
+    (entry.skipFontPreloads === undefined ||
+      (Array.isArray(entry.skipFontPreloads) && entry.skipFontPreloads.every((family) => typeof family === "string"))) &&
     Array.isArray(entry.diagnostics)
   );
 }

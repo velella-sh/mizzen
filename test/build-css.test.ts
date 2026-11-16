@@ -53,3 +53,61 @@ test("a build links hashed base and per-page CSS under base, and writes the file
     rmSync(parent, { recursive: true, force: true });
   }
 });
+
+/**
+ * The layout that asks the engine to leave the `Geist` faces out of this page's preloads. The font
+ * files and faces are the same as {@link plainFontTheme}; only the hint differs.
+ */
+const HINTED_LAYOUT = `export default (p: any) => {
+  p.hints?.skipFontPreload("geist");
+  return \`<html><head><title>\${p.page.title}</title></head><body>\${p.page.html}</body></html>\`;
+};
+`;
+
+const PLAIN_LAYOUT = `export default (p: any) =>
+  \`<html><head><title>\${p.page.title}</title></head><body>\${p.page.html}</body></html>\`;
+`;
+
+const FONT_STYLES = [
+  '@font-face { font-family: "Geist"; font-display: optional; src: url("../fonts/geist.woff2") format("woff2"); }',
+  '@font-face { font-family: "Geist Mono"; font-display: optional; src: url("../fonts/mono.woff2") format("woff2"); }',
+  "body { margin: 0; }",
+  "",
+].join("\n");
+
+/** The preload URLs a built page asks for, in document order. */
+function preloads(html: string): string[] {
+  return [...html.matchAll(/<link rel="preload" as="font"[^>]*href="([^"]+)"/g)].map((match) => match[1]!);
+}
+
+test("a layout can leave a replaced font family out of the preloads, and only that family", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "build-fonts-"));
+  try {
+    const site = join(parent, "site");
+    tree(site, {
+      "mizzen.yml": "title: T\n",
+      "index.md": "---\ntitle: Home\nlayout: doc\n---\n\nHello\n",
+    });
+    const buildWith = async (layout: string, name: string): Promise<string[]> => {
+      const theme = join(parent, name);
+      tree(theme, {
+        "src/index.ts": 'export const theme = { name: "t", folders: ["layouts", "styles"] };\n',
+        "layouts/doc.ts": layout,
+        "styles/base.css": FONT_STYLES,
+        "fonts/geist.woff2": "geist-bytes",
+        "fonts/mono.woff2": "mono-bytes",
+      });
+      const out = join(parent, `${name}-out`);
+      const result = await build({ root: site, out, themeRoot: theme, defaultLayout: "doc" });
+      assert.deepEqual(result.diagnostics.filter((d) => d.severity === "error"), []);
+      return preloads(readFileSync(join(out, "index.html"), "utf8"));
+    };
+    const plain = await buildWith(PLAIN_LAYOUT, "plain");
+    assert.equal(plain.length, 2, "both optional faces are preloaded without a hint");
+    const hinted = await buildWith(HINTED_LAYOUT, "hinted");
+    assert.equal(hinted.length, 1, "the replaced family is not preloaded");
+    assert.match(hinted[0]!, /mono-[0-9a-f]{16}\.woff2$/, "the family that was not replaced keeps its preload");
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
