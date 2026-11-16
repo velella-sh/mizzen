@@ -26,7 +26,8 @@ import { parseFrontMatter } from "../content/frontmatter.ts";
 import { expandIncludes } from "../content/includes.ts";
 import type { Diagnostic, Page, Site, SourcePos } from "../contracts/index.ts";
 import type { DataLock } from "../data/lock.ts";
-import { readLock, storedPath } from "../data/lock.ts";
+import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
+import { URLS_LOCK_FILE } from "../data/urls-lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
 import { sortDiagnostics } from "./diagnostics.ts";
 
@@ -114,6 +115,14 @@ const RECORD = "record:";
 
 /** Prefix of a collection node id: the set of one collection's records, which a list or an index reads as a whole. */
 const COLLECTION = "collection:";
+
+/** Prefix of the node for what shapes every page of one collection: its schema, its lock files, and its config entry. */
+const COLLECTION_CONFIG = "collection-config:";
+
+/** The id of the node a caller names when a collection's own config entry changed. */
+export function collectionConfigNodeId(collection: string): string {
+  return `${COLLECTION_CONFIG}${collection}`;
+}
 
 /** The id of the node for one record. */
 export function recordNodeId(collection: string, id: string): string {
@@ -522,8 +531,27 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     const sourcePath = collectionPaths.get(name);
     if (sourcePath === undefined) continue;
     const collectionId = collectionNodeId(name);
+    const configId = collectionConfigNodeId(name);
     addNode({ id: collectionId, kind: "collection", path: name });
+    addNode({ id: configId, kind: "collection", path: `${name} (config)` });
     addEdge(collectionId, fileNodeId(sourcePath), atFile(sourcePath));
+    addEdge(collectionId, configId);
+    // A schema or a lock file decides which records reach a page and which URLs they get, so a change to one is a
+    // change to the whole collection. A file that does not exist has no node: its appearance is a change the graph
+    // does not know, and the plan then asks for a full build.
+    const schema = options.site.config.collections[name]?.schema;
+    const shaping = [schema, LOCK_FILE, URLS_LOCK_FILE].filter((file): file is string => file !== undefined);
+    for (const file of shaping) {
+      const abs = resolve(options.root, file);
+      if (!existsSync(abs)) continue;
+      const rel = normalize(relative(sourceDir, abs).split(sep).join("/"));
+      if (rel.startsWith("../")) continue;
+      if (!filePaths.has(rel)) {
+        filePaths.add(rel);
+        addNode({ id: fileNodeId(rel), kind: "data", path: rel });
+      }
+      addEdge(configId, fileNodeId(rel), atFile(rel));
+    }
     for (const record of collection.records) {
       const id = recordNodeId(name, record.id);
       recordNodes.add(id);
@@ -536,6 +564,7 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
         endColumn: record.position.endColumn,
       });
       addEdge(collectionId, id);
+      addEdge(id, configId);
     }
   }
 
