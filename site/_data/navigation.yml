@@ -15,6 +15,8 @@ main:
         url: /outputs/
       - title: Analytics and verification
         url: /analytics/
+      - title: Compare two builds
+        url: /site-diff/
       - title: Plugins
         url: /plugins/
       - title: Programmatic API

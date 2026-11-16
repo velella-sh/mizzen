@@ -1,0 +1,214 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mizzen site diff",
+  "description": "What `mizzen diff <a> <b> --format json` prints: how build B differs from build A, as the two build hashes and the pages added, removed, changed, and moved, with the changed blocks of each changed page, the URLs that now answer 404, the other files that changed, and the records that changed. The report holds no page content by default: it names pages, headings, line ranges, and field names, and a field value only when it is short. Paths are relative with forward slashes, never absolute. The format only gains fields: a reader ignores a field it does not know, and a field it knows never changes meaning or disappears within version 1. Every list is sorted, so the same two builds give the same bytes.",
+  "type": "object",
+  "required": ["version", "base", "head", "identical", "summary", "pages", "brokenUrls", "files", "records"],
+  "properties": {
+    "version": { "const": 1, "description": "The format version. Only 1 exists." },
+    "base": { "$ref": "#/$defs/build", "description": "The build being compared from (`<a>`)." },
+    "head": { "$ref": "#/$defs/build", "description": "The build being compared to (`<b>`)." },
+    "identical": {
+      "type": "boolean",
+      "description": "True when the two build hashes are equal. Every list is then empty."
+    },
+    "summary": {
+      "type": "object",
+      "description": "Counts of the lists below, so a reader can decide whether to read them.",
+      "required": ["pages", "files", "records", "brokenUrls", "renderOnly"],
+      "properties": {
+        "pages": {
+          "type": "object",
+          "required": ["added", "removed", "changed", "moved"],
+          "properties": {
+            "added": { "type": "integer", "minimum": 0 },
+            "removed": { "type": "integer", "minimum": 0 },
+            "changed": { "type": "integer", "minimum": 0 },
+            "moved": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "files": {
+          "type": "object",
+          "required": ["added", "removed", "changed"],
+          "properties": {
+            "added": { "type": "integer", "minimum": 0 },
+            "removed": { "type": "integer", "minimum": 0 },
+            "changed": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "records": {
+          "type": "object",
+          "required": ["added", "removed", "changed"],
+          "properties": {
+            "added": { "type": "integer", "minimum": 0 },
+            "removed": { "type": "integer", "minimum": 0 },
+            "changed": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "brokenUrls": { "type": "integer", "minimum": 0, "description": "How many old URLs now answer 404." },
+        "renderOnly": { "type": "integer", "minimum": 0, "description": "How many changed pages changed only in their rendering." }
+      }
+    },
+    "pages": {
+      "type": "object",
+      "required": ["added", "removed", "changed", "moved"],
+      "properties": {
+        "added": { "type": "array", "description": "Pages only build B has, sorted by URL.", "items": { "$ref": "#/$defs/pageRef" } },
+        "removed": {
+          "type": "array",
+          "description": "Pages only build A has and that did not move, sorted by URL.",
+          "items": { "$ref": "#/$defs/pageRef" }
+        },
+        "changed": { "type": "array", "description": "Pages at one URL in both builds whose manifest entry differs, sorted by URL.", "items": { "$ref": "#/$defs/changedPage" } },
+        "moved": { "type": "array", "description": "A removed page paired with an added page of the same source file or the same record, sorted by old URL.", "items": { "$ref": "#/$defs/movedPage" } }
+      }
+    },
+    "brokenUrls": {
+      "type": "array",
+      "description": "Old URLs of build A that no file in build B answers: removed pages and moves without a redirect. Sorted by code point.",
+      "items": { "$ref": "#/$defs/url" },
+      "uniqueItems": true
+    },
+    "files": {
+      "type": "object",
+      "description": "Files that are not pages, grouped by output name. A hashed asset name that differs only by its hash is one changed file.",
+      "required": ["added", "removed", "changed"],
+      "properties": {
+        "added": { "type": "array", "items": { "$ref": "#/$defs/fileRef" } },
+        "removed": { "type": "array", "items": { "$ref": "#/$defs/fileRef" } },
+        "changed": { "type": "array", "items": { "$ref": "#/$defs/changedFile" } }
+      }
+    },
+    "records": {
+      "type": "array",
+      "description": "Record changes by collection, sorted by collection name. Present for sites with collections; empty otherwise.",
+      "items": { "$ref": "#/$defs/collection" }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "build": {
+      "type": "object",
+      "required": ["hash"],
+      "properties": { "hash": { "$ref": "#/$defs/hash", "description": "The build hash in the build's manifest." } }
+    },
+    "url": { "type": "string", "pattern": "^/" },
+    "path": { "type": "string", "minLength": 1, "not": { "pattern": "^([a-zA-Z]:)?[\\\\/]|(^|/)\\.\\.(/|$)|\\\\" } },
+    "pageRef": {
+      "type": "object",
+      "required": ["url", "source", "title"],
+      "properties": {
+        "url": { "$ref": "#/$defs/url" },
+        "source": { "$ref": "#/$defs/path", "description": "The source file, relative to the site root." },
+        "title": { "type": "string" }
+      }
+    },
+    "block": {
+      "type": "object",
+      "description": "One section of a changed page. `range` is 1-based and inclusive, in the Markdown twin of build B, or of build A for a removed section. A section with a `heading` of null is the text before the first heading.",
+      "required": ["heading", "id", "kind"],
+      "properties": {
+        "heading": { "type": ["string", "null"] },
+        "id": { "type": ["string", "null"], "description": "The section's anchor id." },
+        "kind": { "enum": ["added", "removed", "edited", "moved"] },
+        "range": {
+          "type": "object",
+          "required": ["start", "end"],
+          "properties": { "start": { "type": "integer", "minimum": 1 }, "end": { "type": "integer", "minimum": 1 } }
+        }
+      }
+    },
+    "changedPage": {
+      "type": "object",
+      "required": ["url", "source", "title", "changes", "renderOnly", "blocks"],
+      "properties": {
+        "url": { "$ref": "#/$defs/url" },
+        "source": { "$ref": "#/$defs/path" },
+        "title": { "type": "string" },
+        "changes": {
+          "type": "array",
+          "description": "Which manifest fields changed, in a fixed order: source (the file name), title, layout, text (the Markdown body), html (the rendered body).",
+          "items": { "enum": ["source", "title", "layout", "text", "html"] },
+          "uniqueItems": true
+        },
+        "renderOnly": {
+          "type": "boolean",
+          "description": "True when the rendered body changed and the Markdown twin did not: a theme, a directive, or a data change rather than an edit to the page's text."
+        },
+        "blocks": { "type": "array", "description": "The changed sections, in the order of build B's document, then removed sections.", "items": { "$ref": "#/$defs/block" } }
+      }
+    },
+    "movedPage": {
+      "type": "object",
+      "required": ["from", "to", "source", "by", "redirect", "changed"],
+      "properties": {
+        "from": { "$ref": "#/$defs/url" },
+        "to": { "$ref": "#/$defs/url" },
+        "source": { "$ref": "#/$defs/path", "description": "The source file in build B." },
+        "by": { "enum": ["source", "record"], "description": "What paired the two pages: the same source file, or the same record id." },
+        "redirect": { "type": "boolean", "description": "True when build B has a redirect from the old URL to the new one." },
+        "changed": { "type": "boolean", "description": "True when the page's text or rendering also changed." }
+      }
+    },
+    "fileRef": {
+      "type": "object",
+      "required": ["name", "group"],
+      "properties": {
+        "name": { "$ref": "#/$defs/path", "description": "The file's path with any content hash removed from its name." },
+        "group": { "type": "string", "description": "The output name: the first folder of the path, or the file name at the top level." },
+        "size": { "type": "integer", "minimum": 0, "description": "Bytes, for CSS, JavaScript, and search files." }
+      }
+    },
+    "changedFile": {
+      "type": "object",
+      "required": ["name", "group", "path"],
+      "properties": {
+        "name": { "$ref": "#/$defs/path" },
+        "group": { "type": "string" },
+        "path": { "$ref": "#/$defs/path", "description": "The file's path in build B." },
+        "size": {
+          "type": "object",
+          "required": ["before", "after"],
+          "properties": { "before": { "type": "integer", "minimum": 0 }, "after": { "type": "integer", "minimum": 0 } }
+        }
+      }
+    },
+    "collection": {
+      "type": "object",
+      "required": ["collection", "added", "removed", "changed"],
+      "properties": {
+        "collection": { "type": "string" },
+        "added": { "type": "array", "items": { "$ref": "#/$defs/recordRef" } },
+        "removed": { "type": "array", "items": { "$ref": "#/$defs/recordRef" } },
+        "changed": { "type": "array", "items": { "$ref": "#/$defs/changedRecord" } }
+      }
+    },
+    "recordRef": {
+      "type": "object",
+      "required": ["id", "url"],
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "$ref": "#/$defs/url" },
+        "lists": { "type": "array", "description": "URLs of the list pages that changed and show this record.", "items": { "$ref": "#/$defs/url" } }
+      }
+    },
+    "changedRecord": {
+      "type": "object",
+      "required": ["id", "url", "fields", "lists"],
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "$ref": "#/$defs/url" },
+        "fields": {
+          "type": "array",
+          "description": "The fields whose value changed, sorted by name. `before` and `after` appear only when both values are short strings or numbers.",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": { "name": { "type": "string" }, "before": {}, "after": {} }
+          }
+        },
+        "lists": { "type": "array", "items": { "$ref": "#/$defs/url" } }
+      }
+    }
+  }
+}
