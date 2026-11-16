@@ -4,6 +4,8 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+- **Social share images.** With `social.template` set, the `social-images` output draws a 1200 by 630 PNG for every page from an SVG template and fonts the site declares, and the head points `og:image` at it. The bytes are the same on every operating system.
+
 ## 0.2.1 — 2026-11-16
 
 This release adds data sites: a collection of records read from a data file, validated, and built into pages, lists,

@@ -33,21 +33,24 @@ export interface SlotOutcome {
   readonly truncated: boolean;
 }
 
+/** What the renderer needs of a font: its bytes and its family name. A worker thread gets just these. */
+export type RenderFont = Pick<LoadedFont, "bytes" | "family">;
+
 /** A renderer bound to one list of fonts. */
 export class SocialRenderer {
   readonly #mod: ResvgModule;
-  readonly #fonts: readonly LoadedFont[];
+  readonly #fonts: readonly RenderFont[];
   readonly #family: string;
   readonly #widths = new Map<string, number>();
 
-  private constructor(mod: ResvgModule, fonts: readonly LoadedFont[]) {
+  private constructor(mod: ResvgModule, fonts: readonly RenderFont[]) {
     this.#mod = mod;
     this.#fonts = fonts;
     this.#family = fonts.find((font) => font.family !== "")?.family ?? "";
   }
 
   /** Loads the renderer and binds it to `fonts`. */
-  static async create(fonts: readonly LoadedFont[]): Promise<SocialRenderer> {
+  static async create(fonts: readonly RenderFont[]): Promise<SocialRenderer> {
     return new SocialRenderer(await resvg(), fonts);
   }
 

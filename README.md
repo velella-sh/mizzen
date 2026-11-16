@@ -252,6 +252,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `review-coverage` | `review-coverage.json`, each doc page's review policy, reviewers, last review, and coverage state. |
 | `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
 | `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
+| `social-images` | `assets/social/<page>.png`, a 1200 by 630 share image per page drawn from an SVG template, when the config sets `social`. The page head points at it. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |
 | `search` | `pagefind/`, a static search index; record pages carry the fields their collection declares. |
 | `search-facets` | `search-facets.json`, each search filter and its value counts, with the query parameter names the theme reads. |
