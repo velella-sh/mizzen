@@ -63,6 +63,14 @@ const FROZEN: Shape = {
     "source": "string",
     "records": "readonly DataRecord[]",
     "package": "?{ readonly name: string; readonly version: string }",
+    "snapshot": "?CollectionSnapshot",
+  },
+  CollectionSnapshot: {
+    "source": "string",
+    "ref": "?string",
+    "capturedAt": "?string",
+    "tool": "?string",
+    "toolVersion": "?string",
   },
   PageRecord: {
     "collection": "string",
