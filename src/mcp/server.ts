@@ -66,12 +66,13 @@ export function createServer(options: ServerOptions): Server {
     inFlight += 1;
     const controller = new AbortController();
     let timer: NodeJS.Timeout | undefined;
+    const callTimeoutMs = Math.max(limits.callTimeoutMs, tool.timeoutMs ?? 0);
     try {
       const timeout = new Promise<never>((_, reject) => {
         timer = setTimeout(() => {
           controller.abort();
-          reject(new McpError("timeout", `${name} took longer than ${limits.callTimeoutMs} ms and was stopped.`));
-        }, limits.callTimeoutMs);
+          reject(new McpError("timeout", `${name} took longer than ${callTimeoutMs} ms and was stopped.`));
+        }, callTimeoutMs);
       });
       const run = (async () => {
         await options.site.refresh();
