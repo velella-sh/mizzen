@@ -4,6 +4,8 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+- **`mizzen diff <a> <b>`** compares two builds: pages added, removed, changed (by section), and moved, URLs that stopped answering, changed files, and changed records, as text, JSON (`schema/site-diff.schema.json`), or a pull request comment. `--base <ref>` builds a git ref for you, and `--fail-on` sets what exits `1`. A GitHub Actions recipe is in `recipes/site-diff.yml`.
+
 ## 0.2.1 — 2026-11-16
 
 This release adds data sites: a collection of records read from a data file, validated, and built into pages, lists,
