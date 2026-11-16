@@ -17,6 +17,7 @@ import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
 import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
 import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-verify.ts";
+import { clientConfig, isClient, serveMcp, CLIENTS } from "./mcp.ts";
 import { pack } from "./pack.ts";
 import { verify, verifyMessage } from "./verify.ts";
 import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
@@ -25,7 +26,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["build", "check", "data", "dev", "diff", "doctor", "edit", "pack", "urls", "verify", "watch"] as const;
+export const COMMANDS = ["build", "check", "data", "dev", "diff", "doctor", "edit", "mcp", "pack", "urls", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -72,6 +73,7 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
@@ -96,6 +98,8 @@ Options:
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base
+  --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
+  --print-config <c>   For mcp: print the configuration for claude-code, claude-desktop, cursor, or vscode, and exit
   --dry-run            Print the diff for edit apply without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
   --proof <path>       Proof record for edit apply (default: <patch>.proof.json)
@@ -209,6 +213,14 @@ type DiffOpts = {
   readonly theme?: string;
 };
 
+type McpOpts = {
+  readonly command: "mcp";
+  readonly root: string;
+  readonly theme?: string;
+  readonly allowEdits: boolean;
+  readonly printConfig?: string;
+};
+
 type Parsed =
   | { readonly help: true }
   | { readonly error: string }
@@ -225,7 +237,8 @@ type Parsed =
         | VerifyOpts
         | WatchOpts
         | DataFetchOpts
-        | UrlsCheckOpts;
+        | UrlsCheckOpts
+        | McpOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -468,6 +481,29 @@ function parseDiff(args: readonly string[]): Parsed {
       ...(theme === undefined ? {} : { theme }),
     },
   };
+/** Parses `mcp [dir] [--theme <dir>] [--allow-edits] [--print-config <client>]`. */
+function parseMcp(args: readonly string[]): Parsed {
+  let root: string | undefined;
+  let theme: string | undefined;
+  let allowEdits = false;
+  let printConfig: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--allow-edits") allowEdits = true;
+    else if (arg === "--theme" || arg === "--print-config") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) return { error: `${arg} needs a value` };
+      if (arg === "--theme") theme = next;
+      else {
+        if (!isClient(next)) return { error: `--print-config must be one of ${Object.keys(CLIENTS).join(", ")}, not ${next}` };
+        printConfig = next;
+      }
+    } else if (arg.startsWith("-")) return { error: `unknown option for mcp: ${arg}` };
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
 }
 
 /** Parses `argv` after the process name. */
@@ -484,6 +520,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "diff") return parseDiff(rest);
+  if (command === "mcp") return parseMcp(rest);
   if (
     command !== "build" &&
     command !== "check" &&
@@ -723,6 +760,25 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   }
 
   const { options } = parsed;
+
+  if (options.command === "mcp") {
+    try {
+      const root = resolve(options.root);
+      if (options.printConfig !== undefined && isClient(options.printConfig)) {
+        write(clientConfig(options.printConfig, options.root, options.allowEdits));
+        return 0;
+      }
+      const themeRoot = await resolveThemeRoot(root, options.theme);
+      if (themeRoot === undefined) {
+        error(`${NAME}: no theme found; set theme.name in the config or pass --theme`);
+        return 2;
+      }
+      return await serveMcp({ root, themeRoot, allowEdits: options.allowEdits, version, defaultLayout: DEFAULT_LAYOUT }, (message) => process.stderr.write(`${message}\n`));
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
 
   if (options.command === "urls") {
     try {
