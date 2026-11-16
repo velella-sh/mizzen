@@ -456,9 +456,9 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     page: Page,
   ): void => {
     for (const diagnostic of rendered.diagnostics) {
-      // A collection's pages all share one template layout, so one error is enough for them (#234). A file page's
-      // layout is its own choice, and each keeps its diagnostic and position.
-      if (diagnostic.id === "render.unknown-layout" && page.record !== undefined) {
+      // A collection's pages all share one template layout, and a list's pages share the layout its declaration chose,
+      // so one error is enough for them (#234). A file page's layout is its own choice, and each keeps its diagnostic.
+      if (diagnostic.id === "render.unknown-layout" && (page.record !== undefined || page.list !== undefined)) {
         const layout =
           rendered.layout ??
           /layout "([^"]+)"/.exec(diagnostic.message)?.[1];

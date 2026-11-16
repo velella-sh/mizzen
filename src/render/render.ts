@@ -4,7 +4,7 @@ import type { Page, Site } from "../contracts/content.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
 import type { Pager, Trail } from "../contracts/nav.ts";
 import type { Component, Head, Island, Layout } from "../contracts/render.ts";
-import type { RecordProps } from "../contracts/data.ts";
+import type { ListProps, RecordProps } from "../contracts/data.ts";
 import type { SourcePos } from "../contracts/source.ts";
 import { parseSpan } from "../source/spans.ts";
 
@@ -33,6 +33,8 @@ export interface RenderOptions {
   readonly head: Head;
   /** The record of a record page; unset on every other page. */
   readonly record?: RecordProps;
+  /** The list of a list page; unset on every other page. */
+  readonly list?: ListProps;
 }
 
 /** The HTML document plus the islands and CSS the page actually used. */
@@ -269,7 +271,17 @@ export function renderPage(options: RenderOptions): RenderResult {
       if (name !== "") skipFontPreloads.add(name);
     },
   };
-  const node = layout({ site, page: resolvedPage, trail, pager, head, islands, hints, ...(options.record === undefined ? {} : { record: options.record }) });
+  const node = layout({
+    site,
+    page: resolvedPage,
+    trail,
+    pager,
+    head,
+    islands,
+    hints,
+    ...(options.record === undefined ? {} : { record: options.record }),
+    ...(options.list === undefined ? {} : { list: options.list }),
+  });
   const body = typeof node === "string" ? node : renderToString(node as VNode);
   return {
     html: withDocument(body, page),
