@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#14213d"/>
+      <stop offset="1" stop-color="#0b1426"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="80" y="80" width="64" height="8" fill="#fca311"/>
+  <text data-slot="site" x="80" y="140" data-width="1040" font-family="Geist, Vazirmatn" font-size="30" fill="#fca311">Site name</text>
+  <text data-slot="title" x="80" y="260" data-width="1040" data-max-lines="3" font-family="Geist, Vazirmatn" font-size="76" data-min-size="48" fill="#ffffff">Page title</text>
+  <text data-slot="description" x="80" y="500" data-width="1040" data-max-lines="2" font-family="Geist, Vazirmatn" font-size="32" data-min-size="26" fill="#c9d1e0">Page description</text>
+</svg>
