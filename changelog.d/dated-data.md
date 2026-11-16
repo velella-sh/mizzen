@@ -1,0 +1,1 @@
+- **Dated data (design).** `docs/design/dated-data.md` fixes the date kinds (day, month, year), the as-of date and its order (`--as-of`, then `asOf`, then a collection's `referenceDate`), and what a feature reports when no date is set.

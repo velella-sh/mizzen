@@ -268,6 +268,8 @@ source. It may rely on the field names a site declared, never on a fixed list of
   the source map, each of which names the data file and the record's span.
 - Every diagnostic and every token of the cache and dependency graph.
 
+Dates, the as-of date, and days left are described in [dated data](design/dated-data.md).
+
 ## Frozen on
 
 Frozen on 2026-11-15. The contract in `src/contracts/data.ts` is guarded by
