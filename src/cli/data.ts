@@ -12,6 +12,7 @@ import { loadConfig } from "../config/load.ts";
 import { dataLimitsOf } from "../data/limits.ts";
 import { LOCK_FILE, readLock, sha256, storedPath, writeLock, type DataLock, type LockedSource } from "../data/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
+import { gitSnapshot } from "../data/snapshot.ts";
 
 /** How long one request may take. */
 export const FETCH_TIMEOUT_MS = 30_000;
@@ -239,3 +240,51 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
   return { code: 0, messages, errors };
 }
 
+
+/** Options of {@link dataSnapshot}. */
+export interface DataSnapshotOptions {
+  /** The site root: the folder that holds `mizzen.yml`. */
+  readonly root: string;
+  /** The collection to record. */
+  readonly name: string;
+  /** Record the last commit even when the file has uncommitted changes. */
+  readonly allowDirty?: boolean;
+}
+
+/**
+ * `mizzen data snapshot <name>`: records the last commit and its date for a file collection in the lock. It reads the
+ * local git repository only, refuses a file with uncommitted changes unless `allowDirty` is set, and changes nothing
+ * else in the lock.
+ */
+export async function dataSnapshot(options: DataSnapshotOptions): Promise<DataFetchResult> {
+  const { root, name } = options;
+  const messages: string[] = [];
+  const errors: string[] = [];
+  const loaded = loadConfig(root);
+  for (const diagnostic of loaded.diagnostics) {
+    if (diagnostic.severity === "error") errors.push(diagnostic.message);
+  }
+  if (errors.length > 0) return { code: 1, messages, errors };
+
+  const entry = loaded.config.collections[name];
+  if (entry === undefined) return { code: 2, messages, errors: [`No collection named "${name}" in mizzen.yml.`] };
+  if (/^[a-z][a-z\d+.-]*:/i.test(entry.source)) {
+    return { code: 2, messages, errors: [`Collection "${name}" reads "${entry.source}"; \`mizzen data fetch\` records it. Only a file in the site has a commit.`] };
+  }
+
+  const pinned = await readLock(root);
+  for (const diagnostic of pinned.diagnostics) {
+    if (diagnostic.severity === "error") errors.push(diagnostic.message);
+  }
+  if (errors.length > 0) return { code: 1, messages, errors };
+
+  const result = gitSnapshot(root, entry.source, options.allowDirty === true);
+  if (!result.ok) return { code: 1, messages, errors: [result.message] };
+
+  const lock: DataLock = { ...pinned.lock, snapshots: { ...pinned.lock.snapshots, [name]: result.snapshot } };
+  await writeLock(root, lock);
+  if (result.dirty) messages.push(`warning: ${entry.source} has uncommitted changes; the snapshot names the last commit`);
+  messages.push(`snapshot ${name} at ${result.snapshot.ref} (${result.snapshot.capturedAt})`);
+  messages.push(`wrote ${LOCK_FILE}`);
+  return { code: 0, messages, errors };
+}

@@ -6,6 +6,7 @@
  * a `YYYY-MM-DD` date or a UTC instant to the second (`YYYY-MM-DDTHH:MM:SSZ`). A millisecond instant, which is what a
  * clock reading looks like, is refused. Entries are written in a fixed field order.
  */
+import { execFileSync } from "node:child_process";
 import type { CollectionSnapshot } from "../contracts/data.ts";
 
 export type { CollectionSnapshot };
@@ -53,5 +54,58 @@ export function orderedSnapshot(snapshot: CollectionSnapshot): CollectionSnapsho
     ...(snapshot.capturedAt === undefined ? {} : { capturedAt: snapshot.capturedAt }),
     ...(snapshot.tool === undefined ? {} : { tool: snapshot.tool }),
     ...(snapshot.toolVersion === undefined ? {} : { toolVersion: snapshot.toolVersion }),
+  };
+}
+
+/** What {@link gitSnapshot} found. */
+export type GitSnapshotResult =
+  | { readonly ok: true; readonly snapshot: CollectionSnapshot; readonly dirty: boolean }
+  | { readonly ok: false; readonly message: string };
+
+/** Runs `git` in `cwd`; the text it printed, or `undefined` when it failed. The local repository is the only thing read. */
+function git(cwd: string, args: readonly string[]): string | undefined {
+  try {
+    return execFileSync("git", [...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    return undefined;
+  }
+}
+
+/** A Unix time in seconds as a UTC instant to the second, `YYYY-MM-DDTHH:MM:SSZ`. */
+export function instantOfUnix(seconds: number): string {
+  return `${new Date(seconds * 1000).toISOString().slice(0, 19)}Z`;
+}
+
+/**
+ * Reads the last commit that touched `source` (a path relative to `root`) and its commit date, from the local
+ * repository only. The date is the commit's own, so the same commit always gives the same snapshot. A file with
+ * uncommitted changes is refused unless `allowDirty` is set; the snapshot then still names the last commit.
+ */
+export function gitSnapshot(root: string, source: string, allowDirty: boolean): GitSnapshotResult {
+  if (git(root, ["rev-parse", "--is-inside-work-tree"])?.trim() !== "true") {
+    return { ok: false, message: `${root} is not inside a git repository, so there is no commit to record.` };
+  }
+  const status = git(root, ["status", "--porcelain", "--", source]);
+  if (status === undefined) return { ok: false, message: `Cannot read the git status of ${source}.` };
+  const dirty = status.trim() !== "";
+  if (dirty && !allowDirty) {
+    return { ok: false, message: `${source} has uncommitted changes. Commit them, or pass --allow-dirty to record the last commit anyway.` };
+  }
+  const log = git(root, ["log", "-1", "--format=%H%n%ct", "--", source])?.trim().split("\n");
+  const [commit, seconds] = log ?? [];
+  if (commit === undefined || commit === "" || seconds === undefined || !/^\d+$/.test(seconds)) {
+    return { ok: false, message: `${source} has no commit yet, so there is nothing to record.` };
+  }
+  const version = /(\d+(?:\.\d+)+)/.exec(git(root, ["--version"]) ?? "")?.[1];
+  return {
+    ok: true,
+    dirty,
+    snapshot: {
+      source,
+      ref: commit,
+      capturedAt: instantOfUnix(Number(seconds)),
+      tool: "git",
+      ...(version === undefined ? {} : { toolVersion: version }),
+    },
   };
 }

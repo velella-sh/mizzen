@@ -10,7 +10,7 @@ import { build } from "../pipeline/build.ts";
 import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts";
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
-import { dataFetch } from "./data.ts";
+import { dataFetch, dataSnapshot } from "./data.ts";
 import { runNetwork } from "./network.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
@@ -68,6 +68,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
+  data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -94,6 +95,7 @@ Options:
   --host <host>        Host for dev (default: 127.0.0.1)
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
+  --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
@@ -190,6 +192,13 @@ type DataFetchOpts = {
   readonly check: boolean;
 };
 
+type DataSnapshotOpts = {
+  readonly command: "data-snapshot";
+  readonly root: string;
+  readonly name: string;
+  readonly allowDirty: boolean;
+};
+
 type UrlsCheckOpts = {
   readonly command: "urls";
   readonly root: string;
@@ -246,6 +255,7 @@ type Parsed =
         | VerifyOpts
         | WatchOpts
         | DataFetchOpts
+        | DataSnapshotOpts
         | UrlsCheckOpts
         | McpOpts
         | NetworkOpts;
@@ -395,11 +405,29 @@ function parseEditVerify(args: readonly string[]): Parsed {
   return { options: { command: "edit-verify", proof, site, doctor, format } };
 }
 
-/** Parses `data fetch [dir] [--check]`. */
+/** Parses `data snapshot <name> [dir] [--allow-dirty]`. */
+function parseDataSnapshot(rest: readonly string[]): Parsed {
+  let name: string | undefined;
+  let root: string | undefined;
+  let allowDirty = false;
+  for (const arg of rest) {
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--allow-dirty") allowDirty = true;
+    else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else if (name === undefined) name = arg;
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  if (name === undefined) return { error: "data snapshot needs a collection name" };
+  return { options: { command: "data-snapshot", root: root ?? ".", name, allowDirty } };
+}
+
+/** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
-  if (subcommand === undefined) return { error: "data needs a subcommand: fetch" };
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot" };
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
+  if (subcommand === "snapshot") return parseDataSnapshot(rest);
   if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
 
   let root: string | undefined;
@@ -941,6 +969,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "data-fetch") {
     try {
       const result = await dataFetch({ root, ...(options.check ? { check: true } : {}) });
+      for (const message of result.messages) log(message);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-snapshot") {
+    try {
+      const result = await dataSnapshot({ root, name: options.name, ...(options.allowDirty ? { allowDirty: true } : {}) });
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
