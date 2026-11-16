@@ -14,6 +14,8 @@ import { dataFetch } from "./data.ts";
 import { runNetwork } from "./network.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
+import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
+import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
 import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-verify.ts";
 import { pack } from "./pack.ts";
@@ -24,7 +26,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["build", "check", "data", "dev", "doctor", "edit", "network", "pack", "urls", "verify", "watch"] as const;
+export const COMMANDS = ["build", "check", "data", "dev", "diff", "doctor", "edit", "network", "pack", "urls", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -66,6 +68,7 @@ Commands:
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
+  diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
@@ -81,7 +84,7 @@ Commands:
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text or json for edit apply, edit verify, and urls check; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for edit apply, edit verify, and urls check; markdown or json for pack
   --hash <hex>         Expected build hash for verify (default: the manifest's)
   --site <dir>         Site root for edit verify (default: .)
   --doctor             Rerun the doctor for edit verify
@@ -93,6 +96,10 @@ Options:
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
+  --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
+  --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
+  --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
+  --link-base <url>    For diff --format markdown: link page URLs under this base
   --dry-run            Print the diff for edit apply without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
   --proof <path>       Proof record for edit apply (default: <patch>.proof.json)
@@ -200,6 +207,17 @@ type EditApplyOpts = {
   readonly format: EditFormat;
 };
 
+type DiffOpts = {
+  readonly command: "diff";
+  readonly dirs: readonly string[];
+  readonly base?: string;
+  readonly format: DiffFormat;
+  readonly failOn: readonly FailKind[];
+  readonly maxEntries?: number;
+  readonly linkBase?: string;
+  readonly theme?: string;
+};
+
 type Parsed =
   | { readonly help: true }
   | { readonly error: string }
@@ -212,6 +230,7 @@ type Parsed =
         | EditApplyOpts
         | EditVerifyOpts
         | PackOpts
+        | DiffOpts
         | VerifyOpts
         | WatchOpts
         | DataFetchOpts
@@ -405,6 +424,62 @@ function parseUrls(args: readonly string[]): Parsed {
   return { options: { command: "urls", root: root ?? ".", format } };
 }
 
+/** Parses `diff <a> <b>` and `diff --base <ref> [dir]`. */
+function parseDiff(args: readonly string[]): Parsed {
+  const dirs: string[] = [];
+  let base: string | undefined;
+  let format: DiffFormat = "text";
+  let failOn: FailKind[] = [];
+  let maxEntries: number | undefined;
+  let linkBase: string | undefined;
+  let theme: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    const value = (): string => {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) throw new Error(`${arg} needs a value`);
+      return next;
+    };
+    try {
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--format") {
+        const raw = value();
+        if (!(DIFF_FORMATS as readonly string[]).includes(raw)) return { error: `--format for diff must be text, json, or markdown, not ${raw}` };
+        format = raw as DiffFormat;
+      } else if (arg === "--base") base = value();
+      else if (arg === "--fail-on") {
+        const kinds = parseFailOn(value());
+        if (typeof kinds === "string") return { error: kinds };
+        failOn = kinds;
+      } else if (arg === "--max-entries") {
+        const raw = value();
+        const n = Number(raw);
+        if (!/^\d+$/.test(raw) || !Number.isSafeInteger(n) || n < 1) return { error: `--max-entries must be a positive whole number, not ${raw}` };
+        maxEntries = n;
+      } else if (arg === "--link-base") linkBase = value();
+      else if (arg === "--theme") theme = value();
+      else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      else dirs.push(arg);
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  if (base === undefined && dirs.length !== 2) return { error: "diff needs two built folders: mizzen diff <a> <b>" };
+  if (base !== undefined && dirs.length > 1) return { error: "diff --base takes at most one site folder" };
+  return {
+    options: {
+      command: "diff",
+      dirs: base === undefined ? dirs : [dirs[0] ?? "."],
+      format,
+      failOn,
+      ...(base === undefined ? {} : { base }),
+      ...(maxEntries === undefined ? {} : { maxEntries }),
+      ...(linkBase === undefined ? {} : { linkBase }),
+      ...(theme === undefined ? {} : { theme }),
+    },
+  };
+}
+
 /** Parses `argv` after the process name. */
 export function parseArgs(args: readonly string[]): Parsed {
   const [command, ...rest] = args;
@@ -422,6 +497,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   }
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
+  if (command === "diff") return parseDiff(rest);
   if (
     command !== "build" &&
     command !== "check" &&
@@ -684,6 +760,31 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
     }
+  }
+
+  if (options.command === "diff") {
+    let themeRoot: string | undefined;
+    if (options.base !== undefined) {
+      try {
+        themeRoot = await resolveThemeRoot(resolve(options.dirs[0] ?? "."), options.theme);
+      } catch (err) {
+        error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+        return 2;
+      }
+    }
+    return diffCommand(
+      {
+        dirs: options.dirs,
+        format: options.format,
+        failOn: options.failOn,
+        defaultLayout: DEFAULT_LAYOUT,
+        ...(options.base === undefined ? {} : { base: options.base }),
+        ...(options.maxEntries === undefined ? {} : { maxEntries: options.maxEntries }),
+        ...(options.linkBase === undefined ? {} : { linkBase: options.linkBase }),
+        ...(themeRoot === undefined ? {} : { themeRoot }),
+      },
+      { write, error },
+    );
   }
 
   if (options.command === "verify") {

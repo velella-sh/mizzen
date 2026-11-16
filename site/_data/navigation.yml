@@ -17,6 +17,8 @@ main:
         url: /analytics/
       - title: Several projects
         url: /network/
+      - title: Compare two builds
+        url: /site-diff/
       - title: Plugins
         url: /plugins/
       - title: Programmatic API
