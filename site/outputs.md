@@ -12,6 +12,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `agents-md` | `AGENTS.md`, a guide to the built site for agents. |
 | `changelog-feed` | `changelog.xml`, an Atom feed of the changelog page's dated release headings. |
 | `code-meta-check` | No files: reports fence meta that names lines the fence does not have. |
+| `collection-index` | `data/<collection>.index.json` for each collection with `index`: a column layout of its records and page URLs, split into numbered chunks over the byte budget. |
 | `context-pack` | `pack/<topic>.md` for each topic in `_data/context-packs.yml`: the best pages for the topic, trimmed to its token budget, with each page's URL and source path. |
 | `drift-report` | `drift.json`, every drift finding grouped by page URL. |
 | `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. |
@@ -32,7 +33,8 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `related` | `related.json`, the few pages each doc page is most related to. |
 | `review-coverage` | `review-coverage.json`, each doc page's review policy, reviewers, last review, and coverage state. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |
-| `search` | `pagefind/`, a static search index. |
+| `search` | `pagefind/`, a static search index; record pages carry the fields their collection declares. |
+| `search-facets` | `search-facets.json`, each search filter and its value counts, with the query parameter names the theme reads. |
 | `search-synonyms` | `pagefind.yml`, the search synonyms from `_data/search-synonyms.yml`. |
 | `site-files` | No files: names the root files a site may own (`llms.txt`, `llms-full.txt`, `robots.txt`, `sitemap.xml`) so its own copy wins. |
 | `sitemap` | `sitemap.xml`. |
