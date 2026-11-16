@@ -58,7 +58,14 @@ const nav: NavTree = {
   docs: [{ title: "Guide", children: [{ title: "Install", url: page.url, match: "/example/guide/" }] }],
 };
 
-const site: Site = { config, pages: [page], nav, collections: { components: collection }, data: { versions: [1, 2] } };
+const site: Site = {
+  config,
+  pages: [page],
+  nav,
+  collections: { components: collection },
+  data: { versions: [1, 2] },
+  network: { current: "docs", lock: "a".repeat(64), projects: [{ id: "docs", path: "docs", title: "Docs", current: true }, { id: "blog", path: "blog", title: "Blog", current: false, search: "find" }] },
+};
 const trail: Trail = [{ title: "Guide", url: "/example/guide/" }, { title: "Install", url: page.url }];
 const pager: Pager = { next: { title: "Write", url: "/example/guide/write/" } };
 const head: Head = {
@@ -118,6 +125,7 @@ test("example values of every contract type type-check and carry what the contra
   assert.equal(page.record?.position.startLine, recordPos.startLine);
   assert.equal(site.collections["components"]?.records[0]?.fieldPositions["title"]?.startColumn, 8);
   assert.equal(site.config.collections["components"]?.source, "_data/components.yml");
+  assert.deepEqual(site.network?.projects.filter((p) => p.current).map((p) => p.id), ["docs"]);
   assert.deepEqual(chrome({ site, page, trail, pager }), { type: "header", title: "Example" });
   assert.deepEqual(component({ props: { kind: "note" }, page, site, html: "" }), { type: "aside", kind: "note" });
   const reported: Diagnostic[] = [];

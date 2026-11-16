@@ -40,5 +40,6 @@ The site config file. Every key is optional; an unknown key is an error.
 | `search.text` | integer | `300` | The most characters of a page's body the index keeps. Titles and headings are always indexed. |
 | `analytics` | object | none | A cookieless analytics tool, written as one script tag. See [Analytics and verification](/analytics/). |
 | `verify` | object | none | Search engine verification tags and files. See [Analytics and verification](/analytics/). |
+| `social` | object | none | Generated share images: `template` names a file in `_templates/social/`, `fonts` lists the font files the images are drawn with. Without the key no image is written. |
 | `redirects` | object | `{}` | Redirect pages: each key is an old path under base, each value a path on the site or an https URL. |
 | `outputs` | object | `{}` | Turns an output off by its name (false), such as twins or llms. The loader checks the names against the output registry; an unknown name is an error. |

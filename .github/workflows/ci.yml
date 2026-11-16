@@ -42,6 +42,27 @@ jobs:
         run: scripts/smoke-package.sh ../mizzen ../lateen
         working-directory: mizzen
 
+  # The social images must be the same bytes on every operating system (docs/adr/social-images.md). The render test holds
+  # recorded hashes, so running it on all three is the proof. It needs neither Lateen nor a build.
+  social-images:
+    name: social images (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - run: npm ci --no-audit --no-fund
+      - name: Render the fixture images and compare their hashes
+        run: node --test test/social-render.test.ts test/social-fonts.test.ts test/social-text.test.ts
+
   # Measures line coverage and publishes it for the README badge. It runs on main only and holds the
   # only write permission in this workflow: it can push the `badges` branch and nothing else. The badge
   # is a shields.io endpoint badge reading coverage.json from that branch, so the number follows main.

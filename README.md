@@ -68,6 +68,9 @@ Commands:
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
+  network check <file>      Check the shared network file: ids, paths, titles
+  network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
+  network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
@@ -152,6 +155,7 @@ A site's settings live in `mizzen.yml` at its root; every path in the file is re
 | `repository` | `{url, branch, dir}` | | Where the source lives, for "Edit this page" links and the "Edit with your agent" prompt. `branch` defaults to `main`; `dir` is the site root's folder in the repository, default `""`. |
 | `theme` | `{name, options}` | | The theme package or folder, and the options handed to it unread. The theme validates its own options. |
 | `search` | `false` or `{text}` | `{}` | `false` builds no search index. `text` is the most characters of a page's body the index keeps (default `300`); titles and headings are always indexed. |
+| `social` | `{template, fonts}` | none | Turns on a generated share image for every page. `template` names `_templates/social/<template>.svg` in the source folder (1200 by 630, text slots marked `data-slot`); `fonts` lists the `.ttf`, `.otf`, or `.woff` files, relative to the site root, the images are drawn with. No system font is used. A page sets `social: <name>` in its front matter for another template, `social: false` for none, and its own `image` always wins. Without the key no image is written. The engine ships no template; the theme or the site provides one. |
 | `redirects` | map of path to path or URL | `{}` | Redirect pages: each key is an old path under `base`, each value a path on the site or an `https` URL. |
 | `outputs` | map of name to boolean | every output on | Turns one output off by its name, such as `twins: false`. The names are in [Outputs](#outputs). |
 
@@ -262,8 +266,11 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `review-coverage` | `review-coverage.json`, each doc page's review policy, reviewers, last review, and coverage state. |
 | `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
 | `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
+| `social-images` | `assets/social/<page>.png`, a 1200 by 630 share image per page drawn from an SVG template, when the config sets `social`. The page head points at it. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |
 | `search` | `pagefind/`, a static search index; record pages carry the fields their collection declares. |
+| `search-merge` | `pagefind-network.json`, the other public projects' search indexes, for a site with a `network` key. |
+| `network-record` | `.mizzen/network.json`, the locked network a build was made against, for a site with a `network` key. |
 | `search-facets` | `search-facets.json`, each search filter and its value counts, with the query parameter names the theme reads. |
 | `search-synonyms` | `pagefind.yml`, the search synonyms from `_data/search-synonyms.yml`. |
 | `site-files` | No files: names the root files a site may own (`llms.txt`, `llms-full.txt`, `robots.txt`, `sitemap.xml`) so its own copy wins. |

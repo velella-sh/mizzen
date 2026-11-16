@@ -38,6 +38,7 @@ import { expandIncludes } from "../content/includes.ts";
 import { version } from "../index.ts";
 import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
 import { URLS_LOCK_FILE } from "../data/urls-lock.ts";
+import { NETWORK_LOCK_FILE } from "../network/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
@@ -486,6 +487,8 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   const runtime = options.runtimeVersion ?? `${process.versions.node}/${process.versions.icu ?? ""}`;
   const themeFiles = [...new Set(options.themeFiles ?? [])].sort(byCodePoint);
   const inputs: KeyInput[] = [{ label: "config", path: join(options.root, CONFIG_FILE) }];
+  // The locked network decides the base, the project links, and what themes see, so its bytes are part of the key.
+  if (options.config.network !== undefined) inputs.push({ label: "network-lock", path: join(options.root, NETWORK_LOCK_FILE) });
 
   const files = await discover(options.sourceDir, {
     include: options.config.include,
@@ -602,6 +605,8 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   const runtime = options.runtimeVersion ?? `${process.versions.node}/${process.versions.icu ?? ""}`;
   const themeFiles = [...new Set(options.themeFiles ?? [])].sort(byCodePoint);
   const inputs: KeyInput[] = [{ label: "config", path: join(options.root, CONFIG_FILE) }];
+  // The locked network decides the base, the project links, and what themes see, so its bytes are part of the key.
+  if (options.config.network !== undefined) inputs.push({ label: "network-lock", path: join(options.root, NETWORK_LOCK_FILE) });
 
   for (const file of await discover(options.sourceDir, {
     include: options.config.include,

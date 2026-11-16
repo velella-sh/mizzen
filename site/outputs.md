@@ -38,6 +38,9 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `review-coverage` | `review-coverage.json`, each doc page's review policy, reviewers, last review, and coverage state. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |
 | `search` | `pagefind/`, a static search index; record pages carry the fields their collection declares. |
+| `search-merge` | `pagefind-network.json`, the other public projects' search indexes, for a site with a `network` key. |
+| `network-record` | `.mizzen/network.json`, the locked network a build was made against, for a site with a `network` key. |
+| `social-images` | `assets/social/<page>.png`, a 1200 by 630 share image per page drawn from an SVG template, when the config sets `social`. The page head points at it. |
 | `search-facets` | `search-facets.json`, each search filter and its value counts, with the query parameter names the theme reads. |
 | `search-synonyms` | `pagefind.yml`, the search synonyms from `_data/search-synonyms.yml`. |
 | `site-files` | No files: names the root files a site may own (`llms.txt`, `llms-full.txt`, `robots.txt`, `sitemap.xml`) so its own copy wins. |

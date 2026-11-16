@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/network-lock.schema.json",
+  "title": "Mizzen network lock",
+  "description": "`network.lock.json`: a pinned copy of the network file and of each public project's page list, with hashes. It holds no timestamp.",
+  "type": "object",
+  "required": ["version", "source", "sha256", "projects"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1, "description": "The format version. Only 1 exists." },
+    "source": { "type": "string", "minLength": 1, "description": "Where the network file was read from, as the config writes it." },
+    "sha256": { "$ref": "#/$defs/hash", "description": "SHA-256 of the network file's bytes." },
+    "projects": {
+      "type": "array",
+      "description": "Every project of the file, in file order.",
+      "items": { "$ref": "#/$defs/project" }
+    }
+  },
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "page": {
+      "type": "object",
+      "required": ["path", "title", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "pattern": "^/", "description": "The page's URL below the project's base, such as `/guide/`." },
+        "title": { "type": "string" },
+        "sha256": { "$ref": "#/$defs/hash", "description": "Hash of the page's rendered body in the project's manifest." },
+        "previous": { "$ref": "#/$defs/hash", "description": "The hash before the latest update that changed it; cleared by `mizzen network update --accept`." }
+      }
+    },
+    "project": {
+      "type": "object",
+      "required": ["id", "path", "title", "public"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "path": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "public": { "type": "boolean" },
+        "analytics": { "type": "object" },
+        "search": { "type": "string", "minLength": 1, "description": "Folder of the project's search index below its path." },
+        "manifest": {
+          "type": "object",
+          "required": ["url", "sha256", "pages"],
+          "additionalProperties": false,
+          "description": "The project's page list as fetched. Present for public projects only.",
+          "properties": {
+            "url": { "type": "string", "minLength": 1 },
+            "sha256": { "$ref": "#/$defs/hash" },
+            "pages": { "type": "array", "items": { "$ref": "#/$defs/page" } }
+          }
+        }
+      }
+    }
+  }
+}

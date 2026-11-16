@@ -49,6 +49,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
     "ajv": "^8.20.0",
     "lightningcss": "^1.33.0",
     "pagefind": "^1.6.0",

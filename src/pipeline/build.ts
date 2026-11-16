@@ -506,6 +506,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
 
   const ctx: OutputContext = {
     renderPage: renderPaged,
+    build: { root, workers, ...(cacheRoot === undefined ? {} : { cacheDir: cacheRoot }) },
     report: (d) => diagnostics.report(d),
   };
 

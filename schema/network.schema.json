@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/network.schema.json",
+  "title": "Mizzen network file",
+  "description": "`network.json`: the list of projects that share one domain, kept in the organization site's repository.",
+  "type": "object",
+  "required": ["version", "projects"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1, "description": "The format version. Only 1 exists." },
+    "projects": {
+      "type": "array",
+      "description": "The projects, in navigation order.",
+      "items": { "$ref": "#/$defs/project" }
+    }
+  },
+  "$defs": {
+    "project": {
+      "type": "object",
+      "required": ["id", "path", "title", "public"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "The name other projects use in links. Unique in the file."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The one URL segment the project is published under, without slashes. Unique in the file."
+        },
+        "title": { "type": "string", "minLength": 1, "description": "The label shown for the project." },
+        "public": { "type": "boolean", "description": "false keeps the project out of every shared output." },
+        "analytics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider"],
+          "properties": {
+            "provider": { "enum": ["goatcounter", "plausible", "umami", "cloudflare", "custom"] },
+            "site": { "type": "string", "minLength": 1 },
+            "host": { "type": "string", "pattern": "^https://[^/]+$" },
+            "src": { "type": "string", "pattern": "^https://" },
+            "attrs": { "type": "object", "additionalProperties": { "type": "string" } },
+            "allowedOrigins": { "type": "array", "items": { "type": "string", "pattern": "^https?://[^/]+$" } }
+          },
+          "description": "The shared analytics setting; the project's own `analytics` key wins."
+        },
+        "manifest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Path of the project's page list below its path. Default `.mizzen/manifest.json`."
+        },
+        "search": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Folder of the project's search index below its path. Default `pagefind`."
+        }
+      }
+    }
+  }
+}

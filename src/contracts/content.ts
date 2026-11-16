@@ -1,6 +1,7 @@
 import type { Direction, SiteConfig } from "./config.ts";
 import type { Collection, ListProps, PageRecord } from "./data.ts";
 import type { NavTree } from "./nav.ts";
+import type { SiteNetwork } from "./network.ts";
 import type { SourcePos } from "./source.ts";
 
 /** What a page is: Markdown or HTML content (`doc`), a page with its own program (`app`), or a file copied as is (`asset`). */
@@ -121,4 +122,6 @@ export interface Site {
   readonly collections: Readonly<Record<string, Collection>>;
   /** Records the URL lock published that their collections no longer hold, in lock order. */
   readonly removed?: readonly RemovedRecord[];
+  /** The shared network, from the locked file; unset for a site that has no `network` key. */
+  readonly network?: SiteNetwork;
 }

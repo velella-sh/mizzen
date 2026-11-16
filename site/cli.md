@@ -21,6 +21,9 @@ Commands:
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
+  network check <file>      Check the shared network file: ids, paths, titles
+  network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
+  network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest

@@ -4,6 +4,7 @@ import type { Head, LinkTag, MetaTag } from "../contracts/render.ts";
 import { analyticsScripts } from "../analytics/script.ts";
 import { verificationMeta } from "./verification.ts";
 import { feedLinks } from "../feeds/links.ts";
+import { SOCIAL_IMAGE_SIZE, socialImagePath } from "../social/image-path.ts";
 
 /**
  * Computes each page's {@link Head} once, so layouts only print it. This unit writes no file: the render step calls
@@ -13,7 +14,8 @@ import { feedLinks } from "../feeds/links.ts";
  * - `canonical_url` from front matter wins over the page's own URL; a canonical needs `config.url`, so without it
  *   there is no canonical link.
  * - `description` from front matter wins; the home page falls back to the site `description`.
- * - `image` from front matter is the social image; it needs `config.url` to become absolute.
+ * - `image` from front matter is the social image; it needs `config.url` to become absolute. Without one, a site that
+ *   sets `social.template` gets the generated image of the `social-images` output (see `src/social/image-path.ts`).
  * - `og: false` drops the Open Graph and Twitter card tags and the image in the structured data; the canonical link
  *   and the description stay.
  * - Structured data: the home page is a `WebSite`, every other page a `TechArticle` (publisher: the site title), and a
@@ -79,7 +81,8 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
   const canonical = canonicalSource === undefined ? absolute(site, page.url) : absolute(site, canonicalSource);
   const social = page.frontMatter.og !== false;
 
-  const imageValue = text(page.frontMatter.image);
+  const ownImage = text(page.frontMatter.image);
+  const imageValue = ownImage ?? socialImagePath(site, page);
   const image = social && imageValue !== undefined ? absolute(site, imageValue) : undefined;
 
   const meta: MetaTag[] = [];
@@ -91,6 +94,10 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
     if (canonical !== undefined) meta.push({ name: "og:url", content: canonical, property: true });
     meta.push({ name: "og:site_name", content: siteTitle, property: true });
     if (image !== undefined) meta.push({ name: "og:image", content: image, property: true });
+    if (image !== undefined && ownImage === undefined) {
+      meta.push({ name: "og:image:width", content: String(SOCIAL_IMAGE_SIZE.width), property: true });
+      meta.push({ name: "og:image:height", content: String(SOCIAL_IMAGE_SIZE.height), property: true });
+    }
     meta.push({ name: "twitter:card", content: image === undefined ? "summary" : "summary_large_image" });
   }
 

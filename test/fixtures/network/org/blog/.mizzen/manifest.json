@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "pages": [
+    { "url": "/blog/", "source": "index.md", "title": "Home", "layout": "page", "outputs": [], "hashes": { "source": "1", "html": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+  ]
+}
