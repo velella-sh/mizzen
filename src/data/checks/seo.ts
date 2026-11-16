@@ -6,6 +6,7 @@
  * covers a group of pages and names up to {@link LISTED} URLs and the count of the rest, so a collection of thousands
  * of records gives a handful of findings, not thousands. Pages are compared within one language only.
  */
+import { hasJsonLdType } from "../json-ld.ts";
 import type { Diagnostic, Page, SiteConfig } from "../../contracts/index.ts";
 
 /** The longest title Mizzen accepts without a warning, until `collections.<name>.seo.titleMax` says otherwise. */
@@ -46,6 +47,7 @@ function recordPages(pages: readonly Page[]): Page[] {
 /**
  * Checks the record pages of the site and returns the findings, ordered by collection, language, and kind.
  *
+ * - `data.json-ld-type`: a collection's `seo.jsonLd` mapping has no `@type` (an error, once per collection).
  * - `data.seo-title-long` and `data.seo-description-long`: over `seo.titleMax` (default 70) or `seo.descriptionMax`
  *   (default 160) characters.
  * - `data.seo-title-empty` and `data.seo-description-empty`: no text once the template is filled. A title falls back to
@@ -56,6 +58,17 @@ function recordPages(pages: readonly Page[]): Page[] {
 export function checkSeo(pages: readonly Page[], collections: SiteConfig["collections"]): Diagnostic[] {
   const found: Diagnostic[] = [];
   const records = recordPages(pages);
+
+  for (const [name, entry] of Object.entries(collections).sort((a, b) => (a[0] < b[0] ? -1 : 1))) {
+    if (entry.seo?.jsonLd !== undefined && !hasJsonLdType(entry.seo.jsonLd)) {
+      found.push({
+        id: "data.json-ld-type",
+        severity: "error",
+        message: `The \`seo.jsonLd\` mapping of "${name}" has no \`@type\`, so its record pages get no structured data.`,
+        help: 'Add an `@type` to the mapping, such as `"@type": Product`.',
+      });
+    }
+  }
 
   // Limits and empties, one finding per collection, language, and kind.
   const groups = new Map<string, { collection: string; lang: string; pages: Page[] }>();
