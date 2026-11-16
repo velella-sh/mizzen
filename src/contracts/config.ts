@@ -149,7 +149,7 @@ export interface CollectionChangelogConfig {
   readonly ignore?: readonly string[];
   /** A summary template per event type; `{field}` is replaced by the record's field, plus `{id}`, `{old}`, `{new}`, `{from}`, `{count}`. */
   readonly labels?: Readonly<Partial<Record<ChangelogEventType, string>>>;
-  /** A first run that finds more records than this is written as one `imported` event. Default `100`. */
+  /** A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit. */
   readonly importThreshold?: number;
 }
 

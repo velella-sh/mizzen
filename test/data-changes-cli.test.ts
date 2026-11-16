@@ -8,8 +8,17 @@ import { dataSnapshot } from "../src/cli/data.ts";
 import { main, parseArgs } from "../src/cli/index.ts";
 import { dataChanges } from "../src/data/changes/write.ts";
 
+let clock = Date.UTC(2026, 0, 1) / 1000;
+
+/** Every git call gets its own commit time, so two commits never share a snapshot date. */
 function git(root: string, ...args: string[]): void {
-  execFileSync("git", ["-c", "user.name=T", "-c", "user.email=t@example.com", ...args], { cwd: root, stdio: "ignore" });
+  clock += 86_400;
+  const date = `${clock} +0000`;
+  execFileSync("git", ["-c", "user.name=T", "-c", "user.email=t@example.com", ...args], {
+    cwd: root,
+    stdio: "ignore",
+    env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date },
+  });
 }
 
 const CONFIG = "collections:\n  items:\n    source: _data/items.yml\n    changelog:\n      track: [title]\n";
@@ -46,7 +55,7 @@ test("a first run lists the events, and --write appends them dated by the snapsh
 
   const written = await dataChanges({ root, write: true });
   assert.equal(written.code, 0);
-  assert.match(history(root), /"type":"added","record":"a","fields":\{"title":"A"\},"date":"20\d\d-/);
+  assert.match(history(root), /"type":"imported","record":"items","count":1,"ref":"[0-9a-f]{40}","date":"20\d\d-/);
 });
 
 test("a repeated run writes nothing, and a later change appends one event", async () => {
@@ -61,7 +70,7 @@ test("a repeated run writes nothing, and a later change appends one event", asyn
   await commit(root, "- id: a\n  title: B\n");
   const next = await dataChanges({ root, write: true });
   assert.equal(next.pending.length, 1);
-  assert.equal(next.pending[0]!.event.type, "changed");
+  assert.equal(next.pending[0]!.event.type, "changed", "after the import, events are normal");
   assert.equal(history(root).startsWith(first), true, "the file only grows");
   assert.equal(history(root).trim().split("\n").length, 2);
 });

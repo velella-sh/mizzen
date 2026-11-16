@@ -181,6 +181,21 @@ export async function dataChanges(options: DataChangesOptions): Promise<DataChan
       fresh.push(event);
     }
 
+    // A first load, or a run past `importThreshold`, is one `imported` event and not one event per record.
+    const threshold = changelog?.importThreshold;
+    const importing =
+      options.from === undefined && fresh.length > 0 && (history.events.length === 0 || (threshold !== undefined && fresh.length > threshold));
+    if (importing) {
+      const count = history.events.length === 0 ? collection.records.length : fresh.length;
+      const ref = collection.snapshot?.tool === "git" ? collection.snapshot.ref : undefined;
+      const id = eventId(name, name, "imported", undefined, date);
+      if (known.has(id)) {
+        errors.push(`${name}: an import dated ${date} is already recorded; the snapshot date has not moved since.`);
+        continue;
+      }
+      fresh.splice(0, fresh.length, { id, type: "imported", record: name, count, ...(ref === undefined ? {} : { ref }), date });
+    }
+
     for (const event of fresh) {
       pending.push({
         collection: name,
