@@ -1,0 +1,1 @@
+- **Scale for thousands of pages.** `fixtures/data-large/generate.ts` writes a seeded data site of any size (three collections, references, two lists, one feed), and `scripts/bench-data.ts` measures cold, warm, and one-record builds.
