@@ -2,6 +2,8 @@
  * `mizzen stale`: pages that name the files they describe (`covers`) and the review lock that says when those files
  * were last read against the page.
  *
+ * - `mizzen stale [dir] [--json] [--fail]` lists the pages whose covered files changed, were removed, or were added by
+ *   a glob since the page was marked, with the files and a fix hint. It exits 1 under `--fail` when any page is stale.
  * - `mizzen stale mark <page…|--all> [--reason <text>] [--date YYYY-MM-DD] [--site <dir>]` writes the current hashes of
  *   the named pages to `docs-review.lock.json` and appends a line to `docs-review.audit.jsonl`.
  *
@@ -11,6 +13,7 @@ import { appendFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { redactAuditText } from "../edits/audit.ts";
 import { loadCoveredPages } from "../stale/pages.ts";
+import { compareToLock, formatStaleJson, formatStaleText } from "../stale/report.ts";
 import { readReviewLock, reviewDate, withPage, writeReviewLock } from "../stale/lock.ts";
 
 /** Where the command prints. */
@@ -22,16 +25,20 @@ export interface StaleIo {
 /** The append-only record of each mark, beside the lock. */
 export const REVIEW_AUDIT_FILE = "docs-review.audit.jsonl";
 
-export const staleUsage = `Usage: mizzen stale mark <page…> [options]
+export const staleUsage = `Usage: mizzen stale [dir] [--json] [--fail]
+       mizzen stale mark <page…> [options]
        mizzen stale mark --all [options]
 
+  (none)   List the pages whose covered files changed since they were marked
   mark     Record the current hashes of a page's covered files as reviewed
 
 Options:
   --all               Mark every page that has covers
   --reason <text>     Why the page is marked; recorded in ${REVIEW_AUDIT_FILE}
   --date <YYYY-MM-DD> Review date (default: the commit date of HEAD)
-  --site <dir>        Site root (default: .)
+  --site <dir>        Site root for mark (default: .)
+  --json              For the list: print JSON
+  --fail              For the list: exit 1 when any page is stale
 `;
 
 /** Parsed `stale mark` arguments. */
@@ -75,8 +82,40 @@ export async function runStale(args: readonly string[], io: StaleIo): Promise<nu
     return 0;
   }
   if (subcommand === "mark") return mark(rest, io);
-  io.error(`mizzen: unknown stale subcommand: ${subcommand ?? ""}\n\n${staleUsage}`);
-  return 2;
+  return list(args, io);
+}
+
+async function list(args: readonly string[], io: StaleIo): Promise<number> {
+  let root: string | undefined;
+  let json = false;
+  let fail = false;
+  for (const arg of args) {
+    if (arg === "--json") json = true;
+    else if (arg === "--fail") fail = true;
+    else if (arg.startsWith("-")) {
+      io.error(`mizzen: unknown option: ${arg}\n\n${staleUsage}`);
+      return 2;
+    } else if (root === undefined) root = arg;
+    else {
+      io.error(`mizzen: unexpected argument: ${arg}\n\n${staleUsage}`);
+      return 2;
+    }
+  }
+  const siteRoot = resolve(root ?? ".");
+  const loaded = await loadCoveredPages(siteRoot);
+  if (loaded.errors.length > 0) {
+    for (const message of loaded.errors) io.error(`mizzen: ${message}`);
+    return 1;
+  }
+  const lock = await readReviewLock(siteRoot);
+  for (const d of lock.diagnostics) io.error(`mizzen: ${d.message}`);
+  if (lock.diagnostics.some((d) => d.severity === "error")) return 1;
+  for (const page of loaded.pages) {
+    for (const d of page.diagnostics) io.error(`mizzen: ${d.pos === undefined ? page.page : `${d.pos.file}:${d.pos.line}`}: ${d.message}`);
+  }
+  const stale = compareToLock(loaded.pages, lock.lock);
+  io.log(json ? formatStaleJson(stale) : formatStaleText(stale));
+  return fail && stale.length > 0 ? 1 : 0;
 }
 
 async function mark(args: readonly string[], io: StaleIo): Promise<number> {
