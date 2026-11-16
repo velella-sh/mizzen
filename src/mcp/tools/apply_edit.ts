@@ -11,5 +11,7 @@ export const tool: Tool<EditInput> = {
     "Apply an edit to the source and record its proof. Needs `expected` and `beforeHash` (from get_block_source); a patch that does not match the file is refused and nothing changes. Rebuilds and returns the diagnostics of the changed file and the proof's site-relative path.",
   inputSchema: editSchema,
   enabled: (setup) => setup.allowEdits,
+  // The edit rebuilds the site, which on a large site or a slow machine outlasts the default call limit.
+  timeoutMs: 120_000,
   handler: (input, { site }) => runEdit(site, input, true),
 };

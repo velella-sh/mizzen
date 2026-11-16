@@ -38,6 +38,8 @@ export interface Tool<Input = Record<string, unknown>> {
   readonly inputSchema: InputSchema;
   /** Return false to leave the tool out of this server; absent means always registered. */
   readonly enabled?: (setup: ToolSetup) => boolean;
+  /** Longest this tool may run, in milliseconds, when the default call limit is too short (a tool that rebuilds the site). */
+  readonly timeoutMs?: number;
   readonly handler: (input: Input, ctx: ToolContext) => Promise<ToolResult>;
 }
 
