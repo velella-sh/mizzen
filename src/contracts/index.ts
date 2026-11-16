@@ -2,7 +2,7 @@
 export type { SourcePos } from "./source.ts";
 export type { Diagnostic, DiagnosticFix, Severity } from "./diagnostic.ts";
 export type { AnalyticsConfig, AnalyticsProvider, CalendarConfig, CalendarEventConfig, VerifyConfig, CollectionConfig, CollectionIndexConfig, CollectionJsonConfig, CollectionRawConfig, CollectionSearchConfig, CollectionSeoConfig, CollectionViewConfig, DataLimitsConfig, DefaultsEntry, Direction, FeedConfig, FeedFormat, LanguageConfig, NetworkConfig, RepositoryConfig, SearchConfig, SiteConfig, SnapshotConfig, SocialConfig, ThemeConfig } from "./config.ts";
-export type { Collection, CollectionSnapshot, DataRecord, DataStats, ListGroup, ListPagination, ListProps, PageRecord, RecordPos, RecordProps } from "./data.ts";
+export type { CalendarLink, Collection, CollectionSnapshot, DataRecord, DataStats, ListGroup, ListPagination, ListProps, PageRecord, RecordPos, RecordProps } from "./data.ts";
 export type { AgentInstructions, FrontMatter, Heading, Page, PageKind, PageStatus, Site } from "./content.ts";
 export type { NavGroup, NavItem, NavLink, NavTree, Pager, Trail } from "./nav.ts";
 export type { Output, OutputBuild, OutputContext, OutputFile } from "./output.ts";

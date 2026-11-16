@@ -1,5 +1,6 @@
 import type { NavGroup, NavItem, NavLink, Page, Site } from "../contracts/index.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
+import { writtenCalendars } from "../calendar/links.ts";
 import { isAppPage } from "./app-pages.ts";
 import { indexRecords } from "./search-shared.ts";
 
@@ -113,6 +114,15 @@ export const llms: Output = {
       for (const name of collections) {
         const count = indexRecords(site, name).length;
         lines.push(`- [${oneLine(name)}](${origin}${base}/data/${name}.json): ${count} ${count === 1 ? "record" : "records"}`);
+      }
+      lines.push("");
+    }
+
+    const calendars = writtenCalendars(site);
+    if (calendars.length > 0) {
+      lines.push("## Calendars", "");
+      for (const c of calendars) {
+        lines.push(`- [${linkText(c.name)}](${origin}${base}/${c.file}): ${c.events} ${c.events === 1 ? "event" : "events"}`);
       }
       lines.push("");
     }

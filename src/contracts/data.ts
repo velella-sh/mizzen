@@ -115,6 +115,20 @@ export interface RecordProps {
    * events in a declared calendar, and absent for a collection with no calendar.
    */
   readonly calendar?: string;
+  /** The calendars this record has events in, in config order; absent when it has none. */
+  readonly calendars?: readonly CalendarLink[];
+}
+
+/** One calendar file a record page belongs to, for a subscribe link. */
+export interface CalendarLink {
+  /** The calendar's name in the config. */
+  readonly name: string;
+  /** The calendar's title, as a calendar app shows it. */
+  readonly title: string;
+  /** Absolute `https` address of the file. */
+  readonly url: string;
+  /** The same address with the `webcal` scheme, which opens the subscribe dialog of a calendar app. */
+  readonly webcal: string;
 }
 
 /** One group of a list page. */

@@ -5,6 +5,7 @@
  * The address of the file is handed to the theme as `record.calendar`. A record with no events, a collection with no
  * calendar, and a site with no valid `url` get no file and no address.
  */
+import { calendarLinksOf } from "../calendar/links.ts";
 import { calendarEvents } from "../calendar/build.ts";
 import { writeIcs, type IcsEvent } from "../calendar/ics.ts";
 import type { Page, RecordProps, Site } from "../contracts/index.ts";
@@ -96,5 +97,10 @@ export function recordPropsWithCalendar(site: Site, page: Page): RecordProps | u
   const record = recordPropsOf(site, page);
   if (record === undefined) return undefined;
   const calendar = recordCalendarUrl(site, page);
-  return calendar === undefined ? record : { ...record, calendar };
+  const calendars = calendarLinksOf(site, page);
+  return {
+    ...record,
+    ...(calendar === undefined ? {} : { calendar }),
+    ...(calendars.length === 0 ? {} : { calendars }),
+  };
 }
