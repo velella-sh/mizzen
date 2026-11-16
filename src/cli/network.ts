@@ -3,12 +3,17 @@
  * shared network. `check` reads one local file. `update` is the only command that fetches the network, and it writes
  * `network.lock.json`; a build reads only that lock. `sitemap` writes the organization site's sitemap index.
  */
+import { resolve } from "node:path";
 import { checkNetworkFile } from "../network/check.ts";
+import type { NetworkFetchLike } from "../network/fetch.ts";
+import { updateNetwork } from "../network/update.ts";
 
 /** What the network commands print through. */
 export interface NetworkIo {
   readonly log: (message: string) => void;
   readonly error: (message: string) => void;
+  /** The fetcher `update` uses; defaults to the global `fetch`. */
+  readonly fetch?: NetworkFetchLike;
 }
 
 /** The help text of the `network` command. */
@@ -52,6 +57,28 @@ export async function runNetwork(args: readonly string[], io: NetworkIo): Promis
       return 0;
     }
     for (const line of result.lines) io.error(line);
+    return result.code;
+  }
+  if (subcommand === "update") {
+    const flags = rest.filter((arg) => arg.startsWith("-"));
+    const unknown = flags.find((flag) => flag !== "--check" && flag !== "--accept");
+    if (unknown !== undefined) {
+      io.error(`mizzen: unknown option: ${unknown}`);
+      return 2;
+    }
+    const dirs = rest.filter((arg) => !arg.startsWith("-"));
+    if (dirs.length > 1) {
+      io.error("mizzen: network update takes at most one folder");
+      return 2;
+    }
+    const result = await updateNetwork({
+      root: resolve(dirs[0] ?? "."),
+      fetch: io.fetch ?? ((url, init) => fetch(url, init)),
+      check: flags.includes("--check"),
+      accept: flags.includes("--accept"),
+    });
+    for (const line of result.lines) io.log(line);
+    for (const line of result.errors) io.error(line);
     return result.code;
   }
   io.error(`mizzen: unknown network subcommand: ${subcommand}`);
