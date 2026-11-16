@@ -143,6 +143,82 @@
       "default": {},
       "description": "false builds no search index. As an object, text sets how much of each page's body the index keeps."
     },
+    "analytics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider"],
+      "properties": {
+        "provider": {
+          "enum": ["goatcounter", "plausible", "umami", "cloudflare", "custom"],
+          "description": "The tool. There is no default: a site without the key gets no script."
+        },
+        "site": {
+          "type": "string",
+          "minLength": 1,
+          "description": "GoatCounter code, Plausible domain, Umami website id, or Cloudflare beacon token."
+        },
+        "host": {
+          "type": "string",
+          "pattern": "^https://[^/]+$",
+          "description": "Origin that serves the script and receives the hits, for a self-hosted tool."
+        },
+        "src": {
+          "type": "string",
+          "pattern": "^https://",
+          "description": "custom only: the script's URL."
+        },
+        "attrs": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+          "description": "custom only: attributes written on the script tag."
+        },
+        "allowedOrigins": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "pattern": "^https?://[^/]+$" },
+          "description": "Outside origins the site may contact; a built page that reaches any other origin earns a warning."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "provider": { "description": "A provider that needs a site value.", "enum": ["goatcounter", "plausible", "umami", "cloudflare"] } } },
+          "then": { "required": ["site"], "properties": { "site": { "description": "Required for this provider.", "type": "string" } } }
+        },
+        {
+          "if": { "properties": { "provider": { "description": "The custom provider.", "const": "custom" } } },
+          "then": { "required": ["src"], "properties": { "src": { "description": "Required for the custom provider.", "type": "string" } } }
+        }
+      ],
+      "description": "A cookieless analytics tool, attached as one deferred script tag. Default: none."
+    },
+    "verify": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "google": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{20,100}$",
+          "description": "Google Search Console token, written as a meta tag on the home page."
+        },
+        "bing": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{32}$",
+          "description": "Bing Webmaster token, written as a meta tag on the home page."
+        },
+        "googleFile": {
+          "type": "string",
+          "pattern": "^google[a-f0-9]{16}\\.html$",
+          "description": "Google's HTML verification file name, written at the site root."
+        },
+        "bingFile": {
+          "type": "string",
+          "pattern": "^[A-Fa-f0-9]{32}$",
+          "description": "Bing's user id, written as BingSiteAuth.xml at the site root."
+        }
+      },
+      "description": "Search engine verification tokens. A provider not set gets no tag and no file."
+    },
     "redirects": {
       "type": "object",
       "default": {},

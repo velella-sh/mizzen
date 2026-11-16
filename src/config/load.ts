@@ -14,6 +14,9 @@ import {
   type Pair,
 } from "yaml";
 import type {
+  AnalyticsConfig,
+  AnalyticsProvider,
+  VerifyConfig,
   CollectionConfig,
   CollectionIndexConfig,
   CollectionJsonConfig,
@@ -159,6 +162,8 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
 
   const repository = repositoryFrom(raw.repository);
   const search = searchFrom(raw.search);
+  const analytics = analyticsFrom(raw.analytics);
+  const verify = verifyFrom(raw.verify);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -182,9 +187,42 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(repository === undefined ? {} : { repository }),
     theme,
     search,
+    ...(analytics === undefined ? {} : { analytics }),
+    ...(verify === undefined ? {} : { verify }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
   };
+}
+
+const PROVIDERS: readonly string[] = ["goatcounter", "plausible", "umami", "cloudflare", "custom"];
+
+/** The analytics key, kept only when the schema accepts it; an invalid one is reported by the schema check. */
+function analyticsFrom(value: unknown): AnalyticsConfig | undefined {
+  if (!isPlainObject(value) || typeof value.provider !== "string" || !PROVIDERS.includes(value.provider)) return undefined;
+  const attrs = isPlainObject(value.attrs)
+    ? Object.fromEntries(Object.entries(value.attrs).filter((pair): pair is [string, string] => typeof pair[1] === "string"))
+    : undefined;
+  return {
+    provider: value.provider as AnalyticsProvider,
+    ...(typeof value.site === "string" ? { site: value.site } : {}),
+    ...(typeof value.host === "string" ? { host: value.host } : {}),
+    ...(typeof value.src === "string" ? { src: value.src } : {}),
+    ...(attrs === undefined ? {} : { attrs }),
+    allowedOrigins: Array.isArray(value.allowedOrigins)
+      ? value.allowedOrigins.filter((origin): origin is string => typeof origin === "string")
+      : [],
+  };
+}
+
+/** The verify key, keeping only string values; `undefined` when none is set. */
+function verifyFrom(value: unknown): VerifyConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const out: Record<string, string> = {};
+  for (const key of ["google", "bing", "googleFile", "bingFile"]) {
+    const entry = value[key];
+    if (typeof entry === "string") out[key] = entry;
+  }
+  return Object.keys(out).length === 0 ? undefined : (out as VerifyConfig);
 }
 
 function repositoryFrom(value: unknown): RepositoryConfig | undefined {

@@ -21,7 +21,9 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `feeds` | `feeds/<name>.xml`, `feeds/<name>.rss.xml`, and `feeds/<name>.json` for each feed the config declares, in the formats it names. |
 | `footnote-check` | No files: reports footnote references with no definition. |
 | `html` | One HTML file per document page, at the page's pretty URL. |
+| `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
 | `link-check` | No files: reports internal links and heading anchors that do not resolve. |
+| `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
 | `llms` | `llms.txt`, following llmstxt.org. |
 | `llms-full` | `llms-full.txt`, every page's Markdown in one file. |
 | `manifest` | `.mizzen/manifest.json`, the page list, per-page source and HTML hashes, and the build hash. |

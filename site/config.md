@@ -38,5 +38,7 @@ The site config file. Every key is optional; an unknown key is an error.
 | `theme.options` | object |  | Handed to the theme unread; the theme validates it against its own schema. |
 | `search` | `false` or object | `{}` | false builds no search index. As an object, text sets how much of each page's body the index keeps. |
 | `search.text` | integer | `300` | The most characters of a page's body the index keeps. Titles and headings are always indexed. |
+| `analytics` | object | none | A cookieless analytics tool, written as one script tag. See [Analytics and verification](/analytics/). |
+| `verify` | object | none | Search engine verification tags and files. See [Analytics and verification](/analytics/). |
 | `redirects` | object | `{}` | Redirect pages: each key is an old path under base, each value a path on the site or an https URL. |
 | `outputs` | object | `{}` | Turns an output off by its name (false), such as twins or llms. The loader checks the names against the output registry; an unknown name is an error. |

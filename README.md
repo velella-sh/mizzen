@@ -250,6 +250,8 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `redirects` | One HTML redirect page per old path, and `_redirects` for hosts that read it. |
 | `related` | `related.json`, the few pages each doc page is most related to. |
 | `review-coverage` | `review-coverage.json`, each doc page's review policy, reviewers, last review, and coverage state. |
+| `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
+| `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |
 | `search` | `pagefind/`, a static search index; record pages carry the fields their collection declares. |
 | `search-facets` | `search-facets.json`, each search filter and its value counts, with the query parameter names the theme reads. |

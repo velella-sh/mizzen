@@ -13,6 +13,8 @@ main:
         url: /cli/
       - title: Outputs
         url: /outputs/
+      - title: Analytics and verification
+        url: /analytics/
       - title: Plugins
         url: /plugins/
       - title: Programmatic API
