@@ -28,6 +28,7 @@ import type {
   FeedConfig,
   FeedFormat,
   LanguageConfig,
+  NetworkConfig,
   RepositoryConfig,
   SearchConfig,
   SiteConfig,
@@ -164,6 +165,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const search = searchFrom(raw.search);
   const analytics = analyticsFrom(raw.analytics);
   const verify = verifyFrom(raw.verify);
+  const network = networkFrom(raw.network);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -189,6 +191,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     search,
     ...(analytics === undefined ? {} : { analytics }),
     ...(verify === undefined ? {} : { verify }),
+    ...(network === undefined ? {} : { network }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
   };
@@ -211,6 +214,18 @@ function analyticsFrom(value: unknown): AnalyticsConfig | undefined {
     allowedOrigins: Array.isArray(value.allowedOrigins)
       ? value.allowedOrigins.filter((origin): origin is string => typeof origin === "string")
       : [],
+  };
+}
+
+/** The network key, kept only when it names a source and a project; the schema check reports an invalid one. */
+function networkFrom(value: unknown): NetworkConfig | undefined {
+  if (!isPlainObject(value) || typeof value.source !== "string" || typeof value.project !== "string") return undefined;
+  return {
+    source: value.source,
+    project: value.project,
+    ...(typeof value.maxAgeDays === "number" && Number.isSafeInteger(value.maxAgeDays) && value.maxAgeDays > 0
+      ? { maxAgeDays: value.maxAgeDays }
+      : {}),
   };
 }
 

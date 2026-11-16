@@ -143,6 +143,29 @@
       "default": {},
       "description": "false builds no search index. As an object, text sets how much of each page's body the index keeps."
     },
+    "network": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "project"],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The shared network file: an https URL or a path. Only `mizzen network update` reads it."
+        },
+        "project": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "The id of this project in the network file."
+        },
+        "maxAgeDays": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "A build warns when network.lock.json is older than this many days. Default 30."
+        }
+      },
+      "description": "Joins the site to a shared network of projects. Default: none, and the site builds on its own."
+    },
     "analytics": {
       "type": "object",
       "additionalProperties": false,

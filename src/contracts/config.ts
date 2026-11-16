@@ -199,6 +199,16 @@ export interface VerifyConfig {
   readonly bingFile?: string;
 }
 
+/** The `network` key: the shared file of projects this site belongs to, and which project in it this site is. */
+export interface NetworkConfig {
+  /** The network file's URL or path. Only `mizzen network update` reads it; no default. */
+  readonly source: string;
+  /** The id of this project in the network file. */
+  readonly project: string;
+  /** A build warns when the lock is older than this many days. Default `30`. */
+  readonly maxAgeDays?: number;
+}
+
 /**
  * The site config: exactly the keys of the site config file, after the loader has checked them.
  * Every key is optional in the file; the loader fills the defaults, so the keys marked required here are always present.
@@ -242,6 +252,8 @@ export interface SiteConfig {
   readonly analytics?: AnalyticsConfig;
   /** Search engine verification tokens. Default: none. */
   readonly verify?: VerifyConfig;
+  /** The shared network of projects. Default: none, and the site builds on its own. */
+  readonly network?: NetworkConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */
   readonly redirects: Readonly<Record<string, string>>;
   /** Turns an output off by its name (`false`). Default: every output on. */
