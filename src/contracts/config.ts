@@ -75,6 +75,26 @@ export interface CollectionSearchConfig {
   readonly aliases?: string;
 }
 
+/** How a collection's record and list pages are described to search engines. Every key is optional. */
+export interface CollectionSeoConfig {
+  /** Longest title a record page may have before a warning. Default 70. */
+  readonly titleMax?: number;
+  /** Longest description a record page may have before a warning. Default 160. */
+  readonly descriptionMax?: number;
+  /** Field that holds a record's own canonical URL; front matter `canonical_url` still wins. */
+  readonly canonical?: string;
+  /** Field that marks a record as not to be indexed: a true value writes `noindex` and leaves the page out of the sitemap. */
+  readonly noindex?: string;
+  /** Field that holds the date of a record's last change, written as the sitemap's `lastmod`. */
+  readonly lastmod?: string;
+  /** Structured data of each record page: a mapping with an `@type`, whose string values may name fields as `{field}`. */
+  readonly jsonLd?: Readonly<Record<string, unknown>>;
+  /** `false` leaves the `BreadcrumbList` off record and list pages. Default `true`. */
+  readonly breadcrumbs?: boolean;
+  /** `false` leaves the `ItemList` off list pages. Default `true`. */
+  readonly itemList?: boolean;
+}
+
 /** Which record fields a collection's page JSON publishes. */
 export interface CollectionJsonConfig {
   /** Fields the page JSON publishes, in the order given; `[]` publishes none. */
@@ -164,6 +184,8 @@ export interface CollectionConfig {
   readonly views?: Readonly<Record<string, CollectionViewConfig>>;
   /** How the collection's record pages take part in search. */
   readonly search?: CollectionSearchConfig;
+  /** How the collection's record and list pages are described to search engines. */
+  readonly seo?: CollectionSeoConfig;
   /** A compact JSON index of the collection's records for the theme, written under `data/`. */
   readonly index?: CollectionIndexConfig;
 }

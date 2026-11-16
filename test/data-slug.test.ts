@@ -122,7 +122,8 @@ test("a page, its named view, and a record: link agree on a disambiguated URL", 
       "links.md": "---\ntitle: Links\n---\n[The first Jane](record:people/a)\n",
     },
     (_root, result) => {
-      assert.deepEqual(ids(result), []);
+      // Two people named Jane share a title: the SEO check says so, and nothing else is wrong.
+      assert.deepEqual(ids(result), ["data.seo-duplicate-title"]);
       const page = pageAt(result, "/people/jane-a/")!;
       const view = pageAt(result, "/people/jane-a/print/")!;
       assert.equal(page.record?.views?.print, "/people/jane-a/print/");

@@ -21,6 +21,7 @@ import type {
   CollectionIndexConfig,
   CollectionJsonConfig,
   CollectionSearchConfig,
+  CollectionSeoConfig,
   CollectionViewConfig,
   DefaultsEntry,
   Diagnostic,
@@ -277,6 +278,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const dates = fieldsFrom(entry.dates);
     const views = viewsFrom(entry.views);
     const search = collectionSearchFrom(entry.search);
+    const seo = collectionSeoFrom(entry.seo);
     const index = collectionIndexFrom(entry.index);
     const onRemoved = onRemovedFrom(entry.onRemoved);
     const json = collectionJsonFrom(entry.json);
@@ -302,6 +304,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
       ...(views === undefined ? {} : { views }),
       ...(search === undefined ? {} : { search }),
+      ...(seo === undefined ? {} : { seo }),
       ...(index === undefined ? {} : { index }),
     };
   }
@@ -353,6 +356,35 @@ function collectionSearchFrom(value: unknown): CollectionSearchConfig | undefine
     ...(typeof value.aliases === "string" ? { aliases: value.aliases } : {}),
   };
   return Object.keys(search).length === 0 ? undefined : search;
+}
+
+/** A collection's SEO settings, keeping only the keys the schema accepts. `undefined` when it sets none. */
+function collectionSeoFrom(value: unknown): CollectionSeoConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const count = (key: string): number | undefined => {
+    const n = value[key];
+    return typeof n === "number" && Number.isSafeInteger(n) && n > 0 ? n : undefined;
+  };
+  const text = (key: string): string | undefined => {
+    const t = value[key];
+    return typeof t === "string" && t !== "" ? t : undefined;
+  };
+  const titleMax = count("titleMax");
+  const descriptionMax = count("descriptionMax");
+  const canonical = text("canonical");
+  const noindex = text("noindex");
+  const lastmod = text("lastmod");
+  const seo: CollectionSeoConfig = {
+    ...(titleMax === undefined ? {} : { titleMax }),
+    ...(descriptionMax === undefined ? {} : { descriptionMax }),
+    ...(canonical === undefined ? {} : { canonical }),
+    ...(noindex === undefined ? {} : { noindex }),
+    ...(lastmod === undefined ? {} : { lastmod }),
+    ...(isPlainObject(value.jsonLd) ? { jsonLd: value.jsonLd } : {}),
+    ...(typeof value.breadcrumbs === "boolean" ? { breadcrumbs: value.breadcrumbs } : {}),
+    ...(typeof value.itemList === "boolean" ? { itemList: value.itemList } : {}),
+  };
+  return Object.keys(seo).length === 0 ? undefined : seo;
 }
 
 /** A collection's compact index settings; `undefined` when it names no fields. */

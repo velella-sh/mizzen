@@ -453,6 +453,54 @@
           },
           "description": "How the collection's record pages take part in search."
         },
+        "seo": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "titleMax": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 70,
+              "description": "Longest title a record page may have before a warning. Default 70."
+            },
+            "descriptionMax": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 160,
+              "description": "Longest description a record page may have before a warning. Default 160."
+            },
+            "canonical": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Field that holds a record's own canonical URL; front matter canonical_url still wins."
+            },
+            "noindex": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Field that marks a record as not to be indexed: a true value writes noindex and leaves the page out of the sitemap."
+            },
+            "lastmod": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Field that holds the date of a record's last change, written as the sitemap's lastmod."
+            },
+            "jsonLd": {
+              "type": "object",
+              "description": "Structured data of each record page: a mapping with an @type, whose string values may name fields as {field}."
+            },
+            "breadcrumbs": {
+              "type": "boolean",
+              "default": true,
+              "description": "false leaves the BreadcrumbList off record and list pages. Default true."
+            },
+            "itemList": {
+              "type": "boolean",
+              "default": true,
+              "description": "false leaves the ItemList off list pages. Default true."
+            }
+          },
+          "description": "How the collection's record and list pages are described to search engines."
+        },
         "index": {
           "type": "object",
           "additionalProperties": false,
