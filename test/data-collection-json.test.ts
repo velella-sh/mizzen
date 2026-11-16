@@ -84,7 +84,7 @@ test("collection JSON lists every record's id, URL, and page JSON address, sorte
     site([page("/docs/posts/b/", "b"), page("/docs/fa/posts/a/", "a", "fa"), page("/docs/posts/a/", "a")]),
     ctx,
   );
-  assert.deepEqual(files.map((file) => file.path), ["data/posts.json"]);
+  assert.deepEqual(files.map((file) => file.path), ["data/posts.json", "data/posts.raw.json"]);
   const body = JSON.parse(String(files[0]!.contents)) as unknown;
   assert.deepEqual(body, {
     collection: "posts",
@@ -105,7 +105,7 @@ test("collection JSON is one file per declared collection, sorted, and leaves ou
   });
   assert.deepEqual(
     (await collectionJson.run(model, ctx)).map((file) => file.path),
-    ["data/notes.json", "data/posts.json"],
+    ["data/notes.json", "data/posts.json", "data/posts.raw.json"],
   );
   const notes = JSON.parse(String((await collectionJson.run(model, ctx))[0]!.contents)) as { records: unknown[] };
   assert.deepEqual(notes.records, []);

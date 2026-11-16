@@ -501,6 +501,25 @@
           },
           "description": "How the collection's record and list pages are described to search engines."
         },
+        "raw": {
+          "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",
+          "oneOf": [
+            { "const": false },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "private": {
+                  "type": "array",
+                  "default": [],
+                  "uniqueItems": true,
+                  "items": { "type": "string", "minLength": 1 },
+                  "description": "Fields left out of the published JSON and CSV. Default []."
+                }
+              }
+            }
+          ]
+        },
         "index": {
           "type": "object",
           "additionalProperties": false,

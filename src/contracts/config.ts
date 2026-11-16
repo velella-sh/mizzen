@@ -132,6 +132,12 @@ export interface CollectionIndexConfig {
   readonly bytes?: number;
 }
 
+/** The raw data a collection publishes beside its pages. */
+export interface CollectionRawConfig {
+  /** Fields left out of the published JSON and CSV. Default `[]`. */
+  readonly private?: readonly string[];
+}
+
 /** What a record's disappearance from its collection does. */
 export type OnRemovedConfig =
   | "error"
@@ -188,6 +194,8 @@ export interface CollectionConfig {
   readonly seo?: CollectionSeoConfig;
   /** A compact JSON index of the collection's records for the theme, written under `data/`. */
   readonly index?: CollectionIndexConfig;
+  /** The raw data published as JSON and CSV with a checksum file; `false` writes none. Default: written, every field. */
+  readonly raw?: false | CollectionRawConfig;
 }
 
 /** A cookieless analytics tool the site attaches with one script tag. */

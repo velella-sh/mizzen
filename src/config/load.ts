@@ -19,6 +19,7 @@ import type {
   VerifyConfig,
   CollectionConfig,
   CollectionIndexConfig,
+  CollectionRawConfig,
   CollectionJsonConfig,
   CollectionSearchConfig,
   CollectionSeoConfig,
@@ -282,6 +283,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const index = collectionIndexFrom(entry.index);
     const onRemoved = onRemovedFrom(entry.onRemoved);
     const json = collectionJsonFrom(entry.json);
+    const raw = collectionRawFrom(entry.raw);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
@@ -306,6 +308,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(search === undefined ? {} : { search }),
       ...(seo === undefined ? {} : { seo }),
       ...(index === undefined ? {} : { index }),
+      ...(raw === undefined ? {} : { raw }),
     };
   }
   return collections;
@@ -398,6 +401,14 @@ function collectionIndexFrom(value: unknown): CollectionIndexConfig | undefined 
       ? { bytes: value.bytes }
       : {}),
   };
+}
+
+/** `raw` as the contract holds it: `false`, or the private fields; `undefined` when unset. */
+function collectionRawFrom(value: unknown): false | CollectionRawConfig | undefined {
+  if (value === false) return false;
+  if (!isPlainObject(value)) return undefined;
+  const hidden = fieldsFrom(value.private);
+  return hidden === undefined ? {} : { private: hidden };
 }
 
 /** `onRemoved` as the contract holds it: one of the words, or a redirect to a safe site path. */
