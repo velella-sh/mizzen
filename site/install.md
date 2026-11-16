@@ -20,6 +20,17 @@ npm install --save-dev @velella/mizzen @velella/lateen
 
 Installing both packages in `package.json` pins the versions for the next person.
 
+## Start from a theme starter
+
+A theme can ship starter sites. List them, then copy one into a new folder:
+
+```sh
+npx mizzen init --list
+npx mizzen init --starter docs my-docs
+```
+
+`init` finds the theme the way `build` does: `--theme`, else `theme.name` in the config, else the default theme. It copies the theme's `starters/<name>/` folder into the target, leaves out the starter's own `starter.json`, and refuses a folder that is not empty. A starter that declares optional languages in `starter.json` keeps all of them unless you pass `--lang`, which keeps only the ones you name.
+
 ## Write a page
 
 Put a Markdown file in the folder. Front matter is optional; without it the title is the first `h1`.
