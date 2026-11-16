@@ -529,6 +529,28 @@
           },
           "description": "How the collection's record and list pages are described to search engines."
         },
+        "changelog": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The collection's change history, written by `mizzen data changes` to `data-changes/<name>.jsonl`. Default: none.",
+          "properties": {
+            "track": { "type": "array", "default": [], "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "Fields whose changes are recorded. No field is tracked unless it is named. Default []." },
+            "ignore": { "type": "array", "default": [], "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "Fields never recorded, even when `track` names them. Default []." },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "A summary template per event type. `{id}`, `{field}`, `{old}`, `{new}`, `{from}`, `{count}`, and `{<record field>}` are replaced.",
+              "properties": {
+                "added": { "type": "string", "minLength": 1 },
+                "removed": { "type": "string", "minLength": 1 },
+                "changed": { "type": "string", "minLength": 1 },
+                "renamed": { "type": "string", "minLength": 1 },
+                "imported": { "type": "string", "minLength": 1 }
+              }
+            },
+            "importThreshold": { "type": "integer", "minimum": 1, "default": 100, "description": "A first run over this many records is written as one `imported` event. Default 100." }
+          }
+        },
         "raw": {
           "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",
           "oneOf": [

@@ -138,6 +138,21 @@ export interface CollectionRawConfig {
   readonly private?: readonly string[];
 }
 
+/** The event types whose summary text a collection can write. */
+export type ChangelogEventType = "added" | "removed" | "changed" | "renamed" | "imported";
+
+/** How a collection's change history is recorded: which fields it follows and how an event reads. */
+export interface CollectionChangelogConfig {
+  /** Fields whose changes are recorded. Default `[]`: no field is tracked unless it is named. */
+  readonly track?: readonly string[];
+  /** Fields never recorded, even when `track` names them. Default `[]`. */
+  readonly ignore?: readonly string[];
+  /** A summary template per event type; `{field}` is replaced by the record's field, plus `{id}`, `{old}`, `{new}`, `{from}`, `{count}`. */
+  readonly labels?: Readonly<Partial<Record<ChangelogEventType, string>>>;
+  /** A first run that finds more records than this is written as one `imported` event. Default `100`. */
+  readonly importThreshold?: number;
+}
+
 /** What a record's disappearance from its collection does. */
 export type OnRemovedConfig =
   | "error"
@@ -196,6 +211,8 @@ export interface CollectionConfig {
   readonly index?: CollectionIndexConfig;
   /** The raw data published as JSON and CSV with a checksum file; `false` writes none. Default: written, every field. */
   readonly raw?: false | CollectionRawConfig;
+  /** The change history of the collection's data, written by `mizzen data changes`. Default: none. */
+  readonly changelog?: CollectionChangelogConfig;
 }
 
 /** A cookieless analytics tool the site attaches with one script tag. */
