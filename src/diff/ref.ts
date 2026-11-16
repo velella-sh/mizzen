@@ -83,6 +83,43 @@ export async function diffAgainstRef(options: RefOptions): Promise<SiteDiff> {
   }
 }
 
+/** Builds `ref` of the site's repository into a temporary folder, hands that folder to `use`, and removes everything it made. */
+export async function withBuiltRef<T>(
+  options: Pick<RefOptions, "root" | "ref" | "themeRoot" | "defaultLayout">,
+  use: (baseOut: string) => Promise<T>,
+): Promise<T> {
+  const root = resolve(options.root);
+  if (options.ref === "" || options.ref.startsWith("-")) throw new DiffUsageError(`"${options.ref}" is not a git ref.`);
+  const top = await git(root, ["rev-parse", "--show-toplevel"]).catch(() => {
+    throw new DiffUsageError("a git ref needs the site to be inside a git repository.");
+  });
+  const commit = await git(root, ["rev-parse", "--verify", "--quiet", `${options.ref}^{commit}`]).catch(() => {
+    throw new DiffUsageError(`"${options.ref}" is neither a built folder nor a commit of this repository.`);
+  });
+  const inside = relative(await realpathOf(top), await realpathOf(root));
+  const scratch = await mkdtemp(join(tmpdir(), "mizzen-api-base-"));
+  const worktree = join(scratch, "base-tree");
+  let added = false;
+  try {
+    await git(top, ["worktree", "add", "--detach", "--quiet", worktree, commit]);
+    added = true;
+    const out = join(scratch, "base");
+    await build({
+      themeRoot: options.themeRoot,
+      ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
+      root: join(worktree, inside),
+      out,
+    });
+    return await use(out);
+  } finally {
+    if (added) {
+      await git(top, ["worktree", "remove", "--force", worktree]).catch(() => undefined);
+      await git(top, ["worktree", "prune"]).catch(() => undefined);
+    }
+    await rm(scratch, { recursive: true, force: true });
+  }
+}
+
 async function realpathOf(path: string): Promise<string> {
   const { realpath } = await import("node:fs/promises");
   return realpath(path);
