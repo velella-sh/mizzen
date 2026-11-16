@@ -47,6 +47,7 @@ The source is TypeScript that Node runs directly through type stripping (Node 24
 
 - `npm test` runs `node --test` on `test/**/*.test.ts`.
 - `npm run typecheck` runs `tsc --noEmit`.
+- `node scripts/bench-data.ts` measures a site of thousands of records; the numbers, the budgets CI enforces, and what makes a build start over are in [docs/performance.md](docs/performance.md).
 
 Many tests build the fixtures in `fixtures/` with the theme, so check out [Lateen](https://github.com/velella-sh/lateen) next to this repository (`../lateen`) and run `npm ci` in both.
 

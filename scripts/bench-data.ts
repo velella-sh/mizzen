@@ -9,7 +9,7 @@
 // Usage: node scripts/bench-data.ts [--records 1000,10000] [--runs 3] [--theme ../lateen] [--check bench/budget.json]
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpus, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { write } from "../fixtures/data-large/generate.ts";
@@ -34,6 +34,8 @@ export interface BenchReport {
   readonly node: string;
   readonly platform: string;
   readonly arch: string;
+  /** The CPU model the benchmark ran on, so a published table says which machine its numbers belong to. */
+  readonly cpu?: string;
   readonly runs: number;
   readonly measurements: readonly Measurement[];
 }
@@ -182,7 +184,7 @@ export function bench(options: { records: readonly number[]; runs: number; theme
   } finally {
     rmSync(parent, { recursive: true, force: true });
   }
-  return { node: process.version, platform: process.platform, arch: process.arch, runs: options.runs, measurements };
+  return { node: process.version, platform: process.platform, arch: process.arch, cpu: cpus()[0]?.model ?? "unknown", runs: options.runs, measurements };
 }
 
 if (process.argv[1] && fileURLToPath(new URL(`file://${process.argv[1]}`)) === SELF) {
