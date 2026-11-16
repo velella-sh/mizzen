@@ -25,6 +25,7 @@ import { loadNavigation } from "../nav/from-yaml.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
 import { pageCache, parseMarkdownWithCache, type PageCache } from "../pipeline/page-cache.ts";
 import { runContentHooks } from "../plugins/hooks.ts";
+import { loadLockedNetwork, type LoadedNetwork } from "../network/load.ts";
 import { applyFacts } from "./facts.ts";
 
 /** What {@link buildModel} returns: the site and every finding made while assembling it. */
@@ -50,6 +51,8 @@ export interface BuildModelOptions {
   readonly plugins?: readonly Plugin[];
   /** Accept every current record URL, moving a changed one into `urls.lock.json`'s `previous`; `mizzen build --update-urls` sets this. */
   readonly updateUrls?: boolean;
+  /** The clock the stale-lock warning reads; a test sets it. Default: `Date.now`. */
+  readonly now?: () => number;
 }
 
 /** Compares by code point, never by locale. */
@@ -137,7 +140,25 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   const loaded = loadConfig(siteRoot);
   for (const d of loaded.diagnostics) diagnostics.report(d);
-  const config = loaded.config;
+  let config = loaded.config;
+  // A site in a network builds from the locked copy only. Its base is its project's path, so the pages, assets,
+  // redirects, sitemap, and search index of every project agree on one place without the author repeating it.
+  let network: LoadedNetwork | undefined;
+  if (config.network !== undefined) {
+    network = await loadLockedNetwork(siteRoot, config.network, options.now);
+    for (const d of network.diagnostics) diagnostics.report(d);
+    if (network.project !== undefined) {
+      const base = `/${network.project.path}`;
+      if (config.base !== "" && config.base.replace(/\/+$/, "") !== base) {
+        diagnostics.error(
+          "network.base-mismatch",
+          `The config's base "${config.base}" differs from the base "${base}" that the network gives project "${network.project.id}".`,
+          { help: `Remove \`base\` from the config, or set it to "${base}".` },
+        );
+      }
+      config = { ...config, base };
+    }
+  }
   const sourceDir = resolve(siteRoot, config.source);
   // Positions are relative to the repository root, so a site in `docs/` names `docs/…` paths. Without a repository
   // folder they stay relative to the site root, which is always stable wherever the site is checked out.
@@ -474,8 +495,9 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   });
   for (const d of applied.diagnostics) diagnostics.report(d);
 
+  const site = network?.site === undefined ? applied.site : { ...applied.site, network: network.site };
   return {
-    site: applied.site,
+    site,
     diagnostics: sortDiagnostics(diagnostics.all),
     parsedPages,
     urls,

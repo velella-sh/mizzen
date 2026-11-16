@@ -16,6 +16,8 @@ export interface NetworkProject {
 export interface SiteNetwork {
   /** The id of this site's project. */
   readonly current: string;
+  /** SHA-256 of `network.lock.json`'s bytes: what this build was made against. */
+  readonly lock: string;
   /** The public projects, in the network file's order. */
   readonly projects: readonly NetworkProject[];
 }
