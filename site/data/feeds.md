@@ -100,4 +100,8 @@ shape is published in `schema/page-json.schema.json`.
 
 Each collection writes `data/<collection>.json`: every record's id, URL, and page JSON address, sorted by id. The file
 deliberately does not copy record fields; they are in the page JSON it points at. `llms.txt` links the file under a
-`Data` section.
+`Data` section. The shape is published in `schema/collection-json.schema.json`.
+
+A build links only to files it writes. With `outputs.page-json: false` each record's `page` is `null`; with
+`outputs.collection-json: false` `llms.txt` has no `Data` section; and a feed's `alternate` links appear only when the
+feed file exists, so none are written with `outputs.feeds: false`, without a valid `url`, or when no record qualifies.

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { Page, Site, SiteConfig } from "../src/contracts/index.ts";
+import type { DataRecord, Page, Site, SiteConfig } from "../src/contracts/index.ts";
 import { build } from "../src/pipeline/build.ts";
 import { headMeta } from "../src/outputs/head-meta.ts";
 
@@ -14,6 +14,7 @@ const recordPos = { file: "_data/posts.yml", startLine: 3, startColumn: 1, endLi
 function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
   return {
     title: "Example",
+    url: "https://example.test",
     base: "",
     lang: "en",
     dir: "ltr",
@@ -22,7 +23,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     include: [],
     exclude: [],
     navigation: "_data/navigation.yml",
-    collections: { posts: { source: "_data/posts.yml" } },
+    collections: { posts: { source: "_data/posts.yml" }, notes: { source: "_data/notes.yml" } },
     feeds: {
       posts: { collection: "posts", date: "published", formats: ["atom", "json"] },
       other: { collection: "notes", date: "date" },
@@ -52,8 +53,28 @@ function page(url: string, overrides: Partial<Page> = {}): Page {
   };
 }
 
+function recordPage(collection: string, id: string, url: string): Page {
+  return page(url, {
+    record: { collection, id, position: recordPos, template: `_templates/${collection}.md`, templateLine: 1, fallbacks: [] },
+  });
+}
+
+function entry(id: string, field: string): DataRecord {
+  return { id, fields: { title: id, [field]: "2026-01-01" }, position: recordPos, fieldPositions: {} };
+}
+
+/** A site whose `posts` and `notes` each hold one dated record with a page, so both declared feeds are written. */
 function site(cfg: SiteConfig = config()): Site {
-  return { config: cfg, pages: [], nav: {}, collections: {}, data: {} };
+  return {
+    config: cfg,
+    pages: [recordPage("posts", "hello", "/posts/hello/"), recordPage("notes", "a", "/notes/a/")],
+    nav: {},
+    collections: {
+      posts: { name: "posts", source: "_data/posts.yml", records: [entry("hello", "published")] },
+      notes: { name: "notes", source: "_data/notes.yml", records: [entry("a", "date")] },
+    },
+    data: {},
+  };
 }
 
 test("a record page advertises its collection's feeds with the right media types", () => {
@@ -65,13 +86,13 @@ test("a record page advertises its collection's feeds with the right media types
   assert.deepEqual(
     alternates.map((link) => [link.href, link.attrs?.type, link.attrs?.title]),
     [
-      ["/feeds/posts.xml", "application/atom+xml", "Example"],
-      ["/feeds/posts.json", "application/feed+json", "Example"],
+      ["https://example.test/feeds/posts.xml", "application/atom+xml", "Example"],
+      ["https://example.test/feeds/posts.json", "application/feed+json", "Example"],
     ],
   );
 });
 
-test("a list page advertises its collection's feeds, absolute and under base when the site has a url", () => {
+test("a list page advertises its collection's feeds, absolute and under base", () => {
   const list = page("/posts/", {
     list: {
       collection: "posts",
@@ -91,12 +112,10 @@ test("an ordinary page, a view of another collection, and a file page advertise 
   const ordinary = headMeta(site(), page("/guide/install/"), []);
   assert.deepEqual(ordinary.links.filter((link) => link.rel === "alternate"), []);
 
-  const other = page("/notes/a/", {
-    record: { collection: "notes", id: "a", position: recordPos, template: "_templates/note.md", templateLine: 1, fallbacks: [] },
-  });
+  const other = recordPage("notes", "a", "/notes/a/");
   assert.deepEqual(
     headMeta(site(), other, []).links.filter((link) => link.rel === "alternate").map((link) => link.href),
-    ["/feeds/other.xml"],
+    ["https://example.test/feeds/other.xml"],
   );
 
   const file = page("/download.zip");

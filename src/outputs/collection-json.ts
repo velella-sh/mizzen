@@ -22,7 +22,7 @@ interface CollectionJson {
   readonly records: readonly {
     readonly id: string;
     readonly url: string;
-    /** The page JSON's URL, including `base`; absent for a URL that names no page. */
+    /** The page JSON's URL, including `base`; null when the `page-json` output is off or the URL names no page. */
     readonly page: string | null;
   }[];
 }
@@ -31,13 +31,15 @@ interface CollectionJson {
 export const collectionJson: Output = {
   name: "collection-json",
   async run(site: Site): Promise<readonly OutputFile[]> {
+    // A page JSON address is only worth publishing when the `page-json` output writes the file it names.
+    const pageJsonOn = site.config.outputs["page-json"] !== false;
     const files: OutputFile[] = [];
     for (const name of Object.keys(site.config.collections)) {
       const records = indexRecords(site, name)
         .map(({ record, page }) => ({
           id: record.id,
           url: page.url,
-          page: jsonUrl(page.url) ?? null,
+          page: pageJsonOn && page.kind === "doc" ? (jsonUrl(page.url) ?? null) : null,
         }))
         .sort((a, b) => byCodePoint(a.id, b.id));
       const body: CollectionJson = { collection: name, records };

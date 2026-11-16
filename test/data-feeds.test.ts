@@ -120,6 +120,18 @@ test("an Atom feed lists the collection's dated records newest first, with tag i
   assert.match(xml, /<summary>Second\.<\/summary>/);
 });
 
+test("a collection Atom feed carries a feed-level author, the site title", async () => {
+  const records = [record("a", { title: "A", published: "2026-03-01" })];
+  const model = site(
+    { url: "https://example.test", title: "Example Site", feeds: { posts: { collection: "posts", date: "published" } } },
+    records,
+    [page("/posts/a/", "a")],
+  );
+  const xml = String((await run(model)).files[0]!.contents);
+  const feedLevel = xml.slice(0, xml.indexOf("<entry>"));
+  assert.match(feedLevel, /<author>\n    <name>Example Site<\/name>\n  <\/author>/);
+});
+
 test("the feed is limited, filtered, and titled by its config", async () => {
   const records = [
     record("a", { title: "A", published: "2026-01-01", status: "stable" }),

@@ -1,9 +1,20 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
 import type { DataRecord, Page, Site, SiteConfig } from "../src/contracts/index.ts";
 import type { OutputContext } from "../src/contracts/output.ts";
 import { collectionJson } from "../src/outputs/collection-json.ts";
 import { llms } from "../src/outputs/llms.ts";
+import { build } from "../src/pipeline/build.ts";
+
+const Ajv2020 = createRequire(import.meta.url)("ajv/dist/2020.js") as typeof Ajv2020Class;
+const schema = JSON.parse(readFileSync(new URL("../schema/collection-json.schema.json", import.meta.url), "utf8")) as object;
+const validate = new Ajv2020({ strict: true, allErrors: true }).compile(schema);
 
 const pos = { file: "_data/posts.yml", startLine: 3, startColumn: 1, endLine: 7, endColumn: 1 };
 
@@ -109,4 +120,59 @@ test("llms.txt links each collection's JSON under a Data section", async () => {
 test("a site without collections writes no Data section", async () => {
   const text = String((await llms.run(site([], { collections: {} }), ctx))[0]!.contents);
   assert.ok(!text.includes("## Data"));
+});
+
+test("collection JSON writes page: null when the page-json output is off", async () => {
+  const files = await collectionJson.run(site([page("/docs/posts/a/", "a")], { outputs: { "page-json": false } }), ctx);
+  const body = JSON.parse(String(files[0]!.contents)) as { records: { id: string; page: unknown }[] };
+  assert.deepEqual(body.records.map((r) => [r.id, r.page]), [["a", null]]);
+  assert.ok(validate(body), JSON.stringify(validate.errors));
+});
+
+test("llms.txt writes no Data section when the collection-json output is off", async () => {
+  const text = String((await llms.run(site([page("/docs/posts/a/", "a")], { outputs: { "collection-json": false } }), ctx))[0]!.contents);
+  assert.ok(!text.includes("## Data"));
+});
+
+test("real collection JSON validates against the published schema, and its links point at written files", async () => {
+  const root = mkdtempSync(join(tmpdir(), "coll-site-"));
+  const out = mkdtempSync(join(tmpdir(), "coll-out-"));
+  const theme = fileURLToPath(new URL("../../lateen", import.meta.url));
+  const files: Record<string, string> = {
+    "mizzen.yml": [
+      "title: Example",
+      "url: https://example.test",
+      "base: /docs",
+      "collections:",
+      "  posts:",
+      "    source: _data/posts.yml",
+      "    id: id",
+      "    template: _templates/post.md",
+      "    permalink: /posts/{id}/",
+      "",
+    ].join("\n"),
+    "_data/posts.yml": "- id: hello\n  title: Hello\n- id: world\n  title: World\n",
+    "_templates/post.md": "---\ntitle: Post\nlayout: doc\n---\n\n# Post\n",
+  };
+  try {
+    for (const [path, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+    const result = await build({ root, out, themeRoot: theme, defaultLayout: "doc" });
+    assert.deepEqual(result.diagnostics.filter((d) => d.severity === "error"), []);
+    const body = JSON.parse(readFileSync(join(out, "data/posts.json"), "utf8")) as {
+      records: { id: string; url: string; page: string | null }[];
+    };
+    assert.equal(validate(body), true, JSON.stringify(validate.errors));
+    assert.equal(body.records.length, 2);
+    for (const record of body.records) {
+      assert.ok(record.page !== null);
+      assert.ok(readFileSync(join(out, record.page.replace(/^\/docs\//, "")), "utf8").length > 0, `${record.page} was written`);
+    }
+    assert.match(readFileSync(join(out, "llms.txt"), "utf8"), /\/docs\/data\/posts\.json/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(out, { recursive: true, force: true });
+  }
 });

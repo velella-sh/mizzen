@@ -101,3 +101,33 @@ test("an idField makes a new event of the same record a new entry", async () => 
   };
   assert.deepEqual(await ids(model), ["tag:example.test:feeds/releases", "tag:example.test:releases/v1/1.2.0"]);
 });
+
+test("two feeds over one collection give the shared record the same tag URI, whatever its page URL", async () => {
+  const make = (url: string): Site => ({
+    config: config({
+      url: "https://example.test",
+      feeds: {
+        all: { collection: "releases", date: "date" },
+        recent: { collection: "releases", date: "date", limit: 1 },
+      },
+    }),
+    pages: [page(url, "v1")],
+    nav: {},
+    collections: { releases: { name: "releases", source: "_data/releases.yml", records: [record("v1", { date: "2026-01-01" })] } },
+    data: {},
+  });
+  const entryIds = async (model: Site): Promise<Record<string, string>> => {
+    const out: Record<string, string> = {};
+    for (const file of await feeds.run(model, ctx)) {
+      const all = [...String(file.contents).matchAll(/<id>([^<]*)<\/id>/g)].map((match) => match[1] ?? "");
+      out[file.path] = all.find((id) => id.includes("releases/v1")) ?? "";
+    }
+    return out;
+  };
+  const before = await entryIds(make("/releases/v1/"));
+  const after = await entryIds(make("/releases/version-one/"));
+  assert.deepEqual(Object.keys(before), ["feeds/all.xml", "feeds/recent.xml"]);
+  assert.equal(before["feeds/all.xml"], "tag:example.test:releases/v1");
+  assert.equal(before["feeds/recent.xml"], before["feeds/all.xml"]);
+  assert.deepEqual(after, before, "changing the page URL does not change the id");
+});

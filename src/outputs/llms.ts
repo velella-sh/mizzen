@@ -108,7 +108,7 @@ export const llms: Output = {
 
     const base = site.config.base.replace(/\/+$/, "");
     const collections = Object.keys(site.config.collections);
-    if (collections.length > 0) {
+    if (collections.length > 0 && site.config.outputs["collection-json"] !== false) {
       lines.push("## Data", "");
       for (const name of collections) {
         const count = indexRecords(site, name).length;
