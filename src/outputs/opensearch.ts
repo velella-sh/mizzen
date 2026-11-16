@@ -1,6 +1,7 @@
 import type { Site } from "../contracts/content.ts";
 import type { LinkTag } from "../contracts/render.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
+import { SEARCH_QUERY } from "./search-shared.ts";
 
 /** The file an OpenSearch description is served from, at the site root. */
 export const OPENSEARCH_PATH = "opensearch.xml";
@@ -53,11 +54,12 @@ export function opensearchLink(site: Site): LinkTag | undefined {
 }
 
 /**
- * The address the site's search page reads `q` from: the site `url` plus `base` and a slash, with `{searchTerms}`
- * where the browser puts the query. OpenSearch substitutes the placeholder, so the braces stay literal in the file.
+ * The address the site's search page reads the query from: the site `url` plus `base` and a slash, with
+ * `{searchTerms}` where the browser puts the query. OpenSearch substitutes the placeholder, so the braces stay
+ * literal in the file. The parameter name is the one `search-facets.json` publishes.
  */
 function searchTemplate(site: Site, origin: string): string {
-  return `${origin}${site.config.base}/?q={searchTerms}`;
+  return `${origin}${site.config.base}/?${SEARCH_QUERY.text}={searchTerms}`;
 }
 
 /**

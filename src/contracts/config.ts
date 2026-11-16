@@ -63,6 +63,26 @@ export interface CollectionViewConfig {
   readonly layout?: string;
 }
 
+/** How a collection's record pages take part in search. Every key is optional; unset means the default below. */
+export interface CollectionSearchConfig {
+  /** Fields written as result metadata under the field's own name. Default `[]`. */
+  readonly meta?: readonly string[];
+  /** Fields a reader can filter by; a list field gives one filter value per item. Default `[]`. */
+  readonly filters?: readonly string[];
+  /** Fields results can be ordered by: dates, numbers, or short text. Default `[]`. */
+  readonly sort?: readonly string[];
+  /** Field that holds other names of a record, indexed so a search for one finds the page. */
+  readonly aliases?: string;
+}
+
+/** One compact JSON index of a collection's records for the theme's data explorer. */
+export interface CollectionIndexConfig {
+  /** Fields each row carries, in this order, before the record's URL. */
+  readonly fields: readonly string[];
+  /** Largest chunk, in bytes of the written JSON. Default `100000`. */
+  readonly bytes?: number;
+}
+
 /** What a record's disappearance from its collection does. */
 export type OnRemovedConfig =
   | "error"
@@ -111,6 +131,10 @@ export interface CollectionConfig {
   readonly limits?: DataLimitsConfig;
   /** Extra named pages built from every record, each with its own template, URL pattern, and layout. Default `{}`. */
   readonly views?: Readonly<Record<string, CollectionViewConfig>>;
+  /** How the collection's record pages take part in search. */
+  readonly search?: CollectionSearchConfig;
+  /** A compact JSON index of the collection's records for the theme, written under `data/`. */
+  readonly index?: CollectionIndexConfig;
 }
 
 /**

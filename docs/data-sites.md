@@ -119,6 +119,81 @@ and layout. A view page's canonical URL is the record's main page, and the main 
 sitemap, the feeds, and `llms.txt`/`llms-full.txt`; their manifest entry names the view. A view never changes the record
 and is not built when the record's main page is not built.
 
+## Search over data
+
+A collection's record pages enter the Pagefind index with their title, description, and body like any doc page. Its
+`search` key adds what the theme can filter, sort, and show:
+
+```yaml
+collections:
+  posts:
+    source: _data/posts.yml
+    template: _templates/posts.md
+    permalink: /posts/{id}/
+    dates: [date]
+    search:
+      meta: [author, date]
+      filters: [status, tags]
+      sort: [date, rank]
+      aliases: aka
+```
+
+`search.meta` writes each field as result metadata under its own name. `search.filters` writes each field as a Pagefind
+filter, with one value per item for a list; every record page also carries `collection` as a filter. A field with more
+than 100 distinct values is free text, so it is reported as `search.filter-too-many` and left out. `search.sort` writes
+a sort key for a field the collection marks under `dates`, a field whose values are all numbers, or a field whose values
+are short text; anything else is reported as `search.sort-unsupported` and left out. `search.aliases` names a string or
+list field of other names, which is indexed as the `aliases` metadata and never shown as page text.
+
+A record whose own `search` field is `false`, a page whose front matter says `search: false`, and a named view stay out
+of the index. `search: false` in the site config writes no index at all.
+
+`search-facets.json` lists each filter and the number of record pages per value, with the collection filter first and
+every name and value in code-point order; it holds no labels or translations:
+
+```json
+{
+  "query": { "text": "q", "filter": "filter.{field}", "sort": "sort", "order": "order" },
+  "filters": {
+    "collection": { "posts": 3 },
+    "status": { "draft": 1, "published": 2 },
+    "tags": { "news": 2, "release": 2 }
+  }
+}
+```
+
+Its `query` object names the search results page's parameters, and `opensearch.xml` uses the same text parameter:
+
+| Purpose | Parameter | Example |
+| --- | --- | --- |
+| Search text | `q` | `?q=cache` |
+| A filter | `filter.<field>` | `&filter.status=published` |
+| Sort field | `sort` | `&sort=date` |
+| Sort direction | `order` | `&order=desc` |
+
+A result page the theme builds reads those names; a parameter it does not know is ignored, never an error. The theme
+owns the results page, the engine only publishes the index and the names.
+
+## A compact index for the theme
+
+`collections.<name>.index` writes `data/<name>.index.json`: a column layout for the theme's data explorer, with the
+declared fields once in `columns` and one array per record in `rows`, ending with the record's page URL.
+
+```yaml
+collections:
+  posts:
+    source: _data/posts.yml
+    index:
+      fields: [title, date, status]
+      bytes: 100000
+```
+
+Rows keep the collection's source order, and a record with pages in several languages is written once with the default
+language's URL. A file over `index.bytes` (default `100000`) is split by bytes, never by record count, into
+`data/<name>.index.1.json`, `.2.json`, and so on; the head file then lists them under `chunks` and carries no `rows`.
+Each written file's plain and gzipped size is reported as `collection-index.size`. A collection without the key writes
+no file.
+
 ## URLs that do not move
 
 A URL pattern may filter a field with `|slug`: `{name|slug}` lowercases the value, keeps the letters and digits of every

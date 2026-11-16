@@ -15,6 +15,8 @@ import {
 } from "yaml";
 import type {
   CollectionConfig,
+  CollectionIndexConfig,
+  CollectionSearchConfig,
   CollectionViewConfig,
   DefaultsEntry,
   Diagnostic,
@@ -192,6 +194,8 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const references = referencesFrom(entry.references);
     const dates = fieldsFrom(entry.dates);
     const views = viewsFrom(entry.views);
+    const search = collectionSearchFrom(entry.search);
+    const index = collectionIndexFrom(entry.index);
     const onRemoved = onRemovedFrom(entry.onRemoved);
     collections[name] = {
       source: entry.source,
@@ -213,9 +217,39 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(onRemoved === undefined ? {} : { onRemoved }),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
       ...(views === undefined ? {} : { views }),
+      ...(search === undefined ? {} : { search }),
+      ...(index === undefined ? {} : { index }),
     };
   }
   return collections;
+}
+
+/** A collection's search settings, keeping only the keys the schema accepts. `undefined` when it sets none. */
+function collectionSearchFrom(value: unknown): CollectionSearchConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const meta = fieldsFrom(value.meta);
+  const filters = fieldsFrom(value.filters);
+  const sort = fieldsFrom(value.sort);
+  const search: CollectionSearchConfig = {
+    ...(meta === undefined ? {} : { meta }),
+    ...(filters === undefined ? {} : { filters }),
+    ...(sort === undefined ? {} : { sort }),
+    ...(typeof value.aliases === "string" ? { aliases: value.aliases } : {}),
+  };
+  return Object.keys(search).length === 0 ? undefined : search;
+}
+
+/** A collection's compact index settings; `undefined` when it names no fields. */
+function collectionIndexFrom(value: unknown): CollectionIndexConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const fields = fieldsFrom(value.fields);
+  if (fields === undefined || fields.length === 0) return undefined;
+  return {
+    fields,
+    ...(typeof value.bytes === "number" && Number.isSafeInteger(value.bytes) && value.bytes > 0
+      ? { bytes: value.bytes }
+      : {}),
+  };
 }
 
 /** `onRemoved` as the contract holds it: one of the words, or a redirect to a safe site path. */
