@@ -48,3 +48,17 @@ the page is silently out of date. The engine should say which pages to look at, 
 | Moves | `src/stale/moves.ts` |
 | Diagnostics for `check` and `doctor` | `src/stale/diagnostics.ts` |
 | Pages a change touches | `src/stale/changed.ts` |
+
+## Diagnostic codes
+
+| Code | Severity | Meaning |
+| --- | --- | --- |
+| `stale.page` | `stale.severity`, default `warning` | A page's covered files changed, were removed, or were added since the last review. The message names each file. |
+| `stale.covers-invalid` | error | `covers` is not a list of non-empty strings. |
+| `stale.covers-outside-root` | error | A `covers` path leaves `stale.root`. |
+| `stale.covers-empty` | warning | A `covers` path or glob matches no file. |
+| `stale.covers-limit` | error | A page covers too many files, or a file is too large. |
+| `stale.covers-unreadable` | warning | A covered file cannot be read. |
+| `stale.lock-invalid` | error | `docs-review.lock.json` is not valid JSON or does not match `schema/docs-review.schema.json`. |
+
+`mizzen check` and `mizzen doctor` report these with `--format json` and `--format sarif` like any other finding.

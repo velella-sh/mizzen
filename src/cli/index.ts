@@ -14,6 +14,7 @@ import { dataFetch, dataSnapshot } from "./data.ts";
 import { verifyData } from "../data/verify.ts";
 import { runNetwork } from "./network.ts";
 import { runStale } from "./stale.ts";
+import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
 import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
@@ -1044,12 +1045,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "doctor") {
     try {
       const themeRoot = await resolveThemeRoot(root, options.theme);
-      const diagnostics = await doctor({
-        root,
-        defaultLayout: DEFAULT_LAYOUT,
-        today: new Date().toISOString().slice(0, 10),
-        ...(themeRoot === undefined ? {} : { themeRoot }),
-      });
+      const diagnostics = [
+        ...(await doctor({
+          root,
+          defaultLayout: DEFAULT_LAYOUT,
+          today: new Date().toISOString().slice(0, 10),
+          ...(themeRoot === undefined ? {} : { themeRoot }),
+        })),
+        ...(await staleDiagnostics(root)),
+      ];
       printDiagnostics(diagnostics, options.format, log);
       return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
     } catch (err) {
@@ -1161,8 +1165,9 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       defaultLayout: DEFAULT_LAYOUT,
       ...(options.workers === undefined ? {} : { workers: options.workers }),
     });
-    printDiagnostics(result.diagnostics, options.format, log);
-    return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;
+    const diagnostics = [...result.diagnostics, ...(await staleDiagnostics(root))];
+    printDiagnostics(diagnostics, options.format, log);
+    return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
   } catch (err) {
     error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
     return 2;
