@@ -24,7 +24,7 @@ test("a clean site lists nothing and exits 0 even with --fail", async () => {
   const r = await run(["stale", root, "--fail"]);
   assert.equal(r.code, 0);
   assert.deepEqual(r.logs, ["No stale pages."]);
-  assert.deepEqual(JSON.parse((await run(["stale", root, "--json"])).logs[0]!), { version: 1, pages: [] });
+  assert.deepEqual(JSON.parse((await run(["stale", root, "--json"])).logs[0]!), { version: 1, pages: [], moves: [] });
 });
 
 test("a changed file names the page and the file", async () => {

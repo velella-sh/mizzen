@@ -13,7 +13,7 @@ import { appendFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { redactAuditText } from "../edits/audit.ts";
 import { loadCoveredPages } from "../stale/pages.ts";
-import { compareToLock, formatStaleJson, formatStaleText } from "../stale/report.ts";
+import { applyMoves, compareToLock, formatStaleJson, formatStaleText } from "../stale/report.ts";
 import { readReviewLock, reviewDate, withPage, writeReviewLock } from "../stale/lock.ts";
 
 /** Where the command prints. */
@@ -113,8 +113,8 @@ async function list(args: readonly string[], io: StaleIo): Promise<number> {
   for (const page of loaded.pages) {
     for (const d of page.diagnostics) io.error(`mizzen: ${d.pos === undefined ? page.page : `${d.pos.file}:${d.pos.line}`}: ${d.message}`);
   }
-  const stale = compareToLock(loaded.pages, lock.lock);
-  io.log(json ? formatStaleJson(stale) : formatStaleText(stale));
+  const { pages: stale, moves } = await applyMoves(compareToLock(loaded.pages, lock.lock), lock.lock, loaded.coversRoot);
+  io.log(json ? formatStaleJson(stale, moves) : formatStaleText(stale, moves));
   return fail && stale.length > 0 ? 1 : 0;
 }
 

@@ -75,6 +75,13 @@ async function walk(root: string, dir: string, out: string[]): Promise<void> {
   }
 }
 
+/** Every regular file under `root`, sorted, as `/`-separated relative paths; links are not followed and `.git` and `node_modules` are skipped. */
+export async function listFiles(root: string): Promise<string[]> {
+  const out: string[] = [];
+  await walk(root, root, out);
+  return out.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 /** Expands a page's `covers` to the files it names. */
 export async function expandCovers(options: ExpandCoversOptions): Promise<ExpandedCovers> {
   const line = options.line ?? 1;

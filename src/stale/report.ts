@@ -7,6 +7,7 @@
  * has never been reviewed: every file counts as added and `reviewed` is absent.
  */
 import type { CoveredPage } from "./pages.ts";
+import { matchMoves, moveCandidates, type FileMove } from "./moves.ts";
 import type { ReviewLock } from "./lock.ts";
 
 /** How a covered file differs from the lock. */
@@ -30,11 +31,19 @@ export interface StalePage {
   readonly fix: string;
 }
 
+/** A covered file that moved: the page's `covers` should name the new path. */
+export interface PageMove extends FileMove {
+  /** Source path of the page. */
+  readonly page: string;
+}
+
 /** What `mizzen stale --json` prints. */
 export interface StaleReport {
   readonly version: 1;
   /** Stale pages sorted by page. Empty when every page is current. */
   readonly pages: readonly StalePage[];
+  /** Covered files that moved without a change; they do not make a page stale. */
+  readonly moves: readonly PageMove[];
 }
 
 /** The hint for a page. */
@@ -63,19 +72,50 @@ export function compareToLock(pages: readonly CoveredPage[], lock: ReviewLock): 
   return out;
 }
 
+/**
+ * Moves removed files out of the stale list when the same content now sits at one other path under the covers root.
+ * A page left with no other change is no longer stale; a page that keeps other changes stays, with the new path in its
+ * hint.
+ */
+export async function applyMoves(
+  stale: readonly StalePage[],
+  lock: ReviewLock,
+  coversRoot: string,
+): Promise<{ readonly pages: StalePage[]; readonly moves: PageMove[] }> {
+  if (!stale.some((p) => p.files.some((f) => f.change === "removed"))) return { pages: [...stale], moves: [] };
+  const everyLocked = new Set<string>();
+  for (const entry of Object.values(lock.pages)) for (const f of entry.files) everyLocked.add(f.path);
+  const candidates = await moveCandidates(coversRoot, everyLocked);
+  const pages: StalePage[] = [];
+  const moves: PageMove[] = [];
+  for (const page of stale) {
+    const locked = new Map((lock.pages[page.page]?.files ?? []).map((f) => [f.path, f]));
+    const removed = page.files.filter((f) => f.change === "removed").map((f) => locked.get(f.path)!);
+    const found = matchMoves(removed, candidates);
+    for (const m of found) moves.push({ page: page.page, ...m });
+    const gone = new Set(found.map((m) => m.from));
+    const files = page.files.filter((f) => !gone.has(f.path));
+    if (files.length === 0) continue;
+    const hint = found.length === 0 ? page.fix : `${page.fix} Moved: ${found.map((m) => `${m.from} -> ${m.to}`).join(", ")}; update \`covers\` to the new path.`;
+    pages.push({ ...page, files, fix: hint });
+  }
+  return { pages, moves };
+}
+
 /** The machine-readable report, as text. */
-export function formatStaleJson(pages: readonly StalePage[]): string {
-  const report: StaleReport = { version: 1, pages };
+export function formatStaleJson(pages: readonly StalePage[], moves: readonly PageMove[] = []): string {
+  const report: StaleReport = { version: 1, pages, moves };
   return JSON.stringify(report, null, 2);
 }
 
 /** The human report, one block per stale page; a clean site prints one line. */
-export function formatStaleText(pages: readonly StalePage[]): string {
-  if (pages.length === 0) return "No stale pages.";
+export function formatStaleText(pages: readonly StalePage[], moves: readonly PageMove[] = []): string {
+  const moved = moves.map((m) => `${m.page}: ${m.from} moved to ${m.to}; update \`covers\` to the new path.`);
+  if (pages.length === 0) return ["No stale pages.", ...moved].join("\n");
   const blocks = pages.map((p) => {
     const head = p.reviewed === undefined ? `${p.page} (never reviewed)` : `${p.page} (reviewed ${p.reviewed})`;
     const lines = p.files.map((f) => `  ${f.change.padEnd(7)} ${f.path}`);
     return [head, ...lines, `  fix: ${p.fix}`].join("\n");
   });
-  return `${blocks.join("\n\n")}\n\n${pages.length} stale page${pages.length === 1 ? "" : "s"}.`;
+  return `${blocks.join("\n\n")}\n\n${[...moved, `${pages.length} stale page${pages.length === 1 ? "" : "s"}.`].join("\n")}`;
 }
