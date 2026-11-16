@@ -132,6 +132,12 @@ export interface CollectionIndexConfig {
   readonly bytes?: number;
 }
 
+/** The raw data a collection publishes beside its pages. */
+export interface CollectionRawConfig {
+  /** Fields left out of the published JSON and CSV. Default `[]`. */
+  readonly private?: readonly string[];
+}
+
 /** What a record's disappearance from its collection does. */
 export type OnRemovedConfig =
   | "error"
@@ -188,6 +194,8 @@ export interface CollectionConfig {
   readonly seo?: CollectionSeoConfig;
   /** A compact JSON index of the collection's records for the theme, written under `data/`. */
   readonly index?: CollectionIndexConfig;
+  /** The raw data published as JSON and CSV with a checksum file; `false` writes none. Default: written, every field. */
+  readonly raw?: false | CollectionRawConfig;
 }
 
 /** A cookieless analytics tool the site attaches with one script tag. */
@@ -228,6 +236,12 @@ export interface NetworkConfig {
   /** The id of this project in the network file. */
   readonly project: string;
   /** A build warns when the lock is older than this many days. Default `30`. */
+  readonly maxAgeDays?: number;
+}
+
+/** The `snapshot` key: how old a collection's recorded snapshot may be before `mizzen doctor` reports it. */
+export interface SnapshotConfig {
+  /** Report a collection whose snapshot `capturedAt` is more than this many days before the date doctor is given. Default: never. */
   readonly maxAgeDays?: number;
 }
 
@@ -284,6 +298,8 @@ export interface SiteConfig {
   readonly verify?: VerifyConfig;
   /** The shared network of projects. Default: none, and the site builds on its own. */
   readonly network?: NetworkConfig;
+  /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
+  readonly snapshot?: SnapshotConfig;
   /** Generated social share images. Default: none, and no image is written. */
   readonly social?: SocialConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */

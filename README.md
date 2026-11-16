@@ -61,6 +61,8 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
+  data verify [dir]         Compare the lock's record of each collection with its data; read-only
+  data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -87,6 +89,7 @@ Options:
   --host <host>        Host for dev (default: 127.0.0.1)
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
+  --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
@@ -112,6 +115,8 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen build [dir] --out <dir> --theme <dir>` | Builds `dir` (default `.`) into `--out` (default `dist`). Prints diagnostics as text. A build with an error still writes the site and exits `1`. |
 | `mizzen check [dir] --format text\|json\|sarif --theme <dir>` | Builds into a temporary folder, prints only the diagnostics in the chosen format, and removes the folder. Exits `1` on an error. |
 | `mizzen data fetch [dir] --check` | Fetches every `https:` collection source, stores it under `.mizzen/data/`, and writes `mizzen.lock.json`; `--check` compares without writing. |
+| `mizzen data snapshot <name> [dir] --allow-dirty` | Records the last commit that touched a file collection, and its commit date, under `snapshots` in `mizzen.lock.json`; refuses a file with uncommitted changes unless `--allow-dirty`. |
+| `mizzen data verify [dir]` | Compares each collection with the lock and prints the first differing record with its source position; exits `1` on a difference and never writes. |
 | `mizzen dev [dir] --port <number> --host <host> --theme <dir>` | Builds `dir`, serves the output with pretty URLs, watches the source and theme, rebuilds on change, and reloads the browser over Server-Sent Events. The reload script is added to HTML responses only; the files on disk stay as `build` wrote them. Ctrl-C stops the server. |
 | `mizzen doctor [dir] --format text\|json\|sarif --theme <dir>` | Checks the runtime, the config, the content, the output paths, and the toolchain without writing to the site, and prints the findings in the chosen format. Exits `1` on an error. |
 | `mizzen edit apply <patch.json> [dir] --dry-run --proof <path> --allow-unchecked` | Applies one span patch (the JSON shape of `src/edits/patch.ts`) to the source file its `span.file` names, resolved against `dir` and refused outside it. The patch is applied in memory and the file is replaced through a rename only when it succeeds, so a refused patch leaves it byte-identical. A patch that carries neither `expected` nor `beforeHash` is refused (exit `2`) unless `--allow-unchecked` is given; one that carries only one is still refused. Writes an edit proof (`src/edits/proof.ts`) with the SHA-256 before and after, at `--proof` or `<patch>.proof.json`, and prints its path. `--dry-run` prints a unified diff and writes neither. Exits `1` on a refused patch or path, `2` on a missing or invalid patch. `--format json` prints the same outcome as one report: `status`, `exitCode`, the file, the proof, and any `diagnostics` with their path and span. |
@@ -243,7 +248,8 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `changelog-feed` | `changelog.xml`, an Atom feed of the changelog page's dated release headings. |
 | `code-meta-check` | No files: reports fence meta that names lines the fence does not have. |
 | `collection-index` | `data/<collection>.index.json` for each collection with `index`: a column layout of its records and page URLs, split into numbered chunks over the byte budget. |
-| `collection-json` | `data/<collection>.json` for every collection: each record's id, URL, and page JSON address. |
+| `collection-csv` | `data/<collection>.csv` and `data/<collection>.sha256` for every collection: its records as CSV and the checksums of its raw files. `collections.<name>.raw: false` turns it off. |
+| `collection-json` | `data/<collection>.json` for every collection: each record's id, URL, and page JSON address, and `data/<collection>.raw.json` with every record and its snapshot. |
 | `context-pack` | `pack/<topic>.md` for each topic in `_data/context-packs.yml`: the best pages for the topic, trimmed to its token budget, with each page's URL and source path. |
 | `drift-report` | `drift.json`, every drift finding grouped by page URL. |
 | `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. |

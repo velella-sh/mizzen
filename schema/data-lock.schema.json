@@ -20,9 +20,52 @@
       "additionalProperties": {
         "$ref": "#/$defs/source"
       }
+    },
+    "snapshots": {
+      "type": "object",
+      "description": "Where each collection's data was recorded from, keyed by collection name.",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/snapshot"
+      }
     }
   },
   "$defs": {
+    "snapshot": {
+      "type": "object",
+      "description": "Where a collection was recorded from. Nothing in it is read from the build clock.",
+      "required": ["source"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The source the data was recorded from: a path, a URL, or an `npm:` address."
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The commit, or the package and exact version, the data was recorded at."
+        },
+        "capturedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$",
+          "description": "When the data was recorded: a date, or a UTC instant to the second, taken from the data and never from the build clock."
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The tool that recorded it, such as `git` or `npm`."
+        },
+        "toolVersion": {
+          "type": "string",
+          "minLength": 1,
+          "description": "That tool's version."
+        }
+      }
+    },
     "source": {
       "type": "object",
       "description": "One pinned source, with the bytes a build may read.",
@@ -48,6 +91,11 @@
           "type": "string",
           "pattern": "^[0-9a-f]{64}$",
           "description": "SHA-256 of the source's bytes, as 64 lowercase hex characters."
+        },
+        "fetchedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "description": "When a URL source was fetched, from the response's date header and never the build clock."
         }
       }
     }

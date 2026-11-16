@@ -46,6 +46,20 @@ export interface DataStats {
   readonly unchecked: readonly string[];
 }
 
+/** Where a collection's data was recorded from, as `mizzen.lock.json` holds it. Nothing in it is the build clock. */
+export interface CollectionSnapshot {
+  /** The source the data was recorded from: a path, a URL, or an `npm:` address. */
+  readonly source: string;
+  /** The commit, or the package and exact version, the data was recorded at. */
+  readonly ref?: string;
+  /** When the data was recorded, as a date or a UTC instant to the second, taken from the data. */
+  readonly capturedAt?: string;
+  /** The tool that recorded it, such as `git` or `npm`. */
+  readonly tool?: string;
+  /** That tool's version. */
+  readonly toolVersion?: string;
+}
+
 /** One collection: its name, the records it was read into, and the source file they came from. */
 export interface Collection {
   /** Collection name, as the config key writes it. */
@@ -56,6 +70,8 @@ export interface Collection {
   readonly records: readonly DataRecord[];
   /** The installed package a collection was read from, when its source is `npm:`. */
   readonly package?: { readonly name: string; readonly version: string };
+  /** Where the lock says the data was recorded from; absent when the lock holds none. */
+  readonly snapshot?: CollectionSnapshot;
 }
 
 /** The record a page was built from, as the site model carries it. */

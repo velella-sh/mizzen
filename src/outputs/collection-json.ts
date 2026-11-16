@@ -3,11 +3,13 @@
  * every record's id and URL without reading the data file or the HTML.
  *
  * A record without a main page is left out, and a record with pages in several languages points at the default
- * language's page. Every record's fields live in its own page JSON, which this file links to; copying them here would
+ * language's page. Beside each index it writes `data/<collection>.raw.json`: every record's fields and the collection's
+ * snapshot, without the fields `raw.private` lists, and nothing when `raw` is `false`. Every record's fields live in its own page JSON, which this file links to; copying them here would
  * duplicate the same data once per file. Files come back sorted by path, records by id.
  */
 import type { Site } from "../contracts/content.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
+import { rawFiles, rawPaths } from "../data/raw.ts";
 import { jsonUrl } from "./page-json.ts";
 import { indexRecords } from "./search-shared.ts";
 
@@ -44,6 +46,10 @@ export const collectionJson: Output = {
         .sort((a, b) => byCodePoint(a.id, b.id));
       const body: CollectionJson = { collection: name, records };
       files.push({ path: `data/${name}.json`, contents: `${JSON.stringify(body, null, 2)}\n` });
+      // The raw data, with the collection's snapshot, beside the index; a collection with `raw: false` gets none.
+      const collection = site.collections[name];
+      const raw = collection === undefined ? undefined : rawFiles(collection, site.config.collections[name]);
+      if (raw !== undefined) files.push({ path: rawPaths(name).json, contents: raw.json });
     }
     return files.sort((a, b) => byCodePoint(a.path, b.path));
   },

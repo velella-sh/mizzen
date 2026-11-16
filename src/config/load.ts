@@ -19,6 +19,7 @@ import type {
   VerifyConfig,
   CollectionConfig,
   CollectionIndexConfig,
+  CollectionRawConfig,
   CollectionJsonConfig,
   CollectionSearchConfig,
   CollectionSeoConfig,
@@ -30,6 +31,7 @@ import type {
   FeedFormat,
   LanguageConfig,
   NetworkConfig,
+  SnapshotConfig,
   RepositoryConfig,
   SearchConfig,
   SiteConfig,
@@ -168,6 +170,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const analytics = analyticsFrom(raw.analytics);
   const verify = verifyFrom(raw.verify);
   const network = networkFrom(raw.network);
+  const snapshot = snapshotFrom(raw.snapshot);
   const social = socialFrom(raw.social);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
@@ -195,6 +198,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(analytics === undefined ? {} : { analytics }),
     ...(verify === undefined ? {} : { verify }),
     ...(network === undefined ? {} : { network }),
+    ...(snapshot === undefined ? {} : { snapshot }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -231,6 +235,13 @@ function networkFrom(value: unknown): NetworkConfig | undefined {
       ? { maxAgeDays: value.maxAgeDays }
       : {}),
   };
+}
+
+/** The snapshot key, kept only when it holds a positive whole `maxAgeDays`; the schema check reports an invalid one. */
+function snapshotFrom(value: unknown): SnapshotConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const days = value.maxAgeDays;
+  return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */
@@ -282,6 +293,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const index = collectionIndexFrom(entry.index);
     const onRemoved = onRemovedFrom(entry.onRemoved);
     const json = collectionJsonFrom(entry.json);
+    const raw = collectionRawFrom(entry.raw);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
@@ -306,6 +318,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(search === undefined ? {} : { search }),
       ...(seo === undefined ? {} : { seo }),
       ...(index === undefined ? {} : { index }),
+      ...(raw === undefined ? {} : { raw }),
     };
   }
   return collections;
@@ -398,6 +411,14 @@ function collectionIndexFrom(value: unknown): CollectionIndexConfig | undefined 
       ? { bytes: value.bytes }
       : {}),
   };
+}
+
+/** `raw` as the contract holds it: `false`, or the private fields; `undefined` when unset. */
+function collectionRawFrom(value: unknown): false | CollectionRawConfig | undefined {
+  if (value === false) return false;
+  if (!isPlainObject(value)) return undefined;
+  const hidden = fieldsFrom(value.private);
+  return hidden === undefined ? {} : { private: hidden };
 }
 
 /** `onRemoved` as the contract holds it: one of the words, or a redirect to a safe site path. */

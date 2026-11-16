@@ -283,7 +283,7 @@ async function localBytes(
 }
 
 /** Reads a CSV or YAML/JSON source into records, adding every finding to `diagnostics`. */
-function readText(
+export function readText(
   collection: string,
   source: string,
   display: string,
@@ -514,6 +514,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       source,
       records: kept,
       ...(packageInfo === undefined ? {} : { package: packageInfo }),
+      ...(lock?.snapshots?.[name] === undefined ? {} : { snapshot: lock.snapshots[name]! }),
     };
   }
 

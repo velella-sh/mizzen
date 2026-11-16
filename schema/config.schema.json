@@ -166,6 +166,18 @@
       },
       "description": "Joins the site to a shared network of projects. Default: none, and the site builds on its own."
     },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxAgeDays": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "`mizzen doctor` reports a collection whose snapshot was captured more than this many days before today. Default: never."
+        }
+      },
+      "description": "How old a collection's recorded snapshot may be. Default: none."
+    },
     "analytics": {
       "type": "object",
       "additionalProperties": false,
@@ -500,6 +512,25 @@
             }
           },
           "description": "How the collection's record and list pages are described to search engines."
+        },
+        "raw": {
+          "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",
+          "oneOf": [
+            { "const": false },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "private": {
+                  "type": "array",
+                  "default": [],
+                  "uniqueItems": true,
+                  "items": { "type": "string", "minLength": 1 },
+                  "description": "Fields left out of the published JSON and CSV. Default []."
+                }
+              }
+            }
+          ]
         },
         "index": {
           "type": "object",

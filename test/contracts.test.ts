@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type {
-  Chrome, CodeConfig, Collection, Component, DataRecord, Diagnostic, Head, Island, Layout, ListProps, NavTree, Output, Page, Pager, Plugin, RecordPos, RecordProps, Site, SiteConfig, SourcePos, Trail,
+  Chrome, CodeConfig, Collection, CollectionSnapshot, Component, DataRecord, Diagnostic, Head, Island, Layout, ListProps, NavTree, Output, Page, Pager, Plugin, RecordPos, RecordProps, Site, SiteConfig, SourcePos, Trail,
 } from "../src/contracts/index.ts";
 
 // These values only have to type-check (`npm run typecheck`); the runtime assertions keep the test from being empty.
@@ -38,7 +38,9 @@ const record: DataRecord = {
   fieldPositions: { title: { ...recordPos, startColumn: 8 } },
 };
 
-const collection: Collection = { name: "components", source: "_data/components.yml", records: [record] };
+const snapshot: CollectionSnapshot = { source: "_data/components.yml", ref: "abc123", capturedAt: "2026-03-01T10:20:30Z", tool: "git", toolVersion: "2.45.0" };
+
+const collection: Collection = { name: "components", source: "_data/components.yml", records: [record], snapshot };
 
 const page: Page = {
   url: "/example/guide/install/",
@@ -125,6 +127,10 @@ test("example values of every contract type type-check and carry what the contra
   assert.equal(page.record?.position.startLine, recordPos.startLine);
   assert.equal(site.collections["components"]?.records[0]?.fieldPositions["title"]?.startColumn, 8);
   assert.equal(site.config.collections["components"]?.source, "_data/components.yml");
+  assert.deepEqual(site.collections["components"]?.snapshot, snapshot);
+  const { snapshot: _omitted, ...withoutSnapshot } = collection;
+  const plain: Collection = withoutSnapshot;
+  assert.equal(plain.snapshot, undefined);
   assert.deepEqual(site.network?.projects.filter((p) => p.current).map((p) => p.id), ["docs"]);
   assert.deepEqual(chrome({ site, page, trail, pager }), { type: "header", title: "Example" });
   assert.deepEqual(component({ props: { kind: "note" }, page, site, html: "" }), { type: "aside", kind: "note" });
