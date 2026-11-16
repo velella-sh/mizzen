@@ -14,6 +14,8 @@ import {
   type Pair,
 } from "yaml";
 import type {
+  ApiCollectionConfig,
+  ApiConfig,
   AnalyticsConfig,
   AnalyticsProvider,
   VerifyConfig,
@@ -145,6 +147,17 @@ export function loadConfigText(source: string, file: string, folderTitle: string
   }
 
   const collections = collectionsFrom(raw.collections);
+  for (const name of Object.keys(apiFrom(raw.api)?.collections ?? {})) {
+    if (collections[name] !== undefined) continue;
+    const pair = getMapPair(doc, ["api", "collections", name]);
+    diagnostics.push({
+      id: "config.api-collection",
+      severity: "error",
+      message: `The API publishes the collection "${name}", which the site does not have.`,
+      pos: posFromNode(file, lineCounter, isNode(pair?.key) ? pair.key : doc.contents),
+      help: "Name a collection the config declares under `collections`.",
+    });
+  }
   for (const [name, feed] of Object.entries(feedsFrom(raw.feeds))) {
     if (collections[feed.collection] !== undefined) continue;
     const pair = getMapPair(doc, ["feeds", name, "collection"]);
@@ -171,6 +184,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const verify = verifyFrom(raw.verify);
   const network = networkFrom(raw.network);
   const snapshot = snapshotFrom(raw.snapshot);
+  const api = apiFrom(raw.api);
   const social = socialFrom(raw.social);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
@@ -199,6 +213,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(verify === undefined ? {} : { verify }),
     ...(network === undefined ? {} : { network }),
     ...(snapshot === undefined ? {} : { snapshot }),
+    ...(api === undefined ? {} : { api }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -242,6 +257,19 @@ function snapshotFrom(value: unknown): SnapshotConfig | undefined {
   if (!isPlainObject(value)) return undefined;
   const days = value.maxAgeDays;
   return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
+}
+
+/** The api key, keeping only the collections the schema accepts; `undefined` when the site sets none. `version` defaults to `v1`. */
+export function apiFrom(value: unknown): ApiConfig | undefined {
+  if (!isPlainObject(value) || !isPlainObject(value.collections)) return undefined;
+  const collections: Record<string, ApiCollectionConfig> = {};
+  for (const [name, entry] of Object.entries(value.collections)) {
+    if (!isPlainObject(entry) || !Array.isArray(entry.fields)) continue;
+    const fields = entry.fields.filter((field): field is string => typeof field === "string" && field !== "");
+    collections[name] = { fields, ...(typeof entry.id === "string" && entry.id !== "" ? { id: entry.id } : {}) };
+  }
+  const version = typeof value.version === "string" && /^v[1-9][0-9]*$/.test(value.version) ? value.version : "v1";
+  return { version, collections };
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

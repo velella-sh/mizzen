@@ -178,6 +178,25 @@
       },
       "description": "How old a collection's recorded snapshot may be. Default: none."
     },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collections"],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^v[1-9][0-9]*$",
+          "description": "The version path segment of the API, such as v1. Default v1."
+        },
+        "collections": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+          "additionalProperties": { "$ref": "#/$defs/apiCollection" },
+          "description": "The collections published by name. A collection not named here is never published."
+        }
+      },
+      "description": "The versioned static data API written under api/<version>/. Default: none, and nothing is written."
+    },
     "analytics": {
       "type": "object",
       "additionalProperties": false,
@@ -287,6 +306,26 @@
     }
   },
   "$defs": {
+    "apiCollection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields"],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "The record fields the API publishes. A field not listed is never written."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The key the record id is published under in every file. Default id."
+        }
+      },
+      "description": "One collection of the data API."
+    },
     "language": {
       "type": "object",
       "additionalProperties": false,

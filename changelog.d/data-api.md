@@ -1,0 +1,1 @@
+- **Versioned static data API.** `api: { version, collections }` in `mizzen.yml` names the collections, and for each the fields, that a site publishes as plain files under `/api/v1/`, keyed by record id. A collection the config does not name is never published, and a site without the key is unchanged. The design is in `docs/design/data-api.md`.

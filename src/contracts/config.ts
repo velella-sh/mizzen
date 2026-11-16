@@ -245,6 +245,22 @@ export interface SnapshotConfig {
   readonly maxAgeDays?: number;
 }
 
+/** One collection of the data API: which of its fields are published, and under which key its id is written. */
+export interface ApiCollectionConfig {
+  /** The record fields the API publishes. A field not listed is never written. */
+  readonly fields: readonly string[];
+  /** The key the record id is published under in every file. Default `id`. */
+  readonly id?: string;
+}
+
+/** The `api` key: the collections published as a versioned static API under `/api/<version>/`. Without the key nothing is written. */
+export interface ApiConfig {
+  /** The version path segment, such as `v1`. Default `v1`. */
+  readonly version: string;
+  /** The published collections by name; a collection not named here is never published. */
+  readonly collections: Readonly<Record<string, ApiCollectionConfig>>;
+}
+
 /** The `social` key: generated share images. Without the key no image is written. */
 export interface SocialConfig {
   /** Template used by every page that does not name its own: `_templates/social/<template>.svg` in the source folder. */
@@ -300,6 +316,8 @@ export interface SiteConfig {
   readonly network?: NetworkConfig;
   /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
   readonly snapshot?: SnapshotConfig;
+  /** The versioned static data API. Default: none, and nothing is written under `api/`. */
+  readonly api?: ApiConfig;
   /** Generated social share images. Default: none, and no image is written. */
   readonly social?: SocialConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */

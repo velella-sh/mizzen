@@ -22,7 +22,7 @@ api:
   version: v1            # default v1
   collections:
     packages:
-      id: id             # field that holds the record id; the collection's own id field when absent
+      id: id             # the key the record id is published under; default id
       fields: [name, eol, latest]
 ```
 

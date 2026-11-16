@@ -36,6 +36,8 @@ test("every key of SiteConfig is in the schema and vice versa, at every level", 
   assert.deepEqual(sorted(Object.keys(defs.collection!.properties!)), sorted(contractKeys("CollectionConfig")));
   assert.deepEqual(sorted(Object.keys(schema.properties!.repository!.properties!)), sorted(contractKeys("RepositoryConfig")));
   assert.deepEqual(sorted(Object.keys(schema.properties!.theme!.properties!)), sorted(contractKeys("ThemeConfig")));
+  assert.deepEqual(sorted(Object.keys(schema.properties!.api!.properties!)), sorted(contractKeys("ApiConfig")));
+  assert.deepEqual(sorted(Object.keys(defs.apiCollection!.properties!)), sorted(contractKeys("ApiCollectionConfig")));
   const search = (schema.properties!.search as { oneOf: Schema[] }).oneOf.find((s) => s.properties)!;
   assert.deepEqual(sorted(Object.keys(search.properties!)), sorted(contractKeys("SearchConfig")));
 });
@@ -94,6 +96,8 @@ test("valid configs pass", () => {
     { collections: {} },
     { collections: { components: { source: "_data/components.yml" } } },
     { collections: { components: { source: "_data/components.yml", json: { fields: ["title", "status"] } } } },
+    { api: { collections: {} } },
+    { api: { version: "v2", collections: { packages: { fields: ["name"], id: "key" } } } },
     { feeds: {} },
     { feeds: { posts: { collection: "posts", date: "published" } } },
     { feeds: { posts: { collection: "posts", date: "published", where: { status: "stable" }, limit: 10, title: "Posts", formats: ["atom", "rss", "json"], idField: "version", fields: ["version"] } } },
@@ -147,6 +151,10 @@ test("invalid configs fail", () => {
     ["a collection name with a capital", { collections: { Components: { source: "_data/c.yml" } } }],
     ["a collection name with an underscore", { collections: { part_list: { source: "_data/c.yml" } } }],
     ["a collection with an unknown json key", { collections: { c: { source: "_data/c.yml", json: { field: [] } } } }],
+    ["api without collections", { api: {} }],
+    ["an api collection without fields", { api: { collections: { c: {} } } }],
+    ["an api version that is not vN", { api: { version: "1", collections: {} } }],
+    ["an api collection with an unknown key", { api: { collections: { c: { fields: ["a"], extra: 1 } } } }],
     ["feeds not a map", { feeds: [] }],
     ["a feed without a collection", { feeds: { posts: { date: "published" } } }],
     ["a feed without a date", { feeds: { posts: { collection: "posts" } } }],
