@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mizzen data API index",
+  "description": "`api/<version>/index.json` in the output folder: the entry point of the static data API. It names the version and, for each published collection, its published fields, its record count, and its recorded snapshot. It holds no records. Collections are sorted by name, keys are written in a fixed order, and the file ends with a line feed. The file only gains keys within a version.",
+  "type": "object",
+  "required": ["version", "collections"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "string", "pattern": "^v[1-9][0-9]*$", "description": "The API version, such as v1." },
+    "collections": {
+      "type": "array",
+      "description": "The published collections, sorted by name.",
+      "items": {
+        "type": "object",
+        "required": ["name", "count", "fields", "snapshot"],
+        "additionalProperties": false,
+        "properties": {
+          "name": { "type": "string", "description": "The collection's name, as declared in the site config." },
+          "count": { "type": "integer", "minimum": 0, "description": "How many records the collection publishes." },
+          "fields": { "type": "array", "items": { "type": "string" }, "description": "The published field names, in the order the config lists them." },
+          "snapshot": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["source"],
+                "additionalProperties": false,
+                "properties": {
+                  "source": { "type": "string", "description": "Where the data was recorded from." },
+                  "ref": { "type": "string", "description": "The commit, or the package and exact version." },
+                  "capturedAt": { "type": "string", "description": "When the data was recorded, taken from the data." },
+                  "tool": { "type": "string", "description": "The tool that recorded it." },
+                  "toolVersion": { "type": "string", "description": "That tool's version." }
+                }
+              }
+            ],
+            "description": "The collection's recorded snapshot from mizzen.lock.json, or null when it has none."
+          }
+        }
+      }
+    }
+  }
+}
