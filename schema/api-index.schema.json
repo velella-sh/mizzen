@@ -3,10 +3,13 @@
   "title": "Mizzen data API index",
   "description": "`api/<version>/index.json` in the output folder: the entry point of the static data API. It names the version and, for each published collection, its published fields, its record count, and its recorded snapshot. It holds no records. Collections are sorted by name, keys are written in a fixed order, and the file ends with a line feed. The file only gains keys within a version.",
   "type": "object",
-  "required": ["version", "collections"],
+  "required": ["version", "status", "sunset", "successor", "collections"],
   "additionalProperties": false,
   "properties": {
     "version": { "type": "string", "pattern": "^v[1-9][0-9]*$", "description": "The API version, such as v1." },
+    "status": { "enum": ["current", "deprecated"], "description": "deprecated when the config marks this version deprecated; consumers should move to the successor." },
+    "sunset": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$", "description": "The date after which a deprecated version may be removed; null otherwise." },
+    "successor": { "type": ["string", "null"], "pattern": "^v[1-9][0-9]*$", "description": "The version to move to, for a deprecated version; null otherwise." },
     "collections": {
       "type": "array",
       "description": "The published collections, sorted by name.",

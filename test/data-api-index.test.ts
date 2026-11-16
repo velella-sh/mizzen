@@ -21,6 +21,9 @@ test("the index validates against its schema and holds no records", async () => 
   assert.equal(validate(body), true, JSON.stringify(validate.errors));
   assert.deepEqual(body, {
     version: "v1",
+    status: "current",
+    sunset: null,
+    successor: null,
     collections: [
       {
         name: "packages",

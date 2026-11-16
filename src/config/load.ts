@@ -15,6 +15,7 @@ import {
 } from "yaml";
 import type {
   ApiCollectionConfig,
+  ApiVersionConfig,
   ApiConfig,
   AnalyticsConfig,
   AnalyticsProvider,
@@ -147,16 +148,21 @@ export function loadConfigText(source: string, file: string, folderTitle: string
   }
 
   const collections = collectionsFrom(raw.collections);
-  for (const name of Object.keys(apiFrom(raw.api)?.collections ?? {})) {
-    if (collections[name] !== undefined) continue;
-    const pair = getMapPair(doc, ["api", "collections", name]);
-    diagnostics.push({
-      id: "config.api-collection",
-      severity: "error",
-      message: `The API publishes the collection "${name}", which the site does not have.`,
-      pos: posFromNode(file, lineCounter, isNode(pair?.key) ? pair.key : doc.contents),
-      help: "Name a collection the config declares under `collections`.",
-    });
+  const apiConfig = apiFrom(raw.api);
+  const apiBlocks: [readonly string[], Record<string, unknown>][] = [[["api"], apiConfig?.collections ?? {}]];
+  for (const [version, entry] of Object.entries(apiConfig?.versions ?? {})) apiBlocks.push([["api", "versions", version], entry.collections]);
+  for (const [path, published] of apiBlocks) {
+    for (const name of Object.keys(published)) {
+      if (collections[name] !== undefined) continue;
+      const pair = getMapPair(doc, [...path, "collections", name]);
+      diagnostics.push({
+        id: "config.api-collection",
+        severity: "error",
+        message: `The API publishes the collection "${name}", which the site does not have.`,
+        pos: posFromNode(file, lineCounter, isNode(pair?.key) ? pair.key : doc.contents),
+        help: "Name a collection the config declares under `collections`.",
+      });
+    }
   }
   for (const [name, feed] of Object.entries(feedsFrom(raw.feeds))) {
     if (collections[feed.collection] !== undefined) continue;
@@ -259,17 +265,41 @@ function snapshotFrom(value: unknown): SnapshotConfig | undefined {
   return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
 }
 
-/** The api key, keeping only the collections the schema accepts; `undefined` when the site sets none. `version` defaults to `v1`. */
-export function apiFrom(value: unknown): ApiConfig | undefined {
-  if (!isPlainObject(value) || !isPlainObject(value.collections)) return undefined;
+/** The collections of an api block, keeping only the entries the schema accepts. */
+function apiCollectionsFrom(value: unknown): Record<string, ApiCollectionConfig> {
   const collections: Record<string, ApiCollectionConfig> = {};
-  for (const [name, entry] of Object.entries(value.collections)) {
+  if (!isPlainObject(value)) return collections;
+  for (const [name, entry] of Object.entries(value)) {
     if (!isPlainObject(entry) || !Array.isArray(entry.fields)) continue;
     const fields = entry.fields.filter((field): field is string => typeof field === "string" && field !== "");
     collections[name] = { fields, ...(typeof entry.id === "string" && entry.id !== "" ? { id: entry.id } : {}) };
   }
+  return collections;
+}
+
+/** The api key, keeping only the collections the schema accepts; `undefined` when the site sets none. `version` defaults to `v1`. */
+export function apiFrom(value: unknown): ApiConfig | undefined {
+  if (!isPlainObject(value) || !isPlainObject(value.collections)) return undefined;
+  const collections = apiCollectionsFrom(value.collections);
   const version = typeof value.version === "string" && /^v[1-9][0-9]*$/.test(value.version) ? value.version : "v1";
-  return { version, collections, ...(value.headers === true ? { headers: true } : {}) };
+  const versions: Record<string, ApiVersionConfig> = {};
+  if (isPlainObject(value.versions)) {
+    for (const [name, entry] of Object.entries(value.versions)) {
+      if (!/^v[1-9][0-9]*$/.test(name) || !isPlainObject(entry) || !isPlainObject(entry.collections)) continue;
+      versions[name] = {
+        collections: apiCollectionsFrom(entry.collections),
+        ...(entry.deprecated === true ? { deprecated: true } : {}),
+        ...(typeof entry.sunset === "string" ? { sunset: entry.sunset } : {}),
+        ...(typeof entry.successor === "string" ? { successor: entry.successor } : {}),
+      };
+    }
+  }
+  return {
+    version,
+    collections,
+    ...(value.headers === true ? { headers: true } : {}),
+    ...(Object.keys(versions).length === 0 ? {} : { versions }),
+  };
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

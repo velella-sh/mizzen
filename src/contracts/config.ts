@@ -253,6 +253,18 @@ export interface ApiCollectionConfig {
   readonly id?: string;
 }
 
+/** One further version of the data API, published beside the current one. */
+export interface ApiVersionConfig {
+  /** The published collections of this version by name, each with its own field list. */
+  readonly collections: Readonly<Record<string, ApiCollectionConfig>>;
+  /** `true` marks the version deprecated in its index; it needs `sunset` and `successor`. Default `false`. */
+  readonly deprecated?: boolean;
+  /** The date (`YYYY-MM-DD`) after which the version may be removed, for a deprecated version. */
+  readonly sunset?: string;
+  /** The version consumers should move to, for a deprecated version. */
+  readonly successor?: string;
+}
+
 /** The `api` key: the collections published as a versioned static API under `/api/<version>/`. Without the key nothing is written. */
 export interface ApiConfig {
   /** The version path segment, such as `v1`. Default `v1`. */
@@ -261,6 +273,8 @@ export interface ApiConfig {
   readonly collections: Readonly<Record<string, ApiCollectionConfig>>;
   /** `true` writes a `_headers` file with CORS and cache rules for `/api/*`, for hosts that read one. Default `false`. */
   readonly headers?: boolean;
+  /** Further versions by name (`v1`, `v2`), published beside the current one in `version`. */
+  readonly versions?: Readonly<Record<string, ApiVersionConfig>>;
 }
 
 /** The `social` key: generated share images. Without the key no image is written. */
