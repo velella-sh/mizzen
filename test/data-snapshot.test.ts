@@ -39,3 +39,21 @@ test("a lock without snapshots keeps its bytes, and snapshot fields are written 
   );
   assert.deepEqual(Object.keys(orderedSnapshot({ toolVersion: "1", source: "s", ref: "r" })), ["source", "ref", "toolVersion"]);
 });
+
+test("a collection carries the lock's snapshot, and a site without one is unchanged", async () => {
+  const { mkdirSync, mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { loadConfig } = await import("../src/config/load.ts");
+  const { loadCollections } = await import("../src/data/collections.ts");
+  const root = mkdtempSync(join(tmpdir(), "data-snapshot-load-"));
+  mkdirSync(join(root, "_data"));
+  writeFileSync(join(root, "mizzen.yml"), "collections:\n  items:\n    source: _data/items.yml\n");
+  writeFileSync(join(root, "_data", "items.yml"), "- id: a\n");
+  const config = loadConfig(root).config;
+  const bare = await loadCollections({ root, config });
+  assert.equal("snapshot" in bare.collections["items"]!, false);
+  writeFileSync(join(root, "mizzen.lock.json"), '{"snapshots":{"items":{"capturedAt":"2026-03-01","source":"_data/items.yml"}},"sources":{},"version":1}\n');
+  const withSnapshot = await loadCollections({ root, config });
+  assert.deepEqual(withSnapshot.collections["items"]?.snapshot, { source: "_data/items.yml", capturedAt: "2026-03-01" });
+});

@@ -514,6 +514,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       source,
       records: kept,
       ...(packageInfo === undefined ? {} : { package: packageInfo }),
+      ...(lock?.snapshots?.[name] === undefined ? {} : { snapshot: lock.snapshots[name]! }),
     };
   }
 

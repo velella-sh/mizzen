@@ -70,6 +70,8 @@ export interface Collection {
   readonly records: readonly DataRecord[];
   /** The installed package a collection was read from, when its source is `npm:`. */
   readonly package?: { readonly name: string; readonly version: string };
+  /** Where the lock says the data was recorded from; absent when the lock holds none. */
+  readonly snapshot?: CollectionSnapshot;
 }
 
 /** The record a page was built from, as the site model carries it. */
