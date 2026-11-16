@@ -12,12 +12,14 @@
       "description": "The published collections, sorted by name.",
       "items": {
         "type": "object",
-        "required": ["name", "count", "fields", "snapshot"],
+        "required": ["name", "count", "fields", "json", "ndjson", "snapshot"],
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string", "description": "The collection's name, as declared in the site config." },
           "count": { "type": "integer", "minimum": 0, "description": "How many records the collection publishes." },
           "fields": { "type": "array", "items": { "type": "string" }, "description": "The published field names, in the order the config lists them." },
+          "json": { "type": "string", "description": "The URL of the collection file, including base." },
+          "ndjson": { "type": "string", "description": "The URL of the NDJSON file, including base: one record per line." },
           "snapshot": {
             "oneOf": [
               { "type": "null" },
