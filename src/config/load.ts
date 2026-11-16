@@ -269,7 +269,7 @@ export function apiFrom(value: unknown): ApiConfig | undefined {
     collections[name] = { fields, ...(typeof entry.id === "string" && entry.id !== "" ? { id: entry.id } : {}) };
   }
   const version = typeof value.version === "string" && /^v[1-9][0-9]*$/.test(value.version) ? value.version : "v1";
-  return { version, collections };
+  return { version, collections, ...(value.headers === true ? { headers: true } : {}) };
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

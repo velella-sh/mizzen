@@ -193,6 +193,11 @@
           "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
           "additionalProperties": { "$ref": "#/$defs/apiCollection" },
           "description": "The collections published by name. A collection not named here is never published."
+        },
+        "headers": {
+          "type": "boolean",
+          "default": false,
+          "description": "true writes a _headers file with CORS and cache rules for /api/*, for hosts that read one; a _headers file the site already has is never replaced. Default false."
         }
       },
       "description": "The versioned static data API written under api/<version>/. Default: none, and nothing is written."

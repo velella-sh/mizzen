@@ -259,6 +259,8 @@ export interface ApiConfig {
   readonly version: string;
   /** The published collections by name; a collection not named here is never published. */
   readonly collections: Readonly<Record<string, ApiCollectionConfig>>;
+  /** `true` writes a `_headers` file with CORS and cache rules for `/api/*`, for hosts that read one. Default `false`. */
+  readonly headers?: boolean;
 }
 
 /** The `social` key: generated share images. Without the key no image is written. */
