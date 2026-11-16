@@ -16,6 +16,8 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadConfig } from "../config/load.ts";
 import { loadCollections } from "../data/collections.ts";
+import { readLock } from "../data/lock.ts";
+import { staleSnapshots } from "../data/snapshot.ts";
 import type { DataStats, Diagnostic, SiteConfig } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
 import { build } from "../pipeline/build.ts";
@@ -36,6 +38,8 @@ export interface DoctorOptions {
   readonly defaultLayout?: string;
   /** The Node version to check, such as `process.versions.node`; tests pass another. Default: this process's. */
   readonly nodeVersion?: string;
+  /** Today as `YYYY-MM-DD`, supplied by the caller; without it no snapshot is checked for age. */
+  readonly today?: string;
 }
 
 /** Help added to a config finding that does not carry its own, so every config finding is actionable. */
@@ -245,6 +249,16 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
       checks.push(dataErrors ? failed("data", "the data check found errors") : passed("data"));
       const summary = dataSummary(collected.stats);
       if (summary !== undefined) publish([summary]);
+      if (options.today !== undefined && config.snapshot?.maxAgeDays !== undefined) {
+        const pinned = await readLock(root);
+        for (const stale of staleSnapshots(pinned.lock.snapshots, config.snapshot.maxAgeDays, options.today)) {
+          diagnostics.warn(
+            "doctor.snapshot-stale",
+            `The snapshot of collection "${stale.collection}" was captured ${stale.capturedAt}, ${stale.ageDays} days before ${options.today}; snapshot.maxAgeDays is ${config.snapshot.maxAgeDays}.`,
+            { help: `Update the data, then run \`mizzen data snapshot ${stale.collection}\` (or \`mizzen data fetch\`) to record a new snapshot.` },
+          );
+        }
+      }
     } catch (err) {
       diagnostics.error("doctor.data-failed", `The data check could not run: ${messageOf(err)}`, { help: CHECK_HELP });
       checks.push(failed("data", "the data check could not run"));

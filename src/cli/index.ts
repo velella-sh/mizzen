@@ -1026,6 +1026,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       const diagnostics = await doctor({
         root,
         defaultLayout: DEFAULT_LAYOUT,
+        today: new Date().toISOString().slice(0, 10),
         ...(themeRoot === undefined ? {} : { themeRoot }),
       });
       printDiagnostics(diagnostics, options.format, log);

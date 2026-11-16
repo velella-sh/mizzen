@@ -169,3 +169,38 @@ export function snapshotText(snapshot: CollectionSnapshot | undefined, field: st
     return new Intl.DateTimeFormat("en", { dateStyle: "long", timeZone: "UTC" }).format(instant);
   }
 }
+
+/** A collection whose snapshot is older than `maxAgeDays`. */
+export interface StaleSnapshot {
+  readonly collection: string;
+  readonly capturedAt: string;
+  /** Whole days between `capturedAt` and the date given. */
+  readonly ageDays: number;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Collections whose snapshot `capturedAt` is more than `maxAgeDays` days before `today` (a `YYYY-MM-DD` date the caller
+ * supplies: this never reads the system clock). Empty when `maxAgeDays` is unset or `today` is not a date; a snapshot
+ * without a `capturedAt` is never stale. Sorted by collection name.
+ */
+export function staleSnapshots(
+  snapshots: Readonly<Record<string, CollectionSnapshot>> | undefined,
+  maxAgeDays: number | undefined,
+  today: string,
+): StaleSnapshot[] {
+  if (snapshots === undefined || maxAgeDays === undefined || !/^\d{4}-\d{2}-\d{2}$/.test(today)) return [];
+  const now = Date.parse(`${today}T00:00:00Z`);
+  if (!Number.isFinite(now)) return [];
+  const out: StaleSnapshot[] = [];
+  for (const collection of Object.keys(snapshots).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const capturedAt = snapshots[collection]!.capturedAt;
+    if (capturedAt === undefined) continue;
+    const then = Date.parse(`${capturedAt.slice(0, 10)}T00:00:00Z`);
+    if (!Number.isFinite(then)) continue;
+    const ageDays = Math.floor((now - then) / DAY_MS);
+    if (ageDays > maxAgeDays) out.push({ collection, capturedAt, ageDays });
+  }
+  return out;
+}

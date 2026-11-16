@@ -31,6 +31,7 @@ import type {
   FeedFormat,
   LanguageConfig,
   NetworkConfig,
+  SnapshotConfig,
   RepositoryConfig,
   SearchConfig,
   SiteConfig,
@@ -169,6 +170,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const analytics = analyticsFrom(raw.analytics);
   const verify = verifyFrom(raw.verify);
   const network = networkFrom(raw.network);
+  const snapshot = snapshotFrom(raw.snapshot);
   const social = socialFrom(raw.social);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
@@ -196,6 +198,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(analytics === undefined ? {} : { analytics }),
     ...(verify === undefined ? {} : { verify }),
     ...(network === undefined ? {} : { network }),
+    ...(snapshot === undefined ? {} : { snapshot }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -232,6 +235,13 @@ function networkFrom(value: unknown): NetworkConfig | undefined {
       ? { maxAgeDays: value.maxAgeDays }
       : {}),
   };
+}
+
+/** The snapshot key, kept only when it holds a positive whole `maxAgeDays`; the schema check reports an invalid one. */
+function snapshotFrom(value: unknown): SnapshotConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const days = value.maxAgeDays;
+  return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

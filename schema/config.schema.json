@@ -166,6 +166,18 @@
       },
       "description": "Joins the site to a shared network of projects. Default: none, and the site builds on its own."
     },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxAgeDays": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "`mizzen doctor` reports a collection whose snapshot was captured more than this many days before today. Default: never."
+        }
+      },
+      "description": "How old a collection's recorded snapshot may be. Default: none."
+    },
     "analytics": {
       "type": "object",
       "additionalProperties": false,

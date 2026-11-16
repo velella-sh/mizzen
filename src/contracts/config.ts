@@ -239,6 +239,12 @@ export interface NetworkConfig {
   readonly maxAgeDays?: number;
 }
 
+/** The `snapshot` key: how old a collection's recorded snapshot may be before `mizzen doctor` reports it. */
+export interface SnapshotConfig {
+  /** Report a collection whose snapshot `capturedAt` is more than this many days before the date doctor is given. Default: never. */
+  readonly maxAgeDays?: number;
+}
+
 /** The `social` key: generated share images. Without the key no image is written. */
 export interface SocialConfig {
   /** Template used by every page that does not name its own: `_templates/social/<template>.svg` in the source folder. */
@@ -292,6 +298,8 @@ export interface SiteConfig {
   readonly verify?: VerifyConfig;
   /** The shared network of projects. Default: none, and the site builds on its own. */
   readonly network?: NetworkConfig;
+  /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
+  readonly snapshot?: SnapshotConfig;
   /** Generated social share images. Default: none, and no image is written. */
   readonly social?: SocialConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */
