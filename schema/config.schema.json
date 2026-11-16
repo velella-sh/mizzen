@@ -541,11 +541,11 @@
               "additionalProperties": false,
               "description": "A summary template per event type. `{id}`, `{field}`, `{old}`, `{new}`, `{from}`, `{count}`, and `{<record field>}` are replaced.",
               "properties": {
-                "added": { "type": "string", "minLength": 1 },
-                "removed": { "type": "string", "minLength": 1 },
-                "changed": { "type": "string", "minLength": 1 },
-                "renamed": { "type": "string", "minLength": 1 },
-                "imported": { "type": "string", "minLength": 1 }
+                "added": { "type": "string", "minLength": 1, "description": "The summary template of a `added` event." },
+                "removed": { "type": "string", "minLength": 1, "description": "The summary template of a `removed` event." },
+                "changed": { "type": "string", "minLength": 1, "description": "The summary template of a `changed` event." },
+                "renamed": { "type": "string", "minLength": 1, "description": "The summary template of a `renamed` event." },
+                "imported": { "type": "string", "minLength": 1, "description": "The summary template of a `imported` event." }
               }
             },
             "importThreshold": { "type": "integer", "minimum": 1, "default": 100, "description": "A first run over this many records is written as one `imported` event. Default 100." }
