@@ -5,6 +5,7 @@
  * A page is identified by its source path relative to the site root (`docs/guide.md`), the same key the review lock
  * uses. Only a page's own front matter counts: `covers` from `defaults` is not read.
  */
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { loadConfig } from "../config/load.ts";
@@ -52,6 +53,8 @@ export async function loadCoveredPages(root: string): Promise<LoadedCoveredPages
 
   const sourceDir = resolve(siteRoot, config.source);
   const prefix = config.source === "." || config.source === "" ? "" : `${config.source.replace(/\\/g, "/").replace(/\/+$/, "")}/`;
+  // A missing source folder is the build's finding (doctor.source-missing), not this command's: it has no pages.
+  if (!existsSync(sourceDir)) return { pages: [], coversRoot, errors, severity };
   const files = await discover(sourceDir, { include: config.include, exclude: config.exclude });
   const pages: CoveredPage[] = [];
   for (const file of files) {
