@@ -14,7 +14,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { write } from "../fixtures/data-large/generate.ts";
 
-export const CASES = ["cold", "warm", "one-record"] as const;
+export const CASES = ["cold", "warm", "one-record", "search"] as const;
 export type CaseName = (typeof CASES)[number];
 
 export interface Measurement {
@@ -26,6 +26,8 @@ export interface Measurement {
   readonly peakMb: number;
   readonly renderedPages: number;
   readonly cachedPages: number;
+  /** Size of the search index in kilobytes for the `search` case (the `search` output alone, no render); 0 for the others. */
+  readonly indexKb: number;
 }
 
 export interface BenchReport {
@@ -43,13 +45,13 @@ export const median = (values: readonly number[]): number => {
 };
 
 export interface BudgetFile {
-  readonly budgets: Readonly<Record<string, Readonly<Record<string, { readonly ms: number; readonly peakMb: number }>>>>;
+  readonly budgets: Readonly<Record<string, Readonly<Record<string, { readonly ms: number; readonly peakMb: number; readonly indexKb?: number }>>>>;
 }
 
 export interface BudgetRow {
   readonly records: number;
   readonly case: string;
-  readonly metric: "ms" | "peakMb";
+  readonly metric: "ms" | "peakMb" | "indexKb";
   readonly measured: number;
   readonly budget: number;
   readonly ok: boolean;
@@ -61,8 +63,10 @@ export function checkBudget(report: BenchReport, file: BudgetFile): BudgetRow[] 
   for (const m of report.measurements) {
     const budget = file.budgets[String(m.records)]?.[m.case];
     if (budget === undefined) continue;
-    for (const metric of ["ms", "peakMb"] as const) {
-      rows.push({ records: m.records, case: m.case, metric, measured: m[metric], budget: budget[metric], ok: m[metric] <= budget[metric] });
+    for (const metric of ["ms", "peakMb", "indexKb"] as const) {
+      const limit = budget[metric];
+      if (limit === undefined) continue;
+      rows.push({ records: m.records, case: m.case, metric, measured: m[metric], budget: limit, ok: m[metric] <= limit });
     }
   }
   return rows;
@@ -71,14 +75,32 @@ export function checkBudget(report: BenchReport, file: BudgetFile): BudgetRow[] 
 /** The rows as a Markdown table, for the CI job summary. */
 export function budgetTable(rows: readonly BudgetRow[]): string {
   const lines = ["| Records | Case | Metric | Measured | Budget | |", "| ---: | --- | --- | ---: | ---: | --- |"];
-  for (const r of rows) lines.push(`| ${r.records} | ${r.case} | ${r.metric === "ms" ? "ms" : "MB"} | ${r.measured} | ${r.budget} | ${r.ok ? "ok" : "**over budget**"} |`);
+  for (const r of rows) lines.push(`| ${r.records} | ${r.case} | ${r.metric === "ms" ? "ms" : r.metric === "peakMb" ? "MB" : "KB"} | ${r.measured} | ${r.budget} | ${r.ok ? "ok" : "**over budget**"} |`);
   return `${lines.join("\n")}\n`;
 }
 
 const SELF = fileURLToPath(import.meta.url);
 
+/** The `search` case: the site model and the search output alone, so indexing time and index size are not mixed with rendering. */
+async function searchChild(args: Map<string, string>): Promise<void> {
+  const { buildModel } = await import("../src/model/build.ts");
+  const { search } = await import("../src/outputs/search.ts");
+  const { site } = await buildModel(args.get("root") as string);
+  const start = performance.now();
+  const files = await search.run(site, {
+    renderPage: async () => "",
+    build: { root: args.get("root") as string, workers: 1 },
+    report: () => undefined,
+  });
+  const ms = performance.now() - start;
+  const indexKb = Math.round(files.reduce((total, file) => total + Buffer.byteLength(file.contents), 0) / 1024);
+  const peakMb = process.resourceUsage().maxRSS / 1024;
+  console.log(JSON.stringify({ ms, peakMb, renderedPages: 0, cachedPages: 0, indexKb }));
+}
+
 /** The child process: one build, reported as one JSON line. */
 async function child(args: Map<string, string>): Promise<void> {
+  if (args.has("search")) return searchChild(args);
   const { build } = await import("../src/pipeline/build.ts");
   const cache = args.get("cache") === "true";
   const start = performance.now();
@@ -92,7 +114,7 @@ async function child(args: Map<string, string>): Promise<void> {
   });
   const ms = performance.now() - start;
   const peakMb = process.resourceUsage().maxRSS / 1024;
-  console.log(JSON.stringify({ ms, peakMb, renderedPages: result.renderedPages, cachedPages: result.cachedPages }));
+  console.log(JSON.stringify({ ms, peakMb, renderedPages: result.renderedPages, cachedPages: result.cachedPages, indexKb: 0 }));
 }
 
 interface Run {
@@ -100,12 +122,13 @@ interface Run {
   readonly peakMb: number;
   readonly renderedPages: number;
   readonly cachedPages: number;
+  readonly indexKb: number;
 }
 
-function runChild(opts: { root: string; out: string; cacheDir: string; cache: boolean; theme: string }): Run {
+function runChild(opts: { root: string; out: string; cacheDir: string; cache: boolean; theme: string; search?: boolean }): Run {
   const result = spawnSync(
     process.execPath,
-    ["--no-warnings", SELF, "--child", "--root", opts.root, "--out", opts.out, "--cache-dir", opts.cacheDir, "--cache", String(opts.cache), "--theme", opts.theme],
+    ["--no-warnings", SELF, "--child", "--root", opts.root, "--out", opts.out, "--cache-dir", opts.cacheDir, "--cache", String(opts.cache), "--theme", opts.theme, ...(opts.search === true ? ["--search"] : [])],
     { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
   );
   if (result.status !== 0) throw new Error(`bench child failed (${result.status}): ${result.stderr}`);
@@ -140,6 +163,7 @@ export function bench(options: { records: readonly number[]; runs: number; theme
           peakMb: Math.round(median(runs.map((r) => r.peakMb))),
           renderedPages: median(runs.map((r) => r.renderedPages)),
           cachedPages: median(runs.map((r) => r.cachedPages)),
+          indexKb: Math.round(median(runs.map((r) => r.indexKb))),
         });
       };
       const cold = Array.from({ length: options.runs }, () => runChild({ ...base, cache: false }));
@@ -152,6 +176,7 @@ export function bench(options: { records: readonly number[]; runs: number; theme
         return runChild({ ...base, cache: true });
       });
       summarize("one-record", one);
+      summarize("search", Array.from({ length: options.runs }, () => runChild({ ...base, cache: false, search: true })));
       rmSync(join(parent, `site-${records}`), { recursive: true, force: true });
     }
   } finally {

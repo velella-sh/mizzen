@@ -17,13 +17,13 @@ test("the benchmark prints one measurement per record count and case, as JSON", 
   const report = JSON.parse(run.stdout);
   assert.equal(report.runs, 1);
   assert.equal(typeof report.node, "string");
-  assert.equal(report.measurements.length, 6);
+  assert.equal(report.measurements.length, 8);
   assert.deepEqual(
     report.measurements.map((m: { records: number; case: string }) => [m.records, m.case]),
     [30, 60].flatMap((records) => CASES.map((name) => [records, name])),
   );
   for (const m of report.measurements) {
-    assert.deepEqual(Object.keys(m).sort(), ["cachedPages", "case", "ms", "peakMb", "records", "renderedPages"]);
+    assert.deepEqual(Object.keys(m).sort(), ["cachedPages", "case", "indexKb", "ms", "peakMb", "records", "renderedPages"]);
     assert.ok(m.ms > 0 && m.peakMb > 0);
   }
   const one = report.measurements.find((m: { case: string; records: number }) => m.case === "one-record" && m.records === 60);
@@ -38,9 +38,9 @@ test("checkBudget pairs each measurement with its budget and flags the ones over
     arch: "y",
     runs: 1,
     measurements: [
-      { records: 10, case: "cold", ms: 100, peakMb: 50, renderedPages: 1, cachedPages: 0 },
-      { records: 10, case: "warm", ms: 5, peakMb: 50, renderedPages: 0, cachedPages: 0 },
-      { records: 99, case: "cold", ms: 1, peakMb: 1, renderedPages: 0, cachedPages: 0 },
+      { records: 10, case: "cold", ms: 100, peakMb: 50, renderedPages: 1, cachedPages: 0, indexKb: 0 },
+      { records: 10, case: "warm", ms: 5, peakMb: 50, renderedPages: 0, cachedPages: 0, indexKb: 0 },
+      { records: 99, case: "cold", ms: 1, peakMb: 1, renderedPages: 0, cachedPages: 0, indexKb: 0 },
     ],
   } as const;
   const rows = checkBudget(report, { budgets: { "10": { cold: { ms: 90, peakMb: 60 }, warm: { ms: 10, peakMb: 60 } } } });
