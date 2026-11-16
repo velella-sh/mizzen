@@ -192,6 +192,24 @@
       ],
       "description": "A cookieless analytics tool, attached as one deferred script tag. Default: none."
     },
+    "social": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "template": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$",
+          "description": "The default template of every page's share image: the file `_templates/social/<template>.svg` in the source folder. A page names another in its front matter `social`, or `false` to have no image."
+        },
+        "fonts": {
+          "type": "array",
+          "default": [],
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Font files the images are drawn with, relative to the site root: `.ttf`, `.otf`, or `.woff`. No system font is ever used."
+        }
+      },
+      "description": "Generated social share images. Default: none, and no image is written."
+    },
     "verify": {
       "type": "object",
       "additionalProperties": false,
