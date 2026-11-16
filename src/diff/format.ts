@@ -67,7 +67,7 @@ function sizeText(file: FileRef): string {
 /** The report as plain text for a terminal. */
 export function formatText(diff: SiteDiff): string {
   const lines = [`mizzen diff ${diff.base.hash.slice(0, 12)}..${diff.head.hash.slice(0, 12)}: ${summaryLine(diff)}`];
-  if (diff.identical) return `${lines.join("\n")}\n`;
+  if (diff.identical && diff.changes === undefined) return `${lines.join("\n")}\n`;
   const section = (title: string, rows: readonly string[]): void => {
     if (rows.length === 0) return;
     lines.push("", `${title}:`, ...rows.map((row) => `  ${row}`));
@@ -100,6 +100,10 @@ export function formatText(diff: SiteDiff): string {
       }),
     ]),
   );
+  section(
+    "Pending history entries",
+    (diff.changes ?? []).flatMap((collection) => collection.events.map((event) => `${collection.collection}: ${event.type} ${event.summary} (${event.date})`)),
+  );
   return `${lines.join("\n")}\n`;
 }
 
@@ -123,7 +127,7 @@ function link(url: string, linkBase: string | undefined): string {
 /** The report as a pull request comment: a summary line, then a table of pages with links. */
 export function formatMarkdown(diff: SiteDiff, options: MarkdownOptions = {}): string {
   const out = [MARKER, "### Site diff", "", summaryLine(diff)];
-  if (diff.identical) return `${out.join("\n")}\n`;
+  if (diff.identical) return `${out.join("\n")}\n${pendingSection(diff)}`;
 
   const rows: string[] = [];
   const base = options.linkBase;
@@ -157,6 +161,17 @@ export function formatMarkdown(diff: SiteDiff, options: MarkdownOptions = {}): s
   const shown = rows.slice(0, max);
   if (shown.length > 0) out.push("", "| Page | Change | Details |", "| --- | --- | --- |", ...shown);
   if (rows.length > shown.length) out.push("", `${plural(rows.length - shown.length, "more entry", "more entries")} left out of this comment; run \`mizzen diff --format json\` for the full report.`);
+  return `${out.join("\n")}\n${pendingSection(diff)}`;
+}
+
+/** The pending history entries under each collection, or nothing; written by `mizzen data changes --write`, never here. */
+function pendingSection(diff: SiteDiff): string {
+  if (diff.changes === undefined || diff.changes.length === 0) return "";
+  const out = ["", "#### Pending history entries", "", "These are not written yet; run `mizzen data changes --write` to record them."];
+  for (const collection of diff.changes) {
+    out.push("", `**${cell(collection.collection)}**`, "");
+    for (const event of collection.events) out.push(`- ${cell(event.type)}: ${cell(event.summary)} (${cell(event.date)})`);
+  }
   return `${out.join("\n")}\n`;
 }
 

@@ -33,6 +33,11 @@
       "type": "string",
       "description": "One sentence for the meta description, the `llms.txt` entry, and the search excerpt."
     },
+    "covers": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The files this page describes: paths and globs (`*`, `**`, `?`) relative to `stale.root`. `mizzen stale` reports the page when one of them changes after the page was last marked as reviewed."
+    },
     "dir": {
       "enum": ["ltr", "rtl"],
       "description": "Text direction. Unset, it comes from the page's `lang`."

@@ -1,0 +1,100 @@
+# Copy to .github/workflows/stale-docs.yml.
+#
+# Comments on a pull request with the pages that describe files the change touches, so the author can check them. The
+# list comes from `mizzen stale --git-diff`: a page's `covers` are matched against the files that differ from the base
+# branch. Nothing is hashed, no lock is read, and no network is used beyond the checkout. One comment is kept up to
+# date; it is found by the marker `<!-- mizzen-stale-docs -->` and edited in place on every push. When no page
+# matches, no comment is written.
+#
+# The comment is advice: the job never fails the pull request.
+#
+# Safe by construction: the job that runs Mizzen has a read-only token and no secrets; the job that writes the comment
+# has `pull-requests: write`, checks out nothing, and posts a Markdown file as data. It does not run for pull requests
+# from forks, whose token cannot write anyway.
+#
+# Change `SITE` to your site folder, and the Mizzen version to the one you use.
+name: stale-docs
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: stale-docs-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  SITE: docs
+  MIZZEN_VERSION: latest
+  # Turns the `mizzen stale` list (`page`, then each file indented) into a Markdown list.
+  FORMAT_AWK: '/^ / { sub(/^ +/, ""); print "  - `" $0 "`"; next } { print "- `" $0 "`" }'
+
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      found: ${{ steps.list.outputs.found }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Install Mizzen
+        run: npm install --no-save --no-audit --no-fund "@velella/mizzen@${MIZZEN_VERSION}"
+      - name: List the pages this change touches
+        id: list
+        env:
+          BASE_REF: origin/${{ github.base_ref }}
+        run: |
+          set -uo pipefail
+          npx mizzen stale --git-diff "$BASE_REF" "$SITE" > "$RUNNER_TEMP/pages.txt" || true
+          if [ -s "$RUNNER_TEMP/pages.txt" ]; then
+            {
+              echo "<!-- mizzen-stale-docs -->"
+              echo "This change touches files that these pages describe. Check that they still match:"
+              echo
+              awk "$FORMAT_AWK" "$RUNNER_TEMP/pages.txt"
+            } > "$RUNNER_TEMP/stale-docs.md"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.list.outputs.found == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: stale-docs
+          path: ${{ runner.temp }}/stale-docs.md
+          retention-days: 3
+
+  comment:
+    needs: pages
+    if: needs.pages.outputs.found == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: stale-docs
+      - name: Post or update the comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          existing=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.body | contains("<!-- mizzen-stale-docs -->"))][0].id // empty')
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" --field body=@stale-docs.md
+          else
+            gh api --method POST "repos/$REPO/issues/$PR/comments" --field body=@stale-docs.md
+          fi

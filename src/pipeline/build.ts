@@ -19,7 +19,7 @@ import { cacheKey, cacheRootOf, includedSnippets, renderSettingsKey, restoreCach
 import { createDiagnostics, sortDiagnostics, type Diagnostics } from "./diagnostics.ts";
 import { buildDependencyGraph } from "./dependency-graph.ts";
 import { planInvalidation, type InvalidationPlan } from "./invalidation.ts";
-import { pruneRenderCache, readRenderInputs, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
+import { pruneRenderCache, pruneRenderEntries, readRenderInputs, recordKeyOf, recordShapeOf, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
 import { moduleName } from "../runtime/modules.ts";
 import { createRenderPool, renderOnePage, type RenderPool } from "./parallel.ts";
 import { placeholderDiagnostics } from "./placeholder-diagnostic.ts";
@@ -272,18 +272,6 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // which pages still render to the bytes they had? Its key covers the config, navigation, data, theme, outputs, and
   // every page's front matter but not a page's body, so a body-only edit retires that one page and nothing else.
   const renderRoot = cacheRoot === undefined ? undefined : join(cacheRoot, "render");
-  const settingsKey =
-    renderRoot === undefined
-      ? undefined
-      : await renderSettingsKey({
-          root,
-          sourceDir,
-          config: loaded.config,
-          themeRoot,
-          outputsDir,
-          ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
-          ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
-        }).catch(() => undefined);
   // The site's code file is read after the cache, which it never shares a key with. Its problems are diagnostics, not a
   // failed build: the pages still build and the plugin that could not load costs only its own work.
   const code = await loadCodeConfig(root);
@@ -338,6 +326,38 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     }
   }
 
+  // Its key stands in for the collection sources with the site's shape (see `recordShapeOf`), so it is computed once the
+  // model exists: a record's fields are keyed by the page that shows them, not by the settings every page shares.
+  const settingsKey =
+    renderRoot === undefined
+      ? undefined
+      : await renderSettingsKey({
+          root,
+          sourceDir,
+          config: loaded.config,
+          themeRoot,
+          outputsDir,
+          ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
+          ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
+          ...(Object.keys(site.collections).length === 0 ? {} : { recordShape: recordShapeOf(site) }),
+        }).catch(() => undefined);
+  const recordKey = recordKeyOf(site);
+  /** Every page's render key, computed once: the lookup, the write, and the prune of unused entries all read it. */
+  const pageKeys = new Map<string, string>();
+  const pageKeyOf = (page: Page): string => {
+    let key = pageKeys.get(page.url);
+    if (key === undefined && settingsKey !== undefined) {
+      key = renderPageKey(
+        settingsKey,
+        page,
+        options.defaultLayout,
+        evidenceByUrl.get(page.url) ?? "",
+        recordKey(page),
+      );
+      pageKeys.set(page.url, key);
+    }
+    return key ?? "";
+  };
   const settingsDir = renderRoot === undefined || settingsKey === undefined ? undefined : join(renderRoot, settingsKey);
   const renderStore: RenderCache | undefined = settingsDir === undefined ? undefined : renderCache(settingsDir);
   const previousInputs = settingsDir === undefined ? {} : await readRenderInputs(settingsDir);
@@ -397,9 +417,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       site.pages
         .filter((page) => page.kind === "doc")
         .map(async (page) => {
-          const entry = await renderStore.get(
-            renderPageKey(settingsKey, page, options.defaultLayout, evidenceByUrl.get(page.url) ?? ""),
-          );
+          const entry = await renderStore.get(pageKeyOf(page));
           if (entry !== undefined) cachedRenders.set(page.url, entry);
         }),
     );
@@ -500,7 +518,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       renderedPages += 1;
       reportRendered(rendered, page);
       if (renderStore !== undefined && settingsKey !== undefined) {
-        await renderStore.set(renderPageKey(settingsKey, page, options.defaultLayout, evidenceByUrl.get(page.url) ?? ""), {
+        await renderStore.set(pageKeyOf(page), {
           html: rendered.html,
           css: rendered.css,
           ...(rendered.islands === undefined ? {} : { islands: rendered.islands }),
@@ -536,7 +554,15 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     await pool?.close();
   }
 
-  const hookedOutputs = await runOutputsHooks(code.plugins, produced, site);
+  // Every page's render is in the output files now; the per-page copies are not needed to write them.
+  renderedHtml.clear();
+  cachedRenders.clear();
+
+  let hookedOutputs: Awaited<ReturnType<typeof runOutputsHooks>> | undefined = await runOutputsHooks(
+    code.plugins,
+    produced,
+    site,
+  );
   for (const d of hookedOutputs.diagnostics) diagnostics.report(d);
 
   const claimed = new Map<string, string>();
@@ -561,6 +587,10 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     claimed.set(file.path, from ?? "");
     pending.push(file);
   }
+  // Only `pending` keeps the files from here on, and it lets go of each as it is written.
+  hookedOutputs = undefined;
+  owner.clear();
+  produced.length = 0;
 
   const parent = dirname(out);
   await mkdir(parent, { recursive: true });
@@ -596,7 +626,10 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       written.push(bundle.path);
     }
 
-    for (const file of pending) {
+    const waiting: (OutputFile | undefined)[] = pending;
+    for (let i = 0; i < waiting.length; i++) {
+      const file = waiting[i] as OutputFile;
+      waiting[i] = undefined;
       // A site's own file wins over a generated one at the same path, silently: a site `llms.txt` replaces the output's.
       if (assetPaths.has(file.path)) continue;
       const abs = join(staging, file.path);
@@ -620,6 +653,13 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     }
     if (settingsDir !== undefined) await writeRenderInputs(settingsDir, includeInputs);
     if (renderRoot !== undefined && settingsKey !== undefined) await pruneRenderCache(renderRoot, settingsKey);
+    // An entry no page of this build asked for belongs to a record that changed or went away.
+    if (settingsDir !== undefined) {
+      await pruneRenderEntries(
+        settingsDir,
+        new Set(site.pages.filter((page) => page.kind === "doc").map((page) => pageKeyOf(page))),
+      );
+    }
     return {
       out,
       files: fileList,

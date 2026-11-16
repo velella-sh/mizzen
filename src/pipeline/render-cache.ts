@@ -15,10 +15,11 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Diagnostic, Page } from "../contracts/index.ts";
+import type { Diagnostic, Page, Site } from "../contracts/index.ts";
+import { recordHash } from "./dependency-graph.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
-export const RENDER_CACHE_FORMAT = 2;
+export const RENDER_CACHE_FORMAT = 3;
 
 /** The largest entry read or written; a page's HTML is far below this, and a larger file is not ours. */
 export const MAX_RENDER_ENTRY_BYTES = 8 * 1024 * 1024;
@@ -42,11 +43,63 @@ export function renderPageKey(
   page: Page,
   defaultLayout: string | undefined,
   evidence = "",
+  records = "",
 ): string {
   const hash = createHash("sha256");
-  hash.update(`mizzen-render-page\0${RENDER_CACHE_FORMAT}\0${settings}\0${defaultLayout ?? ""}\0${evidence}\0`);
+  hash.update(
+    `mizzen-render-page\0${RENDER_CACHE_FORMAT}\0${settings}\0${defaultLayout ?? ""}\0${evidence}\0${records}\0`,
+  );
   hash.update(JSON.stringify(page));
   return hash.digest("hex");
+}
+
+/**
+ * The site's shape without its records' fields: every page's URL and title, the navigation, and each collection's
+ * record ids, in a fixed order. It stands in for the collection source bytes in the render settings key, so a change to
+ * one field of one record leaves it, and every other page's entry, alone. A record added, removed, retitled, or moved
+ * to another URL changes it, because every page can show another page's title.
+ */
+export function recordShapeOf(site: Site): string {
+  const hash = createHash("sha256");
+  hash.update("mizzen-record-shape\0");
+  for (const page of site.pages) hash.update(`${JSON.stringify([page.url, page.title])}\n`);
+  hash.update(`${JSON.stringify(site.nav)}\n`);
+  for (const name of Object.keys(site.collections).sort()) {
+    hash.update(`${JSON.stringify([name, site.collections[name]!.records.map((record) => record.id).sort()])}\n`);
+  }
+  return hash.digest("hex");
+}
+
+/**
+ * What a record page reads besides its own model, as a string for {@link renderPageKey}: the record's hash and the
+ * hash of every record its reference fields point at, so a page is rebuilt when a record it links to changed, and
+ * only then. A page that is not a record page has none; a list page carries its records in its own model.
+ */
+export function recordKeyOf(site: Site): (page: Page) => string {
+  const byCollection = new Map<string, Map<string, { readonly hash: string; readonly fields: Readonly<Record<string, unknown>> }>>();
+  for (const [name, collection] of Object.entries(site.collections)) {
+    const records = new Map<string, { readonly hash: string; readonly fields: Readonly<Record<string, unknown>> }>();
+    for (const record of collection.records) records.set(record.id, { hash: recordHash(record), fields: record.fields });
+    byCollection.set(name, records);
+  }
+  return (page) => {
+    const ref = page.record;
+    if (ref === undefined) return "";
+    const own = byCollection.get(ref.collection)?.get(ref.id);
+    if (own === undefined) return "";
+    const parts = [`${ref.collection}/${ref.id}:${own.hash}`];
+    const references = site.config.collections[ref.collection]?.references ?? {};
+    for (const field of Object.keys(references).sort()) {
+      const target = references[field]!;
+      const value = own.fields[field];
+      const ids = Array.isArray(value) ? value : [value];
+      for (const id of ids) {
+        if (typeof id !== "string" && typeof id !== "number") continue;
+        parts.push(`${field}>${target}/${String(id)}:${byCollection.get(target)?.get(String(id))?.hash ?? "-"}`);
+      }
+    }
+    return parts.join("\n");
+  };
 }
 
 /** The cache of one settings key. */
@@ -103,6 +156,30 @@ export function renderCache(dir: string): RenderCache {
       }
     },
   };
+}
+
+/**
+ * Removes the entries of `dir` that this build did not use: a record edited, removed, or re-keyed leaves its old entry
+ * behind under the same settings key, and nothing else would ever delete it. Files that are not entries (the inputs
+ * list, a staging file of a concurrent build) are left alone.
+ */
+export async function pruneRenderEntries(dir: string, keep: ReadonlySet<string>): Promise<number> {
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const name of names) {
+    const match = /^([0-9a-f]{64})\.json$/.exec(name);
+    if (match === null || keep.has(match[1]!)) continue;
+    await rm(join(dir, name), { force: true }).then(
+      () => (removed += 1),
+      () => undefined,
+    );
+  }
+  return removed;
 }
 
 /** Removes every settings folder under `root` except `keep`, so retired entries do not grow without bound. */

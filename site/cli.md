@@ -14,6 +14,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
+  data changes [name] [dir] List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
@@ -22,11 +23,14 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
   network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
+  stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
+  stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   watch [dir]               Rebuild the site whenever a source or theme file changes
@@ -54,6 +58,9 @@ Options:
   --link-base <url>    For diff --format markdown: link page URLs under this base
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
   --print-config <c>   For mcp: print the configuration for claude-code, claude-desktop, cursor, or vscode, and exit
+  --starter <name>     For init: the theme starter to copy into the folder (default folder: .)
+  --list               For init: print the theme's starters with their titles and descriptions
+  --lang <a,b>         For init: keep only these of the starter's optional languages
   --dry-run            Print the diff for edit apply without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
   --proof <path>       Proof record for edit apply (default: <patch>.proof.json)
@@ -75,7 +82,14 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen doctor [dir] --format text\|json\|sarif --theme <dir>` | Checks the runtime, the config, the content, the output paths, and the toolchain without writing to the site, and prints the findings in the chosen format. Exits `1` on an error. |
 | `mizzen edit apply <patch.json> [dir] --dry-run --proof <path> --allow-unchecked` | Applies one span patch (the JSON shape of `src/edits/patch.ts`) to the source file its `span.file` names, resolved against `dir` and refused outside it. The patch is applied in memory and the file is replaced through a rename only when it succeeds, so a refused patch leaves it byte-identical. A patch that carries neither `expected` nor `beforeHash` is refused (exit `2`) unless `--allow-unchecked` is given; one that carries only one is still refused. Writes an edit proof (`src/edits/proof.ts`) with the SHA-256 before and after, at `--proof` or `<patch>.proof.json`, and prints its path. `--dry-run` prints a unified diff and writes neither. Exits `1` on a refused patch or path, `2` on a missing or invalid patch. `--format json` prints the same outcome as one report: `status`, `exitCode`, the file, the proof, and any `diagnostics` with their path and span. |
 | `mizzen edit verify <proof.json> --site <dir> --doctor` | Re-hashes every file the edit's proof record names, under `--site` (default `.`), and compares each with its after-edit hash. The first mismatch is named, and the command exits `1`; a proof that cannot be read exits `2`. With `--doctor` it also runs `mizzen doctor --format json` and compares the level with the recorded one; without it, the hashes are checked and the command says the doctor check did not run. `--format json` prints the same outcome as one report, with the failed check, its path, and the doctor levels it compared. |
+| `mizzen init --starter <name> [dir] --theme <dir> --lang <a,b>` | Copies the theme's `starters/<name>/` folder into `dir` (default `.`), resolving the theme the way `build` does. `--list` prints each starter with its title and description from `starter.json`; `--lang` keeps only the named optional languages. It refuses a folder that is not empty and names a missing theme or starter. |
 | `mizzen mcp [dir] [--allow-edits] [--print-config <client>]` | Serves the site to an AI client over MCP on stdio. Read-only unless `--allow-edits` adds `apply_edit`. Logs go to stderr. See [MCP server](/mcp/). |
+| `mizzen network check <file>` | Checks the shared network file: ids, paths, and titles. See [Several projects](/network/). |
+| `mizzen network update [dir]` | Fetches the network and writes `network.lock.json`; `--check` compares without writing and `--accept` takes a changed project. |
+| `mizzen network sitemap [dir]` | Writes the organization's sitemap index; `--url <origin>` names the host and `--out <dir>` the folder. |
+| `mizzen stale [dir]` | Lists pages whose covered files changed since they were reviewed. `--json`, `--fail` (exit `1` when any page is stale), `--changed <files…>`, and `--git-diff <base>` choose what counts as changed. |
+| `mizzen stale mark <page…>` | Records a page's covered files as reviewed; `--all` marks every page. |
+| `mizzen urls check [dir]` | Compares every record page's URL with `urls.lock.json` and prints the new, changed, and removed records. Writes nothing; exits `1` on an error. `--format text\|json`. See [Stable URLs](/data/urls/). |
 | `mizzen pack [dir] --topic <name> --budget <tokens> --out <file>` | Prints the context pack for one topic in `_data/context-packs.yml` to stdout, or writes it to `--out`. `--budget` overrides the topic's budget; without `--topic` the site's only topic is used, and a site with several lists them and exits `2`. Diagnostics go to stderr, so stdout stays clean Markdown. |
 | `mizzen diff <a> <b>` | Compares two built folders by their manifests and prints the pages, files, and records that changed, the moved pages, and the URLs that stopped answering. `--base <ref>` builds a git ref and compares it with the current site. `--format text\|json\|markdown`; exits `0` unless `--fail-on removed-pages,broken-urls,render-only` finds one (`1`). See [Compare two builds](/site-diff/). |
 | `mizzen verify [dir] --hash <hex>` | Hashes a built folder by the same rule the build used and compares it with `.mizzen/manifest.json` (or `--hash`). Exits `1` on a mismatch. |

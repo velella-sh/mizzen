@@ -93,6 +93,24 @@ export interface PlannedOutput {
   readonly transitive: readonly InvalidationCause[];
 }
 
+/**
+ * What happens to the artifacts that read one collection as a whole: its feeds and search entries, and the lists the
+ * outputs above already name. A record-level change leaves the other records alone; a change to the collection's
+ * source file, schema, lock, or config cannot say which record moved, so every record of it is read again.
+ */
+export interface PlannedCollection {
+  /** The collection node's id. */
+  readonly id: string;
+  /** The collection's name. */
+  readonly name: string;
+  /** `records` when the plan names the records that moved; `full` when the whole collection is read again. */
+  readonly scope: "records" | "full";
+  /** Ids of the records that changed, are new in the graph's view, or were deleted; empty for `full`. */
+  readonly records: readonly string[];
+  /** Why the collection is affected, shortest chains first. */
+  readonly causes: readonly InvalidationCause[];
+}
+
 /** The answer: whether every output must be rebuilt, and what to do with each. */
 export interface InvalidationPlan {
   /** True when the graph cannot name the affected set, so every output is listed. */
@@ -103,6 +121,8 @@ export interface InvalidationPlan {
   readonly changes: readonly PlannedChange[];
   /** Affected outputs only, sorted by id. Unaffected outputs are absent. */
   readonly outputs: readonly PlannedOutput[];
+  /** Affected collections only, sorted by id: the ones whose feeds and indexes must be rebuilt. */
+  readonly collections: readonly PlannedCollection[];
 }
 
 /** How strong a change for one node is: a deletion wins over a change. */
@@ -351,6 +371,42 @@ export function planInvalidation(options: InvalidationPlanOptions): Invalidation
 
   outputs.sort((a, b) => byCodePoint(a.id, b.id));
 
+  // A collection is affected when its forward walk reaches a changed node. A changed record alone keeps the scope
+  // narrow; anything else (its file, schema, lock, config, or an unknown change) reads the whole collection again.
+  const collections: PlannedCollection[] = [];
+  for (const node of nodes) {
+    if (node.kind !== "collection" || !node.id.startsWith("collection:")) continue;
+    const reached = walk(node.id);
+    const causes: InvalidationCause[] = [];
+    const records: string[] = [];
+    let wide = complete;
+    for (const [seed, kind] of seeds) {
+      const chain = chainOf(node, seed, reached);
+      if (chain.length === 0) continue;
+      causes.push(causeOf(chain, kind, seed));
+      if (nodeById.get(seed)?.kind === "record") records.push(nodeById.get(seed)!.path.slice(node.path.length + 1));
+      else wide = true;
+    }
+    if (complete) {
+      for (const external of externalCauses) {
+        const chain: InvalidationStep[] = [
+          { id: node.id, kind: "collection", path: node.path },
+          { id: external.node, kind: "external", path: external.label },
+        ];
+        causes.push(causeOf(chain, external.kind, external.node));
+      }
+    }
+    if (causes.length === 0) continue;
+    collections.push({
+      id: node.id,
+      name: node.path,
+      scope: wide ? "full" : "records",
+      records: wide ? [] : records.sort(byCodePoint),
+      causes: sortedCauses(causes),
+    });
+  }
+  collections.sort((a, b) => byCodePoint(a.id, b.id));
+
   const uniqueChanges = new Map<string, PlannedChange>();
   for (const change of changes) {
     const key = `${change.kind}\u0000${change.path}\u0000${change.from ?? ""}\u0000${change.node ?? ""}`;
@@ -362,6 +418,7 @@ export function planInvalidation(options: InvalidationPlanOptions): Invalidation
     reasons: [...reasons.values()].sort(compareReasons),
     changes: [...uniqueChanges.values()].sort(compareChanges),
     outputs,
+    collections,
   };
 }
 
@@ -414,5 +471,13 @@ export function serializeInvalidationPlan(plan: InvalidationPlan): string {
     transitive: sortedCauses(output.transitive).map(causeJson),
   }));
 
-  return `${JSON.stringify({ version: 1, complete: plan.complete, reasons, changes, outputs }, null, 2)}\n`;
+  const collections = [...plan.collections].sort((a, b) => byCodePoint(a.id, b.id)).map((collection) => ({
+    id: collection.id,
+    name: collection.name,
+    scope: collection.scope,
+    records: [...collection.records].sort(byCodePoint),
+    causes: sortedCauses(collection.causes).map(causeJson),
+  }));
+
+  return `${JSON.stringify({ version: 1, complete: plan.complete, reasons, changes, outputs, collections }, null, 2)}\n`;
 }

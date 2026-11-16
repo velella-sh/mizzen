@@ -138,6 +138,21 @@ export interface CollectionRawConfig {
   readonly private?: readonly string[];
 }
 
+/** The event types whose summary text a collection can write. */
+export type ChangelogEventType = "added" | "removed" | "changed" | "renamed" | "imported";
+
+/** How a collection's change history is recorded: which fields it follows and how an event reads. */
+export interface CollectionChangelogConfig {
+  /** Fields whose changes are recorded. Default `[]`: no field is tracked unless it is named. */
+  readonly track?: readonly string[];
+  /** Fields never recorded, even when `track` names them. Default `[]`. */
+  readonly ignore?: readonly string[];
+  /** A summary template per event type; `{field}` is replaced by the record's field, plus `{id}`, `{old}`, `{new}`, `{from}`, `{count}`. */
+  readonly labels?: Readonly<Partial<Record<ChangelogEventType, string>>>;
+  /** A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit. */
+  readonly importThreshold?: number;
+}
+
 /** What a record's disappearance from its collection does. */
 export type OnRemovedConfig =
   | "error"
@@ -196,6 +211,8 @@ export interface CollectionConfig {
   readonly index?: CollectionIndexConfig;
   /** The raw data published as JSON and CSV with a checksum file; `false` writes none. Default: written, every field. */
   readonly raw?: false | CollectionRawConfig;
+  /** The change history of the collection's data, written by `mizzen data changes`. Default: none. */
+  readonly changelog?: CollectionChangelogConfig;
 }
 
 /** A cookieless analytics tool the site attaches with one script tag. */
@@ -249,6 +266,14 @@ export interface DatesConfig {
 export interface SnapshotConfig {
   /** Report a collection whose snapshot `capturedAt` is more than this many days before the date doctor is given. Default: never. */
   readonly maxAgeDays?: number;
+}
+
+/** The `stale` key: how pages that name the files they describe are checked against the review lock. */
+export interface StaleConfig {
+  /** Folder that a page's `covers` paths are relative to, relative to the site root. Default `.`. */
+  readonly root?: string;
+  /** How `mizzen check` and `mizzen doctor` report a stale page. Default `warning`; never `error` unless set. */
+  readonly severity?: "info" | "warning" | "error";
 }
 
 /** The `social` key: generated share images. Without the key no image is written. */
@@ -310,6 +335,8 @@ export interface SiteConfig {
   readonly dates?: DatesConfig;
   /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
   readonly snapshot?: SnapshotConfig;
+  /** Stale page detection. Default: none, and `covers` paths are relative to the site root. */
+  readonly stale?: StaleConfig;
   /** Generated social share images. Default: none, and no image is written. */
   readonly social?: SocialConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */

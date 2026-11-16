@@ -18,6 +18,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { Diagnostic } from "../contracts/index.ts";
 import { build } from "../pipeline/build.ts";
 import { formatText } from "../pipeline/diagnostics.ts";
+import { pageCounts } from "./page-counts.ts";
 
 /** Folder under the site root that `mizzen watch` writes to when `--out` is not given. Hidden, so discovery skips it. */
 export const DEFAULT_WATCH_OUT = ".mizzen/watch";
@@ -285,6 +286,10 @@ export interface WatchBuild {
   readonly files: readonly string[];
   /** Findings of the build, sorted. The site is written even when there are errors. */
   readonly diagnostics: readonly Diagnostic[];
+  /** Pages the build rendered. Zero when everything came from the cache, and counted only with `cache` on. */
+  readonly renderedPages: number;
+  /** Pages the build reused from the render cache instead of rendering them. */
+  readonly cachedPages: number;
 }
 
 /** Options of {@link watch}. */
@@ -376,8 +381,14 @@ export async function watch(options: WatchOptions): Promise<Watcher> {
     });
     const milliseconds = performance.now() - started;
     if (result.diagnostics.length > 0) log(formatText(result.diagnostics).replace(/\n$/, ""));
-    log(`mizzen watch: ${reason} in ${Math.round(milliseconds)} ms`);
-    return { milliseconds, files: result.files, diagnostics: result.diagnostics };
+    log(`mizzen watch: ${reason} in ${Math.round(milliseconds)} ms${pageCounts(result)}`);
+    return {
+      milliseconds,
+      files: result.files,
+      diagnostics: result.diagnostics,
+      renderedPages: result.renderedPages,
+      cachedPages: result.cachedPages,
+    };
   };
 
   const scheduler = new WatchScheduler<WatchBuild>({

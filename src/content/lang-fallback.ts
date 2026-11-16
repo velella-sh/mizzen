@@ -172,6 +172,17 @@ export function resolveLanguage(
  * the order of their first page by URL, so the map is stable whatever order `site.pages` arrives in.
  */
 export function languageGroups(site: Site): ReadonlyMap<string, readonly Page[]> {
+  const known = groupsOfSite.get(site);
+  if (known !== undefined) return known;
+  const computed = computeLanguageGroups(site);
+  groupsOfSite.set(site, computed);
+  return computed;
+}
+
+/** One site's groups, kept so a per-page caller (hreflang) does not regroup every page for every page. A site is never mutated. */
+const groupsOfSite = new WeakMap<Site, ReadonlyMap<string, readonly Page[]>>();
+
+function computeLanguageGroups(site: Site): ReadonlyMap<string, readonly Page[]> {
   const groups = new Map<string, Page[]>();
   const pages = [...site.pages].sort((a, b) => byCodePoint(a.url, b.url));
 
