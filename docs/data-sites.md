@@ -272,3 +272,9 @@ source. It may rely on the field names a site declared, never on a fixed list of
 
 Frozen on 2026-11-15. The contract in `src/contracts/data.ts` is guarded by
 `test/data-contract-freeze.test.ts`; a field is removed or retyped only with a new note here.
+
+## Pre-release
+
+A theme can typecheck against the frozen contract before 0.3.0 ships: `npm install @velella/mizzen@next`, then import from `@velella/mizzen/contracts`. The pre-release promises the types only, not the behaviour, and `latest` is never moved by it. The workflow publishes a new `0.3.0-next.<n>` whenever the contract changes.
+
+Current pre-release: none published yet; the first is `0.3.0-next.0`. Update this line when a newer one is published.
