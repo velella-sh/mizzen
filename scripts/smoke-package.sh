@@ -38,11 +38,16 @@ if ! grep -q 'class="mermaid-diagram"' "$mermaid_page"; then
 fi
 echo "packages build the Lateen site from node_modules"
 
-# The data contract types must be importable from the installed package, so a theme can typecheck against them.
+# The data contract types must be importable from the tarball alone, in an empty folder with no Lateen and no
+# checkout, so a theme can typecheck against a published pre-release.
+mkdir "$work/contract"
+cd "$work/contract"
+npm init -y >/dev/null
+npm install --silent --no-audit --no-fund "$work"/tar/velella-mizzen-*.tgz
 cat > contract-check.ts <<'TS'
 import type { Collection, DataRecord, LayoutProps, ListProps, RecordProps } from "@velella/mizzen/contracts";
 export type Check = [Collection, DataRecord, ListProps, RecordProps, LayoutProps["record"], LayoutProps["list"]];
 TS
 "$mizzen/node_modules/.bin/tsc" --noEmit --strict --skipLibCheck --module nodenext --moduleResolution nodenext \
   --target es2023 --allowImportingTsExtensions contract-check.ts
-echo "packages expose the data contract types"
+echo "the tarball alone exposes the data contract types"
