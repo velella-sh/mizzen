@@ -24,7 +24,7 @@ test("the portable Skill has valid frontmatter and documents the engine workflow
   assert.match(frontmatter, /^description: .+$/m);
   assert.match(frontmatter, /^license: Apache-2\.0$/m);
   assert.doesNotMatch(frontmatter, /^allowed-tools:/m);
-  for (const required of ["Theme-free", "Deterministic", "Add an output", "Add a fact", "npm test", "edit apply --dry-run"]) {
+  for (const required of ["Theme-free", "Deterministic", "Add an output", "Add a fact", "npm test", "edit apply --dry-run", "Work on a data site", "urls check", "urls.lock.json", "referenceDate", "examples/data-site"]) {
     assert.ok(skill.includes(required), `SKILL.md documents ${required}`);
   }
 });
