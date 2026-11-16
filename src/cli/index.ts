@@ -1078,6 +1078,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       if (result.code === 0 && options.check && result.pending.length > 0) {
+        for (const item of result.pending) error(`${NAME}: pending ${item.collection}: ${item.event.type} ${item.summary}`);
         error(`${NAME}: data changed without a history entry; run \`${NAME} data changes --write\``);
         return 1;
       }
