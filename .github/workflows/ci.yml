@@ -41,6 +41,9 @@ jobs:
       - name: Build the packages and install them
         run: scripts/smoke-package.sh ../mizzen ../lateen
         working-directory: mizzen
+      - name: Build the example data site twice from the packed tarballs
+        run: scripts/smoke-example.sh ../mizzen ../lateen
+        working-directory: mizzen
 
   # The social images must be the same bytes on every operating system (docs/adr/social-images.md). The render test holds
   # recorded hashes, so running it on all three is the proof. It needs neither Lateen nor a build.
