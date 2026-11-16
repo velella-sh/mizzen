@@ -78,6 +78,13 @@
       "additionalProperties": { "$ref": "#/$defs/feed" },
       "description": "Feeds of collections' records by name: which records, how many, and which formats. Default {}."
     },
+    "calendars": {
+      "type": "object",
+      "default": {},
+      "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+      "additionalProperties": { "$ref": "#/$defs/calendar" },
+      "description": "Calendars of collections' dated records by name, written as .ics files under calendars/. Default {}."
+    },
     "defaults": {
       "type": "array",
       "default": [],
@@ -607,6 +614,72 @@
         }
       },
       "description": "One feed of a collection's records, written under feeds/."
+    },
+    "calendar": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collection", "events"],
+      "properties": {
+        "collection": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Collection whose records the calendar lists."
+        },
+        "where": {
+          "type": "object",
+          "description": "Which records it lists, written like a list page's where. Default: every record."
+        },
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/calendarEvent" },
+          "description": "Events built from each record. At least one."
+        },
+        "reminders": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[1-9][0-9]*d$" },
+          "description": "Reminders before each event as whole days, such as 30d. Default: none."
+        },
+        "groupBy": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Record field whose values each get a calendar of their own under calendars/<name>/."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Largest number of events in one file. Default: no limit."
+        }
+      },
+      "description": "One calendar of a collection's dated records, written as calendars/<name>.ics."
+    },
+    "calendarEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "field"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9-]*$",
+          "description": "Event name, kept in the event id, such as eol. Unique per calendar."
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Record field that holds the event's date; it must be one of the collection's dates."
+        },
+        "end": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Record field that holds the last day of a multi-day event; it must be one of the collection's dates."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Title template; {field} names a record field. Default {title}."
+        }
+      }
     },
     "view": {
       "type": "object",
