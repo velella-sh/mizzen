@@ -165,17 +165,21 @@ export function localizeFields(
 ): LocalizedFields {
   const out: Record<string, unknown> = {};
   const fallbacks: string[] = [];
+  /** Own-key assignment, so a field named `__proto__` stays data and never becomes the prototype. */
+  const put = (key: string, value: unknown): void => {
+    Object.defineProperty(out, key, { value, writable: true, enumerable: true, configurable: true });
+  };
   for (const [key, value] of Object.entries(fields)) {
     if (isLocalized(value, lang, defaultLang)) {
       if (Object.prototype.hasOwnProperty.call(value, lang)) {
-        out[key] = value[lang];
+        put(key, value[lang]);
       } else {
-        out[key] = value[defaultLang];
+        put(key, value[defaultLang]);
         if (lang !== defaultLang) fallbacks.push(key);
       }
       continue;
     }
-    out[key] = value;
+    put(key, value);
   }
   return { fields: out, fallbacks };
 }

@@ -120,9 +120,14 @@ export interface FilterPlan {
   readonly skipped: Readonly<Record<string, readonly string[]>>;
 }
 
+/** A counts map with no prototype, so a value named `__proto__` or `constructor` is an ordinary key. */
+function countsMap(): Record<string, number> {
+  return Object.create(null) as Record<string, number>;
+}
+
 /** Adds one value once per record, so a list with a repeated value counts that record once. */
 function countValues(records: readonly SearchableRecord[], field: string): Record<string, number> {
-  const counts: Record<string, number> = {};
+  const counts = countsMap();
   for (const record of records) {
     const values = field === "collection" ? [record.collection] : valuesOf(record.fields[field]);
     for (const value of new Set(values)) counts[value] = (counts[value] ?? 0) + 1;
@@ -165,7 +170,7 @@ export function filterPlan(
         });
         continue;
       }
-      const merged = byField.get(field) ?? {};
+      const merged = byField.get(field) ?? countsMap();
       mergeCounts(merged, values);
       byField.set(field, merged);
     }

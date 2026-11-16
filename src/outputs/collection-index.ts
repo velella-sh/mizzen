@@ -1,13 +1,15 @@
 import { gzipSync } from "node:zlib";
 import type { DataRecord, Site } from "../contracts/index.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
+import { localizeFields } from "../data/record-context.ts";
 import { byCodePoint, indexRecords } from "./search-shared.ts";
 
 /** The largest chunk, in bytes, when a collection does not set `index.bytes`. */
 export const DEFAULT_INDEX_BYTES = 100_000;
 
-/** A cell is the scalar the record holds, or `null` when the field is missing or not a scalar. */
-type Cell = string | number | boolean | null;
+/** A value a column may hold: one scalar, a list of scalars, or `null` when the field is missing. */
+type Scalar = string | number | boolean;
+type Cell = Scalar | readonly Scalar[] | null;
 
 /** One collection's compact index: columns once, then one array per record. */
 interface IndexBody {
@@ -22,12 +24,20 @@ interface SplitIndex {
   readonly chunks: readonly string[];
 }
 
-/** The value one column holds, with a declared date in its normalized form. */
-function cellOf(record: DataRecord, field: string): Cell {
+/** A scalar as the index writes it, or `undefined` for an object, a list, or `null`. */
+function scalarOf(value: unknown): Scalar | undefined {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : undefined;
+}
+
+/** The value one column holds, from the page's language and with a declared date in its normalized form. */
+function cellOf(record: DataRecord, fields: Readonly<Record<string, unknown>>, field: string): Cell {
   const normalized = record.normalizedDates?.[field];
   if (normalized !== undefined) return normalized;
-  const value = record.fields[field];
-  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? value : null;
+  const value = fields[field];
+  if (Array.isArray(value)) {
+    return value.map(scalarOf).filter((item): item is Scalar => item !== undefined);
+  }
+  return scalarOf(value) ?? null;
 }
 
 /** Splits rows by the bytes they add to the JSON, never by their count, so one chunk fits the budget when it can. */
@@ -77,10 +87,13 @@ export const collectionIndex: Output = {
       const entry = site.config.collections[name]?.index;
       if (entry === undefined) continue;
       const columns = [...entry.fields.filter((field) => field !== "url"), "url"];
-      const rows = indexRecords(site, name).map(({ record, page }) => [
-        ...entry.fields.filter((field) => field !== "url").map((field) => cellOf(record, field)),
-        page.url,
-      ]);
+      const rows = indexRecords(site, name).map(({ record, page }) => {
+        const fields = localizeFields(record.fields, page.lang, site.config.lang).fields;
+        return [
+          ...entry.fields.filter((field) => field !== "url").map((field) => cellOf(record, fields, field)),
+          page.url,
+        ];
+      });
       const head = `data/${name}.index.json`;
       const body: IndexBody = { collection: name, columns, rows };
       const text = JSON.stringify(body);

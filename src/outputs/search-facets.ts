@@ -5,9 +5,14 @@ import { byCodePoint, filterPlan, SEARCH_QUERY, searchableRecords } from "./sear
 /** The file the theme reads the list of filter values from, at the site root. */
 const FILE = "search-facets.json";
 
+/** A counts map with no prototype, so a value named `__proto__` or `constructor` is an ordinary key. */
+function countsMap(): Record<string, number> {
+  return Object.create(null) as Record<string, number>;
+}
+
 /** A counts map with its keys in code-point order, so two builds write the same bytes. */
 function sortedCounts(values: Readonly<Record<string, number>>): Record<string, number> {
-  const out: Record<string, number> = {};
+  const out = countsMap();
   for (const value of Object.keys(values).sort(byCodePoint)) out[value] = values[value]!;
   return out;
 }
@@ -28,9 +33,8 @@ export const searchFacets: Output = {
     if (records.length === 0) return [];
 
     const plan = filterPlan(site, records, () => {});
-    const filters: Record<string, Record<string, number>> = {
-      collection: sortedCounts(plan.collection),
-    };
+    const filters = Object.create(null) as Record<string, Record<string, number>>;
+    filters.collection = sortedCounts(plan.collection);
     for (const { field, values } of plan.fields) filters[field] = sortedCounts(values);
 
     return [

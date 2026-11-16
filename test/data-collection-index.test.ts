@@ -33,6 +33,58 @@ test("a collection index is a column layout with one row per record and its page
   });
 });
 
+test("a list field such as search.aliases keeps its scalar values in the index", async () => {
+  const files = {
+    ...SEARCH_FILES,
+    "mizzen.yml": SEARCH_FILES["mizzen.yml"]!.replace("fields: [title, date, status]", "fields: [aka]"),
+  };
+  await withSite(files, async (_root, result) => {
+    const written = await collectionIndex.run(result.site, context().ctx);
+    const index = JSON.parse(String(written[0]!.contents)) as {
+      columns: string[];
+      rows: (string | string[] | null)[][];
+    };
+    assert.deepEqual(index.columns, ["aka", "url"]);
+    assert.deepEqual(index.rows[0], [["Alphonso", "first-alpha"], "/posts/alpha/"]);
+    assert.deepEqual(index.rows[2], [["Gammatron"], "/posts/gamma/"]);
+    assert.equal(index.rows[1]?.[0], null, "a record without the field keeps null");
+  });
+});
+
+test("a localized field uses the page's language, and the default language when that page is chosen", async () => {
+  const files = {
+    "mizzen.yml": [
+      "languages:",
+      "  - code: en",
+      "    name: English",
+      "    prefix: \"\"",
+      "  - code: fa",
+      "    name: فارسی",
+      "    prefix: /fa",
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      "    template: _templates/items.md",
+      "    permalink: /items/{id}/",
+      "    index:",
+      "      fields: [name]",
+      "",
+    ].join("\n"),
+    "_data/items.yml": "- id: button\n  name:\n    en: Button\n    fa: دکمه\n",
+    "_templates/items.md": "---\ntitle: \"{name}\"\n---\n# :field[name]\n",
+  };
+  await withSite(files, async (_root, result) => {
+    assert.deepEqual(result.diagnostics, []);
+    const written = await collectionIndex.run(result.site, context().ctx);
+    const index = JSON.parse(String(written[0]!.contents)) as {
+      columns: string[];
+      rows: (string | null)[][];
+    };
+    assert.deepEqual(index.columns, ["name", "url"]);
+    assert.deepEqual(index.rows, [["Button", "/items/button/"]]);
+  });
+});
+
 test("an index over the byte budget is split into numbered chunks listed by the head file", async () => {
   const files = {
     ...SEARCH_FILES,
