@@ -2,3 +2,4 @@
 - **`mizzen api check`.** `mizzen api check --against <built folder|git ref>` builds the site and fails when a published field, collection, or type of the earlier API is gone; adding fields passes. Each finding names the file, the field, and a fix.
 - **API versions.** `api.versions` publishes further versions beside the current one, each with its own field lists. A version can be marked `deprecated` with a `sunset` date and a `successor`, which its index repeats; `api check` refuses to drop a version that the earlier build did not mark deprecated.
 - **API size budget.** `api.maxFileBytes` warns when an API file passes the limit and points at the NDJSON file; a file is never truncated.
+- **Data API guide.** `site/data/api.md` documents the layout, the index, the record file, the compatibility rule, and `mizzen api check`.

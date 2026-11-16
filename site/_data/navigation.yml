@@ -36,3 +36,5 @@ main:
         url: /data/feeds/
       - title: Recorded snapshots
         url: /data/snapshots/
+      - title: A versioned data API
+        url: /data/api/
