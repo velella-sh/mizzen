@@ -6,6 +6,7 @@
 import { resolve } from "node:path";
 import { checkNetworkFile } from "../network/check.ts";
 import type { NetworkFetchLike } from "../network/fetch.ts";
+import { writeNetworkSitemap } from "../network/sitemap.ts";
 import { updateNetwork } from "../network/update.ts";
 
 /** What the network commands print through. */
@@ -22,7 +23,7 @@ export const networkUsage = `Usage: mizzen network <subcommand> [options]
 Subcommands:
   check <file>              Check a local network file: ids, paths, titles
   update [dir]              Fetch the network file and each public project's page list, and write network.lock.json
-  sitemap <network-lock-or-file> --url <origin> --out <dir>
+  sitemap [dir|lock] --url <origin> --out <dir>
                             Write one sitemap index that points to each public project's sitemap
 
 Options:
@@ -77,6 +78,34 @@ export async function runNetwork(args: readonly string[], io: NetworkIo): Promis
       check: flags.includes("--check"),
       accept: flags.includes("--accept"),
     });
+    for (const line of result.lines) io.log(line);
+    for (const line of result.errors) io.error(line);
+    return result.code;
+  }
+  if (subcommand === "sitemap") {
+    let url: string | undefined;
+    let out = ".";
+    const inputs: string[] = [];
+    for (let i = 0; i < rest.length; i++) {
+      const arg = rest[i]!;
+      if (arg === "--url" || arg === "--out") {
+        const value = rest[++i];
+        if (value === undefined) {
+          io.error(`mizzen: ${arg} needs a value`);
+          return 2;
+        }
+        if (arg === "--url") url = value;
+        else out = value;
+      } else if (arg.startsWith("-")) {
+        io.error(`mizzen: unknown option: ${arg}`);
+        return 2;
+      } else inputs.push(arg);
+    }
+    if (inputs.length > 1) {
+      io.error("mizzen: network sitemap takes one folder or lock file");
+      return 2;
+    }
+    const result = await writeNetworkSitemap({ input: resolve(inputs[0] ?? "."), url, out: resolve(out) });
     for (const line of result.lines) io.log(line);
     for (const line of result.errors) io.error(line);
     return result.code;

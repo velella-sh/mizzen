@@ -6,6 +6,7 @@
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
 import type { Diagnostic, NetworkConfig, SiteNetwork } from "../contracts/index.ts";
+import { publicProjects } from "./visibility.ts";
 import { NETWORK_LOCK_FILE, readNetworkLock, type LockedProject, type NetworkLock } from "./lock.ts";
 
 /** Days after which a lock is reported as stale, when the config sets no `maxAgeDays`. */
@@ -28,8 +29,7 @@ export function siteNetwork(lock: NetworkLock, current: string, hash: string): S
   return {
     current,
     lock: hash,
-    projects: lock.projects
-      .filter((project) => project.public)
+    projects: publicProjects(lock.projects)
       .map((project) => ({
         id: project.id,
         path: project.path,

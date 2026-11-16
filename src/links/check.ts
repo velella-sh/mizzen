@@ -3,6 +3,7 @@
  * and line of the link, so the author sees it where they wrote it. Pure: it reads the locked network and nothing else.
  */
 import type { Diagnostic, SourcePos } from "../contracts/index.ts";
+import { publicProjects } from "../network/visibility.ts";
 import type { LockedPage, LockedProject, NetworkLock } from "../network/lock.ts";
 
 /** What a link resolves to. */
@@ -43,7 +44,7 @@ export function checkProjectLink(
         id: "network.link-missing-project",
         severity: "error",
         message: `${address} names the project "${projectId}", which the network lock does not list.`,
-        help: `Use one of: ${lock.projects.filter((p) => p.public).map((p) => p.id).join(", ")}.`,
+        help: `Use one of: ${publicProjects(lock.projects).map((p) => p.id).join(", ")}.`,
         pos,
       }],
     };
