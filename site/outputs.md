@@ -27,6 +27,8 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
 | `llms` | `llms.txt`, following llmstxt.org. |
 | `llms-full` | `llms-full.txt`, every page's Markdown in one file. |
+| `calendars` | `calendars/<name>.ics` and one file per `groupBy` value, from the `calendars` config. |
+| `record-calendar` | `calendar.ics` beside each record page that has dated events. |
 | `manifest` | `.mizzen/manifest.json`, the page list, per-page source and HTML hashes, and the build hash. |
 | `not-found` | `404.html`, the page at `/404/` when the site has one, else a minimal page. |
 | `opensearch` | `opensearch.xml`, the site's search as an OpenSearch provider, when the config has `url`. |
