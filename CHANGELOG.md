@@ -4,8 +4,28 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+## 0.2.1 — 2026-11-16
+
+This release adds data sites: a collection of records read from a data file, validated, and built into pages, lists,
+search, and URLs that do not move. The data contract is exported from `@velella/mizzen/contracts`; a theme can type
+against it.
+
 ### Added
 
+- **Collections** read records from a `_data` YAML, JSON, or CSV file, an installed npm package, or a locked HTTPS URL,
+  with the position of every record and field, size limits, and `mizzen data fetch [--check]` with `mizzen.lock.json`.
+  `:data[path]` and `::data-table` show data inside an ordinary page, and the cache and dependency graph track which
+  pages read which data.
+- **Data validation** checks each record against a JSON Schema and points at the failing field with a suggested fix,
+  and checks unique ids, references between collections, and date fields. `onInvalid` decides whether a bad record
+  stops the build, and the findings appear in `check` and `doctor`.
+- **Search over data** writes per-collection `search` metadata, filters, sort keys, and aliases into the Pagefind index,
+  `search-facets.json` with the search results URL parameters, and a compact `data/<name>.index.json` that is split
+  into chunks when large.
+- **Stable URLs** build slugs from fields (`{name|slug}`), resolve collisions with `disambiguate`, and keep
+  `urls.lock.json`. A changed URL is an error until `mizzen build --update-urls` accepts it and writes a redirect;
+  `aliases`, `onRemoved`, `urls.json`, and `mizzen urls check` cover earlier addresses and removed records.
+- **Named views** build extra pages of one record from their own templates, kept out of navigation, search, and feeds.
 - **List pages** turn an ordinary page into a filtered, sorted, grouped, and paginated list of a collection's
   records with `list` front matter: a reference date instead of the clock, one page per group value, `:count`
   on ordinary pages, `LayoutProps.list`, and a Markdown twin for every page.
