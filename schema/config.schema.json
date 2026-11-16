@@ -242,6 +242,11 @@
             "$ref": "#/$defs/apiVersion"
           },
           "description": "Further versions of the API by name, published beside the current one (version), each with its own collections and field lists."
+        },
+        "maxFileBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Warn when an API file is larger than this many bytes, advising the NDJSON file; a file is never truncated. Default: no limit."
         }
       },
       "description": "The versioned static data API written under api/<version>/. Default: none, and nothing is written."

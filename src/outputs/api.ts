@@ -12,6 +12,7 @@ import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { unsafeIdReason } from "../api/ids.ts";
 import { publishedSchema } from "../api/schemas.ts";
 import { openApiDocument } from "../api/openapi.ts";
+import { overBudget } from "../api/budget.ts";
 import { apiVersions, type ApiVersion } from "../api/versions.ts";
 import { apiCollections, apiDir, apiUrl, byCodePoint, type ApiCollection, type ApiRecord } from "../api/model.ts";
 
@@ -124,6 +125,7 @@ export const api: Output = {
   async run(site: Site, ctx: OutputContext): Promise<readonly OutputFile[]> {
     const files: OutputFile[] = [];
     for (const version of apiVersions(site, (diagnostic) => ctx.report(diagnostic))) files.push(...(await versionFiles(site, version, ctx)));
+    overBudget(files, site.config.api?.maxFileBytes, (diagnostic) => ctx.report(diagnostic));
     return files.sort((a, b) => byCodePoint(a.path, b.path));
   },
 };

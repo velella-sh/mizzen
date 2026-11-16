@@ -298,6 +298,7 @@ export function apiFrom(value: unknown): ApiConfig | undefined {
     version,
     collections,
     ...(value.headers === true ? { headers: true } : {}),
+    ...(typeof value.maxFileBytes === "number" && Number.isSafeInteger(value.maxFileBytes) && value.maxFileBytes > 0 ? { maxFileBytes: value.maxFileBytes } : {}),
     ...(Object.keys(versions).length === 0 ? {} : { versions }),
   };
 }

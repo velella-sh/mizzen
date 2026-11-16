@@ -273,6 +273,8 @@ export interface ApiConfig {
   readonly collections: Readonly<Record<string, ApiCollectionConfig>>;
   /** `true` writes a `_headers` file with CORS and cache rules for `/api/*`, for hosts that read one. Default `false`. */
   readonly headers?: boolean;
+  /** Warn when an API file is larger than this many bytes. A file is never truncated. Default: no limit. */
+  readonly maxFileBytes?: number;
   /** Further versions by name (`v1`, `v2`), published beside the current one in `version`. */
   readonly versions?: Readonly<Record<string, ApiVersionConfig>>;
 }
