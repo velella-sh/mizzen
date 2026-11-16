@@ -147,3 +147,25 @@ export function instantOfHttpDate(value: string | null): string | undefined {
   const time = Date.parse(value);
   return Number.isFinite(time) ? instantOfUnix(Math.floor(time / 1000)) : undefined;
 }
+
+/** The fields a template may show with `:snapshot[field]`. */
+export const SNAPSHOT_TEMPLATE_FIELDS = SNAPSHOT_FIELDS;
+
+/**
+ * A snapshot field as a page shows it. `capturedAt` is a date in the page's language and that language's own calendar
+ * (UTC, so every time zone gives the same text); every other field is printed as the lock holds it. `undefined` when the
+ * snapshot, or the field, is absent: nothing is printed that the lock does not hold.
+ */
+export function snapshotText(snapshot: CollectionSnapshot | undefined, field: string, lang: string): string | undefined {
+  if (snapshot === undefined) return undefined;
+  const value = (snapshot as unknown as Record<string, unknown>)[field];
+  if (typeof value !== "string" || value === "") return undefined;
+  if (field !== "capturedAt") return value;
+  const instant = Date.parse(value.length === 10 ? `${value}T00:00:00Z` : value);
+  if (!Number.isFinite(instant)) return undefined;
+  try {
+    return new Intl.DateTimeFormat(lang, { dateStyle: "long", timeZone: "UTC" }).format(instant);
+  } catch {
+    return new Intl.DateTimeFormat("en", { dateStyle: "long", timeZone: "UTC" }).format(instant);
+  }
+}

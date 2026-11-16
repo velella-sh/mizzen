@@ -26,6 +26,7 @@ import { directionFromLang } from "../content/lang.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { applyField, type FieldResult } from "../markdown/plugins/field.ts";
 import { eachItems, ifKeeps } from "../markdown/plugins/field-blocks.ts";
+import { applySnapshot } from "../markdown/plugins/snapshot.ts";
 import { selectRecords } from "../markdown/plugins/records.ts";
 import { applyRecordLinks } from "../markdown/plugins/links.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
@@ -155,6 +156,13 @@ async function rewriteField(
   return result;
 }
 
+/** Rewrites one `:snapshot[…]` into the text the lock holds, or nothing. */
+function rewriteSnapshot(node: Nodes, scope: RecordScope, build: Build): RootContent[] {
+  const result = applySnapshot(node, scope);
+  build.diagnostics.push(...result.diagnostics);
+  return result.replacement === undefined ? [] : [result.replacement as RootContent];
+}
+
 /** Rewrites a list of nodes, returning their replacements in order. */
 async function rewriteChildren(
   children: readonly Nodes[],
@@ -172,6 +180,9 @@ async function rewriteNode(node: Nodes, build: Build): Promise<RootContent[]> {
   if (isDirective(node) && node.type === "textDirective" && node.name === "field") {
     const result = await rewriteField(node, build.scope, build, false);
     return result instanceof Array ? [...result] : result.replacement === undefined ? [] : [result.replacement as RootContent];
+  }
+  if (isDirective(node) && node.type === "textDirective" && node.name === "snapshot") {
+    return rewriteSnapshot(node, build.scope, build);
   }
   if (isDirective(node) && node.type === "leafDirective" && node.name === "field") {
     const result = await rewriteField(node, build.scope, build, true);
@@ -276,6 +287,9 @@ function twinNode(node: Nodes, body: string, scope: RecordScope): string {
   if (isDirective(node) && (node.type === "textDirective" || node.type === "leafDirective") && node.name === "field") {
     const result = applyField(node, scope);
     return result.markdown?.value ?? result.twin;
+  }
+  if (isDirective(node) && node.type === "textDirective" && node.name === "snapshot") {
+    return applySnapshot(node, scope).twin;
   }
   if (isDirective(node) && node.type === "containerDirective") {
     const children = (node as Nodes & { children: Nodes[] }).children;
