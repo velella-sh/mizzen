@@ -69,6 +69,23 @@ test("every quoted CLI help is the command's own help", () => {
   }
 });
 
+test("every command in the help has a row in the README and in site/cli.md", () => {
+  const commands = [
+    ...new Set(
+      usage
+        .split("\n")
+        .filter((line) => /^ {2}[a-z]/.test(line))
+        .map((line) => line.trim().replace(/\s{2,}.*$/, "").split(/\s+/).filter((word) => !/^[[<]/.test(word)).join(" ")),
+    ),
+  ];
+  assert.ok(commands.includes("urls check") && commands.includes("init"), "the list holds the newest commands");
+  for (const command of commands) {
+    for (const file of ["README.md", "site/cli.md"]) {
+      assert.ok(document(file).includes(`| \`mizzen ${command}`), `${file} has a row for mizzen ${command}`);
+    }
+  }
+});
+
 test("the documents name test files that exist", () => {
   for (const [file, text] of DOCUMENTS) {
     for (const match of text.matchAll(/test\/[A-Za-z0-9_./-]+\.test\.ts/g)) {

@@ -1,0 +1,1 @@
+- **README and CLI page cover every command.** `urls check` and the `network` commands now have rows in `README.md` and `site/cli.md`, and a test fails when a command in the help has no row in either.
