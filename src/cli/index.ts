@@ -481,6 +481,8 @@ function parseDiff(args: readonly string[]): Parsed {
       ...(theme === undefined ? {} : { theme }),
     },
   };
+}
+
 /** Parses `mcp [dir] [--theme <dir>] [--allow-edits] [--print-config <client>]`. */
 function parseMcp(args: readonly string[]): Parsed {
   let root: string | undefined;
