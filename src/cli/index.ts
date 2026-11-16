@@ -12,6 +12,7 @@ import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
 import { verifyData } from "../data/verify.ts";
+import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
 import { runStale } from "./stale.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
@@ -72,6 +73,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
+  data changes [name] [dir] List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
@@ -210,6 +212,15 @@ type DataSnapshotOpts = {
   readonly allowDirty: boolean;
 };
 
+type DataChangesOpts = {
+  readonly command: "data-changes";
+  readonly root: string;
+  readonly name?: string;
+  readonly write: boolean;
+  readonly check: boolean;
+  readonly from?: string;
+};
+
 type DataVerifyOpts = {
   readonly command: "data-verify";
   readonly root: string;
@@ -287,6 +298,7 @@ type Parsed =
         | DataFetchOpts
         | DataSnapshotOpts
         | DataVerifyOpts
+        | DataChangesOpts
         | UrlsCheckOpts
         | InitOpts
         | McpOpts
@@ -455,12 +467,36 @@ function parseDataSnapshot(rest: readonly string[]): Parsed {
   return { options: { command: "data-snapshot", root: root ?? ".", name, allowDirty } };
 }
 
+/** Parses `data changes [name] [dir] [--write] [--check] [--from <ref|folder>]`. */
+function parseDataChanges(rest: readonly string[]): Parsed {
+  const positional: string[] = [];
+  let write = false;
+  let check = false;
+  let from: string | undefined;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--write") write = true;
+    else if (arg === "--check") check = true;
+    else if (arg === "--from") {
+      from = rest[++i];
+      if (from === undefined) return { error: "--from needs a git ref or a folder" };
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else positional.push(arg);
+  }
+  if (positional.length > 2) return { error: `unexpected argument: ${positional[2]}` };
+  if (write && check) return { error: "--write and --check cannot be used together" };
+  const [name, root] = positional;
+  return { options: { command: "data-changes", root: root ?? ".", ...(name === undefined ? {} : { name }), write, check, ...(from === undefined ? {} : { from }) } };
+}
+
 /** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
-  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, verify" };
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify" };
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
+  if (subcommand === "changes") return parseDataChanges(rest);
   if (subcommand === "verify") {
     let root: string | undefined;
     for (const arg of rest) {
@@ -1098,6 +1134,28 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       const result = await verifyData({ root });
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-changes") {
+    try {
+      const result = await dataChanges({
+        root,
+        ...(options.name === undefined ? {} : { name: options.name }),
+        write: options.write,
+        ...(options.from === undefined ? {} : { from: options.from }),
+      });
+      for (const message of result.messages) log(message);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      if (result.code === 0 && options.check && result.pending.length > 0) {
+        for (const item of result.pending) error(`${NAME}: pending ${item.collection}: ${item.event.type} ${item.summary}`);
+        error(`${NAME}: data changed without a history entry; run \`${NAME} data changes --write\``);
+        return 1;
+      }
       return result.code;
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);

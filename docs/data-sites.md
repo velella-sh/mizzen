@@ -268,6 +268,11 @@ source. It may rely on the field names a site declared, never on a fixed list of
   the source map, each of which names the data file and the record's span.
 - Every diagnostic and every token of the cache and dependency graph.
 
+## Change history
+
+Every change to a collection can be recorded in an append-only history file that the site shows and feeds. See the
+[data changelog design note](design/data-changelog.md).
+
 ## Frozen on
 
 Frozen on 2026-11-15. The contract in `src/contracts/data.ts` is guarded by

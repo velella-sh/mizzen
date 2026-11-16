@@ -1,7 +1,8 @@
 # Copy to .github/workflows/site-diff.yml.
 #
 # Comments on every pull request with what its change does to the built site: pages added, removed, changed (by
-# section), and moved, URLs that stopped answering, changed files, and changed records. One comment is kept up to
+# section), and moved, URLs that stopped answering, changed files, changed records, and, for collections with a `changelog`, the history entries the pull request leaves
+# unwritten (run `mizzen data changes --write` to record them). One comment is kept up to
 # date; it is found by the marker `<!-- mizzen-diff -->` and edited in place on every push.
 #
 # Safe by construction:

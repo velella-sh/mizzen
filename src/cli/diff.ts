@@ -8,6 +8,7 @@
 import { resolve } from "node:path";
 import { DiffUsageError, diffBuilds } from "../diff/index.ts";
 import { DEFAULT_MAX_ENTRIES, formatDiff, type DiffFormat } from "../diff/format.ts";
+import { pendingChanges } from "../diff/changes.ts";
 import { diffAgainstRef } from "../diff/ref.ts";
 import type { SiteDiff } from "../diff/types.ts";
 
@@ -76,6 +77,8 @@ export async function diffCommand(command: DiffCommand, io: DiffIo): Promise<num
           if (errors > 0) io.error(`mizzen: the ${side} build has ${errors} error${errors === 1 ? "" : "s"}; comparing what it wrote.`);
         },
       });
+      const changes = await pendingChanges(resolve(command.dirs[0] ?? "."));
+      if (changes.length > 0) diff = { ...diff, changes };
     } else {
       const [a, b] = command.dirs;
       if (a === undefined || b === undefined) throw new DiffUsageError("diff needs two built folders: mizzen diff <a> <b>");

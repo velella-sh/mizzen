@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/data-changes.schema.json",
+  "title": "Mizzen data change event",
+  "description": "One line of `data-changes/<collection>.jsonl`: one change to one record, dated by the collection's data snapshot.",
+  "type": "object",
+  "required": ["id", "type", "record", "date"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[0-9a-f]{16}$", "description": "The first 16 hex characters of the SHA-256 of the collection, record, type, field, and date." },
+    "type": { "enum": ["added", "removed", "changed", "renamed", "imported"] },
+    "record": { "type": "string", "minLength": 1, "description": "The record's id; for `imported`, the collection's name." },
+    "field": { "type": "string", "minLength": 1, "description": "The changed field. `changed` only." },
+    "old": { "description": "The earlier value. `changed` only; absent when the field did not exist." },
+    "new": { "description": "The current value. `changed` only; absent when the field was removed." },
+    "from": { "type": "string", "minLength": 1, "description": "The earlier id. `renamed` only." },
+    "fields": { "type": "object", "description": "The tracked fields' values. `added` only." },
+    "count": { "type": "integer", "minimum": 0, "description": "How many records were loaded. `imported` only." },
+    "ref": { "type": "string", "minLength": 1, "description": "The snapshot ref the import summarizes. `imported` only." },
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$", "description": "The collection snapshot's `capturedAt`." }
+  },
+  "allOf": [
+    { "if": { "properties": { "type": { "const": "changed" } } }, "then": { "properties": { "field": {} }, "required": ["field"] } },
+    { "if": { "properties": { "type": { "const": "renamed" } } }, "then": { "properties": { "from": {} }, "required": ["from"] } },
+    { "if": { "properties": { "type": { "const": "imported" } } }, "then": { "properties": { "count": {} }, "required": ["count"] } },
+    { "if": { "properties": { "type": { "enum": ["added", "removed", "renamed", "imported"] } } }, "then": { "properties": { "field": false, "old": false, "new": false } } },
+    { "if": { "properties": { "type": { "not": { "const": "renamed" } } } }, "then": { "properties": { "from": false } } },
+    { "if": { "properties": { "type": { "not": { "const": "added" } } } }, "then": { "properties": { "fields": false } } },
+    { "if": { "properties": { "type": { "not": { "const": "imported" } } } }, "then": { "properties": { "count": false, "ref": false } } }
+  ]
+}

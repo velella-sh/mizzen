@@ -19,6 +19,7 @@ import type {
   VerifyConfig,
   CollectionConfig,
   CollectionIndexConfig,
+  CollectionChangelogConfig,
   CollectionRawConfig,
   CollectionJsonConfig,
   CollectionSearchConfig,
@@ -307,6 +308,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const onRemoved = onRemovedFrom(entry.onRemoved);
     const json = collectionJsonFrom(entry.json);
     const raw = collectionRawFrom(entry.raw);
+    const changelog = collectionChangelogFrom(entry.changelog);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
@@ -332,6 +334,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(seo === undefined ? {} : { seo }),
       ...(index === undefined ? {} : { index }),
       ...(raw === undefined ? {} : { raw }),
+      ...(changelog === undefined ? {} : { changelog }),
     };
   }
   return collections;
@@ -432,6 +435,29 @@ function collectionRawFrom(value: unknown): false | CollectionRawConfig | undefi
   if (!isPlainObject(value)) return undefined;
   const hidden = fieldsFrom(value.private);
   return hidden === undefined ? {} : { private: hidden };
+}
+
+const CHANGELOG_TYPES = ["added", "removed", "changed", "renamed", "imported"] as const;
+
+/** A collection's changelog settings, keeping only what the schema accepts. */
+function collectionChangelogFrom(value: unknown): CollectionChangelogConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const track = fieldsFrom(value.track);
+  const ignore = fieldsFrom(value.ignore);
+  const labels: Partial<Record<(typeof CHANGELOG_TYPES)[number], string>> = {};
+  if (isPlainObject(value.labels)) {
+    for (const type of CHANGELOG_TYPES) {
+      const text = value.labels[type];
+      if (typeof text === "string" && text !== "") labels[type] = text;
+    }
+  }
+  const threshold = value.importThreshold;
+  return {
+    ...(track === undefined ? {} : { track }),
+    ...(ignore === undefined ? {} : { ignore }),
+    ...(Object.keys(labels).length === 0 ? {} : { labels }),
+    ...(typeof threshold === "number" && Number.isSafeInteger(threshold) && threshold >= 1 ? { importThreshold: threshold } : {}),
+  };
 }
 
 /** `onRemoved` as the contract holds it: one of the words, or a redirect to a safe site path. */
