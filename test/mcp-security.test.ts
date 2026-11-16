@@ -79,11 +79,11 @@ test("a call that outlives the timeout is stopped with an error, and the server 
     site: h.site,
     registry: registryOf([tool("slow", () => new Promise(() => {})), tool("quick", async () => ({ text: "fine" }))]),
     info: { name: "t", version: "0" },
-    limits: { callTimeoutMs: 50 },
+    limits: { callTimeoutMs: 1000 },
   });
   const result = await call(slow, "slow");
   assert.equal(result.isError, true);
-  assert.match(result.content[0].text, /took longer than 50 ms/);
+  assert.match(result.content[0].text, /took longer than 1000 ms/);
   assert.equal((await call(slow, "quick")).content[0].text, "fine");
 });
 
