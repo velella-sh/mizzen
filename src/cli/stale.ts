@@ -4,6 +4,8 @@
  *
  * - `mizzen stale [dir] [--json] [--fail]` lists the pages whose covered files changed, were removed, or were added by
  *   a glob since the page was marked, with the files and a fix hint. It exits 1 under `--fail` when any page is stale.
+ * - `mizzen stale --changed <file…>` and `--git-diff <base>` print the pages whose `covers` match the changed files, with
+ *   the matched files; nothing is printed and the exit code is 0 when no page matches.
  * - `mizzen stale mark <page…|--all> [--reason <text>] [--date YYYY-MM-DD] [--site <dir>]` writes the current hashes of
  *   the named pages to `docs-review.lock.json` and appends a line to `docs-review.audit.jsonl`.
  *
@@ -13,6 +15,7 @@ import { appendFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { redactAuditText } from "../edits/audit.ts";
 import { loadCoveredPages } from "../stale/pages.ts";
+import { gitChangedFiles, pagesTouchedBy } from "../stale/changed.ts";
 import { applyMoves, compareToLock, formatStaleJson, formatStaleText } from "../stale/report.ts";
 import { readReviewLock, reviewDate, withPage, writeReviewLock } from "../stale/lock.ts";
 
@@ -26,6 +29,8 @@ export interface StaleIo {
 export const REVIEW_AUDIT_FILE = "docs-review.audit.jsonl";
 
 export const staleUsage = `Usage: mizzen stale [dir] [--json] [--fail]
+       mizzen stale --changed <file…> [dir] [--json]
+       mizzen stale --git-diff <base> [dir] [--json]
        mizzen stale mark <page…> [options]
        mizzen stale mark --all [options]
 
@@ -39,6 +44,8 @@ Options:
   --site <dir>        Site root for mark (default: .)
   --json              For the list: print JSON
   --fail              For the list: exit 1 when any page is stale
+  --changed <file…>   Print the pages whose covers match these files (every argument up to the next option)
+  --git-diff <base>   Print the pages whose covers match the files that differ from this local git ref
 `;
 
 /** Parsed `stale mark` arguments. */
@@ -89,10 +96,28 @@ async function list(args: readonly string[], io: StaleIo): Promise<number> {
   let root: string | undefined;
   let json = false;
   let fail = false;
-  for (const arg of args) {
+  let changed: string[] | undefined;
+  let base: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
     if (arg === "--json") json = true;
     else if (arg === "--fail") fail = true;
-    else if (arg.startsWith("-")) {
+    else if (arg === "--changed") {
+      changed = [];
+      while (i + 1 < args.length && !args[i + 1]!.startsWith("-")) changed.push(args[++i]!);
+    } else if (arg === "--git-diff") {
+      base = args[++i];
+      if (base === undefined) {
+        io.error(`mizzen: --git-diff needs a base ref\n\n${staleUsage}`);
+        return 2;
+      }
+    } else if (arg === "--site") {
+      root = args[++i];
+      if (root === undefined) {
+        io.error(`mizzen: --site needs a value\n\n${staleUsage}`);
+        return 2;
+      }
+    } else if (arg.startsWith("-")) {
       io.error(`mizzen: unknown option: ${arg}\n\n${staleUsage}`);
       return 2;
     } else if (root === undefined) root = arg;
@@ -106,6 +131,21 @@ async function list(args: readonly string[], io: StaleIo): Promise<number> {
   if (loaded.errors.length > 0) {
     for (const message of loaded.errors) io.error(`mizzen: ${message}`);
     return 1;
+  }
+  if (changed !== undefined || base !== undefined) {
+    let files = changed ?? [];
+    if (base !== undefined) {
+      try {
+        files = [...files, ...(await gitChangedFiles(loaded.coversRoot, base))];
+      } catch (err) {
+        io.error(`mizzen: ${err instanceof Error ? err.message : String(err)}`);
+        return 2;
+      }
+    }
+    const touched = pagesTouchedBy(loaded.pages, files);
+    if (touched.length === 0) return 0;
+    io.log(json ? JSON.stringify({ version: 1, pages: touched }, null, 2) : touched.map((t) => [t.page, ...t.files.map((f) => `  ${f}`)].join("\n")).join("\n"));
+    return 0;
   }
   const lock = await readReviewLock(siteRoot);
   for (const d of lock.diagnostics) io.error(`mizzen: ${d.message}`);

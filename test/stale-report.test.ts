@@ -71,6 +71,6 @@ test("usage errors exit 2", async () => {
 
 test("compareToLock ignores pages whose files match", () => {
   const h = "a".repeat(64);
-  const pages = [{ page: "a.md", line: 3, files: [{ path: "x", sha256: h }], diagnostics: [] }];
+  const pages = [{ page: "a.md", covers: [], line: 3, files: [{ path: "x", sha256: h }], diagnostics: [] }];
   assert.deepEqual(compareToLock(pages, { version: 1, pages: { "a.md": { reviewed: "2026-01-01", files: [{ path: "x", sha256: h }] } } }), []);
 });

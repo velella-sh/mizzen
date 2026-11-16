@@ -18,6 +18,8 @@ import { hashFiles, type FileHash } from "./hash.ts";
 export interface CoveredPage {
   /** Source path relative to the site root, `/`-separated. */
   readonly page: string;
+  /** The `covers` patterns as written; empty when the value is not a list of strings. */
+  readonly covers: readonly string[];
   /** 1-based line of the `covers` key in the page's source. */
   readonly line: number;
   /** The covered files and their current hashes, sorted by path. */
@@ -60,7 +62,7 @@ export async function loadCoveredPages(root: string): Promise<LoadedCoveredPages
     const page = `${prefix}${file.path}`.replace(/^\.\//, "");
     const expanded = await expandCovers({ covers: fm.data.covers, root: coversRoot, file: page, line: coversLine(text) });
     const hashed = await hashFiles(expanded.files, { root: coversRoot, file: page });
-    pages.push({ page, line: coversLine(text), files: hashed.hashes, diagnostics: [...expanded.diagnostics, ...hashed.diagnostics] });
+    pages.push({ page, covers: Array.isArray(fm.data.covers) && fm.data.covers.every((c) => typeof c === "string") ? (fm.data.covers as string[]).map((c) => c.trim()) : [], line: coversLine(text), files: hashed.hashes, diagnostics: [...expanded.diagnostics, ...hashed.diagnostics] });
   }
   pages.sort((a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : 0));
   return { pages, coversRoot, errors, severity };
