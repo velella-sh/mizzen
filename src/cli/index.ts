@@ -11,6 +11,7 @@ import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts"
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
 import { dataFetch } from "./data.ts";
+import { runNetwork } from "./network.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
 import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
@@ -25,7 +26,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["build", "check", "data", "dev", "diff", "doctor", "edit", "pack", "urls", "verify", "watch"] as const;
+export const COMMANDS = ["build", "check", "data", "dev", "diff", "doctor", "edit", "network", "pack", "urls", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -72,6 +73,9 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  network check <file>      Check the shared network file: ids, paths, titles
+  network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
+  network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
@@ -188,6 +192,11 @@ type UrlsCheckOpts = {
   readonly format: "text" | "json";
 };
 
+type NetworkOpts = {
+  readonly command: "network";
+  readonly args: readonly string[];
+};
+
 type EditApplyOpts = {
   readonly command: "edit-apply";
   readonly root: string;
@@ -225,7 +234,8 @@ type Parsed =
         | VerifyOpts
         | WatchOpts
         | DataFetchOpts
-        | UrlsCheckOpts;
+        | UrlsCheckOpts
+        | NetworkOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -481,6 +491,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (subcommand === "verify") return parseEditVerify(rest);
     return parseEditApply(rest);
   }
+  if (command === "network") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "network", args: rest } };
+  }
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "diff") return parseDiff(rest);
@@ -723,6 +737,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   }
 
   const { options } = parsed;
+
+  if (options.command === "network") {
+    try {
+      return await runNetwork(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
 
   if (options.command === "urls") {
     try {

@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "projects": [
+    { "id": "docs", "path": "docs", "title": "Docs", "public": true },
+    { "id": "blog", "path": "blog", "title": "Blog", "public": true }
+  ]
+}

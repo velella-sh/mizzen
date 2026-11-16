@@ -67,6 +67,9 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  network check <file>      Check the shared network file: ids, paths, titles
+  network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
+  network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
@@ -262,6 +265,8 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `social-images` | `assets/social/<page>.png`, a 1200 by 630 share image per page drawn from an SVG template, when the config sets `social`. The page head points at it. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |
 | `search` | `pagefind/`, a static search index; record pages carry the fields their collection declares. |
+| `search-merge` | `pagefind-network.json`, the other public projects' search indexes, for a site with a `network` key. |
+| `network-record` | `.mizzen/network.json`, the locked network a build was made against, for a site with a `network` key. |
 | `search-facets` | `search-facets.json`, each search filter and its value counts, with the query parameter names the theme reads. |
 | `search-synonyms` | `pagefind.yml`, the search synonyms from `_data/search-synonyms.yml`. |
 | `site-files` | No files: names the root files a site may own (`llms.txt`, `llms-full.txt`, `robots.txt`, `sitemap.xml`) so its own copy wins. |

@@ -30,6 +30,13 @@ export const SEARCH_QUERY = {
   order: "order",
 } as const;
 
+/**
+ * The scope of a search in a site that is part of a network: the parameter that carries it and its two values.
+ * `project` searches this project's index only, `all` also searches the other public projects' indexes. The
+ * theme reads `pagefind-network.json` to know which indexes `all` adds; a site outside a network has no scope.
+ */
+export const SEARCH_SCOPE = { parameter: "scope", project: "project", all: "all" } as const;
+
 /** Compares by code point, never by locale. */
 export function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;

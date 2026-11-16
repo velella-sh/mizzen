@@ -199,6 +199,16 @@ export interface VerifyConfig {
   readonly bingFile?: string;
 }
 
+/** The `network` key: the shared file of projects this site belongs to, and which project in it this site is. */
+export interface NetworkConfig {
+  /** The network file's URL or path. Only `mizzen network update` reads it; no default. */
+  readonly source: string;
+  /** The id of this project in the network file. */
+  readonly project: string;
+  /** A build warns when the lock is older than this many days. Default `30`. */
+  readonly maxAgeDays?: number;
+}
+
 /** The `social` key: generated share images. Without the key no image is written. */
 export interface SocialConfig {
   /** Template used by every page that does not name its own: `_templates/social/<template>.svg` in the source folder. */
@@ -250,6 +260,8 @@ export interface SiteConfig {
   readonly analytics?: AnalyticsConfig;
   /** Search engine verification tokens. Default: none. */
   readonly verify?: VerifyConfig;
+  /** The shared network of projects. Default: none, and the site builds on its own. */
+  readonly network?: NetworkConfig;
   /** Generated social share images. Default: none, and no image is written. */
   readonly social?: SocialConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */

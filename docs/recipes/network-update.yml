@@ -1,0 +1,47 @@
+# Keeps network.lock.json up to date. Copy this file to .github/workflows/network-update.yml in a project that has a
+# `network` key. It runs `mizzen network update` on a schedule and, when the lock changed, opens a pull request whose
+# body is the printed diff. It never pushes to the default branch: a person reviews and merges the pull request.
+name: network-update
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Update the lock
+        run: npx mizzen network update | tee "$RUNNER_TEMP/network-diff.txt"
+      - name: Open a pull request when the lock changed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- network.lock.json; then
+            echo "The lock is up to date."
+            exit 0
+          fi
+          branch="network-lock-update"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C "$branch"
+          git add network.lock.json
+          git commit -m "chore(network): update network.lock.json"
+          git push --force origin "$branch"
+          {
+            echo '```'
+            cat "$RUNNER_TEMP/network-diff.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/body.md"
+          gh pr create --title "chore(network): update network.lock.json" --body-file "$RUNNER_TEMP/body.md" --head "$branch" \
+            || gh pr edit "$branch" --body-file "$RUNNER_TEMP/body.md"
