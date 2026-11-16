@@ -38,6 +38,8 @@ import { OWN_EXTENSION } from "../runtime/modules.ts";
 import { navState } from "../nav/tree.ts";
 import { hreflangLinks } from "../outputs/hreflang.ts";
 import { opensearchLink } from "../outputs/opensearch.ts";
+import { analyticsScripts } from "../analytics/script.ts";
+import { verificationMeta } from "../outputs/verification.ts";
 import { feedLinks } from "../feeds/links.ts";
 import { loadRegistry, type ThemeRegistry } from "../render/registry.ts";
 import { recordPropsOf } from "../data/record-context.ts";
@@ -159,9 +161,13 @@ function headOf(site: Site, page: Page): Head {
   const search = opensearchLink(site);
   return {
     title: page.title,
-    meta: typeof description === "string" ? [{ name: "description", content: description }] : [],
+    meta: [
+      ...(typeof description === "string" ? [{ name: "description", content: description }] : []),
+      ...verificationMeta(site, page),
+    ],
     links: [...hreflangLinks(site, page), ...(search === undefined ? [] : [search]), ...feedLinks(site, page)],
     jsonLd: [],
+    scripts: analyticsScripts(site, page),
   };
 }
 

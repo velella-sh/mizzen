@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { Page, Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
+import { siteOrigins } from "../analytics/origins.ts";
 import { twinUrl } from "./twins.ts";
 
 /** Where the manifest lands, relative to the output folder. */
@@ -135,7 +136,7 @@ export const manifest: Output = {
       });
     }
 
-    const json = `${JSON.stringify({ version: 1, pages }, null, 2)}\n`;
+    const json = `${JSON.stringify({ version: 1, ...(site.config.analytics === undefined ? {} : { origins: siteOrigins(site) }), pages }, null, 2)}\n`;
     return [{ path: FILE, contents: json }];
   },
 };

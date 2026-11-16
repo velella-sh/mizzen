@@ -1,6 +1,8 @@
 import type { Page, Site } from "../contracts/content.ts";
 import type { Trail } from "../contracts/nav.ts";
 import type { Head, LinkTag, MetaTag } from "../contracts/render.ts";
+import { analyticsScripts } from "../analytics/script.ts";
+import { verificationMeta } from "./verification.ts";
 import { feedLinks } from "../feeds/links.ts";
 
 /**
@@ -92,6 +94,8 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
     meta.push({ name: "twitter:card", content: image === undefined ? "summary" : "summary_large_image" });
   }
 
+  meta.push(...verificationMeta(site, page));
+
   const links: LinkTag[] = canonical === undefined ? [] : [{ rel: "canonical", href: canonical }];
   links.push(...feedLinks(site, page));
 
@@ -114,5 +118,5 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
       ];
   if (trail.length > 0) jsonLd.push(breadcrumbList(site, trail));
 
-  return { title, meta, links, jsonLd };
+  return { title, meta, links, jsonLd, scripts: analyticsScripts(site, page) };
 }

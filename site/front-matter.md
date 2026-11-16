@@ -24,6 +24,7 @@ Front matter is a YAML block between two `---` lines at the top of a `.md` or `.
 | `lang` | string | `^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$` | Language of the page as a BCP 47 tag, such as `en` or `fa`. Unset, it comes from the language prefix of its folder, then from `lang` in `mizzen.yml`. |
 | `last_modified_at` | string | `^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?( ?(Z\|[+-]\d{2}:?\d{2}))?)?$` | The date the page last changed; the page's `<url>/index.json` reports it as `lastModified`. |
 | `layout` | string | not empty | The theme layout that renders the page. Unset, it comes from `defaults`, then the theme's default layout. An unknown name is an error. |
+| `analytics` | boolean |  | `false` leaves the site's analytics script out of this page. |
 | `og` | boolean |  | `false` drops the page's Open Graph and Twitter card tags and the image in its structured data. |
 | `order` | number |  | Sort order among siblings in navigation built from folders. Pages without it follow, sorted by title. |
 | `permalink` | string | `^/` | The output URL, a path starting with `/`. Unset, the URL comes from the file path: `guide/install.md` and `guide/install/index.md` both give `/guide/install/`. |

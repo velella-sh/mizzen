@@ -123,6 +123,10 @@
         }
       }
     },
+    "analytics": {
+      "type": "boolean",
+      "description": "`false` leaves the site's analytics script out of this page."
+    },
     "og": {
       "type": "boolean",
       "description": "`false` drops the page's Open Graph and Twitter card tags and the image in its structured data."

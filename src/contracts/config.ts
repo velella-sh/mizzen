@@ -168,6 +168,37 @@ export interface CollectionConfig {
   readonly index?: CollectionIndexConfig;
 }
 
+/** A cookieless analytics tool the site attaches with one script tag. */
+export type AnalyticsProvider = "goatcounter" | "plausible" | "umami" | "cloudflare" | "custom";
+
+/** The `analytics` key: which tool, and the one value it needs to tell this site from others. */
+export interface AnalyticsConfig {
+  /** The tool. There is no default: a site without the key gets no script. */
+  readonly provider: AnalyticsProvider;
+  /** GoatCounter code, Plausible domain, Umami website id, or Cloudflare beacon token. Required except for `custom`. */
+  readonly site?: string;
+  /** Origin that serves the script and receives the hits, such as `https://stats.example.com`, for a self-hosted tool. */
+  readonly host?: string;
+  /** `custom` only: the script's URL, starting `https://`. */
+  readonly src?: string;
+  /** `custom` only: attributes written on the script tag. */
+  readonly attrs?: Readonly<Record<string, string>>;
+  /** Outside origins the site may contact; a built page that reaches any other origin earns a warning. Default `[]`. */
+  readonly allowedOrigins?: readonly string[];
+}
+
+/** The `verify` key: tokens that prove to a search engine that the site is the owner's. A provider not set gets nothing. */
+export interface VerifyConfig {
+  /** Google Search Console token, written as the `google-site-verification` meta tag on the home page. */
+  readonly google?: string;
+  /** Bing Webmaster token, written as the `msvalidate.01` meta tag on the home page. */
+  readonly bing?: string;
+  /** Google's HTML verification file name, such as `google0123456789abcdef.html`, written at the site root. */
+  readonly googleFile?: string;
+  /** Bing's user id, written as `BingSiteAuth.xml` at the site root. */
+  readonly bingFile?: string;
+}
+
 /**
  * The site config: exactly the keys of the site config file, after the loader has checked them.
  * Every key is optional in the file; the loader fills the defaults, so the keys marked required here are always present.
@@ -207,6 +238,10 @@ export interface SiteConfig {
   readonly theme: ThemeConfig;
   /** `false` builds no search index. Default `{}`. */
   readonly search: false | SearchConfig;
+  /** A cookieless analytics tool. Default: none, and no script is written. */
+  readonly analytics?: AnalyticsConfig;
+  /** Search engine verification tokens. Default: none. */
+  readonly verify?: VerifyConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */
   readonly redirects: Readonly<Record<string, string>>;
   /** Turns an output off by its name (`false`). Default: every output on. */

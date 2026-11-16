@@ -25,6 +25,14 @@ export interface LinkTag {
   readonly attrs?: Readonly<Record<string, string>>;
 }
 
+/** A deferred `<script src>` tag. A theme prints it as `<script defer src="…">` with the attributes sorted by name. */
+export interface ScriptTag {
+  /** The `src` attribute: an absolute `https` URL. */
+  readonly src: string;
+  /** Any other attributes, such as `data-domain`. */
+  readonly attrs?: Readonly<Record<string, string>>;
+}
+
 /** What goes in `<head>`: set by the engine, added to by the layout. */
 export interface Head {
   /** The document title. */
@@ -35,6 +43,8 @@ export interface Head {
   readonly links: readonly LinkTag[];
   /** JSON-LD objects, written as `application/ld+json` scripts. */
   readonly jsonLd: readonly Readonly<Record<string, unknown>>[];
+  /** Deferred scripts, such as the site's analytics tag. Absent or empty when the page loads none. */
+  readonly scripts?: readonly ScriptTag[];
 }
 
 /** A client script for one component: a plain ES module loaded only on pages that use the component. */

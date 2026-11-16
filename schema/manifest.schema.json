@@ -11,6 +11,11 @@
     "build": {
       "$ref": "#/$defs/build"
     },
+    "origins": {
+      "type": "array",
+      "description": "Every outside origin the built pages contact, sorted by code point. Present only when the site sets `analytics`.",
+      "items": { "type": "string" }
+    },
     "pages": {
       "type": "array",
       "description": "Every page the build renders, sorted by URL comparing code points.",
