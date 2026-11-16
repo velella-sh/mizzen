@@ -4,6 +4,7 @@ import type { Head, LinkTag, MetaTag } from "../contracts/render.ts";
 import { analyticsScripts } from "../analytics/script.ts";
 import { verificationMeta } from "./verification.ts";
 import { feedLinks } from "../feeds/links.ts";
+import { isLaterListPage, isNoindex, mainRecordOf, seoConfigOf } from "../data/seo.ts";
 import { SOCIAL_IMAGE_SIZE, socialImagePath } from "../social/image-path.ts";
 
 /**
@@ -16,6 +17,9 @@ import { SOCIAL_IMAGE_SIZE, socialImagePath } from "../social/image-path.ts";
  * - `description` from front matter wins; the home page falls back to the site `description`.
  * - `image` from front matter is the social image; it needs `config.url` to become absolute. Without one, a site that
  *   sets `social.template` gets the generated image of the `social-images` output (see `src/social/image-path.ts`).
+ * - A record page's canonical may come from the collection's `seo.canonical` field; front matter still wins. Page two
+ *   onwards of a list always has its own URL as canonical, even when the list's front matter names one.
+ * - `noindex` (`seo.noindex` field of a record, or `noindex_pagination: true` on a list) writes `robots: noindex`.
  * - `og: false` drops the Open Graph and Twitter card tags and the image in the structured data; the canonical link
  *   and the description stay.
  * - Structured data: the home page is a `WebSite`, every other page a `TechArticle` (publisher: the site title), and a
@@ -77,7 +81,11 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
   const title = home ? siteTitle : `${page.title}${TITLE_SEPARATOR}${siteTitle}`;
 
   const description = text(page.frontMatter.description) ?? (home ? text(site.config.description) : undefined);
-  const canonicalSource = text(page.frontMatter.canonical_url);
+  // Page two onwards of a list is its own page: it never takes the canonical its first page's front matter names.
+  const recordCanonicalField = seoConfigOf(site, page)?.canonical;
+  const recordCanonical =
+    recordCanonicalField === undefined || text(site.config.url) === undefined ? undefined : text(mainRecordOf(site, page)?.fields[recordCanonicalField]);
+  const canonicalSource = isLaterListPage(page) ? undefined : (text(page.frontMatter.canonical_url) ?? recordCanonical);
   const canonical = canonicalSource === undefined ? absolute(site, page.url) : absolute(site, canonicalSource);
   const social = page.frontMatter.og !== false;
 
@@ -101,6 +109,7 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
     meta.push({ name: "twitter:card", content: image === undefined ? "summary" : "summary_large_image" });
   }
 
+  if (isNoindex(site, page)) meta.push({ name: "robots", content: "noindex" });
   meta.push(...verificationMeta(site, page));
 
   const links: LinkTag[] = canonical === undefined ? [] : [{ rel: "canonical", href: canonical }];

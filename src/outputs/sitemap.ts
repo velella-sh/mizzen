@@ -2,6 +2,7 @@ import type { SiteConfig } from "../contracts/config.ts";
 import type { Page, Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { languageGroups, translationId } from "../content/lang-fallback.ts";
+import { isNoindex } from "../data/seo.ts";
 import { isAppPage } from "./app-pages.ts";
 
 /** Compares by code point, never by locale. */
@@ -121,7 +122,7 @@ function alternatesOf(
 /**
  * Writes `sitemap.xml`: one `<url>` per doc page, with the absolute URL (the config's `url` plus the page's URL, which
  * already carries `base`) and `lastmod` when the page sets `updated`. A page with `sitemap: false` is left out, and so
- * is every app page, because the config has no key that lists one (the frozen config schema decides that).
+ * is a page marked `noindex` (see `src/data/seo.ts`) and every app page, because the config has no key that lists one (the frozen config schema decides that).
  *
  * A page that has translations gets one `<xhtml:link rel="alternate">` per language of its group plus `x-default`,
  * and the document declares the XHTML namespace only when some page has alternates; a single-language site writes
@@ -135,7 +136,7 @@ export const sitemap: Output = {
     if (origin === undefined) return [];
 
     const pages = site.pages
-      .filter((p) => p.kind === "doc" && p.frontMatter.sitemap !== false && !isAppPage(p.url, { pages: site.pages }))
+      .filter((p) => p.kind === "doc" && p.frontMatter.sitemap !== false && !isNoindex(site, p) && !isAppPage(p.url, { pages: site.pages }))
       .sort((a, b) => byCodePoint(a.url, b.url));
 
     const groups = languageGroups(site);
