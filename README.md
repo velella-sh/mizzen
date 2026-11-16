@@ -61,6 +61,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
+  data changes [name] [dir] List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
