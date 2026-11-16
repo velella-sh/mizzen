@@ -70,7 +70,9 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
-  network <subcommand>      Check, lock, and publish the shared network of projects (check, update, sitemap)
+  network check <file>      Check the shared network file: ids, paths, titles
+  network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
+  network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
@@ -414,7 +416,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (subcommand === "verify") return parseEditVerify(rest);
     return parseEditApply(rest);
   }
-  if (command === "network") return { options: { command: "network", args: rest } };
+  if (command === "network") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "network", args: rest } };
+  }
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (
