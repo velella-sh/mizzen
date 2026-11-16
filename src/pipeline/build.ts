@@ -544,7 +544,15 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     await pool?.close();
   }
 
-  const hookedOutputs = await runOutputsHooks(code.plugins, produced, site);
+  // Every page's render is in the output files now; the per-page copies are not needed to write them.
+  renderedHtml.clear();
+  cachedRenders.clear();
+
+  let hookedOutputs: Awaited<ReturnType<typeof runOutputsHooks>> | undefined = await runOutputsHooks(
+    code.plugins,
+    produced,
+    site,
+  );
   for (const d of hookedOutputs.diagnostics) diagnostics.report(d);
 
   const claimed = new Map<string, string>();
@@ -569,6 +577,10 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     claimed.set(file.path, from ?? "");
     pending.push(file);
   }
+  // Only `pending` keeps the files from here on, and it lets go of each as it is written.
+  hookedOutputs = undefined;
+  owner.clear();
+  produced.length = 0;
 
   const parent = dirname(out);
   await mkdir(parent, { recursive: true });
@@ -604,7 +616,10 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       written.push(bundle.path);
     }
 
-    for (const file of pending) {
+    const waiting: (OutputFile | undefined)[] = pending;
+    for (let i = 0; i < waiting.length; i++) {
+      const file = waiting[i] as OutputFile;
+      waiting[i] = undefined;
       // A site's own file wins over a generated one at the same path, silently: a site `llms.txt` replaces the output's.
       if (assetPaths.has(file.path)) continue;
       const abs = join(staging, file.path);
