@@ -127,6 +127,13 @@
       "type": "boolean",
       "description": "`false` leaves the site's analytics script out of this page."
     },
+    "social": {
+      "oneOf": [
+        { "const": false },
+        { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$" }
+      ],
+      "description": "The page's social image template, a name under `_templates/social/`; `false` gives the page no generated image. Unset, the site's `social.template` applies. A page's own `image` wins."
+    },
     "og": {
       "type": "boolean",
       "description": "`false` drops the page's Open Graph and Twitter card tags and the image in its structured data."

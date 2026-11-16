@@ -209,6 +209,14 @@ export interface NetworkConfig {
   readonly maxAgeDays?: number;
 }
 
+/** The `social` key: generated share images. Without the key no image is written. */
+export interface SocialConfig {
+  /** Template used by every page that does not name its own: `_templates/social/<template>.svg` in the source folder. */
+  readonly template?: string;
+  /** Font files the images are drawn with, relative to the site root: `.ttf`, `.otf`, or `.woff`. Default `[]`. */
+  readonly fonts: readonly string[];
+}
+
 /**
  * The site config: exactly the keys of the site config file, after the loader has checked them.
  * Every key is optional in the file; the loader fills the defaults, so the keys marked required here are always present.
@@ -254,6 +262,8 @@ export interface SiteConfig {
   readonly verify?: VerifyConfig;
   /** The shared network of projects. Default: none, and the site builds on its own. */
   readonly network?: NetworkConfig;
+  /** Generated social share images. Default: none, and no image is written. */
+  readonly social?: SocialConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */
   readonly redirects: Readonly<Record<string, string>>;
   /** Turns an output off by its name (`false`). Default: every output on. */
