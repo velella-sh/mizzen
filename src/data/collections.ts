@@ -283,7 +283,7 @@ async function localBytes(
 }
 
 /** Reads a CSV or YAML/JSON source into records, adding every finding to `diagnostics`. */
-function readText(
+export function readText(
   collection: string,
   source: string,
   display: string,

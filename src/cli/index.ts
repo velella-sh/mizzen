@@ -11,6 +11,7 @@ import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts"
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
+import { verifyData } from "../data/verify.ts";
 import { runNetwork } from "./network.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
@@ -68,6 +69,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
+  data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
@@ -199,6 +201,11 @@ type DataSnapshotOpts = {
   readonly allowDirty: boolean;
 };
 
+type DataVerifyOpts = {
+  readonly command: "data-verify";
+  readonly root: string;
+};
+
 type UrlsCheckOpts = {
   readonly command: "urls";
   readonly root: string;
@@ -256,6 +263,7 @@ type Parsed =
         | WatchOpts
         | DataFetchOpts
         | DataSnapshotOpts
+        | DataVerifyOpts
         | UrlsCheckOpts
         | McpOpts
         | NetworkOpts;
@@ -425,9 +433,19 @@ function parseDataSnapshot(rest: readonly string[]): Parsed {
 /** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
-  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot" };
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, verify" };
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
+  if (subcommand === "verify") {
+    let root: string | undefined;
+    for (const arg of rest) {
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      if (root === undefined) root = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    }
+    return { options: { command: "data-verify", root: root ?? "." } };
+  }
   if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
 
   let root: string | undefined;
@@ -969,6 +987,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "data-fetch") {
     try {
       const result = await dataFetch({ root, ...(options.check ? { check: true } : {}) });
+      for (const message of result.messages) log(message);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-verify") {
+    try {
+      const result = await verifyData({ root });
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
