@@ -37,7 +37,7 @@ test("two builds with different clocks write the same bytes", () => {
   // A later clock: if anything read it, the bytes would differ.
   globalThis.Date = class extends RealDate {
     constructor(...args: ConstructorParameters<typeof RealDate>) {
-      super(...(args.length === 0 ? [RealDate.UTC(2031, 5, 5)] : args) as [number]);
+      super(...((args as unknown[]).length === 0 ? [RealDate.UTC(2031, 5, 5)] : args) as [number]);
     }
     static override now() {
       return RealDate.UTC(2031, 5, 5);
