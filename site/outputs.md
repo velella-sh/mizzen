@@ -13,10 +13,12 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `changelog-feed` | `changelog.xml`, an Atom feed of the changelog page's dated release headings. |
 | `code-meta-check` | No files: reports fence meta that names lines the fence does not have. |
 | `collection-index` | `data/<collection>.index.json` for each collection with `index`: a column layout of its records and page URLs, split into numbered chunks over the byte budget. |
+| `collection-json` | `data/<collection>.json` for every collection: each record's id, URL, and page JSON address. |
 | `context-pack` | `pack/<topic>.md` for each topic in `_data/context-packs.yml`: the best pages for the topic, trimmed to its token budget, with each page's URL and source path. |
 | `drift-report` | `drift.json`, every drift finding grouped by page URL. |
 | `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. |
 | `feed` | `changes.xml`, an Atom feed of the 30 most recently changed doc pages, when the config has `url`. |
+| `feeds` | `feeds/<name>.xml`, `feeds/<name>.rss.xml`, and `feeds/<name>.json` for each feed the config declares, in the formats it names. |
 | `footnote-check` | No files: reports footnote references with no definition. |
 | `html` | One HTML file per document page, at the page's pretty URL. |
 | `link-check` | No files: reports internal links and heading anchors that do not resolve. |
@@ -26,7 +28,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `not-found` | `404.html`, the page at `/404/` when the site has one, else a minimal page. |
 | `opensearch` | `opensearch.xml`, the site's search as an OpenSearch provider, when the config has `url`. |
 | `page-agent` | One JSON file per document page with an `agent:` block (`agent.json` for a pretty URL): URL, source, and the page's instructions. |
-| `page-json` | One JSON file per document page (`index.json` for a pretty URL): URL, title, description, headings, source, last change, and estimated tokens. |
+| `page-json` | One JSON file per document page (`index.json` for a pretty URL): URL, title, description, headings, source, last change, and estimated tokens; a record page adds its collection, id, and published fields, and a list page adds its record ids, groups, and pagination. |
 | `pages-files` | `.nojekyll`, and `CNAME` when the config's `url` is a custom domain on GitHub Pages. |
 | `reading-time` | `reading-time.json`, the word count and reading minutes of each doc page. |
 | `redirects` | One HTML redirect page per old path, and `_redirects` for hosts that read it. |

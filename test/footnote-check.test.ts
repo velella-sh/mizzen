@@ -22,6 +22,7 @@ function site(pages: readonly Page[]): Site {
       exclude: [],
       navigation: "_data/navigation.yml",
       collections: {},
+      feeds: {},
       defaults: [],
       theme: { options: {} },
       search: {},

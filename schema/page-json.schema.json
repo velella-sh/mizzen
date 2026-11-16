@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mizzen page JSON",
+  "description": "One `<url>/index.json` in the output folder: a page's URL, title, description, headings, source file, last change, and token count, so an agent reads the text and structure without parsing HTML. A record page adds a `record` object with the collection, the id, and the published fields; a list page adds a `list` object with its record ids, groups, and pagination. Keys are written in a fixed order and the file ends with a line feed.",
+  "type": "object",
+  "required": ["url", "title", "description", "headings", "source", "lastModified", "tokens"],
+  "properties": {
+    "url": {
+      "type": "string",
+      "description": "The page's output URL, including base."
+    },
+    "title": {
+      "type": "string",
+      "description": "The page's title as the build resolved it."
+    },
+    "description": {
+      "type": ["string", "null"],
+      "description": "The front matter description, trimmed; null when the page has none."
+    },
+    "headings": {
+      "type": "array",
+      "description": "Every heading in document order.",
+      "items": {
+        "type": "object",
+        "required": ["depth", "id", "text"],
+        "properties": {
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 6,
+            "description": "The heading level."
+          },
+          "id": {
+            "type": "string",
+            "description": "The heading's anchor id."
+          },
+          "text": {
+            "type": "string",
+            "description": "The heading's plain text."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "source": {
+      "type": "string",
+      "description": "The source file, relative to the site root, with forward slashes."
+    },
+    "lastModified": {
+      "type": ["string", "null"],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "The front matter last_modified_at as YYYY-MM-DD, or null when absent or unreadable."
+    },
+    "tokens": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Estimated tokens in the page's Markdown body: its characters divided by four, rounded up."
+    },
+    "record": {
+      "type": "object",
+      "required": ["collection", "id", "fields"],
+      "properties": {
+        "collection": {
+          "type": "string",
+          "description": "The collection the record belongs to."
+        },
+        "id": {
+          "type": "string",
+          "description": "The record's id in its collection."
+        },
+        "fields": {
+          "type": "object",
+          "description": "The record's fields in the page's language: every field, or the fields the collection's `json.fields` names."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The record this page was built from."
+    },
+    "list": {
+      "type": "object",
+      "required": ["collection", "records", "groups", "pagination"],
+      "properties": {
+        "collection": {
+          "type": "string",
+          "description": "The collection the list shows."
+        },
+        "records": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Ids of the records this page shows, in the list's order."
+        },
+        "groups": {
+          "type": "array",
+          "description": "The page's groups, when the list asks for groups; empty otherwise.",
+          "items": {
+            "type": "object",
+            "required": ["key", "records"],
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "The group's value, as the list grouped it."
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many records the group holds, including on an index page where its records are empty."
+              },
+              "url": {
+                "type": "string",
+                "description": "The group's own page, when the list expands one page per group value."
+              },
+              "records": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Ids of the group's records on this page."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "pagination": {
+          "type": "object",
+          "required": ["page", "total"],
+          "properties": {
+            "page": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "This page's number in the list."
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The list's number of pages."
+            },
+            "previous": {
+              "type": "string",
+              "description": "The previous page's URL, when there is one."
+            },
+            "next": {
+              "type": "string",
+              "description": "The next page's URL, when there is one."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "The list this page shows."
+    }
+  },
+  "additionalProperties": false
+}

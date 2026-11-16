@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mizzen collection JSON",
+  "description": "One `data/<collection>.json` in the output folder: the collection's name and an index of its records, sorted by id. Each record gives its id, its page URL, and the address of its page JSON, which carries the fields. A record without a main page is left out. `page` is null when the `page-json` output is off, so the file never links to a file the build did not write. Keys are written in a fixed order and the file ends with a line feed.",
+  "type": "object",
+  "required": ["collection", "records"],
+  "additionalProperties": false,
+  "properties": {
+    "collection": {
+      "type": "string",
+      "description": "The collection's name, as declared in the site config."
+    },
+    "records": {
+      "type": "array",
+      "description": "Every record that has a main page, sorted by id.",
+      "items": {
+        "type": "object",
+        "required": ["id", "url", "page"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "description": "The record's id." },
+          "url": { "type": "string", "description": "The URL of the record's main page, including base." },
+          "page": {
+            "type": ["string", "null"],
+            "description": "The URL of the record's page JSON, including base; null when the `page-json` output is off or the page URL names no page."
+          }
+        }
+      }
+    }
+  }
+}

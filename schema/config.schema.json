@@ -71,6 +71,13 @@
       "additionalProperties": { "$ref": "#/$defs/collection" },
       "description": "Data collections by name: where their records come from and how their pages are built. Default {}."
     },
+    "feeds": {
+      "type": "object",
+      "default": {},
+      "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+      "additionalProperties": { "$ref": "#/$defs/feed" },
+      "description": "Feeds of collections' records by name: which records, how many, and which formats. Default {}."
+    },
     "defaults": {
       "type": "array",
       "default": [],
@@ -248,6 +255,20 @@
           "default": true,
           "description": "false keeps the collection's record pages out of llms-full.txt."
         },
+        "json": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["fields"],
+          "properties": {
+            "fields": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Fields the page JSON publishes, in this order; empty publishes none."
+            }
+          },
+          "description": "Which record fields the page JSON publishes. Unset publishes every field."
+        },
         "onInvalid": {
           "enum": ["error", "skip"],
           "default": "error",
@@ -337,6 +358,59 @@
           "description": "A compact JSON index of the collection's records for the theme, written under data/."
         }
       }
+    },
+    "feed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collection", "date"],
+      "properties": {
+        "collection": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Collection whose records the feed lists."
+        },
+        "where": {
+          "type": "object",
+          "description": "Which records it lists, written like a list page's where. Default: every record."
+        },
+        "date": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Record field that holds the entry date; a record without a valid date is left out."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 50,
+          "description": "Largest number of entries. Default 50."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Feed title. Default: the site title."
+        },
+        "formats": {
+          "type": "array",
+          "default": ["atom"],
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["atom", "rss", "json"] },
+          "description": "Formats to write. Default [atom]."
+        },
+        "idField": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Record field whose value extends the entry id, so a new event of the same record is a new entry."
+        },
+        "fields": {
+          "type": "array",
+          "default": [],
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Record fields written under the JSON Feed extension key. Default []."
+        }
+      },
+      "description": "One feed of a collection's records, written under feeds/."
     },
     "view": {
       "type": "object",

@@ -38,6 +38,7 @@ import { OWN_EXTENSION } from "../runtime/modules.ts";
 import { navState } from "../nav/tree.ts";
 import { hreflangLinks } from "../outputs/hreflang.ts";
 import { opensearchLink } from "../outputs/opensearch.ts";
+import { feedLinks } from "../feeds/links.ts";
 import { loadRegistry, type ThemeRegistry } from "../render/registry.ts";
 import { recordPropsOf } from "../data/record-context.ts";
 import { renderPage, type ThemeComponent } from "../render/render.ts";
@@ -152,14 +153,14 @@ function placeOf(site: Site, page: Page): { trail: Trail; pager: Pager } {
   return { trail: [], pager: {} };
 }
 
-/** The head of a page: its title, description, `hreflang` alternates, and the OpenSearch link when the site has a URL. */
+/** The head of a page: its title, description, `hreflang` alternates, the OpenSearch link when the site has a URL, and its collection's feeds. */
 function headOf(site: Site, page: Page): Head {
   const description = page.frontMatter.description;
   const search = opensearchLink(site);
   return {
     title: page.title,
     meta: typeof description === "string" ? [{ name: "description", content: description }] : [],
-    links: [...hreflangLinks(site, page), ...(search === undefined ? [] : [search])],
+    links: [...hreflangLinks(site, page), ...(search === undefined ? [] : [search]), ...feedLinks(site, page)],
     jsonLd: [],
   };
 }

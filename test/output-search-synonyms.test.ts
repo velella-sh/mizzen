@@ -18,6 +18,7 @@ function site(data: Readonly<Record<string, unknown>> = {}, options: Readonly<Re
       exclude: [],
       navigation: "_data/navigation.yml",
       collections: {},
+      feeds: {},
       defaults: [],
       theme: { options },
       search: {},

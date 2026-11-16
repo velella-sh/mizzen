@@ -26,3 +26,5 @@ main:
         url: /front-matter/
       - title: Data findings
         url: /data/validation/
+      - title: Feeds and machine output
+        url: /data/feeds/

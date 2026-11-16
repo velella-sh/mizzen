@@ -135,6 +135,35 @@ test("a collection keeps its keys, and a bad name points at the key", () => {
   assert.equal(d.pos?.column, 3);
 });
 
+test("feeds keep their keys, and an unknown collection points at its line", () => {
+  const src = [
+    "collections:",
+    "  posts:",
+    "    source: _data/posts.yml",
+    "feeds:",
+    "  posts:",
+    "    collection: posts",
+    "    date: published",
+    "    formats: [atom, json]",
+    "  missing:",
+    "    collection: nope",
+    "    date: date",
+    "",
+  ].join("\n");
+  const { config, diagnostics } = loadConfigText(src, F, "Example");
+  assert.deepEqual(config.feeds.posts, {
+    collection: "posts",
+    date: "published",
+    formats: ["atom", "json"],
+  });
+  assert.equal(config.feeds.missing?.collection, "nope");
+  assert.deepEqual(
+    diagnostics.map((d) => d.id),
+    ["config.feeds-collection"],
+  );
+  assert.equal(diagnostics[0]?.pos?.line, 10);
+});
+
 test("a collection keeps its URL keys, and a bad onRemoved is reported", () => {
   const src = [
     "collections:",

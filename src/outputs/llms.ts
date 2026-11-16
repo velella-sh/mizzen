@@ -1,6 +1,7 @@
 import type { NavGroup, NavItem, NavLink, Page, Site } from "../contracts/index.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
 import { isAppPage } from "./app-pages.ts";
+import { indexRecords } from "./search-shared.ts";
 
 /** The section that collects links placed directly in a navigation list, outside any group. */
 const PAGES_SECTION = "Pages";
@@ -101,6 +102,17 @@ export const llms: Output = {
       for (const entry of entries) {
         const note = entry.note === undefined ? "" : `: ${entry.note}`;
         lines.push(`- [${entry.title}](${origin}${entry.href})${note}`);
+      }
+      lines.push("");
+    }
+
+    const base = site.config.base.replace(/\/+$/, "");
+    const collections = Object.keys(site.config.collections);
+    if (collections.length > 0 && site.config.outputs["collection-json"] !== false) {
+      lines.push("## Data", "");
+      for (const name of collections) {
+        const count = indexRecords(site, name).length;
+        lines.push(`- [${oneLine(name)}](${origin}${base}/data/${name}.json): ${count} ${count === 1 ? "record" : "records"}`);
       }
       lines.push("");
     }

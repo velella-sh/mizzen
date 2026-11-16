@@ -69,6 +69,7 @@ test("the defaults in the schema match the documented SiteConfig defaults", () =
     exclude: [],
     navigation: "_data/navigation.yml",
     collections: {},
+    feeds: {},
     defaults: [],
     search: {},
     redirects: {},
@@ -92,6 +93,10 @@ test("valid configs pass", () => {
     { source: "docs", include: [".well-known"], exclude: ["drafts"], navigation: "nav.yml" },
     { collections: {} },
     { collections: { components: { source: "_data/components.yml" } } },
+    { collections: { components: { source: "_data/components.yml", json: { fields: ["title", "status"] } } } },
+    { feeds: {} },
+    { feeds: { posts: { collection: "posts", date: "published" } } },
+    { feeds: { posts: { collection: "posts", date: "published", where: { status: "stable" }, limit: 10, title: "Posts", formats: ["atom", "rss", "json"], idField: "version", fields: ["version"] } } },
     {
       collections: {
         components: {
@@ -141,6 +146,14 @@ test("invalid configs fail", () => {
     ["a collection with an unknown key", { collections: { components: { source: "_data/c.yml", sources: [] } } }],
     ["a collection name with a capital", { collections: { Components: { source: "_data/c.yml" } } }],
     ["a collection name with an underscore", { collections: { part_list: { source: "_data/c.yml" } } }],
+    ["a collection with an unknown json key", { collections: { c: { source: "_data/c.yml", json: { field: [] } } } }],
+    ["feeds not a map", { feeds: [] }],
+    ["a feed without a collection", { feeds: { posts: { date: "published" } } }],
+    ["a feed without a date", { feeds: { posts: { collection: "posts" } } }],
+    ["a feed with an unknown key", { feeds: { posts: { collection: "posts", date: "published", sort: "date" } } }],
+    ["a feed with an unknown format", { feeds: { posts: { collection: "posts", date: "published", formats: ["xml"] } } }],
+    ["a feed with a zero limit", { feeds: { posts: { collection: "posts", date: "published", limit: 0 } } }],
+    ["a feed name with a capital", { feeds: { Posts: { collection: "posts", date: "published" } } }],
     ["a permalink without a leading slash", { collections: { c: { source: "_data/c.yml", permalink: "c/{id}/" } } }],
     ["repository without a url", { repository: { branch: "main" } }],
     ["repository with an unknown key", { repository: { url: "https://github.com/e/e", source_dir: "docs" } }],

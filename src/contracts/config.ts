@@ -75,6 +75,35 @@ export interface CollectionSearchConfig {
   readonly aliases?: string;
 }
 
+/** Which record fields a collection's page JSON publishes. */
+export interface CollectionJsonConfig {
+  /** Fields the page JSON publishes, in the order given; `[]` publishes none. */
+  readonly fields: readonly string[];
+}
+
+/** One feed of a collection's records, declared in the site config. */
+export interface FeedConfig {
+  /** Collection whose records the feed lists. */
+  readonly collection: string;
+  /** Which records it lists, written like a list page's `where`. Default: every record. */
+  readonly where?: Readonly<Record<string, unknown>>;
+  /** Record field that holds the entry date; a record without a valid date is left out. */
+  readonly date: string;
+  /** Largest number of entries. Default `50`. */
+  readonly limit?: number;
+  /** Feed title. Default: the site title. */
+  readonly title?: string;
+  /** Formats to write. Default `["atom"]`. */
+  readonly formats?: readonly FeedFormat[];
+  /** Record field whose value extends the entry id, so a new event of the same record is a new entry. */
+  readonly idField?: string;
+  /** Record fields written under the JSON Feed extension key. Default `[]`. */
+  readonly fields?: readonly string[];
+}
+
+/** A feed file's format. */
+export type FeedFormat = "atom" | "rss" | "json";
+
 /** One compact JSON index of a collection's records for the theme's data explorer. */
 export interface CollectionIndexConfig {
   /** Fields each row carries, in this order, before the record's URL. */
@@ -123,6 +152,8 @@ export interface CollectionConfig {
   readonly markdown?: readonly string[];
   /** `false` keeps the collection's record pages out of `llms-full.txt`. Default `true`. */
   readonly llms?: boolean;
+  /** Which record fields the page JSON publishes. Default: every field. */
+  readonly json?: CollectionJsonConfig;
   /** What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. Default `error`. */
   readonly onInvalid?: "error" | "skip";
   /** What a record that was published and is no longer in the collection does. Default `error` once `urls.lock.json` exists. */
@@ -166,6 +197,8 @@ export interface SiteConfig {
   readonly navigation: string;
   /** Data collections by name: where their records come from and how their pages are built. Default `{}`. */
   readonly collections: Readonly<Record<string, CollectionConfig>>;
+  /** Feeds of collections' records by name: which records, how many, and which formats. Default `{}`. */
+  readonly feeds: Readonly<Record<string, FeedConfig>>;
   /** Front matter applied by folder; later entries win over earlier ones, and a page always wins. Default `[]`. */
   readonly defaults: readonly DefaultsEntry[];
   /** Where the source lives, for edit links. */

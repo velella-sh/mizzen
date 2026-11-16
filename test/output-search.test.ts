@@ -24,6 +24,7 @@ function site(pages: readonly Page[], config: false | SearchConfig = {}): Site {
       exclude: [],
       navigation: "_data/navigation.yml",
       collections: {},
+      feeds: {},
       defaults: [],
       theme: { options: {} },
       search: config,

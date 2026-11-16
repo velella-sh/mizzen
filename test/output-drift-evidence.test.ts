@@ -34,6 +34,7 @@ function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
     exclude: [],
     navigation: "_data/navigation.yml",
     collections: {},
+    feeds: {},
     defaults: [],
     theme: { options: {} },
     search: {},

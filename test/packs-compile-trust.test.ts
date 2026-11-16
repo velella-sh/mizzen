@@ -50,6 +50,7 @@ function site(): Site {
     exclude: [],
     navigation: "_data/navigation.yml",
     collections: {},
+    feeds: {},
     defaults: [],
     theme: { options: {} },
     search: {},

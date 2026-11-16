@@ -170,6 +170,7 @@ function site(pages: readonly Page[], url?: string | null, base = "", config: Pa
       exclude: [],
       navigation: "_data/navigation.yml",
       collections: {},
+      feeds: {},
       defaults: [],
       theme: { options: {} },
       search: {},

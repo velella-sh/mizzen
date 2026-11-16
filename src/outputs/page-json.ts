@@ -1,5 +1,6 @@
 import type { Page, Site } from "../contracts/content.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
+import { localizeFields } from "../data/record-context.ts";
 
 /** Characters per token the estimator assumes, until a tokenizer is chosen. */
 const CHARS_PER_TOKEN = 4;
@@ -20,13 +21,14 @@ function underBase(url: string, base: string): string {
   return url;
 }
 
-/**
- * The file a page's JSON lands at: the page's URL with `index.json` in place of the HTML file, so a pretty URL
- * (`/guide/install/`) gives `/guide/install/index.json`, the site root gives `/index.json`, and a URL that already
- * names an HTML file (`/404.html`) gives its `.json` name (`/404.json`). Mirrors the Markdown twin, which swaps
- * `.html` for `.md`. Returns undefined for a URL that names a file of another kind, which has no page JSON.
- */
-function jsonPath(url: string): string | undefined {
+/** The file a page's JSON lands at, under the output folder, or `undefined` for a URL that names no page. */
+export function jsonPath(url: string, base = ""): string | undefined {
+  const path = jsonUrl(url);
+  return path === undefined ? undefined : underBase(path, base).replace(/^\//, "");
+}
+
+/** The URL path a page's JSON is served at, including `base`; `undefined` for a URL that names no page. */
+export function jsonUrl(url: string): string | undefined {
   const last = url.slice(url.lastIndexOf("/") + 1);
   if (/\.html?$/i.test(last)) return `${url.slice(0, url.length - last.length)}${last.replace(/\.html?$/i, ".json")}`;
   if (last.includes(".")) return undefined;
@@ -40,6 +42,44 @@ function isoDate(value: unknown): string | null {
   return null;
 }
 
+/** The record a page was built from, with the fields the collection publishes; `undefined` when the record is gone. */
+function recordOf(site: Site, page: Page): PageJsonRecord | undefined {
+  const identity = page.record;
+  if (identity === undefined) return undefined;
+  const record = site.collections[identity.collection]?.records.find((candidate) => candidate.id === identity.id);
+  if (record === undefined) return undefined;
+  const fields = localizeFields(record.fields, page.lang, site.config.lang).fields;
+  const declared = site.config.collections[identity.collection]?.json?.fields;
+  if (declared === undefined) return { collection: identity.collection, id: identity.id, fields };
+  const picked: Record<string, unknown> = {};
+  for (const field of declared) {
+    if (Object.prototype.hasOwnProperty.call(fields, field)) picked[field] = fields[field];
+  }
+  return { collection: identity.collection, id: identity.id, fields: picked };
+}
+
+/** The list a page shows, with record ids rather than every field, which its page JSON already carries. */
+function listOf(page: Page): PageJsonList | undefined {
+  const list = page.list;
+  if (list === undefined) return undefined;
+  return {
+    collection: list.collection,
+    records: list.records.map((record) => record.id),
+    groups: list.groups.map((group) => ({
+      key: group.key,
+      ...(group.count === undefined ? {} : { count: group.count }),
+      ...(group.url === undefined ? {} : { url: group.url }),
+      records: group.records.map((record) => record.id),
+    })),
+    pagination: {
+      page: list.pagination.page,
+      total: list.pagination.total,
+      ...(list.pagination.previous === undefined ? {} : { previous: list.pagination.previous }),
+      ...(list.pagination.next === undefined ? {} : { next: list.pagination.next }),
+    },
+  };
+}
+
 /** The page's description, trimmed; empty or non-string values read as no description. */
 function descriptionOf(page: Page): string | null {
   const value = page.frontMatter.description;
@@ -51,6 +91,33 @@ interface PageHeading {
   readonly depth: number;
   readonly id: string;
   readonly text: string;
+}
+
+/** One record field as the page JSON publishes it. */
+interface PageJsonRecord {
+  readonly collection: string;
+  readonly id: string;
+  /** The record's fields in the page's language, in the collection's declared order, or every field. */
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+/** One list page's records, groups, and place in its pagination. */
+interface PageJsonList {
+  readonly collection: string;
+  /** Ids of the records this page shows, in the list's order. */
+  readonly records: readonly string[];
+  readonly groups: readonly {
+    readonly key: string;
+    readonly count?: number;
+    readonly url?: string;
+    readonly records: readonly string[];
+  }[];
+  readonly pagination: {
+    readonly page: number;
+    readonly total: number;
+    readonly previous?: string;
+    readonly next?: string;
+  };
 }
 
 /** The JSON body of one page, with a fixed key order so the same model gives the same bytes. */
@@ -68,6 +135,10 @@ interface PageJson {
   readonly lastModified: string | null;
   /** Estimated tokens in the page's Markdown body, rounded up, at {@link CHARS_PER_TOKEN} characters per token. */
   readonly tokens: number;
+  /** The record this page was built from; absent on every other page. */
+  readonly record?: PageJsonRecord;
+  /** The list this page shows; absent on every other page. */
+  readonly list?: PageJsonList;
 }
 
 /**
@@ -89,8 +160,10 @@ export const pageJson: Output = {
     const files: OutputFile[] = [];
     for (const page of site.pages) {
       if (page.kind !== "doc") continue;
-      const url = jsonPath(page.url);
-      if (url === undefined) continue;
+      const path = jsonPath(page.url, site.config.base);
+      if (path === undefined) continue;
+      const record = recordOf(site, page);
+      const list = listOf(page);
       const body: PageJson = {
         url: page.url,
         title: page.title,
@@ -99,9 +172,11 @@ export const pageJson: Output = {
         source: page.source.file,
         lastModified: isoDate(page.frontMatter.last_modified_at),
         tokens: Math.ceil(page.markdown.length / CHARS_PER_TOKEN),
+        ...(record === undefined ? {} : { record }),
+        ...(list === undefined ? {} : { list }),
       };
       files.push({
-        path: underBase(url, site.config.base).replace(/^\//, ""),
+        path,
         contents: `${JSON.stringify(body, null, 2)}\n`,
       });
     }
