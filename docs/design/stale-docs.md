@@ -9,8 +9,7 @@ the page is silently out of date. The engine should say which pages to look at, 
 
 ## Definitions
 
-- **`covers`** is a front matter key: a list of paths and globs, relative to `stale.root` (default: the site root's
-  parent repository root is *not* assumed; the default is the site root). A page names the files it describes.
+- **`covers`** is a front matter key: a list of paths and globs, relative to `stale.root` (default: the site root). A page names the files it describes.
 - **The review lock**, `docs-review.lock.json` in the site root, records for every page with `covers` each covered
   file's SHA-256 and the review date. `mizzen stale mark` writes it; a person or an agent runs it after reading the
   page against the files.
