@@ -35,7 +35,7 @@ export function matchMoves(removed: readonly FileHash[], candidates: readonly Fi
 }
 
 /** Hashes the files under `root` that a moved file could now be, leaving out `exclude` and anything too large. */
-export async function moveCandidates(root: string, exclude: ReadonlySet<string>): Promise<FileHash[]> {
+export async function moveCandidates(root: string, exclude: ReadonlySet<string>): Promise<readonly FileHash[]> {
   const paths = (await listFiles(root)).filter((p) => !exclude.has(p)).slice(0, MAX_MOVE_CANDIDATES);
   const { hashes } = await hashFiles(paths, { root, file: "", maxFiles: MAX_MOVE_CANDIDATES, maxBytes: MAX_COVERED_BYTES });
   return hashes;
