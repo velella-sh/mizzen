@@ -299,6 +299,8 @@ export interface WatchOptions {
   readonly defaultLayout?: string;
   /** Reuse an unchanged build from `.mizzen/cache`, as `mizzen build` does. Off by default. */
   readonly cache?: boolean;
+  /** The as-of date, `YYYY-MM-DD`, every rebuild uses. */
+  readonly asOf?: string;
   /** Receives one line per rebuild and any diagnostic text. Default: silent. */
   readonly log?: (message: string) => void;
   /** How long the tree must stay quiet before rebuilding. Default: {@link DEFAULT_WATCH_DEBOUNCE_MS}. */
@@ -370,6 +372,7 @@ export async function watch(options: WatchOptions): Promise<Watcher> {
       themeRoot,
       ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
       ...(options.cache === true ? { cache: true } : {}),
+      ...(options.asOf === undefined ? {} : { asOf: options.asOf }),
     });
     const milliseconds = performance.now() - started;
     if (result.diagnostics.length > 0) log(formatText(result.diagnostics).replace(/\n$/, ""));

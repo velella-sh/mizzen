@@ -54,6 +54,11 @@ export interface BuildOptions {
    * redirect. `mizzen build --update-urls` sets this; no other command writes the lock.
    */
   readonly updateUrls?: boolean;
+  /**
+   * The as-of date, `YYYY-MM-DD`, from `--as-of`; it wins over the config's `asOf`. The build never reads the clock:
+   * `--as-of today` is resolved by the CLI before it gets here.
+   */
+  readonly asOf?: string;
 }
 
 /** What {@link build} wrote and found. */
@@ -225,7 +230,11 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   }
 
   // The config is read before the cache so the source folder is known without building the model.
-  const loaded = loadConfig(root);
+  const loadedConfig = loadConfig(root);
+  const loaded = {
+    ...loadedConfig,
+    config: options.asOf === undefined ? loadedConfig.config : { ...loadedConfig.config, asOf: options.asOf },
+  };
   const sourceDir = resolve(root, loaded.config.source);
   assertOutOutsideSource(sourceDir, out);
 
@@ -284,6 +293,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     ...(cacheRoot === undefined ? {} : { pageCacheDir: join(cacheRoot, "pages") }),
     plugins: code.plugins,
     ...(options.updateUrls === true ? { updateUrls: true } : {}),
+    ...(options.asOf === undefined ? {} : { asOf: options.asOf }),
   });
   for (const d of model.diagnostics) diagnostics.report(d);
 

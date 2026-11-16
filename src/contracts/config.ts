@@ -240,6 +240,12 @@ export interface NetworkConfig {
 }
 
 /** The `snapshot` key: how old a collection's recorded snapshot may be before `mizzen doctor` reports it. */
+/** How dates are written. */
+export interface DatesConfig {
+  /** The calendar dates are written in: `gregorian` or `jalali`. Default `gregorian`. */
+  readonly calendar?: "gregorian" | "jalali";
+}
+
 export interface SnapshotConfig {
   /** Report a collection whose snapshot `capturedAt` is more than this many days before the date doctor is given. Default: never. */
   readonly maxAgeDays?: number;
@@ -298,6 +304,10 @@ export interface SiteConfig {
   readonly verify?: VerifyConfig;
   /** The shared network of projects. Default: none, and the site builds on its own. */
   readonly network?: NetworkConfig;
+  /** The day the build pretends it is, `YYYY-MM-DD`; `--as-of` wins. Default: none, and a feature that needs a date reports it. */
+  readonly asOf?: string;
+  /** How dates are written. Default: Gregorian. */
+  readonly dates?: DatesConfig;
   /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
   readonly snapshot?: SnapshotConfig;
   /** Generated social share images. Default: none, and no image is written. */

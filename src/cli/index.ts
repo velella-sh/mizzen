@@ -5,6 +5,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "../config/load.ts";
+import { readAsOfFlag, todayOf } from "../dates/as-of.ts";
 import { version } from "../index.ts";
 import { build } from "../pipeline/build.ts";
 import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts";
@@ -95,6 +96,7 @@ Options:
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
+  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
@@ -122,6 +124,8 @@ export type Io = {
   readonly write?: (text: string) => void;
   /** Reads stdin for `pack --request -`; defaults to the process's stream, left open after the read. */
   readonly readStdin?: () => Promise<string>;
+  /** The system clock for `--as-of today`; defaults to `new Date()`. The one place a build's date may come from a clock. */
+  readonly now?: () => Date;
 };
 
 type BuildOpts = {
@@ -131,6 +135,7 @@ type BuildOpts = {
   readonly theme?: string;
   readonly workers?: number;
   readonly updateUrls?: boolean;
+  readonly asOf?: string;
 };
 
 type CheckOpts = {
@@ -139,6 +144,7 @@ type CheckOpts = {
   readonly format: Format;
   readonly theme?: string;
   readonly workers?: number;
+  readonly asOf?: string;
 };
 
 type DoctorOpts = {
@@ -186,6 +192,7 @@ type WatchOpts = {
   readonly root: string;
   readonly out?: string;
   readonly theme?: string;
+  readonly asOf?: string;
 };
 
 type DataFetchOpts = {
@@ -608,6 +615,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let request: string | undefined;
   let packFormat: PackFormat | undefined;
   let updateUrls = false;
+  let asOf: string | undefined;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -672,6 +680,15 @@ export function parseArgs(args: readonly string[]): Parsed {
           }
           workers = parsed;
         }
+      } else if (arg === "--as-of") {
+        if (command !== "build" && command !== "check" && command !== "watch") {
+          return { error: "--as-of is only valid for build, check, and watch" };
+        }
+        const raw = value();
+        // `today` is resolved at the edge of main, where the clock may be read; here only the shape is checked.
+        const read = readAsOfFlag(raw, () => "0001-01-01");
+        if (!read.ok) return { error: `--as-of ${read.message}` };
+        asOf = raw;
       } else if (arg === "--update-urls") {
         if (command !== "build") return { error: "--update-urls is only valid for build" };
         updateUrls = true;
@@ -716,6 +733,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(theme === undefined ? {} : { theme }),
         ...(workers === undefined ? {} : { workers }),
         ...(updateUrls ? { updateUrls: true } : {}),
+        ...(asOf === undefined ? {} : { asOf }),
       },
     };
   }
@@ -766,6 +784,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         root: dir,
         ...(out === undefined ? {} : { out }),
         ...(theme === undefined ? {} : { theme }),
+        ...(asOf === undefined ? {} : { asOf }),
       },
     };
   }
@@ -786,6 +805,7 @@ export function parseArgs(args: readonly string[]): Parsed {
       format,
       ...(theme === undefined ? {} : { theme }),
       ...(workers === undefined ? {} : { workers }),
+      ...(asOf === undefined ? {} : { asOf }),
     },
   };
 }
@@ -822,6 +842,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   }
 
   const { options } = parsed;
+
+  // `--as-of today` is the only place the clock is read: once, here, printed, and passed on as a plain date.
+  let asOf: string | undefined;
+  if ((options.command === "build" || options.command === "check" || options.command === "watch") && options.asOf !== undefined) {
+    const read = readAsOfFlag(options.asOf, () => todayOf((io.now ?? (() => new Date()))()));
+    if (!read.ok) {
+      error(`${NAME}: --as-of ${read.message}`);
+      return 2;
+    }
+    asOf = read.date;
+    if (read.today) error(`${NAME}: as-of date ${asOf} (today)`);
+  }
 
   if (options.command === "mcp") {
     try {
@@ -1087,6 +1119,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         themeRoot,
         defaultLayout: DEFAULT_LAYOUT,
         cache: true,
+        ...(asOf === undefined ? {} : { asOf }),
         log,
       });
       log(`mizzen watch: watching ${root} and ${themeRoot}; press Ctrl-C to stop`);
@@ -1121,6 +1154,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         cache: true,
         ...(options.workers === undefined ? {} : { workers: options.workers }),
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
+        ...(asOf === undefined ? {} : { asOf }),
       });
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);
       return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;
@@ -1139,6 +1173,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       themeRoot,
       defaultLayout: DEFAULT_LAYOUT,
       ...(options.workers === undefined ? {} : { workers: options.workers }),
+      ...(asOf === undefined ? {} : { asOf }),
     });
     printDiagnostics(result.diagnostics, options.format, log);
     return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;

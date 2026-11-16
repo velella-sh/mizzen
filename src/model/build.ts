@@ -53,6 +53,8 @@ export interface BuildModelOptions {
   readonly plugins?: readonly Plugin[];
   /** Accept every current record URL, moving a changed one into `urls.lock.json`'s `previous`; `mizzen build --update-urls` sets this. */
   readonly updateUrls?: boolean;
+  /** The as-of date from `--as-of`, `YYYY-MM-DD`; it wins over the config's `asOf`. */
+  readonly asOf?: string;
   /** The clock the stale-lock warning reads; a test sets it. Default: `Date.now`. */
   readonly now?: () => number;
 }
@@ -142,7 +144,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   const loaded = loadConfig(siteRoot);
   for (const d of loaded.diagnostics) diagnostics.report(d);
-  let config = loaded.config;
+  let config = options.asOf === undefined ? loaded.config : { ...loaded.config, asOf: options.asOf };
   // A site in a network builds from the locked copy only. Its base is its project's path, so the pages, assets,
   // redirects, sitemap, and search index of every project agree on one place without the author repeating it.
   let network: LoadedNetwork | undefined;
