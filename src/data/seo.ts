@@ -6,7 +6,7 @@
  */
 import type { CollectionSeoConfig } from "../contracts/config.ts";
 import type { Page, RecordProps, Site } from "../contracts/index.ts";
-import { recordPropsOf } from "./record-context.ts";
+import { isLocalized, recordPropsOf } from "./record-context.ts";
 
 /** The `seo` settings of the collection a record or list page belongs to; `undefined` for any other page. */
 export function seoConfigOf(site: Site, page: Page): CollectionSeoConfig | undefined {
@@ -42,4 +42,18 @@ export function isNoindex(site: Site, page: Page): boolean {
   if (field === undefined) return false;
   const record = mainRecordOf(site, page);
   return record !== undefined && truthy(record.fields[field]);
+}
+
+/**
+ * `true` for a record page in a language that is not the default one and has no translation of any of the record's
+ * translatable fields: every field it shows fell back to the default language, so the page is a copy, not a
+ * translation. A record with no translatable fields at all is plain data, not a copy.
+ */
+export function isFallbackCopy(site: Site, page: Pick<Page, "record" | "lang">): boolean {
+  const record = page.record;
+  if (record === undefined || page.lang === site.config.lang) return false;
+  const source = site.collections[record.collection]?.records.find((candidate) => candidate.id === record.id);
+  if (source === undefined) return false;
+  const localized = Object.values(source.fields).filter((value) => isLocalized(value, page.lang, site.config.lang));
+  return localized.length > 0 && record.fallbacks.length >= localized.length;
 }

@@ -2,7 +2,7 @@ import type { SiteConfig } from "../contracts/config.ts";
 import type { Page, Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { languageGroups, translationId } from "../content/lang-fallback.ts";
-import { isNoindex, mainRecordOf, seoConfigOf } from "../data/seo.ts";
+import { isFallbackCopy, isNoindex, mainRecordOf, seoConfigOf } from "../data/seo.ts";
 import { isAppPage } from "./app-pages.ts";
 
 /** Compares by code point, never by locale. */
@@ -111,15 +111,16 @@ function alternatesOf(
   config: SiteConfig,
   groups: ReadonlyMap<string, readonly Page[]>,
   listed: ReadonlySet<string>,
+  isCopy: (page: Page) => boolean,
 ): readonly Alternate[] | undefined {
   const group = groups.get(translationId(page, config));
-  if (group === undefined) return undefined;
+  if (group === undefined || isCopy(page)) return undefined;
 
   const languages = new Set<string>();
   const alternates: Alternate[] = [];
   for (const entry of group) {
     const tag = normalizeTag(entry.lang);
-    if (tag === "" || languages.has(tag) || !listed.has(entry.url)) continue;
+    if (tag === "" || languages.has(tag) || !listed.has(entry.url) || isCopy(entry)) continue;
     languages.add(tag);
     alternates.push({ lang: entry.lang, url: entry.url });
   }
@@ -261,7 +262,7 @@ export async function writeSitemap(site: Site, ctx: OutputContext, limits: Sitem
   const groups = languageGroups(site);
   const listed = new Set(pages.map((p) => p.url));
   const entries: Entry[] = pages.map((page) => {
-    const alternates = alternatesOf(page, site.config, groups, listed);
+    const alternates = alternatesOf(page, site.config, groups, listed, (candidate) => isFallbackCopy(site, candidate));
     const loc = escapeXml(new URL(page.url, origin).href);
     const date = lastmod(site, page);
     const xml = [

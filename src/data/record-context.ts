@@ -146,7 +146,7 @@ export interface LocalizedFields {
 }
 
 /** True for a mapping that holds translations: it owns the page language or the default language. */
-function isLocalized(value: unknown, lang: string, defaultLang: string): value is Record<string, unknown> {
+export function isLocalized(value: unknown, lang: string, defaultLang: string): value is Record<string, unknown> {
   if (!isMapping(value)) return false;
   return (
     Object.prototype.hasOwnProperty.call(value, lang) || Object.prototype.hasOwnProperty.call(value, defaultLang)

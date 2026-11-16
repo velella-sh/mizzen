@@ -1,5 +1,6 @@
 import type { Page, Site } from "../contracts/content.ts";
 import type { LinkTag } from "../contracts/render.ts";
+import { isFallbackCopy } from "../data/seo.ts";
 import { languageGroups, translationId } from "../content/lang-fallback.ts";
 
 /** A language tag as matching compares it: trimmed, lower case, `_` read as `-`. */
@@ -19,7 +20,8 @@ function hrefOf(site: Site, page: Page): string {
 
 /**
  * The `hreflang` alternates of a page: one `rel=alternate` link per language its translation group has, the page's
- * own language included, plus an `x-default` link at the default-language page when the group has one. A page whose
+ * own language included (a record page whose language only has the default language's text is a copy, not a
+ * translation: it gets no links and is not linked), plus an `x-default` link at the default-language page when the group has one. A page whose
  * group has only one language gets no links, and so does a page that is not in the model.
  *
  * Grouping is the one N37 gives translation (`translationId` over `site.pages`: an explicit `translation_key`, else
@@ -29,10 +31,11 @@ function hrefOf(site: Site, page: Page): string {
  */
 export function hreflangLinks(site: Site, page: Page): LinkTag[] {
   const group = languageGroups(site).get(translationId(page, site.config));
-  if (group === undefined) return [];
+  if (group === undefined || isFallbackCopy(site, page)) return [];
 
   const byLanguage = new Map<string, Page>();
   for (const member of group) {
+    if (isFallbackCopy(site, member)) continue;
     const key = tagKey(member.lang);
     if (!byLanguage.has(key)) byLanguage.set(key, member);
   }
