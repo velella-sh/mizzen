@@ -147,6 +147,10 @@
       "pattern": "^/",
       "description": "The output URL, a path starting with `/`. Unset, the URL comes from the file path: `guide/install.md` and `guide/install/index.md` both give `/guide/install/`."
     },
+    "noindex_pagination": {
+      "type": "boolean",
+      "description": "On a list page, `true` writes `noindex` on page two onwards and leaves them out of `sitemap.xml`."
+    },
     "published": {
       "type": "boolean",
       "description": "`false` keeps the page out of the build."

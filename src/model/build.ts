@@ -3,6 +3,7 @@ import { join, posix, relative, resolve } from "node:path";
 import type { Heading as MdHeading, Root } from "mdast";
 import { loadConfig } from "../config/load.ts";
 import { loadData } from "../content/data.ts";
+import { checkSeo } from "../data/checks/seo.ts";
 import { loadCollections } from "../data/collections.ts";
 import { applyDataDirectives } from "../data/directives.ts";
 import { buildRecordPages, aliasUrlsOf } from "../data/pages.ts";
@@ -446,6 +447,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     if (earlier.length === 0) continue;
     pages[i] = { ...page, record: { ...page.record, previousUrls: earlier } };
   }
+
+  for (const d of checkSeo(pages, config.collections)) diagnostics.report(d);
 
   const navFile = resolve(siteRoot, config.navigation);
   const navRel = relative(siteRoot, navFile).split("\\").join("/");

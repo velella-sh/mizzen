@@ -136,6 +136,12 @@ its help names the two accepted formats.
 | `data.reference-invalid` | A reference field holds something other than an id or a list of ids. | Write an id, or a list of ids. |
 | `data.reference-unknown-collection` | A `references` entry names a collection the config does not declare. | Declare that collection, or point the reference at one that exists. |
 | `data.date-invalid` | A field listed under `dates` is not `YYYY-MM-DD` or a full ISO 8601 instant. | Write `YYYY-MM-DD`, such as `2026-01-31`, or a full instant such as `2026-01-31T09:00:00Z`. |
+| `data.seo-title-long` | Record pages have a title over `seo.titleMax` characters (default 70). A warning; the text is never shortened. | Shorten the field the title is built from, or raise `collections.<name>.seo.titleMax`. |
+| `data.seo-description-long` | Record pages have a description over `seo.descriptionMax` characters (default 160). A warning; the text is never shortened. | Shorten the field the description is built from, or raise `collections.<name>.seo.descriptionMax`. |
+| `data.seo-title-empty` | Record pages have no title once the template is filled. A collection without a `seo` key is reported only for a blank title. | Add a `title` that names a field with text to the template's front matter. |
+| `data.seo-description-empty` | Record pages have no description once the template is filled. A collection without a `seo` key is reported only for a blank description. | Add a `description` that names a field with text to the template's front matter. |
+| `data.seo-duplicate-title` | Record pages of one language share a title. The finding names five URLs and the count of the rest; languages are never compared. | Build the title from a field that tells the records apart. |
+| `data.seo-duplicate-description` | Record pages of one language share a description. The finding names five URLs and the count of the rest. | Build the description from a field that tells the records apart. |
 
 ## Page directives
 
