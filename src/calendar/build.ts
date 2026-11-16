@@ -54,7 +54,6 @@ export function calendarEvents(
   calendar: CalendarConfig,
   origin: string,
   report: (diagnostic: Diagnostic) => void = () => {},
-  only?: string,
 ): CalendarEvents {
   const collection = site.collections[calendar.collection];
   // The config loader reports a calendar that names a collection the site does not declare.
@@ -80,7 +79,6 @@ export function calendarEvents(
   }
 
   const rows = indexRecords(site, calendar.collection)
-    .filter(({ record }) => only === undefined || record.id === only)
     .map(({ record, page }) => ({
       id: record.id,
       fields: localizeFields(record.fields, site.config.lang, site.config.lang).fields,

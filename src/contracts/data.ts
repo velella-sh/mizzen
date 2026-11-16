@@ -110,6 +110,11 @@ export interface RecordProps {
   readonly links: Readonly<Record<string, string>>;
   /** URL of every view of this record, keyed by view name; present on the main page only. */
   readonly views?: Readonly<Record<string, string>>;
+  /**
+   * URL of this record's add-to-calendar `.ics` file, including `base`; present on the main page of a record that has
+   * events in a declared calendar, and absent for a collection with no calendar.
+   */
+  readonly calendar?: string;
 }
 
 /** One group of a list page. */

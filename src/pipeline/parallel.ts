@@ -42,7 +42,7 @@ import { analyticsScripts } from "../analytics/script.ts";
 import { verificationMeta } from "../outputs/verification.ts";
 import { feedLinks } from "../feeds/links.ts";
 import { loadRegistry, type ThemeRegistry } from "../render/registry.ts";
-import { recordPropsOf } from "../data/record-context.ts";
+import { recordPropsWithCalendar } from "../outputs/record-calendar.ts";
 import { renderPage, type ThemeComponent } from "../render/render.ts";
 import { islandUrl } from "../render/islands.ts";
 import type { Island } from "../contracts/render.ts";
@@ -229,7 +229,7 @@ export function renderOnePage(
   }
   const { trail, pager } = placeOf(site, page);
   const registered = registry.layouts[name]!;
-  const record = recordPropsOf(site, page);
+  const record = recordPropsWithCalendar(site, page);
   const list = page.list;
   const result = renderPage({
     site,
