@@ -120,6 +120,24 @@ function dataSummary(stats: DataStats): Diagnostic | undefined {
   };
 }
 
+/**
+ * One `info` finding that counts the links to other projects that fail or changed. It is left out for a site with no
+ * `network` key, so a site outside a network sees nothing new.
+ */
+function networkSummary(model: Awaited<ReturnType<typeof buildModel>>): Diagnostic | undefined {
+  const network = model.site.network;
+  if (network === undefined) return undefined;
+  const links = model.diagnostics.filter((found) => found.id.startsWith("network.link-"));
+  const errors = links.filter((found) => found.severity === "error").length;
+  const changed = links.filter((found) => found.severity === "warning").length;
+  return {
+    id: "doctor.network-summary",
+    severity: "info",
+    message: `Network: project "${network.current}" with ${counted(network.projects.length, "public project")}; project links: ${errors} broken, ${changed} to a changed page.`,
+    help: "Run `mizzen network update` to refresh the lock, and `mizzen network update --accept` once changed pages are reviewed.",
+  };
+}
+
 /** Sorted findings, with a help line on every config finding that has none. */
 function finalize(all: readonly Diagnostic[]): readonly Diagnostic[] {
   return sortDiagnostics(
@@ -204,6 +222,8 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
     try {
       const model = await buildModel(root);
       publish(model.diagnostics);
+      const network = networkSummary(model);
+      if (network !== undefined) publish([network]);
       const contentErrors = model.diagnostics.some(
         (found) => isError(found) && !found.id.startsWith("config.") && !found.id.startsWith("data."),
       );

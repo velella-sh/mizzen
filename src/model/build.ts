@@ -25,6 +25,7 @@ import { loadNavigation } from "../nav/from-yaml.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
 import { pageCache, parseMarkdownWithCache, type PageCache } from "../pipeline/page-cache.ts";
 import { runContentHooks } from "../plugins/hooks.ts";
+import { applyProjectLinks } from "../links/project-link.ts";
 import { loadLockedNetwork, type LoadedNetwork } from "../network/load.ts";
 import { applyFacts } from "./facts.ts";
 
@@ -272,6 +273,9 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       : { markdown: body, diagnostics: [] };
     for (const d of directives.diagnostics) diagnostics.report(d);
     const lang = pageLang(file.path, { config, frontMatter });
+    if (isMarkdown && network?.lock !== undefined && config.network !== undefined) {
+      applyProjectLinks(tree, { lock: network.lock, current: config.network.project, file: rel, report: (d) => diagnostics.report(d) });
+    }
     if (isMarkdown) {
       applyRecordLinks(tree, {
         collections: collected.collections,
