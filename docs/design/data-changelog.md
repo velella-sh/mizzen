@@ -12,7 +12,7 @@ One event describes one change to one record. Every event has an `id`, a `type`,
 
 | `type`     | Extra fields                    | Meaning                                                              |
 | ---------- | ------------------------------- | -------------------------------------------------------------------- |
-| `added`    |                                 | The record id is new.                                                |
+| `added`    | optional `fields`               | The record id is new; `fields` holds its tracked values.             |
 | `removed`  |                                 | The record id is gone and no other record names it as an earlier id. |
 | `changed`  | `field`, `old`, `new`           | One tracked field has another value. An absent value has no key.     |
 | `renamed`  | `from`                          | The record's id appears in another record's earlier ids (`aliases`). |
