@@ -31,6 +31,7 @@ import type {
   RepositoryConfig,
   SearchConfig,
   SiteConfig,
+  SocialConfig,
   SourcePos,
   ThemeConfig,
 } from "../contracts/index.ts";
@@ -164,6 +165,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const search = searchFrom(raw.search);
   const analytics = analyticsFrom(raw.analytics);
   const verify = verifyFrom(raw.verify);
+  const social = socialFrom(raw.social);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -189,6 +191,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     search,
     ...(analytics === undefined ? {} : { analytics }),
     ...(verify === undefined ? {} : { verify }),
+    ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
   };
@@ -223,6 +226,15 @@ function verifyFrom(value: unknown): VerifyConfig | undefined {
     if (typeof entry === "string") out[key] = entry;
   }
   return Object.keys(out).length === 0 ? undefined : (out as VerifyConfig);
+}
+
+/** The social key: an object turns generated images on, with its template and font files when it names them. */
+function socialFrom(value: unknown): SocialConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  return {
+    ...(typeof value.template === "string" ? { template: value.template } : {}),
+    fonts: Array.isArray(value.fonts) ? value.fonts.filter((font): font is string => typeof font === "string") : [],
+  };
 }
 
 function repositoryFrom(value: unknown): RepositoryConfig | undefined {
