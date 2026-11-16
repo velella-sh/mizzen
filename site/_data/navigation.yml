@@ -25,6 +25,29 @@ main:
         url: /plugins/
       - title: Programmatic API
         url: /api/
+  - title: Data sites
+    tab: true
+    children:
+      - title: Data sites
+        url: /data/
+      - title: Quick start
+        url: /data/quick-start/
+      - title: Collections
+        url: /data/collections/
+      - title: Templates
+        url: /data/templates/
+      - title: Lists
+        url: /data/lists/
+      - title: Search
+        url: /data/search/
+      - title: SEO
+        url: /data/seo/
+      - title: Social images
+        url: /data/social-images/
+      - title: Stable URLs
+        url: /data/urls/
+      - title: Theme contract
+        url: /data/theme-contract/
   - title: Reference
     tab: true
     children:

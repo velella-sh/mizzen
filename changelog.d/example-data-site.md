@@ -1,0 +1,1 @@
+- **An example data site.** `examples/data-site/` is a small catalogue built from two data files, with record pages, list pages, a feed, search filters, and a URL lock. CI packs `mizzen` and `lateen`, builds it twice, and compares the bytes (`scripts/smoke-example.sh`).

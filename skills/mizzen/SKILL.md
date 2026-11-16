@@ -34,6 +34,7 @@ Use erasable TypeScript that Node 24 runs directly: `.ts` extensions in relative
 | Span edits or proofs | Inspect `src/edits/`; exercise `edit apply --dry-run` before a real apply |
 | Generated artifact | Follow the output workflow below |
 | Derived site value | Follow the fact workflow below |
+| Data site, collection, record page, list page, or URL lock | Follow the data workflow below |
 
 Run the CLI from a checkout as `node bin/mizzen.ts`. Its implementation and `node bin/mizzen.ts --help` are the source of truth for flags and exit codes.
 
@@ -50,6 +51,19 @@ Run the CLI from a checkout as `node bin/mizzen.ts`. Its implementation and `nod
 2. Add one file under `src/model/facts/` with a matching `name`; no shared-index edit is needed.
 3. Keep `compute()` deterministic. Facts cannot read one another's derived values, and a site's `_data` value wins.
 4. Test the value, precedence, and relevant diagnostics.
+
+## Work on a data site
+
+A data site builds pages from `collections` in `mizzen.yml`: sources under `_data/`, templates under `_templates/`, record pages from `permalink`, list pages from `list` front matter, feeds, search filters, SEO, share images, and the URL lock `urls.lock.json`. Read `docs/data-sites.md` and the pages under `site/data/` first; `examples/data-site/` is a small site to copy from, and `fixtures/data-site/` is the shared fixture for tests.
+
+Edit a record:
+
+1. Change the value in the data file, never in the built page. Every value keeps its position, so a finding names the file and line.
+2. Run `node bin/mizzen.ts check <site>`. Fix `data.*` findings at the field they name.
+3. If the record's id or a permalink field changed, run `node bin/mizzen.ts urls check <site>`; accept a moved URL with `build --update-urls`, or set `aliases` or `onRemoved`. Commit `urls.lock.json` with the data.
+4. Run `node bin/mizzen.ts diff --base <ref>` to see which pages, files, and records the change touched.
+
+Change a template, list, or collection key: keep the schema (`schema/config.schema.json`), `src/contracts/config.ts`, the page under `site/data/`, and its docs test together, and build the example twice to confirm the bytes match. A list never reads the clock; dates compare against `referenceDate`.
 
 ## Verify
 

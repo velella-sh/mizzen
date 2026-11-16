@@ -1,0 +1,1 @@
+- **Lists reference.** `site/data/lists.md` covers `list` front matter, every `where` operator, sorting, grouping, pagination, `expand`, and the reference date that replaces the clock.
