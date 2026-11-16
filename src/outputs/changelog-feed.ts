@@ -1,6 +1,8 @@
 import { basename } from "node:path";
 import type { Heading, Page, Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
+import { atomFeed } from "../feeds/atom.ts";
+import { originOf } from "../feeds/model.ts";
 
 /** The feed's file name, relative to the output folder. */
 const FILE = "changelog.xml";
@@ -8,27 +10,6 @@ const FILE = "changelog.xml";
 /** Compared by code point, never by locale. */
 function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
-}
-
-/** Escapes the five characters XML reserves, so any title or URL can sit inside an element or an attribute. */
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-/** The scheme and host absolute URLs start with, from `url` in the site config; `undefined` when it is missing or not absolute. */
-function originOf(site: Site): string | undefined {
-  const url = site.config.url?.trim() ?? "";
-  if (url === "") return undefined;
-  try {
-    return new URL(url).origin;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -109,18 +90,6 @@ interface Entry {
   readonly order: number;
 }
 
-/** One `<entry>` block, indented like the feed. */
-function entryXml(entry: Entry): string[] {
-  return [
-    "  <entry>",
-    `    <title>${escapeXml(entry.title)}</title>`,
-    `    <link href="${escapeXml(entry.link)}" rel="alternate" type="text/html"/>`,
-    `    <id>${escapeXml(entry.id)}</id>`,
-    `    <updated>${entry.updated.toISOString()}</updated>`,
-    "  </entry>",
-  ];
-}
-
 /** The absolute form of a page URL when the site has a `url`, else the URL as the model gives it. */
 function addressOf(url: string, origin: string | undefined): string {
   return origin === undefined ? url : new URL(url, origin).href;
@@ -144,7 +113,7 @@ export async function changelogFeed(site: Site): Promise<readonly OutputFile[]> 
   if (page === undefined) return [];
 
   const level = page.headings.some((heading) => heading.depth === 2) ? 2 : 3;
-  const origin = originOf(site);
+  const origin = originOf(site.config.url);
   const address = addressOf(page.url, origin);
 
   const entries: Entry[] = [];
@@ -161,21 +130,20 @@ export async function changelogFeed(site: Site): Promise<readonly OutputFile[]> 
 
   const base = site.config.base.replace(/\/+$/, "");
   const self = addressOf(`${base}/${FILE}`, origin);
-  const xml = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    `<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="${escapeXml(site.config.lang)}">`,
-    `  <title>${escapeXml(site.config.title)}</title>`,
-    `  <link href="${escapeXml(self)}" rel="self" type="application/atom+xml"/>`,
-    `  <link href="${escapeXml(address)}" rel="alternate" type="text/html"/>`,
-    `  <id>${escapeXml(self)}</id>`,
-    `  <updated>${entries[0]!.updated.toISOString()}</updated>`,
-    "  <author>",
-    `    <name>${escapeXml(site.config.title)}</name>`,
-    "  </author>",
-    ...entries.flatMap(entryXml),
-    "</feed>",
-    "",
-  ].join("\n");
+  const xml = atomFeed({
+    id: self,
+    title: site.config.title,
+    self,
+    home: address,
+    language: site.config.lang,
+    author: site.config.title,
+    entries: entries.map((entry) => ({
+      id: entry.id,
+      title: entry.title,
+      link: entry.link,
+      date: entry.updated,
+    })),
+  });
 
   return [{ path: FILE, contents: xml }];
 }

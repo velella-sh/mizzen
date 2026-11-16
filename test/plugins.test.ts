@@ -29,6 +29,7 @@ function config(): SiteConfig {
     exclude: [],
     navigation: "_data/navigation.yml",
     collections: {},
+    feeds: {},
     defaults: [],
     theme: { options: {} },
     search: {},

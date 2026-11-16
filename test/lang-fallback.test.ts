@@ -23,6 +23,7 @@ const CONFIG: SiteConfig = {
   exclude: [],
   navigation: "_data/navigation.yml",
   collections: {},
+  feeds: {},
   defaults: [],
   theme: {},
   search: {},

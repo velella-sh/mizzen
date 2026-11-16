@@ -462,6 +462,7 @@ test("required warnings and dependencies appear in both outputs", async () => {
     exclude: [],
     navigation: "_data/navigation.yml",
     collections: {},
+    feeds: {},
     defaults: [],
     theme: { options: {} },
     search: {},

@@ -20,6 +20,7 @@ const config: SiteConfig = {
   exclude: [],
   navigation: "_data/navigation.yml",
   collections: { components: { source: "_data/components.yml", id: "slug" } },
+  feeds: {},
   defaults: [{ path: "", values: { layout: "doc" } }],
   repository: { url: "https://github.com/example/example", branch: "main", dir: "docs" },
   theme: { options: { logo: { light: "logo.svg" } } },

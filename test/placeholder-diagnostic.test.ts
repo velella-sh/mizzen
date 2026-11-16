@@ -25,6 +25,7 @@ function site(pages: readonly Page[], data: Readonly<Record<string, unknown>> = 
       exclude: [],
       navigation: "_data/navigation.yml",
       collections: {},
+      feeds: {},
       defaults: [],
       theme: { options: {} },
       search: {},

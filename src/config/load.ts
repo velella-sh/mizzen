@@ -16,11 +16,14 @@ import {
 import type {
   CollectionConfig,
   CollectionIndexConfig,
+  CollectionJsonConfig,
   CollectionSearchConfig,
   CollectionViewConfig,
   DefaultsEntry,
   Diagnostic,
   Direction,
+  FeedConfig,
+  FeedFormat,
   LanguageConfig,
   RepositoryConfig,
   SearchConfig,
@@ -133,6 +136,19 @@ export function loadConfigText(source: string, file: string, folderTitle: string
     }
   }
 
+  const collections = collectionsFrom(raw.collections);
+  for (const [name, feed] of Object.entries(feedsFrom(raw.feeds))) {
+    if (collections[feed.collection] !== undefined) continue;
+    const pair = getMapPair(doc, ["feeds", name, "collection"]);
+    diagnostics.push({
+      id: "config.feeds-collection",
+      severity: "error",
+      message: `The feed "${name}" lists the collection "${feed.collection}", which the site does not have.`,
+      pos: posFromNode(file, lineCounter, isNode(pair?.value) ? pair.value : doc.contents),
+      help: "Name a collection the config declares.",
+    });
+  }
+
   return { config: applyDefaults(raw, folderTitle), diagnostics };
 }
 
@@ -161,6 +177,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
         ? raw.navigation
         : "_data/navigation.yml",
     collections: collectionsFrom(raw.collections),
+    feeds: feedsFrom(raw.feeds),
     defaults: Array.isArray(raw.defaults) ? (raw.defaults as DefaultsEntry[]) : [],
     ...(repository === undefined ? {} : { repository }),
     theme,
@@ -197,6 +214,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const search = collectionSearchFrom(entry.search);
     const index = collectionIndexFrom(entry.index);
     const onRemoved = onRemovedFrom(entry.onRemoved);
+    const json = collectionJsonFrom(entry.json);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
@@ -213,6 +231,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
         ? { markdown: entry.markdown.filter((field): field is string => typeof field === "string") }
         : {}),
       ...(isPlainObject(entry) && typeof entry.llms === "boolean" ? { llms: entry.llms } : {}),
+      ...(json === undefined ? {} : { json }),
       ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
       ...(onRemoved === undefined ? {} : { onRemoved }),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
@@ -222,6 +241,38 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     };
   }
   return collections;
+}
+
+/** A collection's page JSON settings, keeping only the fields the schema accepts. `undefined` when it sets none. */
+function collectionJsonFrom(value: unknown): CollectionJsonConfig | undefined {
+  if (!isPlainObject(value) || !Array.isArray(value.fields)) return undefined;
+  return { fields: value.fields.filter((field): field is string => typeof field === "string") };
+}
+
+/** The declared feeds, keeping only entries the schema accepts, with their defaults left to the writer. */
+function feedsFrom(value: unknown): Readonly<Record<string, FeedConfig>> {
+  if (!isPlainObject(value)) return {};
+  const feeds: Record<string, FeedConfig> = {};
+  for (const [name, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry) || typeof entry.collection !== "string" || typeof entry.date !== "string") continue;
+    const where = isPlainObject(entry.where) ? entry.where : undefined;
+    const formats = Array.isArray(entry.formats)
+      ? entry.formats.filter((format): format is FeedFormat => format === "atom" || format === "rss" || format === "json")
+      : undefined;
+    feeds[name] = {
+      collection: entry.collection,
+      ...(where === undefined ? {} : { where }),
+      date: entry.date,
+      ...(typeof entry.limit === "number" && Number.isSafeInteger(entry.limit) && entry.limit > 0 ? { limit: entry.limit } : {}),
+      ...(typeof entry.title === "string" ? { title: entry.title } : {}),
+      ...(formats === undefined ? {} : { formats }),
+      ...(typeof entry.idField === "string" ? { idField: entry.idField } : {}),
+      ...(Array.isArray(entry.fields)
+        ? { fields: entry.fields.filter((field): field is string => typeof field === "string") }
+        : {}),
+    };
+  }
+  return feeds;
 }
 
 /** A collection's search settings, keeping only the keys the schema accepts. `undefined` when it sets none. */

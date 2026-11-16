@@ -3,6 +3,8 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import type { Page, Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
+import { atomFeed } from "../feeds/atom.ts";
+import { originOf } from "../feeds/model.ts";
 
 /** The feed's file name, relative to the output folder. */
 const FILE = "changes.xml";
@@ -13,27 +15,6 @@ const LIMIT = 30;
 /** Compares by code point, never by locale. */
 function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
-}
-
-/** Escapes the five characters XML reserves, so any title or URL can sit inside an element or an attribute. */
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-/** The scheme and host absolute URLs start with, from `url` in the site config; `undefined` when it is missing or not absolute. */
-function originOf(site: Site): string | undefined {
-  const url = site.config.url?.trim() ?? "";
-  if (url === "") return undefined;
-  try {
-    return new URL(url).origin;
-  } catch {
-    return undefined;
-  }
 }
 
 /**
@@ -162,19 +143,6 @@ interface Entry {
   readonly summary?: string;
 }
 
-/** One `<entry>` block, indented like the feed. */
-function entryXml(entry: Entry): string[] {
-  return [
-    "  <entry>",
-    `    <title>${escapeXml(entry.title)}</title>`,
-    `    <link href="${escapeXml(entry.url)}" rel="alternate" type="text/html"/>`,
-    `    <id>${escapeXml(entry.url)}</id>`,
-    `    <updated>${entry.updated.toISOString()}</updated>`,
-    ...(entry.summary === undefined ? [] : [`    <summary>${escapeXml(entry.summary)}</summary>`]),
-    "  </entry>",
-  ];
-}
-
 /**
  * Writes `changes.xml`: an Atom 1.0 feed of the {@link LIMIT} most recently changed doc pages, newest first, so
  * people can follow changes to the docs.
@@ -188,7 +156,7 @@ function entryXml(entry: Entry): string[] {
  * report: both write no file, with no error. Problems in the content are reported, never thrown.
  */
 export async function changesFeed(site: Site, root: string = process.cwd()): Promise<readonly OutputFile[]> {
-  const origin = originOf(site);
+  const origin = originOf(site.config.url);
   if (origin === undefined) return [];
 
   const git = gitDatesAt(root);
@@ -213,21 +181,21 @@ export async function changesFeed(site: Site, root: string = process.cwd()): Pro
   const base = site.config.base.replace(/\/+$/, "");
   const self = `${origin}${base}/${FILE}`;
   const home = `${origin}${base}/`;
-  const xml = [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    `<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="${escapeXml(site.config.lang)}">`,
-    `  <title>${escapeXml(site.config.title)}</title>`,
-    `  <link href="${escapeXml(self)}" rel="self" type="application/atom+xml"/>`,
-    `  <link href="${escapeXml(home)}" rel="alternate" type="text/html"/>`,
-    `  <id>${escapeXml(self)}</id>`,
-    `  <updated>${newest[0]!.updated.toISOString()}</updated>`,
-    "  <author>",
-    `    <name>${escapeXml(site.config.title)}</name>`,
-    "  </author>",
-    ...newest.flatMap(entryXml),
-    "</feed>",
-    "",
-  ].join("\n");
+  const xml = atomFeed({
+    id: self,
+    title: site.config.title,
+    self,
+    home,
+    language: site.config.lang,
+    author: site.config.title,
+    entries: newest.map((entry) => ({
+      id: entry.url,
+      title: entry.title,
+      link: entry.url,
+      date: entry.updated,
+      ...(entry.summary === undefined ? {} : { summary: entry.summary }),
+    })),
+  });
 
   return [{ path: FILE, contents: xml }];
 }

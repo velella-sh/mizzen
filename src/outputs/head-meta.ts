@@ -1,6 +1,7 @@
 import type { Page, Site } from "../contracts/content.ts";
 import type { Trail } from "../contracts/nav.ts";
 import type { Head, LinkTag, MetaTag } from "../contracts/render.ts";
+import { feedLinks } from "../feeds/links.ts";
 
 /**
  * Computes each page's {@link Head} once, so layouts only print it. This unit writes no file: the render step calls
@@ -92,6 +93,7 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
   }
 
   const links: LinkTag[] = canonical === undefined ? [] : [{ rel: "canonical", href: canonical }];
+  links.push(...feedLinks(site, page));
 
   const structured: Record<string, unknown> = {
     "@context": "https://schema.org",

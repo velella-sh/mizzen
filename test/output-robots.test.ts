@@ -19,6 +19,7 @@ function site(url: string | undefined, base: string): Site {
       exclude: [],
       navigation: "_data/navigation.yml",
       collections: {},
+      feeds: {},
       defaults: [],
       theme: { options: {} },
       search: {},
