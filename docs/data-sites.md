@@ -229,6 +229,9 @@ A navigation entry `- collection: <name>` expands to that collection's record pa
 cut to `limit`, and titled by `title`. A link written `record:<collection>/<id>` becomes the record page's URL; a link to
 a missing record is a broken link at its position in the page or template.
 
+The data API (`/api/v1/`) is the stable, versioned way for another program to read records; its design is in
+[design/data-api.md](design/data-api.md).
+
 ## Limits
 
 A collection source is bounded by default at 2 MiB, 10,000 records, and 100,000 characters per field. Raise one
