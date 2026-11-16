@@ -29,6 +29,7 @@ test("the index validates against its schema and holds no records", async () => 
         json: "/docs/api/v1/packages.json",
         ndjson: "/docs/api/v1/packages.ndjson",
         record: "/docs/api/v1/packages/{id}.json",
+        schema: null,
         snapshot: { source: "_data/packages.yml", ref: "abc123", capturedAt: "2026-11-01", tool: "git" },
       },
     ],

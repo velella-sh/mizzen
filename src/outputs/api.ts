@@ -10,6 +10,7 @@
 import type { Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { unsafeIdReason } from "../api/ids.ts";
+import { publishedSchema } from "../api/schemas.ts";
 import { apiCollections, apiDir, apiUrl, byCodePoint, type ApiCollection, type ApiRecord } from "../api/model.ts";
 
 /** Serializes a file body: two-space indent and one final line feed. */
@@ -23,7 +24,7 @@ function recordBody(collection: ApiCollection, record: ApiRecord): Record<string
 }
 
 /** The index file's entry for one collection. */
-function indexEntry(site: Site, collection: ApiCollection): Record<string, unknown> {
+function indexEntry(site: Site, collection: ApiCollection, hasSchema: boolean): Record<string, unknown> {
   return {
     name: collection.name,
     count: collection.records.length,
@@ -31,6 +32,7 @@ function indexEntry(site: Site, collection: ApiCollection): Record<string, unkno
     json: apiUrl(site, `${collection.name}.json`),
     record: apiUrl(site, `${collection.name}/{id}.json`),
     ndjson: apiUrl(site, `${collection.name}.ndjson`),
+    schema: hasSchema ? apiUrl(site, `schemas/${collection.name}.json`) : null,
     snapshot: collection.snapshot,
   };
 }
@@ -43,9 +45,20 @@ export const api: Output = {
     const collections = apiCollections(site, (diagnostic) => ctx.report(diagnostic));
     const dir = apiDir(site);
     const files: OutputFile[] = [];
+    // A collection without a schema publishes none, and the index says so with null.
+    const schemas = new Map<string, Record<string, unknown>>();
+    for (const collection of collections) {
+      const schema = publishedSchema(site, ctx.build?.root, collection, (diagnostic) => ctx.report(diagnostic));
+      if (schema === undefined) continue;
+      schemas.set(collection.name, schema);
+      files.push({ path: `${dir}/schemas/${collection.name}.json`, contents: jsonFile(schema) });
+    }
     files.push({
       path: `${dir}/index.json`,
-      contents: jsonFile({ version: site.config.api.version, collections: collections.map((collection) => indexEntry(site, collection)) }),
+      contents: jsonFile({
+        version: site.config.api.version,
+        collections: collections.map((collection) => indexEntry(site, collection, schemas.has(collection.name))),
+      }),
     });
     for (const collection of collections) {
       const records = collection.records.map((record) => recordBody(collection, record));
