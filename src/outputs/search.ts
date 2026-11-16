@@ -172,7 +172,7 @@ export const search: Output = {
       const { files, errors } = await index.getFiles();
       reportErrors(ctx, undefined, errors);
       return files
-        .map((file) => ({ path: `${FOLDER}/${file.path}`, contents: file.content }))
+        .map((file) => ({ path: `${site.network?.projects.find((project) => project.current)?.search ?? FOLDER}/${file.path}`, contents: file.content }))
         .sort((a, b) => byCodePoint(a.path, b.path));
     } finally {
       await pagefind.close();
