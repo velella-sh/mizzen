@@ -254,6 +254,8 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |
 | `search` | `pagefind/`, a static search index; record pages carry the fields their collection declares. |
+| `search-merge` | `pagefind-network.json`, the other public projects' search indexes, for a site with a `network` key. |
+| `network-record` | `.mizzen/network.json`, the locked network a build was made against, for a site with a `network` key. |
 | `search-facets` | `search-facets.json`, each search filter and its value counts, with the query parameter names the theme reads. |
 | `search-synonyms` | `pagefind.yml`, the search synonyms from `_data/search-synonyms.yml`. |
 | `site-files` | No files: names the root files a site may own (`llms.txt`, `llms-full.txt`, `robots.txt`, `sitemap.xml`) so its own copy wins. |
