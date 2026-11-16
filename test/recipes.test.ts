@@ -1,0 +1,58 @@
+/** The workflow recipes parse, and the network recipe's own command works against a fixture and never pushes to the default branch. */
+import assert from "node:assert/strict";
+import { cpSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { test } from "node:test";
+import { parse } from "yaml";
+import { runNetwork } from "../src/cli/network.ts";
+
+const DIR = new URL("../docs/recipes/", import.meta.url);
+
+interface Step { readonly run?: string; readonly uses?: string }
+interface Workflow { readonly on: Record<string, unknown>; readonly permissions: Record<string, string>; readonly jobs: Record<string, { steps: Step[] }> }
+
+test("every recipe is valid YAML with a trigger and jobs", () => {
+  const files = readdirSync(DIR).filter((f) => f.endsWith(".yml"));
+  assert.ok(files.includes("network-update.yml"));
+  for (const file of files) {
+    const workflow = parse(readFileSync(new URL(file, DIR), "utf8")) as Workflow;
+    assert.ok(workflow.on, file);
+    assert.ok(Object.keys(workflow.jobs).length > 0, file);
+  }
+});
+
+test("the network recipe is scheduled, opens a pull request, and never pushes to the main branch", () => {
+  const text = readFileSync(new URL("network-update.yml", DIR), "utf8");
+  const workflow = parse(text) as Workflow;
+  assert.ok("schedule" in workflow.on);
+  const runs = Object.values(workflow.jobs).flatMap((job) => job.steps.map((step) => step.run ?? ""));
+  assert.ok(runs.some((run) => run.includes("mizzen network update")));
+  assert.ok(runs.some((run) => run.includes("gh pr create")));
+  for (const run of runs) {
+    for (const line of run.split("\n").filter((l) => l.includes("git push"))) {
+      assert.match(line, /origin "\$branch"/, line);
+      assert.doesNotMatch(line, /\b(main|master)\b/, line);
+    }
+  }
+});
+
+test("the recipe's update command writes a lock in a fixture, and the lock then compares equal", async () => {
+  const workflow = parse(readFileSync(new URL("network-update.yml", DIR), "utf8")) as Workflow;
+  const step = Object.values(workflow.jobs).flatMap((job) => job.steps).find((s) => s.run?.includes("mizzen network update"));
+  const args = step!.run!.split("|")[0]!.trim().split(/\s+/).slice(2); // npx mizzen network update -> network update
+  assert.deepEqual(args.slice(0, 2), ["network", "update"]);
+
+  const root = mkdtempSync(join(tmpdir(), "mizzen-recipe-"));
+  const shared = join(root, "org");
+  cpSync(new URL("../test/fixtures/network/org/", import.meta.url), shared, { recursive: true });
+  const site = join(root, "site");
+  cpSync(new URL("../test/fixtures/network/site/", import.meta.url), site, { recursive: true });
+  writeFileSync(join(site, "mizzen.yml"), `title: Demo\nnetwork:\n  source: ${join(shared, "network.json")}\n  project: docs\n`);
+
+  const out: string[] = [];
+  const io = { log: (m: string) => out.push(m), error: (m: string) => out.push(`error: ${m}`) };
+  assert.equal(await runNetwork([...args.slice(1), site], io), 0, out.join("\n"));
+  assert.ok(out.some((l) => l.includes("wrote network.lock.json")));
+  assert.equal(await runNetwork([...args.slice(1), site, "--check"], io), 0);
+});
