@@ -3,9 +3,12 @@
 // process, so peak memory is that build's own, and runs `--runs` times (default 3); the median is reported. The result is
 // printed as JSON. The script never fails on a time or a size: bench/budget.json and `--check` are the gate.
 //
+// With `--check bench/budget.json` it prints each measurement next to its budget (and into the CI job summary) and exits 1
+// when one is over: that is the gate. Without it, nothing is asserted.
+//
 // Usage: node scripts/bench-data.ts [--records 1000,10000] [--runs 3] [--theme ../lateen] [--check bench/budget.json]
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -38,6 +41,39 @@ export const median = (values: readonly number[]): number => {
   const mid = sorted.length >> 1;
   return sorted.length % 2 === 1 ? (sorted[mid] as number) : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
 };
+
+export interface BudgetFile {
+  readonly budgets: Readonly<Record<string, Readonly<Record<string, { readonly ms: number; readonly peakMb: number }>>>>;
+}
+
+export interface BudgetRow {
+  readonly records: number;
+  readonly case: string;
+  readonly metric: "ms" | "peakMb";
+  readonly measured: number;
+  readonly budget: number;
+  readonly ok: boolean;
+}
+
+/** Each measurement next to its budget. A measurement with no budget is not a row: the budget file decides what is gated. */
+export function checkBudget(report: BenchReport, file: BudgetFile): BudgetRow[] {
+  const rows: BudgetRow[] = [];
+  for (const m of report.measurements) {
+    const budget = file.budgets[String(m.records)]?.[m.case];
+    if (budget === undefined) continue;
+    for (const metric of ["ms", "peakMb"] as const) {
+      rows.push({ records: m.records, case: m.case, metric, measured: m[metric], budget: budget[metric], ok: m[metric] <= budget[metric] });
+    }
+  }
+  return rows;
+}
+
+/** The rows as a Markdown table, for the CI job summary. */
+export function budgetTable(rows: readonly BudgetRow[]): string {
+  const lines = ["| Records | Case | Metric | Measured | Budget | |", "| ---: | --- | --- | ---: | ---: | --- |"];
+  for (const r of rows) lines.push(`| ${r.records} | ${r.case} | ${r.metric === "ms" ? "ms" : "MB"} | ${r.measured} | ${r.budget} | ${r.ok ? "ok" : "**over budget**"} |`);
+  return `${lines.join("\n")}\n`;
+}
 
 const SELF = fileURLToPath(import.meta.url);
 
@@ -140,5 +176,13 @@ if (process.argv[1] && fileURLToPath(new URL(`file://${process.argv[1]}`)) === S
     mkdirSync(tmpdir(), { recursive: true });
     const report = bench({ records, runs, theme });
     console.log(JSON.stringify(report, null, 2));
+    const budgetPath = named.get("check");
+    if (budgetPath !== undefined) {
+      const rows = checkBudget(report, JSON.parse(readFileSync(budgetPath, "utf8")) as BudgetFile);
+      const table = budgetTable(rows);
+      console.error(table);
+      if (process.env.GITHUB_STEP_SUMMARY !== undefined) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Data benchmark\n\n${table}`);
+      if (rows.some((r) => !r.ok)) process.exitCode = 1;
+    }
   }
 }

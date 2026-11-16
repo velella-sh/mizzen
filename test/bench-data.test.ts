@@ -29,3 +29,34 @@ test("the benchmark prints one measurement per record count and case, as JSON", 
   const one = report.measurements.find((m: { case: string; records: number }) => m.case === "one-record" && m.records === 60);
   assert.ok(one.renderedPages >= 1);
 });
+
+test("checkBudget pairs each measurement with its budget and flags the ones over", async () => {
+  const { checkBudget, budgetTable } = await import("../scripts/bench-data.ts");
+  const report = {
+    node: "v0",
+    platform: "x",
+    arch: "y",
+    runs: 1,
+    measurements: [
+      { records: 10, case: "cold", ms: 100, peakMb: 50, renderedPages: 1, cachedPages: 0 },
+      { records: 10, case: "warm", ms: 5, peakMb: 50, renderedPages: 0, cachedPages: 0 },
+      { records: 99, case: "cold", ms: 1, peakMb: 1, renderedPages: 0, cachedPages: 0 },
+    ],
+  } as const;
+  const rows = checkBudget(report, { budgets: { "10": { cold: { ms: 90, peakMb: 60 }, warm: { ms: 10, peakMb: 60 } } } });
+  assert.deepEqual(
+    rows.map((r) => [r.case, r.metric, r.ok]),
+    [["cold", "ms", false], ["cold", "peakMb", true], ["warm", "ms", true], ["warm", "peakMb", true]],
+  );
+  assert.match(budgetTable(rows), /\*\*over budget\*\*/);
+});
+
+test("the committed budget file covers every case of 1,000 and 10,000 records", async () => {
+  const { readFileSync } = await import("node:fs");
+  const file = JSON.parse(readFileSync(fileURLToPath(new URL("../bench/budget.json", import.meta.url)), "utf8"));
+  for (const records of ["1000", "10000"]) {
+    for (const name of CASES) {
+      assert.ok(file.budgets[records][name].ms > 0 && file.budgets[records][name].peakMb > 0, `${records}/${name}`);
+    }
+  }
+});
