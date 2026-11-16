@@ -83,6 +83,31 @@
       "type": "array",
       "description": "Record changes by collection, sorted by collection name. Present for sites with collections; empty otherwise.",
       "items": { "$ref": "#/$defs/collection" }
+    },
+    "changes": {
+      "type": "array",
+      "description": "History entries that `mizzen data changes --write` would append, by collection, sorted by collection name. Present only when some are pending; the diff never writes them.",
+      "items": {
+        "type": "object",
+        "required": ["collection", "events"],
+        "properties": {
+          "collection": { "type": "string", "minLength": 1 },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["type", "record", "summary", "date"],
+              "properties": {
+                "type": { "enum": ["added", "removed", "changed", "renamed", "imported"] },
+                "record": { "type": "string" },
+                "field": { "type": "string" },
+                "summary": { "type": "string" },
+                "date": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "$defs": {
