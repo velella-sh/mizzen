@@ -1,0 +1,40 @@
+# Copy to .github/workflows/docs-command-check.yml.
+#
+# Runs the repository tests that prove the commands in the docs, then builds the site with
+# `examples: { failOnFailure: true }`, so a command that no longer works is an error at its fence and
+# `mizzen check` exits 1. Without that key a failed example is only a warning.
+#
+# Replace the test path with the tests that prove your guide's commands, and SITE with your site folder. The command
+# and its test are defined by the guide's consumer; this sample uses this repository's own acceptance test and site.
+name: docs-command-check
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: docs-command-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  SITE: site
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Run the tests that prove the documented commands
+        run: node --test test/docs-command-check/acceptance.test.ts
+      - name: Fail on a broken example
+        run: npx mizzen check "$SITE"
