@@ -175,6 +175,17 @@
       "default": {},
       "description": "false builds no search index. As an object, text sets how much of each page's body the index keeps."
     },
+    "examples": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "failOnFailure": {
+          "type": "boolean",
+          "description": "Report a failed example as an error at its fence, so `mizzen check` exits 1. Default false."
+        }
+      },
+      "description": "How the examples-report output treats a failing example. Default: a warning that never fails the build."
+    },
     "network": {
       "type": "object",
       "additionalProperties": false,

@@ -14,9 +14,10 @@ import { runShellExample, sandboxAvailable } from "../pipeline/examples/run-shel
  * through `runNodeExample`, `bash` and `sh` through `runShellExample`. An example passes when it exits with code 0
  * and, when it is followed by an `output` fence, when its stdout matches that fence after line endings are normalized
  * and trailing newlines are dropped. A fence without an `output` fence checks only that it exits successfully. A
- * failing example is reported through `exampleFailed`, with the fence's source position, and never fails the build.
- * A host with no OS sandbox reports one `example-sandbox` warning, so a build never presents best-effort limits as
- * isolation.
+ * failing example is reported through `exampleFailed`, with the fence's source position. It is a warning by default;
+ * `examples: { failOnFailure: true }` makes it an error, so `mizzen check` exits 1 without turning any other warning
+ * into an error. A host with no OS sandbox reports one `example-sandbox` warning, so a build never presents
+ * best-effort limits as isolation.
  *
  * A fence whose language has no runner (`python`, `rust`, an empty language) is **not run**: it is counted in `skipped`
  * and neither passed nor failed, because the engine cannot know whether it works. For every page
@@ -203,14 +204,20 @@ async function runOne(
 }
 
 /** The diagnostic for one failed example: the fence's position, the expected output, and what happened. */
-function diagnosticOf(page: Page, example: MarkdownExample, run: ExampleRun): Diagnostic {
-  return exampleFailed({
+function diagnosticOf(
+  page: Page,
+  example: MarkdownExample,
+  run: ExampleRun,
+  failOnFailure: boolean,
+): Diagnostic {
+  const diagnostic = exampleFailed({
     pos: posOf(page, example),
     page: page.url,
     expected: example.expected ?? "",
     actual: run.error ?? run.stdout,
     ...(run.exitCode === null || run.exitCode === 0 ? {} : { exitCode: run.exitCode }),
   });
+  return failOnFailure ? { ...diagnostic, severity: "error" } : diagnostic;
 }
 
 /**
@@ -226,6 +233,7 @@ export async function examplesReport(
 ): Promise<readonly OutputFile[]> {
   const runner = options.runner ?? defaultRunner(options);
   const cache = options.cacheDir === undefined ? undefined : exampleCache({ dir: options.cacheDir });
+  const failOnFailure = site.config.examples?.failOnFailure === true;
   const pages: PageExamples[] = [];
   // Probed only when the default runners are about to run a real example, so a fake runner stays sandbox-free.
   let trustChecked = false;
@@ -258,7 +266,7 @@ export async function examplesReport(
         passedCount += 1;
       } else {
         failedCount += 1;
-        options.report?.(diagnosticOf(page, example, outcome));
+        options.report?.(diagnosticOf(page, example, outcome, failOnFailure));
       }
     }
 

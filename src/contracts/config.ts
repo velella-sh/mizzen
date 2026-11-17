@@ -43,6 +43,12 @@ export interface SearchConfig {
   readonly text?: number;
 }
 
+/** How the `examples-report` output treats a failing example. */
+export interface ExamplesConfig {
+  /** Report a failed example as an error at its fence, so `mizzen check` exits `1`. Default `false`. */
+  readonly failOnFailure?: boolean;
+}
+
 /** Limits on one collection's source. Each key falls back to the default stated in `docs/data-sites.md`. */
 export interface DataLimitsConfig {
   /** Largest source file, in bytes. Default 2097152 (2 MiB). */
@@ -437,6 +443,8 @@ export interface SiteConfig {
   readonly theme: ThemeConfig;
   /** `false` builds no search index. Default `{}`. */
   readonly search: false | SearchConfig;
+  /** How a failed example is reported. Default: a warning that never fails the build. */
+  readonly examples?: ExamplesConfig;
   /** A cookieless analytics tool. Default: none, and no script is written. */
   readonly analytics?: AnalyticsConfig;
   /** Search engine verification tokens. Default: none. */

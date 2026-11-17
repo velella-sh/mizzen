@@ -42,3 +42,18 @@ node --test test/docs-command-check/baseline.test.ts
 ```
 
 The second test is the broken-command case; the guide itself is unchanged between the two runs.
+
+## The CI gate
+
+`examples: { failOnFailure: true }` makes a failed `test` fence an `error` at the fence's file and line, so
+`mizzen check` exits `1`. Every other finding keeps its severity, and a page without a `test` fence is untouched.
+Without the key the same failure stays a warning and the build succeeds.
+
+`docs/recipes/docs-command-check.yml` copies to `.github/workflows/`. It runs the selected repository tests and then
+`npx mizzen check site`; either a failing test or a broken example fails the job. Replace the test path with the tests
+that prove your own guide's commands.
+
+For an Offing guide: mark each command fence `test`, keep the test that runs the command, and set
+`examples.failOnFailure` in `mizzen.yml`. `test/docs-command-check/acceptance.test.ts` proves both cases: the healthy
+guide passes, and the broken `offing explain` block fails at line 42 of the fixture while the same failure without the
+key is only a warning.
