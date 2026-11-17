@@ -145,6 +145,8 @@ test("feeds keep their keys, and an unknown collection points at its line", () =
     "    collection: posts",
     "    date: published",
     "    formats: [atom, json]",
+    "    window:",
+    "      days: 30",
     "  missing:",
     "    collection: nope",
     "    date: date",
@@ -155,13 +157,14 @@ test("feeds keep their keys, and an unknown collection points at its line", () =
     collection: "posts",
     date: "published",
     formats: ["atom", "json"],
+    window: { days: 30 },
   });
   assert.equal(config.feeds.missing?.collection, "nope");
   assert.deepEqual(
     diagnostics.map((d) => d.id),
     ["config.feeds-collection"],
   );
-  assert.equal(diagnostics[0]?.pos?.line, 10);
+  assert.equal(diagnostics[0]?.pos?.line, 12);
 });
 
 test("calendars keep their keys, and an unknown collection or a non-date field points at its line", () => {

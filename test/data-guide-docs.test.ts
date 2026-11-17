@@ -47,7 +47,7 @@ test("the urls page names the lock rules and the data guide links every referenc
     assert.ok(urls.includes(word), word);
   }
   const guide = page("index");
-  for (const link of ["collections", "templates", "lists", "feeds", "search", "seo", "social-images", "urls", "theme-contract", "validation", "quick-start"]) {
+  for (const link of ["collections", "templates", "lists", "calendars", "feeds", "search", "seo", "social-images", "urls", "theme-contract", "validation", "quick-start"]) {
     assert.ok(guide.includes(`(/data/${link}/)`), link);
   }
 });
@@ -61,7 +61,7 @@ test("the theme contract names the props and files a theme reads", () => {
 
 test("the data pages are in the navigation", () => {
   const nav = text("../site/_data/navigation.yml");
-  for (const url of ["/data/", "/data/quick-start/", "/data/collections/", "/data/templates/", "/data/lists/", "/data/search/", "/data/seo/", "/data/social-images/", "/data/urls/", "/data/theme-contract/"]) {
+  for (const url of ["/data/", "/data/quick-start/", "/data/collections/", "/data/templates/", "/data/lists/", "/data/calendars/", "/data/search/", "/data/seo/", "/data/social-images/", "/data/urls/", "/data/theme-contract/"]) {
     assert.ok(nav.includes(`url: ${url}`), url);
   }
 });

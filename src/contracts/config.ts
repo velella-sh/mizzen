@@ -119,6 +119,14 @@ export interface FeedConfig {
   readonly idField?: string;
   /** Record fields written under the JSON Feed extension key. Default `[]`. */
   readonly fields?: readonly string[];
+  /** Keeps only entries dated from the as-of date to that date plus `days`, both included. */
+  readonly window?: FeedWindowConfig;
+}
+
+/** The date range a feed lists, starting at the as-of date and never at the build's clock. */
+export interface FeedWindowConfig {
+  /** Last day of the window, counted from the as-of date; both ends are included, so `0` is the as-of date alone. */
+  readonly days: number;
 }
 
 /** One event a calendar builds from each record: a date field, with an optional end field and a title. */
