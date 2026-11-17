@@ -21,6 +21,12 @@ same repository gives the same answer.
   parameter. `contractTypos(refs, symbols)` reports a stated member the declaration does not have at the
   claim's own span; a parameter name is not compared. The cases are in
   `../../test/api-contract-check/refs.test.ts`.
+- `contract-compare.ts`: `compareContractClaims(pages, { root, tolerance? })` judges every claim
+  `contract-refs.ts` attaches against the public name `contract-resolver.ts` reaches, using the signature
+  comparison in `symbols.ts`. Each result is a match, a `drift.signature-mismatch`, a
+  `drift.missing-symbol`, a `drift.moved-symbol`, or a `drift.signature-unchecked` with the reason at the
+  documentation claim. A body-only change stays clean; a reference without a claim stays with `compare.ts`.
+  The cases are in `../../test/api-contract-check/compare.test.ts`.
 - `symbols.ts`: `exportedSymbols(source)` and `exportedSymbols({ file })` list the names a TypeScript file
   exports, with their kind and line. The scanner skips strings, comments, regular expressions, and nested
   blocks, and never throws: malformed source returns a `drift.symbols-syntax` diagnostic. The cases are in
