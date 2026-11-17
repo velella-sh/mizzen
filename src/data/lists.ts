@@ -30,6 +30,7 @@ import { groupRows, parseGroup, type GroupSpec, type Grouping } from "./group.ts
 import { paginateRows, type Slice } from "./paginate.ts";
 import { filterRows, parseQuery, sortRows, type Row } from "./query.ts";
 import { referenceDateOf } from "./reference-date.ts";
+import { fieldsWithDerived } from "./derived.ts";
 
 /** How one page declares its list. */
 export interface ListSpec {
@@ -253,7 +254,7 @@ function twinOf(spec: ListSpec, props: ListProps): string {
 }
 
 /** The page with `list` filled in, its layout defaulted to `list`, and its twin carrying the table. */
-function listPage(page: Page, url: string, title: string, props: ListProps, twin: string): Page {
+function listPage(page: Page, url: string, title: string, props: ListProps, twin: string, dates: boolean): Page {
   const markdown = twin === "" ? page.markdown : `${page.markdown.replace(/\s+$/, "")}\n\n${twin}\n`;
   return {
     ...page,
@@ -262,6 +263,7 @@ function listPage(page: Page, url: string, title: string, props: ListProps, twin
     frontMatter: { ...page.frontMatter, title, layout: page.frontMatter.layout ?? "list" },
     markdown,
     list: props,
+    ...(dates ? { dates: true } : {}),
   };
 }
 
@@ -295,7 +297,7 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
   if (spec === undefined || collection === undefined) return { pages: [page], diagnostics };
 
   const entry: CollectionConfig | undefined = config.collections[spec.collection];
-  const reference = referenceDateOf(spec.collection, entry, data);
+  const reference = referenceDateOf(spec.collection, entry, data, config.asOf);
   const query = parseQuery(spec.where, spec.sort, {
     file: page.source.file,
     ...(options.position === undefined ? {} : { pos: options.position }),
@@ -319,9 +321,14 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
   }
 
   const prefix = prefixOfLang(config, page.lang);
+  // A derived value or a date filter that reads the as-of date makes these pages depend on that date.
+  const dates =
+    (entry?.derived !== undefined && Object.keys(entry.derived).length > 0) ||
+    (query.needsReference && entry?.referenceDate === undefined && config.asOf !== undefined);
   const rows: RowRecord[] = collection.records.map((record) => {
     const localized = localizeFields(record.fields, page.lang, config.lang);
-    const fields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
+    const idFields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
+    const fields = fieldsWithDerived({ fields: idFields, derived: record.derived });
     return {
       record,
       fields,
@@ -394,6 +401,7 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
       url: urlMap.urls.get(row.id)?.url ?? "",
       fields: picked,
       links,
+      ...(row.record.derived === undefined ? {} : { derived: row.record.derived }),
     };
     props.set(row.id, record);
     return record;
@@ -440,7 +448,7 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
       const title = spec.expand.title === undefined ? value.key : fillValue(spec.expand.title, value.key);
       slices.forEach((slice, position) => {
         const list = propsOfSlice(slice, urls, position);
-        expanded.push(listPage(page, urls[position]!, title, list, twinOf(spec, list)));
+        expanded.push(listPage(page, urls[position]!, title, list, twinOf(spec, list), dates));
       });
     }
     const indexProps: ListProps = {
@@ -450,7 +458,7 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
       pagination: { page: 1, total: 1 },
     };
     return {
-      pages: [listPage(page, page.url, page.title, indexProps, twinOf(spec, indexProps)), ...expanded],
+      pages: [listPage(page, page.url, page.title, indexProps, twinOf(spec, indexProps), dates), ...expanded],
       diagnostics,
     };
   }
@@ -459,7 +467,7 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
   const urls = slices.map((_slice, index) => pageUrl(page.url, index));
   const pages = slices.map((slice, index) => {
     const list = propsOfSlice(slice, urls, index);
-    return listPage(page, urls[index]!, page.title, list, twinOf(spec, list));
+    return listPage(page, urls[index]!, page.title, list, twinOf(spec, list), dates);
   });
   return { pages, diagnostics };
 }

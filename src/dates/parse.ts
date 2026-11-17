@@ -71,6 +71,32 @@ export function parseDate(text: string): ParsedDate {
   return { ok: true, date: { precision: "day", year, month, day } };
 }
 
+const INSTANT_VALUE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * The normalized form of a date value, for a theme: `YYYY-MM-DD`, `YYYY-MM`, or `YYYY` as written, or an ISO 8601
+ * instant as its UTC ISO 8601 form. A value that is not a real date or instant is `undefined`.
+ */
+export function normalizeDate(value: string): string | undefined {
+  const parsed = parseDate(value);
+  if (parsed.ok) return value;
+  const instant = INSTANT_VALUE.exec(value);
+  if (instant === null) return undefined;
+  const [year, month, day, hour, minute, second] = instant.slice(1, 7).map(Number) as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
+  if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month) || hour > 23 || minute > 59 || second > 59) {
+    return undefined;
+  }
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? undefined : at.toISOString();
+}
+
 /** The earliest day a date can mean. */
 export function earliestDay(date: PartialDate): Day {
   return { year: date.year, month: date.month ?? 1, day: date.day ?? 1 };

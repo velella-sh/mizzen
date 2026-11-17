@@ -599,12 +599,22 @@
             "type": "string",
             "minLength": 1
           },
-          "description": "Fields that hold a date, written YYYY-MM-DD or as a full ISO 8601 instant."
+          "description": "Fields that hold a date, written YYYY-MM-DD, YYYY-MM, or YYYY, or as a full ISO 8601 instant."
         },
         "referenceDate": {
           "type": "string",
           "minLength": 1,
           "description": "The date a list compares before or after against: YYYY-MM-DD, or the dot path of a _data value that holds one. Unset, a list cannot filter on a relative date."
+        },
+        "derived": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/derivedRule"
+          },
+          "description": "Values computed once per build from a record's date field against the as-of date, keyed by the name a template or the theme reads. A real field with the same name wins. Default {}."
         },
         "markdown": {
           "type": "array",
@@ -849,6 +859,83 @@
             }
           },
           "description": "A compact JSON index of the collection's records for the theme, written under data/."
+        }
+      }
+    },
+    "derivedRule": {
+      "description": "One value derived from a record's date field: a day count (`kind`) or a banded state (`bands`).",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "field",
+            "kind"
+          ],
+          "properties": {
+            "field": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Record field that holds the date; a record without one has no value."
+            },
+            "kind": {
+              "enum": [
+                "days-left",
+                "days-since"
+              ],
+              "description": "`days-left` counts whole days from the as-of day to the field's latest day; `days-since` counts from its earliest day."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "field",
+            "bands"
+          ],
+          "properties": {
+            "field": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Record field that holds the date; a record without one has no value."
+            },
+            "bands": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/derivedBand"
+              },
+              "description": "Bands in increasing `below` order; the last one has no `below` and takes every count the earlier ones did not."
+            }
+          }
+        }
+      ]
+    },
+    "derivedBand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value"
+      ],
+      "properties": {
+        "below": {
+          "type": "number",
+          "description": "Exclusive upper bound of the band, in whole days. Leave it out on the last band."
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "description": "The value the derived field has in this band."
         }
       }
     },

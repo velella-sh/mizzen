@@ -59,7 +59,7 @@ export function calendarEvents(
   // The config loader reports a calendar that names a collection the site does not declare.
   if (collection === undefined) return { events: [], skipped: 0 };
 
-  const reference = referenceDateOf(calendar.collection, site.config.collections[calendar.collection], site.data);
+  const reference = referenceDateOf(calendar.collection, site.config.collections[calendar.collection], site.data, site.config.asOf);
   if (reference.error !== undefined) report({ id: "calendars.reference-date", severity: "error", message: reference.error });
   const query = parseQuery(calendar.where, undefined, {
     file: "mizzen.yml",

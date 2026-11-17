@@ -94,6 +94,11 @@ export interface Page {
   readonly record?: PageRecord;
   /** The records, groups, and pagination of a list page; unset on every other page. */
   readonly list?: ListProps;
+  /**
+   * True when the page reads a date value, a derived value, or a date filter, so the as-of date is part of its render key.
+   * A page that sets none keeps its bytes and its hash when the as-of date moves.
+   */
+  readonly dates?: boolean;
 }
 
 /** A record the URL lock published that its collection no longer holds. */

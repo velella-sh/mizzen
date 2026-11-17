@@ -24,6 +24,7 @@ import { applyDates } from "./checks/dates.ts";
 import { checkReferences } from "./checks/references.ts";
 import { checkUnique } from "./checks/unique.ts";
 import { parseCsv } from "./csv.ts";
+import { deriveRecords } from "./derived.ts";
 import { checkFieldSizes, checkRecordCount, checkSourceBytes, dataLimitsOf } from "./limits.ts";
 import { readLock, type DataLock } from "./lock.ts";
 import { resolveNpmSource } from "./package-source.ts";
@@ -509,6 +510,9 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     }
     checkUnique(name, kept, entry, diagnostics);
     kept = applyDates(name, kept, entry.dates ?? [], diagnostics);
+    const derived = deriveRecords(name, kept, entry.derived, config.asOf, configPos);
+    kept = derived.records;
+    diagnostics.push(...derived.diagnostics);
     collections[name] = {
       name,
       source,

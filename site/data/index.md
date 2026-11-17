@@ -104,6 +104,7 @@ runs these steps in an empty folder.
 | Declare a collection, its sources, and its checks | [Collections](/data/collections/) |
 | Use directives and URL patterns in a template | [Templates](/data/templates/) |
 | Filter, sort, group, and paginate | [Lists](/data/lists/) |
+| Count days, derive a state, and format a date | [Dated data](/data/dates/) |
 | Publish Atom, RSS, and JSON | [Feeds](/data/feeds/) |
 | Search and filter records | [Search](/data/search/) |
 | Describe pages to search engines | [SEO](/data/seo/) |

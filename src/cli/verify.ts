@@ -63,7 +63,7 @@ export interface VerifyResult {
 type ManifestState =
   | { readonly kind: "absent" }
   | { readonly kind: "unrecorded" }
-  | { readonly kind: "valid"; readonly record: BuildRecord }
+  | { readonly kind: "valid"; readonly record: BuildRecord; readonly asOf?: string }
   | { readonly kind: "malformed"; readonly reason: string };
 
 /** SHA-256 as the build writes it: 64 lowercase hex characters. */
@@ -78,7 +78,7 @@ function malformed(reason: string): ManifestState {
  * Checks a manifest's `build` field: shape, every path, every hash, and the whole-build hash against its own map.
  * Keys are visited in code-point order, so the reported reason does not depend on the order they were written in.
  */
-function checkRecord(value: unknown): ManifestState {
+function checkRecord(value: unknown, asOf?: string): ManifestState {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return malformed("build is not an object");
   const { hash, files } = value as { hash?: unknown; files?: unknown };
   if (typeof hash !== "string" || !HASH.test(hash)) return malformed("build.hash is not a lowercase SHA-256");
@@ -94,8 +94,8 @@ function checkRecord(value: unknown): ManifestState {
     }
     record[path] = file;
   }
-  if (buildHashOf(record) !== hash) return malformed("build.hash does not match build.files");
-  return { kind: "valid", record: { hash, files: record } };
+  if (buildHashOf(record, asOf) !== hash) return malformed("build.hash does not match build.files");
+  return { kind: "valid", record: { hash, files: record }, ...(asOf === undefined ? {} : { asOf }) };
 }
 
 /** A manifest read that keeps "absent" apart from a file whose content cannot be read as a regular file. */
@@ -147,7 +147,8 @@ async function readManifest(dir: string): Promise<ManifestState> {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return malformed("not a JSON object");
   const build = (parsed as { build?: unknown }).build;
   if (build === undefined) return { kind: "unrecorded" };
-  return checkRecord(build);
+  const asOf = (parsed as { asOf?: unknown }).asOf;
+  return checkRecord(build, typeof asOf === "string" ? asOf : undefined);
 }
 
 /** The first file that differs between the recorded build and the folder, in path order. */
@@ -200,7 +201,7 @@ export async function verify(options: VerifyOptions): Promise<VerifyResult> {
 
   let actual: BuildRecord;
   try {
-    actual = await fingerprint(dir);
+    actual = await fingerprint(dir, manifest.kind === "valid" ? manifest.asOf : undefined);
   } catch (err) {
     if (err instanceof UnsupportedEntryError) {
       return missing({ kind: "unsupported", path: err.path, entry: err.entry });

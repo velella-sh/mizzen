@@ -353,6 +353,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
         options.defaultLayout,
         evidenceByUrl.get(page.url) ?? "",
         recordKey(page),
+        page.dates === true ? site.config.asOf : undefined,
       );
       pageKeys.set(page.url, key);
     }
@@ -640,7 +641,10 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
 
     // The build's one hash goes into the manifest last, so every other file is in place (#1252). The manifest that
     // records the hash is left out of it, and a site file that replaced the generated manifest is left alone.
-    if (claimed.get(MANIFEST_PATH) === "manifest" && !assetPaths.has(MANIFEST_PATH)) await recordBuildHash(staging);
+    const usesAsOf = site.pages.some((page) => page.dates === true);
+    if (claimed.get(MANIFEST_PATH) === "manifest" && !assetPaths.has(MANIFEST_PATH)) {
+      await recordBuildHash(staging, usesAsOf ? site.config.asOf : undefined);
+    }
 
     const fileList = [...written].sort(byCodePoint);
     const findings = sortDiagnostics(diagnostics.all);

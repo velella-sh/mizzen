@@ -36,7 +36,7 @@ export const tool: Tool<Input> = {
     if (collection === undefined) {
       return refusal("unknown-collection", `No collection "${input.collection}".`, { collections: Object.keys(site.site.collections).sort() });
     }
-    const reference = referenceDateOf(input.collection, site.site.config.collections[input.collection], site.site.data);
+    const reference = referenceDateOf(input.collection, site.site.config.collections[input.collection], site.site.data, site.site.config.asOf);
     const query = parseQuery(input.where, input.sort, {
       file: "query_records",
       collection: input.collection,

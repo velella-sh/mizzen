@@ -17,6 +17,8 @@ import type {
   SiteConfig,
   SourcePos,
 } from "../contracts/index.ts";
+import type { Calendar } from "../dates/calendars.ts";
+import { fieldsWithDerived } from "./derived.ts";
 import { recordUrlsOf, type RecordUrlMap } from "./permalink.ts";
 
 /** What one record page's directives read. */
@@ -39,6 +41,10 @@ export interface RecordScope {
   readonly extraFields?: ReadonlySet<string>;
   /** Fields the config marks as Markdown. */
   readonly markdownFields: ReadonlySet<string>;
+  /** Names the collection derives from a date, readable and printable like fields. */
+  readonly derivedFields?: ReadonlySet<string>;
+  /** The calendar dates are written in. */
+  readonly calendar: Calendar;
   /** The page's language. */
   readonly lang: string;
   /** The site's default language. */
@@ -97,9 +103,9 @@ export function resolveField(scope: RecordScope, path: string): FoundField {
 /** True when the collection's schema declares the path's first segment, or the collection has no schema. */
 export function declaredField(scope: RecordScope, path: string): boolean {
   // `id` is the record's identity and is always readable, even when the schema does not list it as a property.
-  if (topField(path) === "id") return true;
-  if (scope.extraFields?.has(topField(path)) === true) return true;
-  return scope.schemaFields === undefined || scope.schemaFields.has(topField(path));
+  const top = topField(path);
+  if (top === "id" || scope.derivedFields?.has(top) === true || scope.extraFields?.has(top) === true) return true;
+  return scope.schemaFields === undefined || scope.schemaFields.has(top);
 }
 
 /** A path with a repository folder in front, `/`-separated, when the site is not the repository root. */
@@ -275,7 +281,8 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
   if (entry === undefined || source === undefined) return undefined;
   const config = site.config.collections[record.collection];
   const localized = localizeFields(source.fields, page.lang, site.config.lang);
-  const fields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
+  const idFields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
+  const fields = fieldsWithDerived({ fields: idFields, derived: source.derived });
   const prefix = prefixOfLang(site.config, page.lang);
   const links: Record<string, string> = {};
   for (const [field, collection] of Object.entries(referenceTargets(config))) {
@@ -299,6 +306,7 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
     url: page.url,
     fields,
     links,
+    ...(source.derived === undefined ? {} : { derived: source.derived }),
     ...(record.views === undefined ? {} : { views: record.views }),
     ...(record.changes === undefined ? {} : { changes: record.changes }),
   };

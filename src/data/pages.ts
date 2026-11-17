@@ -37,6 +37,7 @@ import { substituteFrontMatter } from "./frontmatter.ts";
 import { markdownFieldBlocks } from "./markdown-field.ts";
 import { recordSourcePos, recordUrl, recordUrlsOf } from "./permalink.ts";
 import { localizeFields, prefixed, prefixOfLang, type RecordScope } from "./record-context.ts";
+import { fieldsWithDerived } from "./derived.ts";
 import type { Template } from "./template.ts";
 import { viewUrls, viewsOf } from "./views.ts";
 
@@ -121,7 +122,14 @@ function withItem(scope: RecordScope, item: Readonly<Record<string, unknown>>): 
 
 /** A selected record as a scope: its fields come first, and its own positions name its file. */
 function withRecord(scope: RecordScope, record: DataRecord): RecordScope {
-  return { ...scope, record, fields: record.fields, recordFields: record.fields };
+  const fields = fieldsWithDerived(record);
+  return {
+    ...scope,
+    record,
+    fields,
+    recordFields: fields,
+    ...(record.derived === undefined ? {} : { derivedFields: new Set(Object.keys(record.derived)) }),
+  };
 }
 
 /** True for a node whose type field the page reads. */
@@ -137,6 +145,8 @@ interface Build {
   readonly depth: number;
   readonly diagnostics: Diagnostic[];
   readonly sourceLines: Map<string, readonly string[]>;
+  /** True once a directive reads a date value, a derived value, or a formatted date. */
+  dates: boolean;
 }
 
 /**
@@ -151,6 +161,7 @@ async function rewriteField(
 ): Promise<FieldResult | readonly RootContent[]> {
   const result = applyField(node, scope);
   build.diagnostics.push(...result.diagnostics);
+  if (result.dates === true) build.dates = true;
   if (block && result.markdown !== undefined) {
     const lines = await linesOf(build.root, result.markdown.span.file, build.sourceLines, build.filePrefix);
     return markdownFieldBlocks(result.markdown.value, result.markdown.span, lines);
@@ -492,18 +503,21 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     ): Promise<Page> => {
       const source: Template = rendering.template.localized[language.code] ?? rendering.template;
       const parsed = await parseMarkdown(source.body, source.bodyLine);
+      const pageFields = fieldsWithDerived({ fields, derived: record.derived });
       const changes = showsChanges(source.body) ? recordChanges(historyEvents, record.id, fields, entry) : [];
       const scope: RecordScope = {
         collection: name,
         record,
-        recordFields: fields,
-        fields,
+        recordFields: pageFields,
+        fields: pageFields,
         ...(changes.length === 0
           ? {}
           : { changes: changes.map((event) => event as unknown as Readonly<Record<string, unknown>>) }),
         collections,
         ...(schemaFields === undefined ? {} : { schemaFields }),
         markdownFields,
+        ...(record.derived === undefined ? {} : { derivedFields: new Set(Object.keys(record.derived)) }),
+        calendar: config.dates?.calendar ?? "gregorian",
         lang: language.code,
         defaultLang: config.lang,
         ...(filePrefix === undefined || filePrefix === "" ? {} : { filePrefix }),
@@ -524,7 +538,15 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
       const pagePrefix = prefixOfLang(config, pageLangCode);
 
       const tree = structuredClone(parsed) as Root;
-      const build: Build = { scope, depth: 0, diagnostics, sourceLines, root, filePrefix };
+      const build: Build = {
+        scope,
+        depth: 0,
+        diagnostics,
+        sourceLines,
+        root,
+        filePrefix,
+        dates: record.derived !== undefined && Object.keys(record.derived).length > 0,
+      };
       tree.children = await rewriteChildren(tree.children, build);
       applyRecordLinks(tree, {
         collections,
@@ -575,6 +597,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
         html: rendered.html,
         markdown,
         kind: "doc",
+        ...(build.dates ? { dates: true } : {}),
         record: {
           collection: name,
           id: record.id,

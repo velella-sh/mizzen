@@ -11,6 +11,8 @@
 import type { Root } from "mdast";
 import type { Plugin } from "unified";
 import type { Diagnostic, RecordPos, SourcePos } from "../../contracts/index.ts";
+import { DATE_STYLES, type DateStyle } from "../../dates/format.ts";
+import { renderDate } from "../../dates/render.ts";
 import { directivePath, directivePos } from "../../data/directive-context.ts";
 import {
   declaredField,
@@ -43,6 +45,8 @@ export interface FieldResult {
   /** The text the Markdown twin carries. */
   readonly twin: string;
   readonly diagnostics: readonly Diagnostic[];
+  /** True when the directive prints a date, a derived value, or a date with a format. */
+  readonly dates?: boolean;
 }
 
 /** Escapes text for an HTML text node. */
@@ -85,6 +89,7 @@ export function applyField(
       readonly end: { readonly line: number; readonly column: number };
     } | undefined;
     readonly children?: readonly unknown[] | undefined;
+    readonly attributes?: Readonly<Record<string, string | null | undefined>> | null | undefined;
   },
   scope: RecordScope,
 ): FieldResult {
@@ -129,6 +134,42 @@ export function applyField(
 
   const top = topField(path);
   const position = fieldPosition(scope, path);
+  const format = node.attributes?.["format"];
+  if (format !== undefined) {
+    if (!DATE_STYLES.includes(format as DateStyle)) {
+      return {
+        replacement: literal(path, node),
+        twin: `:field[${path}]`,
+        diagnostics: [{
+          id: "data.field-format",
+          severity: "error",
+          message: `The field "${path}" has the format "${format ?? ""}", which is not one of ${DATE_STYLES.join(", ")}.`,
+          ...(pos === undefined ? {} : { pos }),
+          help: "Write `{format=short}`, `{format=long}`, or `{format=full}`.",
+        }],
+      };
+    }
+    const rendered = renderDate(value, scope.lang, scope.calendar, format as DateStyle);
+    if (!rendered.ok) {
+      return {
+        replacement: literal(path, node),
+        twin: `:field[${path}]`,
+        diagnostics: [{
+          id: "data.field-not-date",
+          severity: "error",
+          message: `The field "${path}" is not a date, so it has no "${format}" form.`,
+          ...(pos === undefined ? {} : { pos }),
+          help: `Use a format only on a field the collection declares under dates, such as ${scope.collection}'s date field.`,
+        }],
+      };
+    }
+    return {
+      replacement: fieldHtml(rendered.text, position),
+      twin: rendered.text,
+      diagnostics: [],
+      dates: true,
+    };
+  }
   if (scope.markdownFields.has(top) && typeof value === "string") {
     const span: RecordPos = {
       file: position.file,
@@ -163,5 +204,8 @@ export function applyField(
     replacement: fieldHtml(text, position),
     twin: text,
     diagnostics: [],
+    ...(scope.derivedFields?.has(top) === true || scope.record.normalizedDates?.[top] !== undefined
+      ? { dates: true }
+      : {}),
   };
 }

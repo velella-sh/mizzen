@@ -3,7 +3,9 @@
  *
  * Every file the build writes, except the manifest that records the result, is hashed; the whole-build hash is the
  * SHA-256 of one line per file (`<path>`, a NUL, the file's hash, and a line feed), with the paths sorted by code
- * point. The build and `verify` run the same rule, so both agree byte for byte.
+ * point. A build that uses the as-of date writes `asOf` to the manifest and puts an `as-of` line before the files, so a
+ * site that derives values from dates gets a new hash when the date moves and a site that does not keeps its old one.
+ * The build and `verify` run the same rule, so both agree byte for byte.
  *
  * An identity describes reproducible content only: the path is relative with `/` separators, file times are not read,
  * and the metadata files an operating system adds to a folder (`.DS_Store`, `Thumbs.db`, `desktop.ini`, AppleDouble
@@ -94,13 +96,14 @@ export function isIdentityFile(path: string): boolean {
  * same hash whatever order they were hashed in. A path that identity cannot name without ambiguity is an error: two
  * different files could otherwise produce the same lines.
  */
-export function buildHashOf(files: Readonly<Record<string, string>>): string {
+export function buildHashOf(files: Readonly<Record<string, string>>, asOf?: string): string {
   const paths = Object.keys(files).sort(byCodePoint);
   const ambiguous = paths.find((path) => !isIdentityPath(path));
   if (ambiguous !== undefined) {
     throw new TypeError(`build-hash: "${ambiguous}" is not a relative path a build identity can name.`);
   }
-  return hashOf(paths.map((path) => `${path}\0${files[path]}\n`).join(""));
+  const lines = paths.map((path) => `${path}\0${files[path]}\n`).join("");
+  return hashOf(`${asOf === undefined ? "" : `as-of\0${asOf}\n`}${lines}`);
 }
 
 /** Reads a file without following a final symlink, so a fingerprint cannot leave the folder it was given. */
@@ -166,7 +169,7 @@ async function collect(
  * A symlink, socket, FIFO, device, or other special entry is an {@link UnsupportedEntryError}: including it would
  * read outside the folder or describe something that is not content, and ignoring it would hide a change.
  */
-export async function fingerprint(root: string): Promise<BuildRecord> {
+export async function fingerprint(root: string, asOf?: string): Promise<BuildRecord> {
   const found: string[] = [];
   const unsupported: UnsupportedEntryError[] = [];
   await collect(root, root, found, unsupported);
@@ -180,14 +183,14 @@ export async function fingerprint(root: string): Promise<BuildRecord> {
   // hash would never see it.
   const files: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const path of found) files[path] = hashOf(await readNoFollow(root, path));
-  return { hash: buildHashOf(files), files };
+  return { hash: buildHashOf(files, asOf), files };
 }
 
 /**
  * Writes the build's fingerprint into the manifest already in `root`, and returns the hash. A folder with no
  * manifest (a custom outputs folder, or the manifest output switched off) is left as it is.
  */
-export async function recordBuildHash(root: string): Promise<string | undefined> {
+export async function recordBuildHash(root: string, asOf?: string): Promise<string | undefined> {
   const path = join(root, MANIFEST_PATH);
   let text: string;
   try {
@@ -195,7 +198,7 @@ export async function recordBuildHash(root: string): Promise<string | undefined>
   } catch {
     return undefined;
   }
-  const record = await fingerprint(root);
+  const record = await fingerprint(root, asOf);
   const manifest = JSON.parse(text) as Record<string, unknown>;
   manifest.build = record;
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
