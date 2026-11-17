@@ -136,7 +136,10 @@ export const manifest: Output = {
       });
     }
 
-    const json = `${JSON.stringify({ version: 1, ...(site.config.analytics === undefined ? {} : { origins: siteOrigins(site) }), pages }, null, 2)}\n`;
+    // A site that uses the as-of date records it, because a page's bytes may depend on it; a site that does not keeps
+    // its manifest and its build hash unchanged when the date moves.
+    const asOf = site.pages.some((page) => page.dates === true) ? site.config.asOf : undefined;
+    const json = `${JSON.stringify({ version: 1, ...(asOf === undefined ? {} : { asOf }), ...(site.config.analytics === undefined ? {} : { origins: siteOrigins(site) }), pages }, null, 2)}\n`;
     return [{ path: FILE, contents: json }];
   },
 };

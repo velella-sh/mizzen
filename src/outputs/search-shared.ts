@@ -11,6 +11,7 @@ import type {
   Site,
 } from "../contracts/index.ts";
 import { localizeFields } from "../data/record-context.ts";
+import { fieldsWithDerived } from "../data/derived.ts";
 
 /** A filter with more distinct values than this is free text, not a facet. */
 export const MAX_FILTER_VALUES = 100;
@@ -68,7 +69,10 @@ function recordOf(site: Site, page: Page): SearchableRecord | undefined {
     page,
     record,
     collection: identity.collection,
-    fields: localizeFields(record.fields, page.lang, site.config.lang).fields,
+    fields: fieldsWithDerived({
+      fields: localizeFields(record.fields, page.lang, site.config.lang).fields,
+      derived: record.derived,
+    }),
     config: site.config.collections[identity.collection]?.search ?? {},
   };
 }

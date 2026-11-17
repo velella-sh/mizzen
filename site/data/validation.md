@@ -53,6 +53,8 @@ its help names the two accepted formats.
 | `data.frontmatter-unknown-field` | A template's front matter names a field the collection's schema does not declare. | Use a declared field, or write `{{` for a literal brace. |
 | `data.frontmatter-empty` | A front matter value is empty once filled. | Point it at a field with text, or set a literal value. |
 | `data.field-path` | A `:field[…]` directive has no field name. | Write the name inside the brackets. |
+| `data.field-format` | A `{format=…}` name is not `short`, `long`, or `full`. | Write one of those three names. |
+| `data.field-not-date` | A `{format=…}` is on a field that does not hold a date. | Use a format only on a date field, or remove it. |
 | `data.unknown-field` | A `:field[…]` names a field the collection's schema does not declare. | Use a declared field, or add it to the schema and the data. |
 | `data.block-field` | An `:::if` or `:::each` block has no `field` attribute. | Write `{field=<name>}`. |
 | `data.each-not-list` | An `:::each` block names a field that is not a list. | Point it at a list field. |
@@ -135,7 +137,7 @@ its help names the two accepted formats.
 | `data.reference-missing` | A reference field names an id the target collection does not have. | Use an id from the target collection. |
 | `data.reference-invalid` | A reference field holds something other than an id or a list of ids. | Write an id, or a list of ids. |
 | `data.reference-unknown-collection` | A `references` entry names a collection the config does not declare. | Declare that collection, or point the reference at one that exists. |
-| `data.date-invalid` | A field listed under `dates` is not `YYYY-MM-DD` or a full ISO 8601 instant. | Write `YYYY-MM-DD`, such as `2026-01-31`, or a full instant such as `2026-01-31T09:00:00Z`. |
+| `data.date-invalid` | A field listed under `dates` is not `YYYY-MM-DD`, `YYYY-MM`, `YYYY`, or a full ISO 8601 instant. | Write `YYYY-MM-DD` such as `2026-01-31`, `YYYY-MM` such as `2026-01`, `YYYY` such as `2026`, or a full instant such as `2026-01-31T09:00:00Z`. |
 | `data.seo-title-long` | Record pages have a title over `seo.titleMax` characters (default 70). A warning; the text is never shortened. | Shorten the field the title is built from, or raise `collections.<name>.seo.titleMax`. |
 | `data.snapshot-field` | A `:snapshot[field]` names a field a snapshot does not have, or the collection has no snapshot in the lock. | Use one of `source`, `ref`, `capturedAt`, `tool`, `toolVersion`, and run `mizzen data snapshot <name>` to record one. |
 | `data.seo-description-long` | Record pages have a description over `seo.descriptionMax` characters (default 160). A warning; the text is never shortened. | Shorten the field the description is built from, or raise `collections.<name>.seo.descriptionMax`. |

@@ -31,6 +31,8 @@ import type {
   CollectionViewConfig,
   DatesConfig,
   DefaultsEntry,
+  DerivedBandConfig,
+  DerivedRuleConfig,
   Diagnostic,
   Direction,
   CalendarConfig,
@@ -197,6 +199,7 @@ export function loadConfigText(source: string, file: string, folderTitle: string
   }
 
   diagnostics.push(...calendarDiagnostics(raw, collections, file, doc, lineCounter));
+  diagnostics.push(...derivedDiagnostics(raw, collections, file, doc, lineCounter));
 
   return { config: applyDefaults(raw, folderTitle), diagnostics };
 }
@@ -247,6 +250,78 @@ function calendarDiagnostics(
 function eventPos(doc: Document.Parsed, file: string, lineCounter: LineCounter, name: string, index: number, key: string) {
   const node = doc.getIn(["calendars", name, "events", index, key], true);
   return posFromNode(file, lineCounter, isNode(node) ? node : doc.contents);
+}
+
+/**
+ * Findings about derived rules the schema cannot see: a rule must read a field the collection declares as a date, and its
+ * bands must be in increasing `below` order with only the last one open.
+ */
+function derivedDiagnostics(
+  raw: Record<string, unknown>,
+  collections: Readonly<Record<string, CollectionConfig>>,
+  file: string,
+  doc: Document.Parsed,
+  lineCounter: LineCounter,
+): Diagnostic[] {
+  const found: Diagnostic[] = [];
+  const at = (path: (string | number)[]) => {
+    const node = doc.getIn(path, true);
+    return posFromNode(file, lineCounter, isNode(node) ? node : doc.contents);
+  };
+  for (const [name, entry] of Object.entries((raw.collections as Record<string, unknown> | undefined) ?? {})) {
+    if (!isPlainObject(entry) || !isPlainObject(entry.derived)) continue;
+    const collection = collections[name];
+    if (collection === undefined) continue;
+    const dates = collection.dates ?? [];
+    for (const [rule, value] of Object.entries(entry.derived)) {
+      if (!isPlainObject(value) || typeof value.field !== "string") continue;
+      if (!dates.includes(value.field)) {
+        found.push({
+          id: "config.derived-date-field",
+          severity: "error",
+          message: `The derived value "${rule}" of "${name}" reads "${value.field}", which is not one of the dates of the collection.`,
+          pos: at(["collections", name, "derived", rule, "field"]),
+          help: `List "${value.field}" under dates in the collection, or read a date field.`,
+        });
+      }
+      if (!Array.isArray(value.bands)) continue;
+      const bands = value.bands;
+      let previous: number | undefined;
+      bands.forEach((band, index) => {
+        if (!isPlainObject(band)) return;
+        const last = index === bands.length - 1;
+        const below = typeof band.below === "number" ? band.below : undefined;
+        if (last && below !== undefined) {
+          found.push({
+            id: "config.derived-bands",
+            severity: "error",
+            message: `The last band of the derived value "${rule}" of "${name}" must leave \`below\` out.`,
+            pos: at(["collections", name, "derived", rule, "bands", index, "below"]),
+            help: "Remove `below` from the last band so it takes every count the earlier bands did not.",
+          });
+        } else if (!last && below === undefined) {
+          found.push({
+            id: "config.derived-bands",
+            severity: "error",
+            message: `Every band of the derived value "${rule}" of "${name}" but the last needs a \`below\`.`,
+            pos: at(["collections", name, "derived", rule, "bands", index]),
+            help: "Add `below`, or move this band last and leave its `below` out.",
+          });
+        }
+        if (below !== undefined && previous !== undefined && below <= previous) {
+          found.push({
+            id: "config.derived-bands",
+            severity: "error",
+            message: `The bands of the derived value "${rule}" of "${name}" must be in increasing \`below\` order.`,
+            pos: at(["collections", name, "derived", rule, "bands", index, "below"]),
+            help: "Put the smaller `below` first; the last band has no `below`.",
+          });
+        }
+        previous = below;
+      });
+    }
+  }
+  return found;
 }
 
 function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteConfig {
@@ -446,6 +521,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const json = collectionJsonFrom(entry.json);
     const raw = collectionRawFrom(entry.raw);
     const changelog = collectionChangelogFrom(entry.changelog);
+    const derived = derivedFrom(entry.derived);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
@@ -457,6 +533,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(unique === undefined ? {} : { unique }),
       ...(references === undefined ? {} : { references }),
       ...(dates === undefined ? {} : { dates }),
+      ...(derived === undefined ? {} : { derived }),
       ...(typeof entry.referenceDate === "string" ? { referenceDate: entry.referenceDate } : {}),
       ...(isPlainObject(entry) && Array.isArray(entry.markdown)
         ? { markdown: entry.markdown.filter((field): field is string => typeof field === "string") }
@@ -477,9 +554,34 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
   return collections;
 }
 
+/** A collection's derived rules, keeping only rules the schema accepts. `undefined` when it declares none. */
+function derivedFrom(value: unknown): Readonly<Record<string, DerivedRuleConfig>> | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const rules: Record<string, DerivedRuleConfig> = {};
+  for (const [name, rule] of Object.entries(value)) {
+    if (!isPlainObject(rule) || typeof rule.field !== "string" || rule.field === "") continue;
+    if (rule.kind === "days-left" || rule.kind === "days-since") {
+      rules[name] = { field: rule.field, kind: rule.kind };
+      continue;
+    }
+    if (!Array.isArray(rule.bands)) continue;
+    const bands: DerivedBandConfig[] = [];
+    for (const band of rule.bands) {
+      if (!isPlainObject(band) || band.value === undefined) continue;
+      const value = band.value;
+      if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") continue;
+      bands.push({
+        ...(typeof band.below === "number" && Number.isFinite(band.below) ? { below: band.below } : {}),
+        value,
+      });
+    }
+    if (bands.length > 0) rules[name] = { field: rule.field, bands };
+  }
+  return Object.keys(rules).length === 0 ? undefined : rules;
+}
+
 /** A collection's page JSON settings, keeping only the fields the schema accepts. `undefined` when it sets none. */
-function collectionJsonFrom(value: unknown): CollectionJsonConfig | undefined {
-  if (!isPlainObject(value) || !Array.isArray(value.fields)) return undefined;
+function collectionJsonFrom(value: unknown): CollectionJsonConfig | undefined {  if (!isPlainObject(value) || !Array.isArray(value.fields)) return undefined;
   return { fields: value.fields.filter((field): field is string => typeof field === "string") };
 }
 

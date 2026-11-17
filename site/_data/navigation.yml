@@ -38,6 +38,8 @@ main:
         url: /data/templates/
       - title: Lists
         url: /data/lists/
+      - title: Dated data
+        url: /data/dates/
       - title: Search
         url: /data/search/
       - title: SEO

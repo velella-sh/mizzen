@@ -688,7 +688,9 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   hash.update("mizzen-render\0");
   hash.update(`${engine}\0${runtime}\0`);
   hash.update(`repository\0${repositoryStateKey(options.root)}\0`);
-  hash.update(`config\0${canonicalJson(options.config)}\0`);
+  // The as-of date is per page: a page that reads it puts it in its own render key, so a date move retires those pages
+  // and no other.
+  hash.update(`config\0${canonicalJson({ ...options.config, asOf: undefined })}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
   if (options.recordShape !== undefined) hash.update(`recordShape\0${options.recordShape}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);

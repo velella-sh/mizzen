@@ -26,6 +26,11 @@ export interface DataRecord {
   readonly keyPositions?: Readonly<Record<string, RecordPos>>;
   /** Each date field's normalized form, keyed by field name: `YYYY-MM-DD` as written, an instant as UTC ISO 8601. */
   readonly normalizedDates?: Readonly<Record<string, string>>;
+  /**
+   * Values the collection's `derived` rules computed for this record, keyed by the rule's name. Computed once per
+   * build against the as-of date and never written back to the data file.
+   */
+  readonly derived?: Readonly<Record<string, unknown>>;
 }
 
 /** What a build read from the collections a site declares. */
@@ -108,6 +113,11 @@ export interface RecordProps {
   readonly fields: Readonly<Record<string, unknown>>;
   /** Reference fields resolved to the URL of the record page they point at, keyed by field name. */
   readonly links: Readonly<Record<string, string>>;
+  /**
+   * Values the collection's `derived` rules computed for this record, keyed by the derived name; absent when the
+   * collection declares none or the record has no date to derive from.
+   */
+  readonly derived?: Readonly<Record<string, unknown>>;
   /** URL of every view of this record, keyed by view name; present on the main page only. */
   readonly views?: Readonly<Record<string, string>>;
   /**

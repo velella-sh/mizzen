@@ -7,6 +7,7 @@
  * order; `limit` keeps the first N. Records keep source order when no sort is named.
  */
 import type { DataRecord, Diagnostic } from "../../contracts/index.ts";
+import { fieldsWithDerived } from "../../data/derived.ts";
 import { resolveField, resolveIn, scalarText, type RecordScope } from "../../data/record-context.ts";
 
 export const name = "records";
@@ -128,7 +129,7 @@ export function selectRecords(
         ],
       };
     }
-    selected = selected.filter((record) => matches(record.fields, where, scope));
+    selected = selected.filter((record) => matches(fieldsWithDerived(record), where, scope));
   }
 
   const sort = attributes["sort"]?.trim() ?? "";
@@ -137,7 +138,7 @@ export function selectRecords(
       .map((record, index) => ({ record, index, id: String(record.fields["id"] ?? "") }))
       .sort(
         (a, b) =>
-          byValue(resolveIn(a.record.fields, sort).value, resolveIn(b.record.fields, sort).value) ||
+          byValue(resolveIn(fieldsWithDerived(a.record), sort).value, resolveIn(fieldsWithDerived(b.record), sort).value) ||
           byCodePoint(a.id, b.id) ||
           a.index - b.index,
       )

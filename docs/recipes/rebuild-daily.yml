@@ -1,0 +1,67 @@
+# Rebuilds the site every day with that day's as-of date and publishes it to GitHub Pages, but only when the build hash
+# changed: the last published hash comes back from the Actions cache. Copy this file to .github/workflows/rebuild-daily.yml
+# in a project whose Pages source is "GitHub Actions". A manual build with a fixed date stays valid, so
+# `npx mizzen build site --as-of 2026-01-01` still reproduces a past site byte for byte; this file only adds a schedule.
+name: rebuild-daily
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Restore the last published hash
+        uses: actions/cache/restore@v4
+        with:
+          key: mizzen-rebuild-${{ github.run_id }}
+          restore-keys: mizzen-rebuild-
+          path: .last-build-hash
+      - name: Build the site as of today
+        run: npx mizzen build site --out dist --as-of today
+      - name: Read the build hash and the as-of date
+        id: build
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const manifest = JSON.parse(fs.readFileSync("dist/.mizzen/manifest.json", "utf8"));
+            const asOf = manifest.asOf ?? "none";
+            const previous = fs.existsSync(".last-build-hash") ? fs.readFileSync(".last-build-hash", "utf8").trim() : "";
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `as-of: ${asOf}\nbuild hash: ${manifest.build.hash}\n`);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `hash=${manifest.build.hash}\nasOf=${asOf}\nprevious=${previous}\n`);
+          '
+      - uses: actions/configure-pages@v6
+        if: steps.build.outputs.previous != steps.build.outputs.hash
+      - uses: actions/upload-pages-artifact@v5
+        if: steps.build.outputs.previous != steps.build.outputs.hash
+        with:
+          path: dist
+      - id: deploy
+        uses: actions/deploy-pages@v5
+        if: steps.build.outputs.previous != steps.build.outputs.hash
+      - name: Record the published hash
+        if: steps.build.outputs.previous != steps.build.outputs.hash
+        run: echo "${{ steps.build.outputs.hash }}" > .last-build-hash
+      - name: Save the published hash
+        uses: actions/cache/save@v4
+        if: steps.build.outputs.previous != steps.build.outputs.hash
+        with:
+          key: mizzen-rebuild-${{ github.run_id }}
+          path: .last-build-hash

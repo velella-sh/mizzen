@@ -254,6 +254,8 @@ limit and the key, never a silently truncated file.
   YAML or JSON key, or the CSV header cell, which every row shares.
 - A record's `normalizedDates`: each field the config marks under `dates`, written `YYYY-MM-DD` as it is in the
   source, or as a UTC ISO 8601 instant when the source holds one. The field itself keeps the value as written.
+- A record's `derived`: the values the collection's `derived` rules computed against the build's as-of date, keyed by
+  the rule's name. They are computed once per build and never written back; a real field with the same name wins.
 - `Page.record` on a record page: the collection name, the record id, and the record's position.
 - The ordinary contract, unchanged: navigation, pager, head, islands, and the site model.
 

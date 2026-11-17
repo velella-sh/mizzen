@@ -36,7 +36,7 @@ export interface RenderCacheEntry {
 /**
  * A page's identity inside one settings key: its whole model, layout included. `evidence` is the trust and drift
  * evidence the theme reads for this page, which can move with git and with quoted source positions; it is per page so
- * a body edit elsewhere does not retire this page.
+ * a body edit elsewhere does not retire this page. `asOf` is the build's date, given only for a page that reads it.
  */
 export function renderPageKey(
   settings: string,
@@ -44,10 +44,11 @@ export function renderPageKey(
   defaultLayout: string | undefined,
   evidence = "",
   records = "",
+  asOf?: string,
 ): string {
   const hash = createHash("sha256");
   hash.update(
-    `mizzen-render-page\0${RENDER_CACHE_FORMAT}\0${settings}\0${defaultLayout ?? ""}\0${evidence}\0${records}\0`,
+    `mizzen-render-page\0${RENDER_CACHE_FORMAT}\0${settings}\0${defaultLayout ?? ""}\0${evidence}\0${records}\0${asOf ?? ""}\0`,
   );
   hash.update(JSON.stringify(page));
   return hash.digest("hex");

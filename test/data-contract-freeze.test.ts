@@ -48,6 +48,7 @@ const FROZEN: Shape = {
     "fieldPositions": "Readonly<Record<string, RecordPos>>",
     "keyPositions": "?Readonly<Record<string, RecordPos>>",
     "normalizedDates": "?Readonly<Record<string, string>>",
+    "derived": "?Readonly<Record<string, unknown>>",
   },
   DataStats: {
     "collections": "number",
@@ -89,6 +90,7 @@ const FROZEN: Shape = {
     "url": "string",
     "fields": "Readonly<Record<string, unknown>>",
     "links": "Readonly<Record<string, string>>",
+    "derived": "?Readonly<Record<string, unknown>>",
     "views": "?Readonly<Record<string, string>>",
     "calendar": "?string",
     "calendars": "?readonly CalendarLink[]",

@@ -9,6 +9,7 @@ import type { FeedConfig, Site } from "../contracts/index.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
 import { filterRows, instantOf, parseQuery, type Row } from "../data/query.ts";
 import { localizeFields, resolveIn, scalarText } from "../data/record-context.ts";
+import { fieldsWithDerived } from "../data/derived.ts";
 import { referenceDateOf } from "../data/reference-date.ts";
 import { indexRecords } from "../outputs/search-shared.ts";
 import { entryId } from "./id.ts";
@@ -45,7 +46,7 @@ export function feedEntries(
   // The config loader reports a feed that names a collection the site does not declare; there is nothing to list here.
   if (collection === undefined) return [];
 
-  const reference = referenceDateOf(feed.collection, site.config.collections[feed.collection], site.data);
+  const reference = referenceDateOf(feed.collection, site.config.collections[feed.collection], site.data, site.config.asOf);
   if (reference.error !== undefined) {
     report({ id: "feeds.reference-date", severity: "error", message: reference.error });
   }
@@ -58,10 +59,10 @@ export function feedEntries(
   for (const diagnostic of query.diagnostics) report(diagnostic);
 
   const rows = indexRecords(site, feed.collection).map(({ record, page }) => {
-    const fields = localizeFields(record.fields, site.config.lang, site.config.lang).fields;
+    const localized = localizeFields(record.fields, site.config.lang, site.config.lang).fields;
     return {
       id: record.id,
-      fields,
+      fields: fieldsWithDerived({ fields: localized, derived: record.derived }),
       ...(record.normalizedDates === undefined ? {} : { dates: record.normalizedDates }),
       record,
       page,

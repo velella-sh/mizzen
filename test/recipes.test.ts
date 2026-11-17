@@ -9,7 +9,7 @@ import { runNetwork } from "../src/cli/network.ts";
 
 const DIR = new URL("../docs/recipes/", import.meta.url);
 
-interface Step { readonly run?: string; readonly uses?: string }
+interface Step { readonly run?: string; readonly uses?: string; readonly if?: string }
 interface Workflow { readonly on: Record<string, unknown>; readonly permissions: Record<string, string>; readonly jobs: Record<string, { steps: Step[] }> }
 
 test("every recipe is valid YAML with a trigger and jobs", () => {
@@ -55,4 +55,20 @@ test("the recipe's update command writes a lock in a fixture, and the lock then 
   assert.equal(await runNetwork([...args.slice(1), site], io), 0, out.join("\n"));
   assert.ok(out.some((l) => l.includes("wrote network.lock.json")));
   assert.equal(await runNetwork([...args.slice(1), site, "--check"], io), 0);
+});
+
+test("the rebuild-daily recipe is scheduled, builds as of today, and publishes only a new hash", () => {
+  const text = readFileSync(new URL("rebuild-daily.yml", DIR), "utf8");
+  const workflow = parse(text) as Workflow;
+  assert.ok("schedule" in workflow.on);
+  assert.ok("workflow_dispatch" in workflow.on);
+  const steps = Object.values(workflow.jobs).flatMap((job) => job.steps);
+  const runs = steps.map((step) => step.run ?? "");
+  assert.ok(runs.some((run) => run.includes("mizzen build") && run.includes("--as-of today")));
+  assert.ok(runs.some((run) => run.includes("GITHUB_STEP_SUMMARY") && run.includes("manifest.build.hash") && run.includes("asOf")));
+  const publish = steps.filter((step) => ["upload-pages-artifact", "deploy-pages"].some((name) => step.uses?.includes(name)));
+  assert.equal(publish.length, 2);
+  for (const step of publish) {
+    assert.match(step.if ?? "", /steps\.build\.outputs\.previous != steps\.build\.outputs\.hash/, step.uses ?? "publish");
+  }
 });

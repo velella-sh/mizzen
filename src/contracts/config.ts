@@ -149,6 +149,39 @@ export interface CalendarConfig {
   readonly limit?: number;
 }
 
+/** Which count a derived value is: days to the field's latest day, or days since its earliest day. */
+export type DerivedKind = "days-left" | "days-since";
+
+/** A derived value that counts whole days between a record's date field and the build's as-of date. */
+export interface DerivedCountConfig {
+  /** Record field that holds the date; a record without one has no value. */
+  readonly field: string;
+  /** `days-left` counts to the field's latest day; `days-since` counts from its earliest day. */
+  readonly kind: DerivedKind;
+}
+
+/** One band of a derived state: the value a record takes when its day count is below `below`. */
+export interface DerivedBandConfig {
+  /**
+   * Exclusive upper bound of the band, in whole days. The last band leaves it out and takes every count
+   * the earlier bands did not.
+   */
+  readonly below?: number;
+  /** The value the derived field has in this band. */
+  readonly value: string | number | boolean;
+}
+
+/** A derived value that turns a record's day count into one of a few values. */
+export interface DerivedBandsConfig {
+  /** Record field that holds the date; a record without one has no value. */
+  readonly field: string;
+  /** Bands in increasing `below` order; the last one has no `below`. */
+  readonly bands: readonly DerivedBandConfig[];
+}
+
+/** One value a collection derives from a record's date field, against the build's as-of date. */
+export type DerivedRuleConfig = DerivedCountConfig | DerivedBandsConfig;
+
 /** A feed file's format. */
 export type FeedFormat = "atom" | "rss" | "json";
 
@@ -210,8 +243,13 @@ export interface CollectionConfig {
   readonly unique?: readonly string[];
   /** Fields that hold a reference to another collection's record id, keyed by field name. Default `{}`. */
   readonly references?: Readonly<Record<string, string>>;
-  /** Fields that hold a date, written `YYYY-MM-DD` or as a full ISO 8601 instant. Default `[]`. */
+  /** Fields that hold a date, written `YYYY-MM-DD`, `YYYY-MM`, or `YYYY`, or as a full ISO 8601 instant. Default `[]`. */
   readonly dates?: readonly string[];
+  /**
+   * Values derived from one of the collection's date fields, computed once per build against the site's as-of date.
+   * A real field with the same name wins; nothing is written back to the data file. Default `{}`.
+   */
+  readonly derived?: Readonly<Record<string, DerivedRuleConfig>>;
   /**
    * The date a list compares "before" or "after" against, so no query reads the clock: `YYYY-MM-DD`, or the dot path of
    * a `_data` value that holds one. Unset, a list cannot filter on a relative date.
