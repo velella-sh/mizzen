@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
 # Packs Mizzen and Lateen, installs both tarballs into an empty project, builds examples/data-site twice with the
 # installed CLI, then checks determinism, URLs, verification, a self-diff, and one MCP data call.
-# Usage: scripts/smoke-example.sh [mizzen-dir] [lateen-dir]   (defaults: ../mizzen and ../lateen)
+# Usage: scripts/smoke-example.sh [mizzen-dir] [lateen-dir] [--mizzen-tarball <file>] [--lateen-tarball <file>]
+#   (dirs default to ../mizzen and ../lateen). A tarball argument tests that exact file instead of packing again.
 set -euo pipefail
 
 mizzen="$(cd "${1:-../mizzen}" && pwd)"
 lateen="$(cd "${2:-../lateen}" && pwd)"
+if [ $# -ge 2 ]; then shift 2; elif [ $# -eq 1 ]; then shift; fi
+mizzen_tarball=""
+lateen_tarball=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --mizzen-tarball) mizzen_tarball="$2"; shift 2 ;;
+    --lateen-tarball) lateen_tarball="$2"; shift 2 ;;
+    *) echo "smoke: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 mkdir "$work/tar" "$work/project"
-(cd "$mizzen" && npm pack --silent --pack-destination "$work/tar" >/dev/null)
-(cd "$lateen" && npm pack --silent --pack-destination "$work/tar" >/dev/null)
+if [ -n "$mizzen_tarball" ]; then cp "$mizzen_tarball" "$work/tar/"; else (cd "$mizzen" && npm pack --silent --pack-destination "$work/tar" >/dev/null); fi
+if [ -n "$lateen_tarball" ]; then cp "$lateen_tarball" "$work/tar/"; else (cd "$lateen" && npm pack --silent --pack-destination "$work/tar" >/dev/null); fi
 
 cd "$work/project"
 npm init -y >/dev/null

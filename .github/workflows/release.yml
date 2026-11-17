@@ -32,6 +32,9 @@ concurrency:
 
 env:
   TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  # The published theme this release is verified with. Bump it when the theme ships a matching release; a moving
+  # main branch could hide an engine regression behind a simultaneous theme change.
+  LATEEN_VERSION: "0.2.2"
 
 jobs:
   verify:
@@ -53,7 +56,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
-          ref: main
+          ref: v${{ env.LATEEN_VERSION }}
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -99,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           (cd mizzen && npm ci --no-audit --no-fund && npm run build)
-          (cd lateen && npm ci --no-audit --no-fund && npm install --no-audit --no-fund --no-save ../mizzen)
+          (cd lateen && npm ci --no-audit --no-fund)
       - name: Test with the coverage gate
         if: steps.meta.outputs.published != 'true'
         run: npm run test:coverage
@@ -108,25 +111,47 @@ jobs:
         if: steps.meta.outputs.published != 'true'
         run: npm run typecheck
         working-directory: mizzen
-      - name: Build the packages and install them
+      - name: Pack the one release tarball and the pinned theme
         if: steps.meta.outputs.published != 'true'
-        run: scripts/smoke-package.sh ../mizzen ../lateen
-        working-directory: mizzen
-      - name: Pack the tarball
-        if: steps.meta.outputs.published != 'true'
-        working-directory: mizzen
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/dist"
-          npm pack --silent --pack-destination "$RUNNER_TEMP/dist" >/dev/null
-          ls -l "$RUNNER_TEMP/dist"
+          rm -rf "$RUNNER_TEMP/dist" "$RUNNER_TEMP/theme" "$RUNNER_TEMP/release-evidence"
+          mkdir -p "$RUNNER_TEMP/dist" "$RUNNER_TEMP/theme" "$RUNNER_TEMP/release-evidence"
+          (cd mizzen && npm pack --silent --pack-destination "$RUNNER_TEMP/dist" >/dev/null)
+          (cd lateen && npm pack --silent --pack-destination "$RUNNER_TEMP/theme" >/dev/null)
+          (cd "$RUNNER_TEMP/dist" && sha256sum ./*.tgz > SHA256SUMS && cat SHA256SUMS)
+          echo "theme @velella/lateen@$LATEEN_VERSION: $(cd "$RUNNER_TEMP/theme" && sha256sum ./*.tgz)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Smoke-test the release tarball
+        if: steps.meta.outputs.published != 'true'
+        working-directory: mizzen
+        run: >-
+          scripts/smoke-package.sh ../mizzen ../lateen
+          --mizzen-tarball "$RUNNER_TEMP"/dist/velella-mizzen-*.tgz
+          --lateen-tarball "$RUNNER_TEMP"/theme/velella-lateen-*.tgz
+      - name: Compare with the published 0.2.2 package and theme
+        if: steps.meta.outputs.published != 'true'
+        working-directory: mizzen
+        run: >-
+          node scripts/release-compat.ts
+          --candidate "$RUNNER_TEMP"/dist/velella-mizzen-*.tgz
+          --theme "$RUNNER_TEMP"/theme/velella-lateen-*.tgz
+          --report "$RUNNER_TEMP"/release-evidence/compat-report.json
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.meta.outputs.published != 'true'
         with:
           name: package
-          path: ${{ runner.temp }}/dist/*.tgz
+          path: |
+            ${{ runner.temp }}/dist/*.tgz
+            ${{ runner.temp }}/dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 14
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.meta.outputs.published != 'true'
+        with:
+          name: release-evidence
+          path: ${{ runner.temp }}/release-evidence/compat-report.json
+          if-no-files-found: error
+          retention-days: 90
 
   performance:
     permissions:
@@ -157,14 +182,17 @@ jobs:
         with:
           name: package
           path: ${{ runner.temp }}/dist
-      - name: Publish with provenance
+      - name: Verify and publish the tested tarball with provenance
         env:
           DIST_TAG: ${{ needs.verify.outputs.dist-tag }}
         run: |
           set -euo pipefail
+          cd "$RUNNER_TEMP/dist"
+          sha256sum -c SHA256SUMS
+          test "$(find . -maxdepth 1 -name '*.tgz' | wc -l)" -eq 1
           npm install --global --silent npm@^11.5.1
-          npm publish "$RUNNER_TEMP"/dist/*.tgz --access public --provenance --tag "$DIST_TAG"
-          echo "Published ${{ needs.verify.outputs.version }} to \`$DIST_TAG\`" >> "$GITHUB_STEP_SUMMARY"
+          npm publish ./*.tgz --access public --provenance --tag "$DIST_TAG"
+          echo "Published ${{ needs.verify.outputs.version }} to \`$DIST_TAG\` from $(cat SHA256SUMS)" >> "$GITHUB_STEP_SUMMARY"
 
   github-release:
     needs: [verify, publish]

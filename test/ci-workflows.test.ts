@@ -74,6 +74,20 @@ test("full benchmarks are scheduled, manual, and gate publishing at the exact re
   assert.doesNotMatch(githubRelease.steps![0]!.run!, /--latest(?:\s|$)/);
 });
 
+test("the release tests, checksums, and publishes one tarball", () => {
+  const release = workflow("release");
+  const verify = release.jobs.verify!;
+  const runs = verify.steps!.map((step) => step.run ?? "").join("\n");
+  assert.match(runs, /npm pack --silent --pack-destination "\$RUNNER_TEMP\/dist"/);
+  assert.match(runs, /sha256sum \.\/\*\.tgz > SHA256SUMS/);
+  const smoke = verify.steps!.find((step) => step.run?.includes("smoke-package.sh"))!;
+  assert.match(smoke.run!, /--mizzen-tarball "\$RUNNER_TEMP"\/dist/);
+  assert.match(smoke.run!, /--lateen-tarball "\$RUNNER_TEMP"\/theme/);
+  const compat = verify.steps!.find((step) => step.run?.includes("release-compat.ts"))!;
+  assert.match(compat.run!, /--candidate "\$RUNNER_TEMP"\/dist/);
+  assert.ok(release.jobs.publish!.steps!.some((step) => /sha256sum -c SHA256SUMS/.test(step.run ?? "")));
+});
+
 test("nightly failures notify without executing code or artifacts from the failed run", () => {
   const alert = workflow("benchmark-alert");
   assert.ok("workflow_run" in alert.on);
@@ -84,11 +98,13 @@ test("nightly failures notify without executing code or artifacts from the faile
   assert.match(alert.jobs.notify!.steps![0]!.run!, /gh issue comment/);
 });
 
-test("all engine checks continue testing Lateen main with npm download caching", () => {
+test("engine checks test Lateen main, while a release tests its pinned theme, with npm download caching", () => {
   for (const name of ["ci", "benchmark", "release"]) {
     for (const job of Object.values(workflow(name).jobs)) {
       for (const step of job.steps ?? []) {
-        if (step.with?.repository === "velella-sh/lateen") assert.equal(step.with.ref, "main");
+        if (step.with?.repository === "velella-sh/lateen") {
+          assert.equal(step.with.ref, name === "release" ? "v${{ env.LATEEN_VERSION }}" : "main");
+        }
         if (step.uses?.startsWith("actions/setup-node@") && step.with?.["registry-url"] === undefined) {
           assert.equal(step.with?.cache, "npm", name);
         }
