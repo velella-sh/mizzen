@@ -1,0 +1,9 @@
+main:
+  - title: Guide
+    children:
+      - title: Install
+        url: /v2/guide/install/
+      - title: Upgrade
+        url: /v2/guide/upgrade/
+      - title: Deploy
+        url: /v2/guide/deploy/

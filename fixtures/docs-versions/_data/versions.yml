@@ -1,0 +1,3 @@
+# The version dispositions. See docs/docs-versions.md.
+default: v2
+old: [v1]
