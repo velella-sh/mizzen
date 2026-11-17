@@ -8,7 +8,10 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
+import type { ChangeEvent } from "../../contracts/index.ts";
 import { canonicalJson, sha256 } from "../lock.ts";
+
+export type { ChangeEvent };
 
 const Ajv2020 = createRequire(import.meta.url)("ajv/dist/2020.js") as typeof Ajv2020Class;
 const validateEvent = new Ajv2020({ strict: true, allErrors: true }).compile(
@@ -18,21 +21,6 @@ const validateEvent = new Ajv2020({ strict: true, allErrors: true }).compile(
 /** Where a collection's history lives, relative to the site root. */
 export function historyPath(collection: string): string {
   return `data-changes/${collection}.jsonl`;
-}
-
-/** One line of the history file. */
-export interface ChangeEvent {
-  readonly id: string;
-  readonly type: "added" | "removed" | "changed" | "renamed" | "imported";
-  readonly record: string;
-  readonly field?: string;
-  readonly old?: unknown;
-  readonly new?: unknown;
-  readonly from?: string;
-  readonly fields?: Readonly<Record<string, unknown>>;
-  readonly count?: number;
-  readonly ref?: string;
-  readonly date: string;
 }
 
 /** The stable id of an event: 16 hex characters of the SHA-256 of what makes it the same event on a repeated run. */
@@ -60,6 +48,8 @@ export function eventsText(events: readonly ChangeEvent[]): string {
 /** What {@link parseHistory} read. */
 export interface ParsedHistory {
   readonly events: readonly ChangeEvent[];
+  /** The 1-based line number of each event, in the same order as {@link events}. */
+  readonly lines: readonly number[];
   /** One message per bad line, with its 1-based line number. */
   readonly problems: readonly string[];
 }
@@ -67,11 +57,12 @@ export interface ParsedHistory {
 /** Reads a history file's text; a line that is not valid JSON, fails the schema, or repeats an id is a problem. */
 export function parseHistory(text: string): ParsedHistory {
   const events: ChangeEvent[] = [];
+  const lines: number[] = [];
   const problems: string[] = [];
   const seen = new Set<string>();
-  const lines = text.split("\n");
-  lines.forEach((line, index) => {
-    if (line === "" ) return;
+  const rows = text.split("\n");
+  rows.forEach((line, index) => {
+    if (line === "") return;
     const at = index + 1;
     let value: unknown;
     try {
@@ -92,6 +83,7 @@ export function parseHistory(text: string): ParsedHistory {
     }
     seen.add(event.id);
     events.push(event);
+    lines.push(at);
   });
-  return { events, problems };
+  return { events, lines, problems };
 }

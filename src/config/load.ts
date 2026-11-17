@@ -628,6 +628,7 @@ function collectionChangelogFrom(value: unknown): CollectionChangelogConfig | un
     ...(ignore === undefined ? {} : { ignore }),
     ...(Object.keys(labels).length === 0 ? {} : { labels }),
     ...(typeof threshold === "number" && Number.isSafeInteger(threshold) && threshold >= 1 ? { importThreshold: threshold } : {}),
+    ...(typeof value.pages === "boolean" ? { pages: value.pages } : {}),
   };
 }
 

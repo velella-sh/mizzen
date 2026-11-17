@@ -244,17 +244,20 @@ limit and the key, never a silently truncated file.
   page uses the layout named in its front matter, else the layout `list`. Both are layout names, not
   page kinds: the page itself stays a `doc` page.
 - `LayoutProps.record` on a record page: the collection's name, the record's id, its URL, its
-  fields as data, and on the main page the URL of each named view.
+  fields as data, and on the main page the URL of each named view. A template that shows `:::changes` also
+  gets the record's events as `record.changes`, newest first.
 - `LayoutProps.list` on a list page: the records selected for that page, the groups, and the page's
   number, total, and previous and next URLs. A group of an expanded list also carries the URL of its own
   page and its count, which is how the index page links to each value.
 - `Site.collections` on every page: each collection's records with their ids and positions. A collection read
-  from an `npm:` source also carries `package.name` and `package.version`.
+  from an `npm:` source also carries `package.name` and `package.version`. A collection with a history file also
+  has `<name>.changes`, marked `readonly: true`, whose records are the events of that history.
 - A record's `keyPositions`: where each field's key sits, so a rename can point at the key and never at the value — the
   YAML or JSON key, or the CSV header cell, which every row shares.
 - A record's `normalizedDates`: each field the config marks under `dates`, written `YYYY-MM-DD` as it is in the
   source, or as a UTC ISO 8601 instant when the source holds one. The field itself keeps the value as written.
-- `Page.record` on a record page: the collection name, the record id, and the record's position.
+- `Page.record` on a record page: the collection name, the record id, and the record's position. When the
+  template shows `:::changes`, it also carries the record's events as `changes`, newest first.
 - The ordinary contract, unchanged: navigation, pager, head, islands, and the site model.
 
 The theme does not receive HTML built from field values, and it does not receive the template's

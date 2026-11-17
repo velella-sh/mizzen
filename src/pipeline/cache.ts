@@ -3,7 +3,8 @@
  * when every input that shaped it is unchanged.
  *
  * The key is one SHA-256 of the site's config file and its resolved config values, every discovered source file (pages,
- * assets, app pages, and `_data`), the navigation file, every file of the theme, every file of the outputs folder, the
+ * assets, app pages, and `_data`), each collection's history file, the navigation file, every file of the theme, every
+ * file of the outputs folder, the
  * `defaultLayout` and `themeFiles` options, the engine's version, the runtime's version, and {@link CACHE_FORMAT}.
  * Paths and bytes count; timestamps do not. Config and navigation are part of the same hash as the pages, so changing
  * either misses the cache for every page.
@@ -40,6 +41,7 @@ import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
 import { URLS_LOCK_FILE } from "../data/urls-lock.ts";
 import { NETWORK_LOCK_FILE } from "../network/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
+import { historyPath } from "../data/changes/format.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
 export const CACHE_FORMAT = 2;
@@ -415,7 +417,8 @@ interface KeyInput {
 
 /**
  * The files a collection contributes to a cache key: its source — a local file, an installed package's file and version,
- * or the stored bytes of a pinned URL — and its schema file, which decides which records reach a page. A package source
+ * or the stored bytes of a pinned URL — its schema file, which decides which records reach a page, and its history file,
+ * `data-changes/<name>.jsonl`, whose events are read as the `<name>.changes` collection. A package source
  * comes back as real paths the resolver proved are inside the package folder, never as a path built with `join`, so a
  * link cannot make the key read outside it. A site with no collections contributes nothing, so its key stays exactly
  * what 0.2.0 produced. Both lock files are inputs whenever collections exist: `mizzen.lock.json` decides which bytes a
@@ -451,6 +454,8 @@ async function collectionInputs(
       if (rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) continue;
       inputs.push({ label: `collection/${name}/source`, path });
     }
+    // A history file is read as the `<name>.changes` collection, so its events shape pages even when no record source does.
+    inputs.push({ label: `collection/${name}/history`, path: join(options.root, historyPath(name)) });
     const schema = options.config.collections[name]!.schema;
     if (schema !== undefined) {
       const path = resolve(options.root, schema);

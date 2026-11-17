@@ -29,10 +29,14 @@ export interface RecordScope {
   readonly recordFields: Readonly<Record<string, unknown>>;
   /** The current block's fields: the record's, or one item of `each` or `records`. */
   readonly fields: Readonly<Record<string, unknown>>;
+  /** The record's history, when a `:::changes` block should repeat over it; unset elsewhere. */
+  readonly changes?: readonly Readonly<Record<string, unknown>>[];
   /** Collections by name, for `:::records`. */
   readonly collections: Readonly<Record<string, Collection>>;
   /** Fields the collection's schema declares, when it has one. */
   readonly schemaFields?: ReadonlySet<string>;
+  /** Fields a block provides beyond the collection's schema, such as the keys of a history event. */
+  readonly extraFields?: ReadonlySet<string>;
   /** Fields the config marks as Markdown. */
   readonly markdownFields: ReadonlySet<string>;
   /** The page's language. */
@@ -94,6 +98,7 @@ export function resolveField(scope: RecordScope, path: string): FoundField {
 export function declaredField(scope: RecordScope, path: string): boolean {
   // `id` is the record's identity and is always readable, even when the schema does not list it as a property.
   if (topField(path) === "id") return true;
+  if (scope.extraFields?.has(topField(path)) === true) return true;
   return scope.schemaFields === undefined || scope.schemaFields.has(topField(path));
 }
 
@@ -295,5 +300,6 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
     fields,
     links,
     ...(record.views === undefined ? {} : { views: record.views }),
+    ...(record.changes === undefined ? {} : { changes: record.changes }),
   };
 }

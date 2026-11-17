@@ -796,7 +796,8 @@
                 "imported": { "type": "string", "minLength": 1, "description": "The summary template of a `imported` event." }
               }
             },
-            "importThreshold": { "type": "integer", "minimum": 1, "description": "A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit." }
+            "importThreshold": { "type": "integer", "minimum": 1, "description": "A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit." },
+            "pages": { "type": "boolean", "description": "Build one list page per snapshot date and a newest-events page, and write the Atom feed. Default false." }
           }
         },
         "raw": {

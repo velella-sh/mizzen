@@ -1,3 +1,31 @@
+import type { ChangelogEventType } from "./config.ts";
+
+/** One line of a collection's history, `data-changes/<collection>.jsonl`, as a record of its `<collection>.changes`. */
+export interface ChangeEvent {
+  /** The stable event id: 16 lowercase hex characters of the SHA-256 of what makes the event unique. */
+  readonly id: string;
+  /** What happened to the record. */
+  readonly type: ChangelogEventType;
+  /** The record's id; for `imported`, the collection's name. */
+  readonly record: string;
+  /** The changed field, for `changed`. */
+  readonly field?: string;
+  /** The earlier value, for `changed`; absent when the field did not exist. */
+  readonly old?: unknown;
+  /** The current value, for `changed`; absent when the field was removed. */
+  readonly new?: unknown;
+  /** The earlier id, for `renamed`. */
+  readonly from?: string;
+  /** The tracked fields' values, for `added`. */
+  readonly fields?: Readonly<Record<string, unknown>>;
+  /** How many records were loaded, for `imported`. */
+  readonly count?: number;
+  /** The snapshot ref the import summarizes, for `imported`. */
+  readonly ref?: string;
+  /** The collection snapshot's `capturedAt`, never the build clock. */
+  readonly date: string;
+}
+
 /** Where a record, or one of its fields, sits in a source: 1-based and inclusive, counted in code points. */
 export interface RecordPos {
   /** Source path relative to the site root. */
@@ -72,6 +100,8 @@ export interface Collection {
   readonly package?: { readonly name: string; readonly version: string };
   /** Where the lock says the data was recorded from; absent when the lock holds none. */
   readonly snapshot?: CollectionSnapshot;
+  /** `true` for a derived, read-only collection such as `<name>.changes`, which no template or page is built from. */
+  readonly readonly?: boolean;
 }
 
 /** The record a page was built from, as the site model carries it. */
@@ -94,6 +124,8 @@ export interface PageRecord {
   readonly views?: Readonly<Record<string, string>>;
   /** Earlier URLs of this record page, each of which redirects to it; present when `urls.lock.json` holds one or the record names an alias. */
   readonly previousUrls?: readonly string[];
+  /** The record's history events, newest first; present only when the template shows them with `:::changes`. */
+  readonly changes?: readonly ChangeEvent[];
 }
 
 /** A record as a layout receives it: its identity, its URL, and the fields the page asked for. */
@@ -117,6 +149,8 @@ export interface RecordProps {
   readonly calendar?: string;
   /** The calendars this record has events in, in config order; absent when it has none. */
   readonly calendars?: readonly CalendarLink[];
+  /** The record's history events, newest first; absent when the page's template does not show them. */
+  readonly changes?: readonly ChangeEvent[];
 }
 
 /** One calendar file a record page belongs to, for a subscribe link. */
