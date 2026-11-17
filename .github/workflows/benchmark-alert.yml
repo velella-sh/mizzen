@@ -1,0 +1,35 @@
+name: benchmark alert
+
+on:
+  workflow_run:
+    workflows: [data benchmark]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  notify:
+    if: >-
+      github.event.workflow_run.event == 'schedule' &&
+      github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      # Do not check out or execute code from the triggering run.
+      - name: Open or update the benchmark failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          TITLE: "Scheduled data benchmark is failing"
+        run: |
+          set -euo pipefail
+          issue="$(gh issue list --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')"
+          body="The scheduled data benchmark failed or did not complete successfully. Investigate before the next release: $RUN_URL"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh issue create --title "$TITLE" --body "$body"
+          fi

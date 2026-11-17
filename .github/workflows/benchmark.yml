@@ -1,0 +1,55 @@
+name: data benchmark
+
+on:
+  schedule:
+    - cron: "23 2 * * *"
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Exact release ref to benchmark"
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          path: mizzen
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: velella-sh/lateen
+          ref: main
+          path: lateen
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            mizzen/package-lock.json
+            lateen/package-lock.json
+      - name: Install both repositories
+        run: |
+          set -euo pipefail
+          (cd mizzen && npm ci --no-audit --no-fund)
+          (cd lateen && npm ci --no-audit --no-fund && npm install --no-audit --no-fund --no-save ../mizzen)
+      - name: Run the benchmark against the budgets
+        run: node scripts/bench-data.ts --check bench/budget.json > bench-data.json
+        working-directory: mizzen
+      - name: Keep the measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bench-data
+          path: mizzen/bench-data.json
+          if-no-files-found: ignore

@@ -53,11 +53,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
+          ref: main
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            mizzen/package-lock.json
+            lateen/package-lock.json
       - name: Check the tag and choose the dist-tag
         id: meta
         working-directory: mizzen
@@ -95,9 +100,9 @@ jobs:
           set -euo pipefail
           (cd mizzen && npm ci --no-audit --no-fund && npm run build)
           (cd lateen && npm ci --no-audit --no-fund && npm install --no-audit --no-fund --no-save ../mizzen)
-      - name: Test
+      - name: Test with the coverage gate
         if: steps.meta.outputs.published != 'true'
-        run: npm test
+        run: npm run test:coverage
         working-directory: mizzen
       - name: Type check
         if: steps.meta.outputs.published != 'true'
@@ -123,8 +128,17 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  publish:
+  performance:
     needs: verify
+    if: needs.verify.outputs.published != 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/benchmark.yml
+    with:
+      ref: refs/tags/${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+
+  publish:
+    needs: [verify, performance]
     if: needs.verify.outputs.published != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10

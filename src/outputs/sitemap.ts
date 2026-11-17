@@ -182,7 +182,11 @@ function sitemapFiles(entries: readonly Entry[], origin: string, base: string, l
   }
 
   const groups = new Map<string, Entry[]>();
-  for (const entry of entries) groups.set(entry.group, [...(groups.get(entry.group) ?? []), entry]);
+  for (const entry of entries) {
+    const group = groups.get(entry.group);
+    if (group === undefined) groups.set(entry.group, [entry]);
+    else group.push(entry);
+  }
 
   const used = new Set<string>(["sitemap.xml"]);
   const files: { path: string; entries: Entry[] }[] = [];
@@ -255,8 +259,9 @@ export async function writeSitemap(site: Site, ctx: OutputContext, limits: Sitem
   const origin = originOf(site, ctx);
   if (origin === undefined) return [];
 
+  const appPages = { pages: site.pages.filter((page) => page.kind === "app") };
   const pages = site.pages
-    .filter((p) => p.kind === "doc" && p.frontMatter.sitemap !== false && !isNoindex(site, p) && !isAppPage(p.url, { pages: site.pages }))
+    .filter((p) => p.kind === "doc" && p.frontMatter.sitemap !== false && !isNoindex(site, p) && !isAppPage(p.url, appPages))
     .sort((a, b) => byCodePoint(a.url, b.url));
 
   const groups = languageGroups(site);
