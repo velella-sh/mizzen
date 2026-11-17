@@ -3,6 +3,7 @@ import type { Heading, Nodes, Root } from "mdast";
 import rehypeStringify from "rehype-stringify";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
+import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { formatSpan, spanFromPosition } from "../source/spans.ts";
 
 /**
@@ -58,15 +59,16 @@ function visit(node: Nodes, visitFn: (n: Nodes) => void): void {
 }
 
 /** Sets `data-src` on each sourced block, read by remark-rehype through `data.hProperties`. */
-function stampSources(tree: Root, sourcePath: string): void {
+function stampSources(tree: Root, sourcePath: string, spans: readonly IncludeSpan[]): void {
   visit(tree, (node) => {
     if (!SOURCED.has(node.type) || !node.position) return;
     const data = (node.data ??= {}) as { hProperties?: Record<string, unknown> };
     // A block a data field placed already names the data file; the page's own source must not overwrite it.
     if (typeof data.hProperties?.["data-src"] === "string") return;
+    const span = spans.length === 0 ? undefined : sourceSpanOf(spans, node.position.start, node.position.end);
     data.hProperties = {
       ...data.hProperties,
-      "data-src": formatSpan(spanFromPosition(sourcePath, node.position)),
+      "data-src": formatSpan(span ?? spanFromPosition(sourcePath, node.position)),
     };
   });
 }
@@ -117,12 +119,13 @@ function collectHeadings(tree: Root): PageHeading[] {
  * Converts a parsed page to HTML and collects its headings.
  *
  * `sourcePath` is the page's source file relative to the site (for example `guide/install.md`);
- * it is written into every `data-src`. The input tree is not modified.
+ * it is written into every `data-src` that `spans` cannot attribute to an included file. The input tree is not
+ * modified.
  */
-export async function markdownToHtml(tree: Root, sourcePath: string): Promise<PageHtml> {
+export async function markdownToHtml(tree: Root, sourcePath: string, spans: readonly IncludeSpan[] = []): Promise<PageHtml> {
   const headings = collectHeadings(tree);
   const stamped = structuredClone(tree);
-  stampSources(stamped, sourcePath);
+  stampSources(stamped, sourcePath, spans);
   const hast = (await processor.run(stamped)) as HastRoot;
   moveCodeSource(hast);
   return { html: processor.stringify(hast), headings };
