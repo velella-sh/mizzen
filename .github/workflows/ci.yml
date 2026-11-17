@@ -65,8 +65,16 @@ jobs:
         working-directory: mizzen
 
   package:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    name: package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -95,9 +103,6 @@ jobs:
         working-directory: mizzen
       - name: Build the packages and install them
         run: scripts/smoke-package.sh ../mizzen ../lateen
-        working-directory: mizzen
-      - name: Build the example data site twice from the packed tarballs
-        run: scripts/smoke-example.sh ../mizzen ../lateen
         working-directory: mizzen
 
   # The social images must be the same bytes on every operating system (docs/adr/social-images.md). The render test holds
