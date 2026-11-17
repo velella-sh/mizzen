@@ -105,6 +105,8 @@ test("valid configs pass", () => {
     { calendars: { eol: { collection: "runtimes", where: { lts: true }, events: [{ name: "eol", field: "eol", end: "extendedEnd", title: "{name} ends" }], reminders: ["30d", "7d"], groupBy: "vendor", limit: 20 } } },
     { feeds: { posts: { collection: "posts", date: "published" } } },
     { feeds: { posts: { collection: "posts", date: "published", where: { status: "stable" }, limit: 10, title: "Posts", formats: ["atom", "rss", "json"], idField: "version", fields: ["version"] } } },
+    { feeds: { ending: { collection: "posts", date: "published", window: { days: 30 } } } },
+    { feeds: { today: { collection: "posts", date: "published", window: { days: 0 } } } },
     {
       collections: {
         components: {
@@ -174,6 +176,9 @@ test("invalid configs fail", () => {
     ["a feed with an unknown format", { feeds: { posts: { collection: "posts", date: "published", formats: ["xml"] } } }],
     ["a feed with a zero limit", { feeds: { posts: { collection: "posts", date: "published", limit: 0 } } }],
     ["a feed name with a capital", { feeds: { Posts: { collection: "posts", date: "published" } } }],
+    ["a window without days", { feeds: { posts: { collection: "posts", date: "published", window: {} } } }],
+    ["a window with a negative day count", { feeds: { posts: { collection: "posts", date: "published", window: { days: -1 } } } }],
+    ["a window with an unknown key", { feeds: { posts: { collection: "posts", date: "published", window: { days: 7, from: "2026-01-01" } } } }],
     ["a permalink without a leading slash", { collections: { c: { source: "_data/c.yml", permalink: "c/{id}/" } } }],
     ["repository without a url", { repository: { branch: "main" } }],
     ["repository with an unknown key", { repository: { url: "https://github.com/e/e", source_dir: "docs" } }],
