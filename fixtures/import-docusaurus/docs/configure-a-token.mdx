@@ -1,0 +1,42 @@
+---
+title: Configure a token
+sidebar_position: 3
+description: Store a Beacon token once and read it from every shell.
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import Card from '@site/src/components/Card';
+
+:::note
+A token is read when a command starts. Restart a running `beacon dev` after changing one.
+:::
+
+## Set the token
+
+<Tabs groupId="shell">
+  <TabItem value="bash" label="Bash" default>
+    Add the token to your shell profile, then start a new shell:
+
+    1. `export BEACON_TOKEN=<token>`
+    2. `beacon login`
+  </TabItem>
+  <TabItem value="powershell" label="PowerShell">
+    Add the token to your profile, then start a new shell:
+
+    ```powershell
+    $env:BEACON_TOKEN = "<token>"
+    beacon login
+    ```
+  </TabItem>
+</Tabs>
+
+:::tip[Write it once]
+A token in the shell profile is not in your command history.
+:::
+
+<Card title="Rotate a token">
+  Run `beacon token rotate` before the expiry date. The old token stops working at midnight UTC.
+</Card>
+
+Every shell reads `BEACON_TOKEN`; see [Configuration](configuration.md).
