@@ -25,6 +25,20 @@ npm test
 
 A change to behavior needs a test beside the others in `test/`. A change to the docs site is checked with `node bin/mizzen.ts check site` and must report 0 errors.
 
+### CI
+
+PRs run type checking and the theme boundary, all tests in two shards (up to four test files at once per runner), package smoke tests, the docs site check, and
+social-image checks on Linux, macOS, and Windows in parallel. Nothing is selected by changed paths. Configure branch
+protection to require **`ci-required`**, which fails if any correctness job fails, is cancelled, or is skipped.
+Superseded runs are cancelled only on the same PR; each `main` commit keeps its own checks and 95% coverage gate.
+All theme-dependent jobs check out Lateen's latest `main`; a failure can therefore come from either repository.
+
+The full data benchmark runs nightly at 02:23 UTC, manually from the **data benchmark** workflow (select a branch to
+check before merging a performance-sensitive PR), and against the exact release tag before publishing. It retains all
+three repetitions and the existing budgets; build outputs are not cached between runs. A failed nightly run opens or
+updates an issue through the **benchmark alert** workflow; keep GitHub Issues enabled and subscribe to that issue.
+Only npm downloads are cached; installations still use `npm ci`.
+
 ## Ground rules
 
 - Use only erasable TypeScript syntax (no `enum`, `namespace`, or parameter properties) and import local files with their `.ts` extension.
@@ -34,7 +48,7 @@ A change to behavior needs a test beside the others in `test/`. A change to the 
 
 ## Releasing
 
-Pushing a tag `v<version>` or publishing a GitHub Release publishes that version to npm. The [`release`](.github/workflows/release.yml) workflow does the rest: it checks that the tag is `v<package.json version>` and is on `main`, runs the tests, type check, and package smoke test, packs one tarball, and publishes that exact tarball with provenance. A version with a suffix (`0.4.0-rc.1`) goes to the `next` dist-tag; any other goes to `latest`.
+Pushing a tag `v<version>` or publishing a GitHub Release publishes that version to npm. The [`release`](.github/workflows/release.yml) workflow does the rest: it checks that the tag is `v<package.json version>` and is on `main`, runs the tests with the 95% coverage gate, type check, and package smoke test, packs one tarball, checks the full data benchmark, and publishes that exact tarball with provenance. A version with a suffix (`0.4.0-rc.1`) goes to the `next` dist-tag; any other goes to `latest`.
 
 To release: bump `version` in `package.json` (and `src/index.ts`), move the changelog fragments, merge to `main`, then push the tag or create a release on that commit. If a publish fails, run the `release` workflow by hand with the same tag; a version already on npm is skipped.
 

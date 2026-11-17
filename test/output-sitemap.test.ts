@@ -265,6 +265,7 @@ test("the sitemap is exactly what the protocol describes for a site with a base 
       page("/evergreen/", "doc", { updated: "2026-11-01" }),
       page("/evergreen/hidden/", "doc", { sitemap: false }),
       page("/evergreen/dashboard/", "app"),
+      page("/evergreen/dashboard/nested/", "doc"),
       page("/evergreen/logo.svg", "asset"),
     ],
     "https://example.github.io/",

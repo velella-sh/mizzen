@@ -121,6 +121,10 @@ test("more than 50,000 URLs write an index at sitemap.xml and files of at most 5
   const count = (path: string): number => (files.find((f) => f.path === path)!.contents.toString().match(/<url>/g) ?? []).length;
   assert.equal(count("sitemap-items.xml"), 50_000);
   assert.equal(count("sitemap-items-part-2.xml"), 1);
+  const urls = files.filter((file) => file.path !== "sitemap.xml")
+    .flatMap((file) => [...file.contents.toString().matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]!))
+    .sort();
+  assert.deepEqual(urls, pages.map((page) => `https://example.com${page.url}`));
 });
 
 test("robots.txt names sitemap.xml, which is the index when the sitemap is split", async () => {

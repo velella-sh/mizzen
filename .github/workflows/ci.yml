@@ -1,6 +1,6 @@
 name: ci
 
-# Tests, type check, and a build of the packages as they install. Mizzen and Lateen test against each other, so both are checked out side by side.
+# Keep correctness checks independent of coverage and the scheduled data benchmark.
 on:
   push:
     branches: [main]
@@ -10,10 +10,33 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run typecheck
+      - run: node --test test/boundary.test.ts
+
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -22,21 +45,53 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
+          ref: main
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            mizzen/package-lock.json
+            lateen/package-lock.json
       - name: Install both repositories
         run: |
           set -euo pipefail
           (cd mizzen && npm ci --no-audit --no-fund && npm run build)
           (cd lateen && npm ci --no-audit --no-fund && npm install --no-audit --no-fund --no-save ../mizzen)
       - name: Test
-        run: npm test
+        run: node --test --test-concurrency=4 --test-shard=${{ matrix.shard }}/2 "test/**/*.test.ts"
         working-directory: mizzen
-      - name: Type check
-        run: npm run typecheck
+
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: mizzen
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: velella-sh/lateen
+          ref: main
+          path: lateen
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            mizzen/package-lock.json
+            lateen/package-lock.json
+      - name: Install both repositories
+        run: |
+          set -euo pipefail
+          (cd mizzen && npm ci --no-audit --no-fund && npm run build)
+          (cd lateen && npm ci --no-audit --no-fund && npm install --no-audit --no-fund --no-save ../mizzen)
+      - name: Check the docs site
+        run: node bin/mizzen.ts check site
         working-directory: mizzen
       - name: Build the packages and install them
         run: scripts/smoke-package.sh ../mizzen ../lateen
@@ -44,41 +99,6 @@ jobs:
       - name: Build the example data site twice from the packed tarballs
         run: scripts/smoke-example.sh ../mizzen ../lateen
         working-directory: mizzen
-
-  # Builds a generated data site of 1,000 and 10,000 records and fails when a build is slower than, or uses more memory
-  # than, bench/budget.json allows. The measurements are printed next to their budgets in the job summary.
-  bench:
-    name: data benchmark
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          path: mizzen
-          persist-credentials: false
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: velella-sh/lateen
-          path: lateen
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: "24"
-      - name: Install both repositories
-        run: |
-          set -euo pipefail
-          (cd mizzen && npm ci --no-audit --no-fund)
-          (cd lateen && npm ci --no-audit --no-fund && npm install --no-audit --no-fund --no-save ../mizzen)
-      - name: Run the benchmark against the budgets
-        run: node scripts/bench-data.ts --check bench/budget.json > bench-data.json
-        working-directory: mizzen
-      - name: Keep the measurements
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: bench-data
-          path: mizzen/bench-data.json
-          if-no-files-found: ignore
 
   # The social images must be the same bytes on every operating system (docs/adr/social-images.md). The render test holds
   # recorded hashes, so running it on all three is the proof. It needs neither Lateen nor a build.
@@ -97,9 +117,22 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Render the fixture images and compare their hashes
         run: node --test test/social-render.test.ts test/social-fonts.test.ts test/social-text.test.ts
+
+  ci-required:
+    if: always()
+    needs: [static, test, package, social-images]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Require every correctness check to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          node -e 'if (!Object.values(JSON.parse(process.env.RESULTS)).every(job => job.result === "success")) process.exit(1)'
 
   # Measures line coverage and publishes it for the README badge. It runs on main only and holds the
   # only write permission in this workflow: it can push the `badges` branch and nothing else. The badge
@@ -119,11 +152,16 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
+          ref: main
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            mizzen/package-lock.json
+            lateen/package-lock.json
       - name: Install both repositories
         run: |
           set -euo pipefail
