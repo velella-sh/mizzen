@@ -602,8 +602,31 @@ test("changing a collection schema misses the cache, and the warm build matches 
   }
 });
 
-test("a record URL lock is a cache input, so creating, changing, and corrupting it all miss", async () => {
+test("a collection history file is part of the key", async () => {
   const root = tree({
+    "mizzen.yml": "title: Data\ncollections:\n  items:\n    source: data/items.yml\n",
+    "data/items.yml": "- id: one\n",
+    "data-changes/items.jsonl": '{"id":"a","type":"add","record":"one","date":"2026-01-01"}\n',
+  });
+  const theme = tree({ "src/index.ts": 'export const theme = { name: "cache" };\n' });
+  try {
+    const options: CacheKeyOptions = {
+      root,
+      sourceDir: root,
+      config: loadConfig(root).config,
+      themeRoot: theme,
+      outputsDir: theme,
+      defaultLayout: "doc",
+    };
+    const base = await cacheKey(options);
+    writeFileSync(join(root, "data-changes/items.jsonl"), '{"id":"a","type":"add","record":"one","date":"2026-01-02"}\n');
+    assert.notEqual(await cacheKey(options), base, "a history event is part of the key");
+  } finally {
+    clean(root, theme);
+  }
+});
+
+test("a record URL lock is a cache input, so creating, changing, and corrupting it all miss", async () => {  const root = tree({
     "mizzen.yml": "title: Data\ncollections:\n  pages:\n    source: _data/pages.yml\n",
     "_data/pages.yml": "- id: a\n  name: Alpha\n",
     "_data/navigation.yml": "main:\n  - title: Home\n    url: /\n",

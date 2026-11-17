@@ -179,6 +179,8 @@ export interface CollectionChangelogConfig {
   readonly labels?: Readonly<Partial<Record<ChangelogEventType, string>>>;
   /** A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit. */
   readonly importThreshold?: number;
+  /** Build one list page per snapshot date and a newest-events page, and write the Atom feed. Default `false`. */
+  readonly pages?: boolean;
 }
 
 /** What a record's disappearance from its collection does. */

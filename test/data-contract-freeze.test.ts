@@ -49,6 +49,19 @@ const FROZEN: Shape = {
     "keyPositions": "?Readonly<Record<string, RecordPos>>",
     "normalizedDates": "?Readonly<Record<string, string>>",
   },
+  ChangeEvent: {
+    "id": "string",
+    "type": "ChangelogEventType",
+    "record": "string",
+    "field": "?string",
+    "old": "?unknown",
+    "new": "?unknown",
+    "from": "?string",
+    "fields": "?Readonly<Record<string, unknown>>",
+    "count": "?number",
+    "ref": "?string",
+    "date": "string",
+  },
   DataStats: {
     "collections": "number",
     "loaded": "number",
@@ -64,6 +77,7 @@ const FROZEN: Shape = {
     "records": "readonly DataRecord[]",
     "package": "?{ readonly name: string; readonly version: string }",
     "snapshot": "?CollectionSnapshot",
+    "readonly": "?boolean",
   },
   CollectionSnapshot: {
     "source": "string",
@@ -82,6 +96,7 @@ const FROZEN: Shape = {
     "view": "?string",
     "views": "?Readonly<Record<string, string>>",
     "previousUrls": "?readonly string[]",
+    "changes": "?readonly ChangeEvent[]",
   },
   RecordProps: {
     "collection": "string",
@@ -92,6 +107,7 @@ const FROZEN: Shape = {
     "views": "?Readonly<Record<string, string>>",
     "calendar": "?string",
     "calendars": "?readonly CalendarLink[]",
+    "changes": "?readonly ChangeEvent[]",
   },
   CalendarLink: {
     "name": "string",
