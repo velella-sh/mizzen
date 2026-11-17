@@ -8,12 +8,15 @@ Read `README.md` and `CONTRIBUTING.md` first. Deeper detail is in `docs/`.
 
 Node 24 or later. Development has no build step; Node runs the TypeScript source directly.
 
-Lateen must be checked out beside this repository as `../lateen`, because many tests build `fixtures/` with the theme.
+The test suite reads a Lateen checkout at `../lateen`; CI checks one out there. Clone `velella-sh/lateen` beside this repository, then install both:
 
 ```bash
+git clone https://github.com/velella-sh/lateen.git ../lateen
 npm ci
 (cd ../lateen && npm ci)
 ```
+
+The engine never imports the theme; `test/boundary.test.ts` enforces that. The sibling checkout is for tests and fixtures only.
 
 ## Commands
 
