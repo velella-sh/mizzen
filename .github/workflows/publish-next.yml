@@ -66,6 +66,8 @@ jobs:
           ')"
           version="$NEXT_BASE-next.$n"
           npm version "$version" --no-git-tag-version --allow-same-version >/dev/null
+          # The public version is a literal export, and the tests require it to match package.json.
+          node -e 'const fs = require("node:fs"); const file = "src/index.ts"; const source = fs.readFileSync(file, "utf8"); const stamped = source.replace(/^export const version = "[^"]+";$/m, `export const version = "${process.argv[1]}";`); if (stamped === source) throw new Error("src/index.ts has no version export to stamp"); fs.writeFileSync(file, stamped);' "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Publishing $name@$version to the \`next\` dist-tag" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Install both repositories
