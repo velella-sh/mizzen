@@ -90,6 +90,14 @@ const FROZEN: Shape = {
     "fields": "Readonly<Record<string, unknown>>",
     "links": "Readonly<Record<string, string>>",
     "views": "?Readonly<Record<string, string>>",
+    "calendar": "?string",
+    "calendars": "?readonly CalendarLink[]",
+  },
+  CalendarLink: {
+    "name": "string",
+    "title": "string",
+    "url": "string",
+    "webcal": "string",
   },
   ListGroup: {
     "key": "string",

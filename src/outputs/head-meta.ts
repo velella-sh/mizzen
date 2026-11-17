@@ -3,6 +3,7 @@ import type { Trail } from "../contracts/nav.ts";
 import type { Head, LinkTag, MetaTag } from "../contracts/render.ts";
 import { analyticsScripts } from "../analytics/script.ts";
 import { verificationMeta } from "./verification.ts";
+import { calendarHeadLinks } from "../calendar/links.ts";
 import { feedLinks } from "../feeds/links.ts";
 import { jsonLdFromMapping } from "../data/json-ld.ts";
 import { isLaterListPage, isNoindex, mainRecordOf, seoConfigOf } from "../data/seo.ts";
@@ -137,6 +138,7 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
 
   const links: LinkTag[] = canonical === undefined ? [] : [{ rel: "canonical", href: canonical }];
   links.push(...feedLinks(site, page));
+  links.push(...calendarHeadLinks(site, page));
 
   const structured: Record<string, unknown> = {
     "@context": "https://schema.org",
