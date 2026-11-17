@@ -1,7 +1,6 @@
 # Claim evidence
 
-Status: accepted for 0.2.3 (`claim-evidence`, #527). This note fixes the reference contract; #529 to #532
-implement it.
+Status: implemented for 0.2.3 (`claim-evidence`, #527, #529 to #532). This note fixes the reference contract.
 
 A record page states a date, a number, or a line of text that came from somewhere else. A reader needs the
 source that backs it, and an agent reading the page JSON needs the same source. The link between a value and
@@ -107,6 +106,11 @@ A template puts evidence beside the field it backs with `:evidence[<field>]`. Th
 per claim in list order: `title` is the link text, `url` is the target, and links are separated by `, `. It
 writes no wrapper, label, or punctuation of its own, so the surrounding words stay in the template and a field
 with no claim writes nothing. A field the record does not have is `data.unknown-field`, as with `:field`.
+
+Record pages apply the directive in `src/data/pages.ts`, through `applyEvidence` in
+`src/data/evidence/render.ts`. The claims come from `publicEvidenceOf` in `src/data/evidence/public.ts`, the
+same helper the page JSON uses, so both outputs name the same claims in the same order. The raw evidence field
+stays out of the fields a template or layout receives, so a private key cannot leak through `:field` either.
 
 The page JSON carries the claims under the record:
 

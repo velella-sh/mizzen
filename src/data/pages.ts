@@ -26,6 +26,8 @@ import { directionFromLang } from "../content/lang.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { CHANGE_FIELDS } from "./changes/collection.ts";
 import { eventsOf, recordChanges, showsChanges } from "./changes/record.ts";
+import { publicEvidenceOf, withoutEvidence } from "./evidence/public.ts";
+import { applyEvidence } from "./evidence/render.ts";
 import { applyField, type FieldResult } from "../markdown/plugins/field.ts";
 import { eachItems, ifKeeps } from "../markdown/plugins/field-blocks.ts";
 import { applySnapshot } from "../markdown/plugins/snapshot.ts";
@@ -128,6 +130,7 @@ function withRecord(scope: RecordScope, record: DataRecord): RecordScope {
     record,
     fields,
     recordFields: fields,
+    evidence: {},
     ...(record.derived === undefined ? {} : { derivedFields: new Set(Object.keys(record.derived)) }),
   };
 }
@@ -176,6 +179,15 @@ function rewriteSnapshot(node: Nodes, scope: RecordScope, build: Build): RootCon
   return result.replacement === undefined ? [] : [result.replacement as RootContent];
 }
 
+/** Applies one `:evidence[…]` to the page's public claims, which the page JSON also publishes. */
+function evidenceNode(node: Nodes, scope: RecordScope) {
+  return applyEvidence(
+    node,
+    { record: { id: scope.record.id, fields: scope.recordFields }, file: scope.file },
+    scope.evidence ?? {},
+  );
+}
+
 /** Rewrites a list of nodes, returning their replacements in order. */
 async function rewriteChildren(
   children: readonly Nodes[],
@@ -196,6 +208,11 @@ async function rewriteNode(node: Nodes, build: Build): Promise<RootContent[]> {
   }
   if (isDirective(node) && node.type === "textDirective" && node.name === "snapshot") {
     return rewriteSnapshot(node, build.scope, build);
+  }
+  if (isDirective(node) && node.type === "textDirective" && node.name === "evidence") {
+    const result = evidenceNode(node, build.scope);
+    build.diagnostics.push(...result.diagnostics);
+    return result.replacement === undefined ? [] : [result.replacement as RootContent];
   }
   if (isDirective(node) && node.type === "leafDirective" && node.name === "field") {
     const result = await rewriteField(node, build.scope, build, true);
@@ -316,6 +333,9 @@ function twinNode(node: Nodes, body: string, scope: RecordScope): string {
   }
   if (isDirective(node) && node.type === "textDirective" && node.name === "snapshot") {
     return applySnapshot(node, scope).twin;
+  }
+  if (isDirective(node) && node.type === "textDirective" && node.name === "evidence") {
+    return evidenceNode(node, scope).twin;
   }
   if (isDirective(node) && node.type === "containerDirective") {
     const children = (node as Nodes & { children: Nodes[] }).children;
@@ -503,13 +523,15 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     ): Promise<Page> => {
       const source: Template = rendering.template.localized[language.code] ?? rendering.template;
       const parsed = await parseMarkdown(source.body, source.bodyLine);
-      const pageFields = fieldsWithDerived({ fields, derived: record.derived });
+      const pageFields = fieldsWithDerived({ fields: withoutEvidence(fields, entry.evidence), derived: record.derived });
+      const evidence = publicEvidenceOf(record, entry.evidence);
       const changes = showsChanges(source.body) ? recordChanges(historyEvents, record.id, fields, entry) : [];
       const scope: RecordScope = {
         collection: name,
         record,
         recordFields: pageFields,
         fields: pageFields,
+        ...(evidence === undefined ? {} : { evidence }),
         ...(changes.length === 0
           ? {}
           : { changes: changes.map((event) => event as unknown as Readonly<Record<string, unknown>>) }),

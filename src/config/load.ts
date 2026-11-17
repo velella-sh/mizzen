@@ -38,6 +38,7 @@ import type {
   DriftConfig,
   CalendarConfig,
   CalendarEventConfig,
+  ExamplesConfig,
   FeedConfig,
   FeedFormat,
   LanguageConfig,
@@ -332,6 +333,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
 
   const repository = repositoryFrom(raw.repository);
   const search = searchFrom(raw.search);
+  const examples = examplesFrom(raw.examples);
   const analytics = analyticsFrom(raw.analytics);
   const verify = verifyFrom(raw.verify);
   const network = networkFrom(raw.network);
@@ -365,6 +367,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(repository === undefined ? {} : { repository }),
     theme,
     search,
+    ...(examples === undefined ? {} : { examples }),
     ...(analytics === undefined ? {} : { analytics }),
     ...(verify === undefined ? {} : { verify }),
     ...(network === undefined ? {} : { network }),
@@ -398,6 +401,12 @@ function analyticsFrom(value: unknown): AnalyticsConfig | undefined {
       ? value.allowedOrigins.filter((origin): origin is string => typeof origin === "string")
       : [],
   };
+}
+
+/** The examples key, keeping only a boolean `failOnFailure`; the schema check reports an invalid one. */
+function examplesFrom(value: unknown): ExamplesConfig | undefined {
+  if (!isPlainObject(value) || typeof value.failOnFailure !== "boolean") return undefined;
+  return { failOnFailure: value.failOnFailure };
 }
 
 /** The network key, kept only when it names a source and a project; the schema check reports an invalid one. */

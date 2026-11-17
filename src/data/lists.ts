@@ -31,6 +31,7 @@ import { paginateRows, type Slice } from "./paginate.ts";
 import { filterRows, parseQuery, sortRows, type Row } from "./query.ts";
 import { referenceDateOf } from "./reference-date.ts";
 import { fieldsWithDerived } from "./derived.ts";
+import { withoutEvidence } from "./evidence/public.ts";
 import { relatedProps } from "./relations/query.ts";
 
 /** How one page declares its list. */
@@ -329,7 +330,7 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
   const rows: RowRecord[] = collection.records.map((record) => {
     const localized = localizeFields(record.fields, page.lang, config.lang);
     const idFields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
-    const fields = fieldsWithDerived({ fields: idFields, derived: record.derived });
+    const fields = fieldsWithDerived({ fields: withoutEvidence(idFields, entry?.evidence), derived: record.derived });
     return {
       record,
       fields,
