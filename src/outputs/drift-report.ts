@@ -1,8 +1,9 @@
 import type { Page, Site } from "../contracts/content.ts";
-import type { Severity, SourcePos } from "../contracts/index.ts";
+import type { Diagnostic, Severity, SourcePos } from "../contracts/index.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
 import type { CodeRef } from "../drift/code-refs.ts";
 import { comparePages, driftContentOf, type ClaimComparison } from "../drift/compare.ts";
+import { compareContractClaims, type ContractCheck, type ContractState } from "../drift/contract-compare.ts";
 
 /**
  * Writes `drift.json`: every drift finding the engine knows, grouped by page URL, so the theme can show a
@@ -136,6 +137,8 @@ export interface DriftTarget {
 export interface DriftFinding {
   /** The check that found it, such as `drift.missing-file`. */
   readonly kind: string;
+  /** A contract claim's outcome: a mismatch, a removal, a move, or an unchecked claim. */
+  readonly state?: ContractState;
   /** The code reference the page makes, such as `src/app.ts:12`. */
   readonly reference: string;
   /** How serious the finding is. */
@@ -179,6 +182,17 @@ export interface DriftReportOptions {
 /** Every state an evidence entry may carry. */
 const STATES: readonly DriftState[] = ["fresh", "stale", "unknown", "unavailable"];
 
+/** Every state a contract claim may carry. */
+const CONTRACT_STATES: readonly ContractState[] = ["match", "mismatch", "missing", "moved", "unchecked"];
+
+/** The findings `compareContractClaims` owns; a path check at the same claim is superseded by one of these. */
+const CONTRACT_KINDS: ReadonlySet<string> = new Set([
+  "drift.signature-mismatch",
+  "drift.missing-symbol",
+  "drift.moved-symbol",
+  "drift.signature-unchecked",
+]);
+
 /** Compares by code point, never by locale. */
 function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -204,6 +218,11 @@ function severityOf(value: unknown): Severity {
 /** True for one of {@link STATES}. */
 function isState(value: unknown): value is DriftState {
   return typeof value === "string" && (STATES as readonly string[]).includes(value);
+}
+
+/** True for one of {@link CONTRACT_STATES}. */
+function isContractState(value: unknown): value is ContractState {
+  return typeof value === "string" && (CONTRACT_STATES as readonly string[]).includes(value);
 }
 
 /** A SHA-256 as the report writes and reads it. */
@@ -282,17 +301,20 @@ function findingOf(value: unknown): DriftFinding | undefined {
 
   const message = textOf(value.message);
   const help = textOf(value.help);
+  const state = value.state === undefined ? undefined : isContractState(value.state) ? value.state : undefined;
   const sourceValue = value.source ?? value.pos;
   const source = sourceValue === undefined ? undefined : spanOf(sourceValue);
   const target = value.target === undefined ? undefined : targetFromData(value.target);
   // An optional field the data supplied must be usable; a malformed one is a malformed finding.
   if (value.message !== undefined && message === undefined) return undefined;
   if (value.help !== undefined && help === undefined) return undefined;
+  if (value.state !== undefined && state === undefined) return undefined;
   if (sourceValue !== undefined && source === undefined) return undefined;
   if (value.target !== undefined && target === undefined) return undefined;
 
   return {
     kind,
+    ...(state === undefined ? {} : { state }),
     reference,
     severity: severityOf(value.severity),
     ...(message === undefined ? {} : { message }),
@@ -374,20 +396,80 @@ function referenceOf(ref: CodeRef): string {
 }
 
 /** The findings of one comparison, each naming the reference that earned it and its exact place. */
-function findingsOf(comparison: ClaimComparison): DriftFinding[] {
-  return comparison.findings.map(({ diagnostic, reference: ref }) => {
-    const target = targetOf(ref, comparison.identity.sources[ref.path]);
-    return {
-      kind: diagnostic.id,
-      reference: referenceOf(ref),
-      severity: diagnostic.severity,
-      message: diagnostic.message,
-      ...(diagnostic.help === undefined ? {} : { help: diagnostic.help }),
-      // A signature finding points at the inline code that states it; other findings point at the citation.
-      source: diagnostic.pos ?? ref.pos,
-      ...(target === undefined ? {} : { target }),
-    };
-  });
+function findingsOf(comparison: ClaimComparison, checks: readonly ContractCheck[] = []): DriftFinding[] {
+  const claims = new Set(checks.map((check) => spanKey(check.ref.pos)));
+  const findings: DriftFinding[] = comparison.findings
+    .filter(({ diagnostic, reference }) => {
+      if (!CONTRACT_KINDS.has(diagnostic.id)) return true;
+      return !claims.has(spanKey(diagnostic.pos ?? reference.pos));
+    })
+    .map(({ diagnostic, reference: ref }) => {
+      const target = targetOf(ref, comparison.identity.sources[ref.path]);
+      return {
+        kind: diagnostic.id,
+        reference: referenceOf(ref),
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        ...(diagnostic.help === undefined ? {} : { help: diagnostic.help }),
+        // A signature finding points at the inline code that states it; other findings point at the citation.
+        source: diagnostic.pos ?? ref.pos,
+        ...(target === undefined ? {} : { target }),
+      };
+    });
+
+  for (const check of checks) {
+    if (check.diagnostic !== undefined) findings.push(contractFinding(check, comparison));
+  }
+  return findings;
+}
+
+/** One span as a map key; a finding without a span never matches a claim. */
+function spanKey(pos: SourcePos | undefined): string {
+  if (pos === undefined) return "";
+  return `${pos.file}\u0000${pos.line}\u0000${pos.column}\u0000${pos.endLine}\u0000${pos.endColumn}`;
+}
+
+/** One contract claim's finding, with the state `compareContractClaims` judged. */
+function contractFinding(check: ContractCheck, comparison: ClaimComparison): DriftFinding {
+  const diagnostic = check.diagnostic as Diagnostic;
+  const ref = check.ref;
+  const identity = comparison.identity.sources[ref.path];
+  const lines = ref.endLine === undefined || ref.endLine === ref.line ? `${ref.line}` : `${ref.line}-${ref.endLine}`;
+  return {
+    kind: diagnostic.id,
+    state: check.state,
+    reference: `${ref.path}:${lines}`,
+    severity: diagnostic.severity,
+    message: diagnostic.message,
+    ...(diagnostic.help === undefined ? {} : { help: diagnostic.help }),
+    source: diagnostic.pos ?? ref.pos,
+    ...(identity === undefined
+      ? {}
+      : {
+          target: {
+            path: ref.path,
+            line: ref.line,
+            ...(ref.endLine === undefined ? {} : { endLine: ref.endLine }),
+            identity,
+          },
+        }),
+  };
+}
+
+/** Every contract claim's comparison, keyed by the documentation file it was made in. */
+async function contractChecksOf(
+  pages: readonly Page[],
+  root: string,
+  severity: Severity | undefined,
+): Promise<Map<string, ContractCheck[]>> {
+  const byFile = new Map<string, ContractCheck[]>();
+  const checks = await compareContractClaims(pages, { root, ...(severity === undefined ? {} : { severity }) });
+  for (const check of checks) {
+    const list = byFile.get(check.ref.file);
+    if (list === undefined) byFile.set(check.ref.file, [check]);
+    else list.push(check);
+  }
+  return byFile;
 }
 
 /** True when two source identities name the same paths with the same hashes or markers. */
@@ -526,6 +608,7 @@ export async function driftReportOf(
   const prior = evidenceFromData(data);
   const root = options.root;
   const comparisons = root === undefined ? undefined : await comparisonsOf(site.pages, root);
+  const checks = root === undefined ? undefined : await contractChecksOf(site.pages, root, site.config.drift?.severity);
 
   const byFile = new Map<string, ClaimComparison>();
   for (const comparison of comparisons ?? []) byFile.set(comparison.file, comparison);
@@ -545,7 +628,7 @@ export async function driftReportOf(
       if (comparison === undefined) {
         evidence.set(page.url, stateEvidence(root === undefined ? "unknown" : "unavailable"));
       } else {
-        candidates.set(page.url, findingsOf(comparison));
+        candidates.set(page.url, findingsOf(comparison, checks?.get(page.source.file)));
         evidence.set(page.url, freshEvidence(comparison));
       }
       continue;
@@ -562,7 +645,7 @@ export async function driftReportOf(
       evidence.set(page.url, freshEvidence(comparison));
     } else if (comparison !== undefined) {
       // The stored identity no longer matches; this run's comparison is the current evidence.
-      candidates.set(page.url, findingsOf(comparison));
+      candidates.set(page.url, findingsOf(comparison, checks?.get(page.source.file)));
       evidence.set(page.url, freshEvidence(comparison));
     } else {
       evidence.set(page.url, echoEvidence(entry, state));
@@ -597,6 +680,30 @@ export async function driftPagesOf(
   options: DriftReportOptions = {},
 ): Promise<Record<string, readonly DriftFinding[]>> {
   return (await driftReportOf(site, options)).pages;
+}
+
+/**
+ * The `drift.json` findings as diagnostics, so `mizzen doctor` gates on exactly what the report writes.
+ * Each finding keeps its id, severity, message, help, and documentation span; the sort is the report's.
+ */
+export async function driftDiagnosticsOf(
+  site: Site,
+  options: DriftReportOptions = {},
+): Promise<Diagnostic[]> {
+  const report = await driftReportOf(site, options);
+  const diagnostics: Diagnostic[] = [];
+  for (const findings of Object.values(report.pages)) {
+    for (const finding of findings) {
+      diagnostics.push({
+        id: finding.kind,
+        severity: finding.severity,
+        message: finding.message ?? `${finding.kind}: ${finding.reference}`,
+        ...(finding.help === undefined ? {} : { help: finding.help }),
+        ...(finding.source === undefined ? {} : { pos: finding.source }),
+      });
+    }
+  }
+  return diagnostics;
 }
 
 /**

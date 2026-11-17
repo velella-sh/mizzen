@@ -290,6 +290,17 @@
       },
       "description": "Stale page detection. Default: none."
     },
+    "drift": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "severity": {
+          "enum": ["info", "warning", "error"],
+          "description": "How a contract failure (a signature mismatch, a removed symbol, or a moved symbol) is reported in `drift.json` and by `mizzen doctor`. Default `warning`; an unchecked claim stays a warning."
+        }
+      },
+      "description": "How the API contract findings `drift.json` writes are reported. Default: none, and a contract failure is a warning."
+    },
     "analytics": {
       "type": "object",
       "additionalProperties": false,

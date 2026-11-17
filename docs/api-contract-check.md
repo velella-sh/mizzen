@@ -25,8 +25,9 @@ The comparison lives in `src/drift/` and runs for every page with a code referen
 - `outputs/drift-report.ts` writes `drift.json` from those findings, grouped by page URL, with coverage and
   evidence.
 
-Every drift diagnostic is currently a `warning` except `drift.symbols-syntax`, which is an `error`. No command
-fails a build on a signature change today; the configurable gate is #617.
+Every drift diagnostic is a `warning` by default, except `drift.symbols-syntax`, which is an `error`. A contract
+failure can be raised to an error with `drift.severity`, which `mizzen doctor` and `drift.json` both report; the
+configurable gate is #617.
 
 ### Baseline run
 
@@ -107,17 +108,20 @@ Every result answers the same questions without naming a language: which documen
 claim, which code path and line it targets, which symbol and (when stated) member or parameter it names, and
 whether the result is a match, a mismatch, a removal, a move, or unchecked with a reason. TypeScript is the first
 resolver; another resolver fills the same fields. `drift.json` keeps its existing `kind`, `reference`, `severity`,
-`message`, `help`, `source`, and `target` keys, and later issues add claim fields without changing the meaning of
-those keys.
+`message`, `help`, `source`, and `target` keys, and a contract finding adds `state` (`mismatch`, `missing`, `moved`,
+or `unchecked`) without changing the meaning of those keys. A reference without a claim keeps its path/line finding
+and no `state`.
 
 ## CI policy
 
-- A contract failure is an error in the API contract recipe: `drift.signature-mismatch`, `drift.missing-symbol`,
-  and `drift.moved-symbol`. `drift.symbols-syntax` is already an error. The process exits non-zero and the
-  diagnostic carries the documentation path and line, so CI points at the claim and not only at the code.
-- `drift.signature-unchecked` is a warning by default and exits zero, but it is always printed and present in
-  JSON. It is configurable like every other finding (#617); the default must not fail CI on an intentionally
-  uncovered case.
+- A contract failure is `drift.signature-mismatch`, `drift.missing-symbol`, or `drift.moved-symbol`. It is a
+  `warning` by default; a site raises it with `drift.severity: error`. `drift.symbols-syntax` is always an error.
+  The process exits non-zero and the diagnostic carries the documentation path and line, so CI points at the claim
+  and not only at the code.
+- `drift.signature-unchecked` is always a `warning` and exits zero, whatever `drift.severity` says. It is always
+  printed and present in JSON, so an intentionally uncovered case cannot fail CI by accident.
+- `mizzen doctor` adds a `drift` check, which reads the same comparison `drift.json` writes. A site that turns the
+  `drift-report` output off with `outputs` skips the check.
 - The existing `drift.missing-file`, `drift.line-out-of-range`, and `drift.outside-root` findings keep their
   current severity unless the site raises it. This epic does not widen the gate beyond the API contract.
 - The gate runs from a directory where the cited files resolve, through `MIZZEN_SITE_ROOT` or the working
@@ -125,6 +129,18 @@ those keys.
   finding only counts when the page was measured.
 - Findings remain deterministic and source-positioned; the recipe does not compare wall-clock output or a
   generated snapshot.
+
+## Recipe
+
+`recipes/api-contract-check.yml` runs `mizzen doctor --format json` on a pull request, prints the findings, and
+uploads the JSON whether the job passes or fails. It needs `drift.severity: error` in the site config to fail on a
+changed signature; unchecked claims stay visible in the same report and leave the exit code at 0.
+
+```yaml
+# mizzen.yml
+drift:
+  severity: error
+```
 
 ## Limits
 

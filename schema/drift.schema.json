@@ -64,6 +64,16 @@
           "type": "string",
           "minLength": 1
         },
+        "state": {
+          "description": "A contract claim's outcome: `mismatch`, `missing`, `moved`, or `unchecked`. Absent on a path check.",
+          "enum": [
+            "match",
+            "mismatch",
+            "missing",
+            "moved",
+            "unchecked"
+          ]
+        },
         "reference": {
           "description": "The code reference the page makes, such as `src/app.ts:12`, `src/app.ts:10-14`, or `src/app.ts:12:7`.",
           "type": "string",
