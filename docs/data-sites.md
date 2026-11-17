@@ -285,6 +285,6 @@ Frozen on 2026-11-15. The contract in `src/contracts/data.ts` is guarded by
 
 ## Pre-release
 
-A theme can typecheck against the frozen contract before 0.3.0 ships: `npm install @velella/mizzen@next`, then import from `@velella/mizzen/contracts`. The pre-release promises the types only, not the behaviour, and `latest` is never moved by it. The workflow publishes a new `0.3.0-next.<n>` whenever the contract changes.
+A theme can typecheck against the frozen contract before 0.3.0 ships: `npm install @velella/mizzen@next`, then import from `@velella/mizzen/contracts`. The pre-release promises the types only, not the behaviour, and `latest` is never moved by it. Pushing a `v0.3.0-next.<n>` tag publishes that version under `next`.
 
 Current pre-release: none published yet; the first is `0.3.0-next.0`. Update this line when a newer one is published.
