@@ -493,6 +493,7 @@ function feedsFrom(value: unknown): Readonly<Record<string, FeedConfig>> {
     const formats = Array.isArray(entry.formats)
       ? entry.formats.filter((format): format is FeedFormat => format === "atom" || format === "rss" || format === "json")
       : undefined;
+    const days = isPlainObject(entry.window) ? entry.window.days : undefined;
     feeds[name] = {
       collection: entry.collection,
       ...(where === undefined ? {} : { where }),
@@ -504,6 +505,7 @@ function feedsFrom(value: unknown): Readonly<Record<string, FeedConfig>> {
       ...(Array.isArray(entry.fields)
         ? { fields: entry.fields.filter((field): field is string => typeof field === "string") }
         : {}),
+      ...(typeof days === "number" && Number.isSafeInteger(days) && days >= 0 ? { window: { days } } : {}),
     };
   }
   return feeds;

@@ -1,6 +1,6 @@
 name: release
 
-# Publishes @velella/mizzen to npm whenever a GitHub Release is published.
+# Publishes @velella/mizzen to npm whenever a release tag is pushed or a GitHub Release is published.
 #
 #   1. verify  checks the tag, tests the exact commit, and packs ONE tarball.
 #   2. publish uploads that same tarball to npm with provenance. It holds the only credential in the
@@ -13,6 +13,8 @@ name: release
 # `latest`. To retry a failed publish, run this workflow by hand with the tag; an already-published
 # version is skipped, so a retry is safe.
 on:
+  push:
+    tags: ["v*"]
   release:
     types: [published]
   workflow_dispatch:
@@ -25,11 +27,11 @@ on:
 permissions: {}
 
 concurrency:
-  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  group: release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 env:
-  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
 
 jobs:
   verify:

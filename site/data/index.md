@@ -24,9 +24,9 @@ checks for the same bytes.
 - A **list page** is an ordinary page whose front matter asks for a list of records: filtered, sorted, grouped, and
   paginated. See [Lists](/data/lists/).
 
-Around those four sit the [feeds and machine output](/data/feeds/), [change history](/data/changelog/),
-[search](/data/search/), [SEO](/data/seo/), [social images](/data/social-images/), and [stable URLs](/data/urls/).
-A theme draws the pages from the [theme contract](/data/theme-contract/).
+Around those four sit the [feeds and machine output](/data/feeds/), [calendar feeds](/data/calendars/),
+[change history](/data/changelog/), [search](/data/search/), [SEO](/data/seo/), [social images](/data/social-images/),
+and [stable URLs](/data/urls/). A theme draws the pages from the [theme contract](/data/theme-contract/).
 
 ## One small example
 

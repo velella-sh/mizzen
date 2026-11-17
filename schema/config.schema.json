@@ -915,6 +915,19 @@
             "minLength": 1
           },
           "description": "Record fields written under the JSON Feed extension key. Default []."
+        },
+        "window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["days"],
+          "properties": {
+            "days": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Last day of the window, counted from the as-of date; both ends are included, so 0 is the as-of date alone."
+            }
+          },
+          "description": "Keeps only entries dated from the as-of date to that date plus days, both included. Default: no window."
         }
       },
       "description": "One feed of a collection's records, written under feeds/."
