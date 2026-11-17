@@ -1,0 +1,81 @@
+{
+  "node": "v22.23.1",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpu": "Apple M5",
+  "runs": 3,
+  "measurements": [
+    {
+      "records": 1000,
+      "case": "cold",
+      "ms": 3267,
+      "peakMb": 314,
+      "renderedPages": 1011,
+      "cachedPages": 0,
+      "indexKb": 0
+    },
+    {
+      "records": 1000,
+      "case": "warm",
+      "ms": 772,
+      "peakMb": 196,
+      "renderedPages": 0,
+      "cachedPages": 0,
+      "indexKb": 0
+    },
+    {
+      "records": 1000,
+      "case": "one-record",
+      "ms": 4954,
+      "peakMb": 394,
+      "renderedPages": 1,
+      "cachedPages": 1010,
+      "indexKb": 0
+    },
+    {
+      "records": 1000,
+      "case": "search",
+      "ms": 126,
+      "peakMb": 171,
+      "renderedPages": 0,
+      "cachedPages": 0,
+      "indexKb": 931
+    },
+    {
+      "records": 10000,
+      "case": "cold",
+      "ms": 37688,
+      "peakMb": 4034,
+      "renderedPages": 10101,
+      "cachedPages": 0,
+      "indexKb": 0
+    },
+    {
+      "records": 10000,
+      "case": "warm",
+      "ms": 4074,
+      "peakMb": 369,
+      "renderedPages": 0,
+      "cachedPages": 0,
+      "indexKb": 0
+    },
+    {
+      "records": 10000,
+      "case": "one-record",
+      "ms": 49369,
+      "peakMb": 4141,
+      "renderedPages": 1,
+      "cachedPages": 10100,
+      "indexKb": 0
+    },
+    {
+      "records": 10000,
+      "case": "search",
+      "ms": 1360,
+      "peakMb": 387,
+      "renderedPages": 0,
+      "cachedPages": 0,
+      "indexKb": 3665
+    }
+  ]
+}

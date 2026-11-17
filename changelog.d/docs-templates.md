@@ -1,0 +1,1 @@
+- **Templates reference.** `site/data/templates.md` shows each template directive with its output, front matter substitution, and permalink patterns with the `slug` filter; a test checks the directives.

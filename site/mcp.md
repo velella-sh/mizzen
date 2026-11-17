@@ -36,6 +36,7 @@ Without `--allow-edits` the server cannot change a file. Every tool below reads,
 | `propose_edit` | The diff an edit would make, without writing it. |
 | `apply_edit` | Only with `--allow-edits`. Applies an edit with `mizzen edit apply`, writing source, proof, and audit together. |
 | `get_diagnostics` | The build's diagnostics, filtered by path or severity. |
+| `get_stale_pages` | The pages whose covered files changed since they were reviewed, with the files and the page source. |
 | `get_pack` | A context pack for a goal, within a token budget of at most 12000. |
 | `get_record` | On a site with collections: one record's fields, page URL, and place in its data file. |
 | `query_records` | On a site with collections: records filtered and sorted with the list rules, one page at a time. |

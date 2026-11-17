@@ -5,6 +5,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "../config/load.ts";
+import { readAsOfFlag, todayOf } from "../dates/as-of.ts";
 import { version } from "../index.ts";
 import { build } from "../pipeline/build.ts";
 import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts";
@@ -12,10 +13,14 @@ import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
 import { verifyData } from "../data/verify.ts";
+import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
+import { runStale } from "./stale.ts";
+import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
 import { apiCheck } from "./api.ts";
+import { init } from "./init.ts";
 import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
 import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
@@ -29,7 +34,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "mcp", "network", "pack", "urls", "verify", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "stale", "urls", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -71,6 +76,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
+  data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
@@ -79,11 +85,14 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
   network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
+  stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
+  stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   watch [dir]               Rebuild the site whenever a source or theme file changes
@@ -97,6 +106,7 @@ Options:
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
+  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
@@ -111,6 +121,9 @@ Options:
   --link-base <url>    For diff --format markdown: link page URLs under this base
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
   --print-config <c>   For mcp: print the configuration for claude-code, claude-desktop, cursor, or vscode, and exit
+  --starter <name>     For init: the theme starter to copy into the folder (default folder: .)
+  --list               For init: print the theme's starters with their titles and descriptions
+  --lang <a,b>         For init: keep only these of the starter's optional languages
   --dry-run            Print the diff for edit apply without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
   --proof <path>       Proof record for edit apply (default: <patch>.proof.json)
@@ -125,6 +138,8 @@ export type Io = {
   readonly write?: (text: string) => void;
   /** Reads stdin for `pack --request -`; defaults to the process's stream, left open after the read. */
   readonly readStdin?: () => Promise<string>;
+  /** The system clock for `--as-of today`; defaults to `new Date()`. The one place a build's date may come from a clock. */
+  readonly now?: () => Date;
 };
 
 type BuildOpts = {
@@ -134,6 +149,7 @@ type BuildOpts = {
   readonly theme?: string;
   readonly workers?: number;
   readonly updateUrls?: boolean;
+  readonly asOf?: string;
 };
 
 type CheckOpts = {
@@ -142,6 +158,7 @@ type CheckOpts = {
   readonly format: Format;
   readonly theme?: string;
   readonly workers?: number;
+  readonly asOf?: string;
 };
 
 type DoctorOpts = {
@@ -189,6 +206,7 @@ type WatchOpts = {
   readonly root: string;
   readonly out?: string;
   readonly theme?: string;
+  readonly asOf?: string;
 };
 
 type DataFetchOpts = {
@@ -204,9 +222,27 @@ type DataSnapshotOpts = {
   readonly allowDirty: boolean;
 };
 
+type DataChangesOpts = {
+  readonly command: "data-changes";
+  readonly root: string;
+  readonly name?: string;
+  readonly write: boolean;
+  readonly check: boolean;
+  readonly from?: string;
+};
+
 type DataVerifyOpts = {
   readonly command: "data-verify";
   readonly root: string;
+};
+
+type InitOpts = {
+  readonly command: "init";
+  readonly root: string;
+  readonly starter?: string;
+  readonly list: boolean;
+  readonly langs?: readonly string[];
+  readonly theme?: string;
 };
 
 type UrlsCheckOpts = {
@@ -217,6 +253,11 @@ type UrlsCheckOpts = {
 
 type NetworkOpts = {
   readonly command: "network";
+  readonly args: readonly string[];
+};
+
+type StaleOpts = {
+  readonly command: "stale";
   readonly args: readonly string[];
 };
 
@@ -275,9 +316,12 @@ type Parsed =
         | DataFetchOpts
         | DataSnapshotOpts
         | DataVerifyOpts
+        | DataChangesOpts
         | UrlsCheckOpts
+        | InitOpts
         | McpOpts
-        | NetworkOpts;
+        | NetworkOpts
+        | StaleOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -441,12 +485,36 @@ function parseDataSnapshot(rest: readonly string[]): Parsed {
   return { options: { command: "data-snapshot", root: root ?? ".", name, allowDirty } };
 }
 
+/** Parses `data changes [name] [dir] [--write] [--check] [--from <ref|folder>]`. */
+function parseDataChanges(rest: readonly string[]): Parsed {
+  const positional: string[] = [];
+  let write = false;
+  let check = false;
+  let from: string | undefined;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--write") write = true;
+    else if (arg === "--check") check = true;
+    else if (arg === "--from") {
+      from = rest[++i];
+      if (from === undefined) return { error: "--from needs a git ref or a folder" };
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else positional.push(arg);
+  }
+  if (positional.length > 2) return { error: `unexpected argument: ${positional[2]}` };
+  if (write && check) return { error: "--write and --check cannot be used together" };
+  const [name, root] = positional;
+  return { options: { command: "data-changes", root: root ?? ".", ...(name === undefined ? {} : { name }), write, check, ...(from === undefined ? {} : { from }) } };
+}
+
 /** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
-  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, verify" };
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify" };
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
+  if (subcommand === "changes") return parseDataChanges(rest);
   if (subcommand === "verify") {
     let root: string | undefined;
     for (const arg of rest) {
@@ -469,6 +537,44 @@ function parseData(args: readonly string[]): Parsed {
     else return { error: `unexpected argument: ${arg}` };
   }
   return { options: { command: "data-fetch", root: root ?? ".", check } };
+}
+
+/** Parses `init [dir] [--starter <name>] [--list] [--lang <a,b>] [--theme <dir>]`. */
+function parseInit(args: readonly string[]): Parsed {
+  let root: string | undefined;
+  let starter: string | undefined;
+  let list = false;
+  let langs: string[] | undefined;
+  let theme: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    const value = (): string | undefined => {
+      const next = args[++i];
+      return next === undefined || next.startsWith("-") ? undefined : next;
+    };
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--list") list = true;
+    else if (arg === "--starter" || arg === "--lang" || arg === "--theme") {
+      const next = value();
+      if (next === undefined) return { error: `${arg} needs a value` };
+      if (arg === "--starter") starter = next;
+      else if (arg === "--theme") theme = next;
+      else langs = next.split(",").map((lang) => lang.trim()).filter((lang) => lang !== "");
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  if (!list && starter === undefined) return { error: "init needs --starter <name>, or --list to see the starters" };
+  return {
+    options: {
+      command: "init",
+      root: root ?? ".",
+      list,
+      ...(starter === undefined ? {} : { starter }),
+      ...(langs === undefined ? {} : { langs }),
+      ...(theme === undefined ? {} : { theme }),
+    },
+  };
 }
 
 /** Parses `urls check [dir] [--format text|json]`. */
@@ -615,8 +721,13 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "network", args: rest } };
   }
+  if (command === "stale") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "stale", args: rest } };
+  }
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
+  if (command === "init") return parseInit(rest);
   if (command === "diff") return parseDiff(rest);
   if (command === "api") return parseApi(rest);
   if (command === "mcp") return parseMcp(rest);
@@ -645,6 +756,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let request: string | undefined;
   let packFormat: PackFormat | undefined;
   let updateUrls = false;
+  let asOf: string | undefined;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -709,6 +821,15 @@ export function parseArgs(args: readonly string[]): Parsed {
           }
           workers = parsed;
         }
+      } else if (arg === "--as-of") {
+        if (command !== "build" && command !== "check" && command !== "watch") {
+          return { error: "--as-of is only valid for build, check, and watch" };
+        }
+        const raw = value();
+        // `today` is resolved at the edge of main, where the clock may be read; here only the shape is checked.
+        const read = readAsOfFlag(raw, () => "0001-01-01");
+        if (!read.ok) return { error: `--as-of ${read.message}` };
+        asOf = raw;
       } else if (arg === "--update-urls") {
         if (command !== "build") return { error: "--update-urls is only valid for build" };
         updateUrls = true;
@@ -753,6 +874,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(theme === undefined ? {} : { theme }),
         ...(workers === undefined ? {} : { workers }),
         ...(updateUrls ? { updateUrls: true } : {}),
+        ...(asOf === undefined ? {} : { asOf }),
       },
     };
   }
@@ -803,6 +925,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         root: dir,
         ...(out === undefined ? {} : { out }),
         ...(theme === undefined ? {} : { theme }),
+        ...(asOf === undefined ? {} : { asOf }),
       },
     };
   }
@@ -823,6 +946,7 @@ export function parseArgs(args: readonly string[]): Parsed {
       format,
       ...(theme === undefined ? {} : { theme }),
       ...(workers === undefined ? {} : { workers }),
+      ...(asOf === undefined ? {} : { asOf }),
     },
   };
 }
@@ -860,6 +984,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   const { options } = parsed;
 
+  // `--as-of today` is the only place the clock is read: once, here, printed, and passed on as a plain date.
+  let asOf: string | undefined;
+  if ((options.command === "build" || options.command === "check" || options.command === "watch") && options.asOf !== undefined) {
+    const read = readAsOfFlag(options.asOf, () => todayOf((io.now ?? (() => new Date()))()));
+    if (!read.ok) {
+      error(`${NAME}: --as-of ${read.message}`);
+      return 2;
+    }
+    asOf = read.date;
+    if (read.today) error(`${NAME}: as-of date ${asOf} (today)`);
+  }
+
   if (options.command === "mcp") {
     try {
       const root = resolve(options.root);
@@ -879,9 +1015,38 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     }
   }
 
+  if (options.command === "stale") {
+    try {
+      return await runStale(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   if (options.command === "network") {
     try {
       return await runNetwork(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "init") {
+    try {
+      const target = resolve(options.root);
+      const themeRoot = await resolveThemeRoot(target, options.theme);
+      const result = await init({
+        themeRoot,
+        target,
+        list: options.list,
+        ...(options.starter === undefined ? {} : { starter: options.starter }),
+        ...(options.langs === undefined ? {} : { langs: options.langs }),
+      });
+      for (const message of result.messages) log(message);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
@@ -1059,6 +1224,28 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     }
   }
 
+  if (options.command === "data-changes") {
+    try {
+      const result = await dataChanges({
+        root,
+        ...(options.name === undefined ? {} : { name: options.name }),
+        write: options.write,
+        ...(options.from === undefined ? {} : { from: options.from }),
+      });
+      for (const message of result.messages) log(message);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      if (result.code === 0 && options.check && result.pending.length > 0) {
+        for (const item of result.pending) error(`${NAME}: pending ${item.collection}: ${item.event.type} ${item.summary}`);
+        error(`${NAME}: data changed without a history entry; run \`${NAME} data changes --write\``);
+        return 1;
+      }
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   if (options.command === "data-snapshot") {
     try {
       const result = await dataSnapshot({ root, name: options.name, ...(options.allowDirty ? { allowDirty: true } : {}) });
@@ -1074,12 +1261,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "doctor") {
     try {
       const themeRoot = await resolveThemeRoot(root, options.theme);
-      const diagnostics = await doctor({
-        root,
-        defaultLayout: DEFAULT_LAYOUT,
-        today: new Date().toISOString().slice(0, 10),
-        ...(themeRoot === undefined ? {} : { themeRoot }),
-      });
+      const diagnostics = [
+        ...(await doctor({
+          root,
+          defaultLayout: DEFAULT_LAYOUT,
+          today: new Date().toISOString().slice(0, 10),
+          ...(themeRoot === undefined ? {} : { themeRoot }),
+        })),
+        ...(await staleDiagnostics(root)),
+      ];
       printDiagnostics(diagnostics, options.format, log);
       return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
     } catch (err) {
@@ -1138,6 +1328,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         themeRoot,
         defaultLayout: DEFAULT_LAYOUT,
         cache: true,
+        ...(asOf === undefined ? {} : { asOf }),
         log,
       });
       log(`mizzen watch: watching ${root} and ${themeRoot}; press Ctrl-C to stop`);
@@ -1172,6 +1363,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         cache: true,
         ...(options.workers === undefined ? {} : { workers: options.workers }),
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
+        ...(asOf === undefined ? {} : { asOf }),
       });
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);
       return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;
@@ -1190,9 +1382,11 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       themeRoot,
       defaultLayout: DEFAULT_LAYOUT,
       ...(options.workers === undefined ? {} : { workers: options.workers }),
+      ...(asOf === undefined ? {} : { asOf }),
     });
-    printDiagnostics(result.diagnostics, options.format, log);
-    return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;
+    const diagnostics = [...result.diagnostics, ...(await staleDiagnostics(root))];
+    printDiagnostics(diagnostics, options.format, log);
+    return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
   } catch (err) {
     error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
     return 2;

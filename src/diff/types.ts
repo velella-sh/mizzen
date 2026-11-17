@@ -102,4 +102,22 @@ export interface SiteDiff {
     readonly changed: readonly ChangedFile[];
   };
   readonly records: readonly CollectionDiff[];
+  /** History entries `mizzen data changes --write` would append. Present only when some are pending. */
+  readonly changes?: readonly PendingChanges[];
+}
+
+/** One history event a pull request would add, as `mizzen data changes` would write it. */
+export interface PendingEvent {
+  readonly type: "added" | "removed" | "changed" | "renamed" | "imported";
+  readonly record: string;
+  readonly field?: string;
+  readonly summary: string;
+  /** The snapshot date the event would carry. */
+  readonly date: string;
+}
+
+/** The history entries that are pending for one collection. */
+export interface PendingChanges {
+  readonly collection: string;
+  readonly events: readonly PendingEvent[];
 }

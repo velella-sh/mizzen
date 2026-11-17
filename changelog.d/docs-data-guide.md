@@ -1,0 +1,1 @@
+- **A guide to data sites.** `site/data/index.md` explains collections, records, templates, and list pages with one small example and links to each reference page.

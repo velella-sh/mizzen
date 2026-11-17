@@ -194,6 +194,22 @@
       },
       "description": "Joins the site to a shared network of projects. Default: none, and the site builds on its own."
     },
+    "asOf": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "The day the build pretends it is, YYYY-MM-DD; the --as-of flag wins. The build never reads the clock. Default: none."
+    },
+    "dates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "calendar": {
+          "enum": ["gregorian", "jalali"],
+          "description": "The calendar dates are written in. Default: gregorian."
+        }
+      },
+      "description": "How dates are written."
+    },
     "snapshot": {
       "type": "object",
       "additionalProperties": false,
@@ -250,6 +266,22 @@
         }
       },
       "description": "The versioned static data API written under api/<version>/. Default: none, and nothing is written."
+    },
+    "stale": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The folder a page's `covers` paths are relative to, relative to the site root. Default `.`."
+        },
+        "severity": {
+          "enum": ["info", "warning", "error"],
+          "description": "How `mizzen check` and `mizzen doctor` report a stale page. Default `warning`."
+        }
+      },
+      "description": "Stale page detection. Default: none."
     },
     "analytics": {
       "type": "object",
@@ -737,6 +769,28 @@
             }
           },
           "description": "How the collection's record and list pages are described to search engines."
+        },
+        "changelog": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "The collection's change history, written by `mizzen data changes` to `data-changes/<name>.jsonl`. Default: none.",
+          "properties": {
+            "track": { "type": "array", "default": [], "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "Fields whose changes are recorded. No field is tracked unless it is named. Default []." },
+            "ignore": { "type": "array", "default": [], "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "Fields never recorded, even when `track` names them. Default []." },
+            "labels": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "A summary template per event type. `{id}`, `{field}`, `{old}`, `{new}`, `{from}`, `{count}`, and `{<record field>}` are replaced.",
+              "properties": {
+                "added": { "type": "string", "minLength": 1, "description": "The summary template of a `added` event." },
+                "removed": { "type": "string", "minLength": 1, "description": "The summary template of a `removed` event." },
+                "changed": { "type": "string", "minLength": 1, "description": "The summary template of a `changed` event." },
+                "renamed": { "type": "string", "minLength": 1, "description": "The summary template of a `renamed` event." },
+                "imported": { "type": "string", "minLength": 1, "description": "The summary template of a `imported` event." }
+              }
+            },
+            "importThreshold": { "type": "integer", "minimum": 1, "description": "A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit." }
+          }
         },
         "raw": {
           "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",

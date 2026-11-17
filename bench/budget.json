@@ -1,0 +1,47 @@
+{
+  "note": "Time budgets were first set from an Apple M-series laptop (node 22, theme ../lateen, 3 runs, median) with a margin of 2x, then raised on 2026-11-17 to what the ubuntu-latest CI runner measures, so a healthy build on a slower runner passes. Memory keeps its 2x margin. A budget goes down when a change makes the build faster; raising one needs a note in the pull request.",
+  "margin": {
+    "ms": 2,
+    "peakMb": 2
+  },
+  "budgets": {
+    "1000": {
+      "cold": {
+        "ms": 13000,
+        "peakMb": 650
+      },
+      "warm": {
+        "ms": 2000,
+        "peakMb": 420
+      },
+      "one-record": {
+        "ms": 16000,
+        "peakMb": 900
+      },
+      "search": {
+        "ms": 1000,
+        "peakMb": 400,
+        "indexKb": 2000
+      }
+    },
+    "10000": {
+      "cold": {
+        "ms": 140000,
+        "peakMb": 8000
+      },
+      "warm": {
+        "ms": 10000,
+        "peakMb": 800
+      },
+      "one-record": {
+        "ms": 165000,
+        "peakMb": 8000
+      },
+      "search": {
+        "ms": 8000,
+        "peakMb": 1000,
+        "indexKb": 8000
+      }
+    }
+  }
+}
