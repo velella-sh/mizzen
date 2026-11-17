@@ -4,6 +4,7 @@
  * text or JSON report. It is never part of a build: a build opens no network connection.
  */
 import { readFile } from "node:fs/promises";
+import { fetchFollowingRedirects } from "../published-site/fetch.ts";
 import { checkPage, type PageFetch } from "../published-site/pages.ts";
 import { checkRedirects } from "../published-site/redirects.ts";
 import { enumerateSitemaps } from "../published-site/sitemaps.ts";
@@ -184,16 +185,16 @@ export async function runPublishedSite(args: readonly string[], io: PublishedSit
 
   const fetcher = io.fetch ?? ((url: string, init?: RequestInit) => fetch(url, init));
   const redirected = new Map<string, string>();
+  const findings: Finding[] = [];
   const pageFetch: PageFetch = async (url, init) => {
-    const response = await fetcher(url, init);
-    if (response.url !== "" && normalize(response.url, url) !== normalize(url, url)) {
-      redirected.set(normalize(url, url), normalize(response.url, url));
-    }
-    return response;
+    const followed = await fetchFollowingRedirects(url, allowed, init, fetcher);
+    if (followed.finding !== undefined) findings.push(followed.finding);
+    else if (followed.final !== normalize(url, url)) redirected.set(normalize(url, url), followed.final);
+    return followed.response;
   };
 
   const enumeration = await enumerateSitemaps({ sitemap: start.href, domain: allowed, fetch: fetcher });
-  const findings: Finding[] = [...enumeration.findings];
+  findings.push(...enumeration.findings);
   for (const page of enumeration.urls) findings.push(...(await checkPage(page, pageFetch)));
   findings.push(...(await checkRedirects({ origin: start.origin, domain: allowed, redirects, fetch: fetcher })));
 

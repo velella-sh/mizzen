@@ -122,6 +122,45 @@ test("a request that fails before a response is unreachable", async () => {
   assert.match(findings[0]?.message ?? "", /connection refused/);
 });
 
+test("a redirect that lands on an HTTP error is not clean", async () => {
+  const { fetcher } = fakeFetch({
+    "https://example.test/old/": { status: 301, location: "/new/" },
+    "https://example.test/new/": { status: 404 },
+  });
+  const findings = await checkRedirects({ origin: ORIGIN, domain: DOMAIN, redirects: { "/old/": "/new/" }, fetch: fetcher });
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0]?.id, "published-site.status");
+  assert.equal(findings[0]?.url, "https://example.test/new/");
+  assert.equal(findings[0]?.expected, "2xx");
+  assert.equal(findings[0]?.actual, "404");
+});
+
+test("a non-redirect 3xx response is final and is not followed", async () => {
+  const { fetcher, calls } = fakeFetch({
+    "https://example.test/old/": { status: 304, location: "/new/" },
+    "https://example.test/new/": {},
+  });
+  const findings = await checkRedirects({ origin: ORIGIN, domain: DOMAIN, redirects: { "/old/": "/old/" }, fetch: fetcher });
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0]?.id, "published-site.status");
+  assert.equal(findings[0]?.actual, "304");
+  assert.deepEqual(calls, ["https://example.test/old/"]);
+});
+
+test("a malformed redirect location is a finding and is not requested", async () => {
+  const { fetcher, calls } = fakeFetch({
+    "https://example.test/old/": { status: 302, location: "http://[::1" },
+  });
+  const findings = await checkRedirects({ origin: ORIGIN, domain: DOMAIN, redirects: { "/old/": "/new/" }, fetch: fetcher });
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0]?.id, "published-site.redirect-mismatch");
+  assert.equal(findings[0]?.url, "https://example.test/old/");
+  assert.equal(findings[0]?.expected, "https://example.test/new/");
+  assert.equal(findings[0]?.actual, "http://[::1");
+  assert.match(findings[0]?.message ?? "", /invalid location/);
+  assert.deepEqual(calls, ["https://example.test/old/"]);
+});
+
 test("findings are sorted by address, then id", async () => {
   const { fetcher } = fakeFetch({
     "https://example.test/z/": { status: 302, location: "/z-final/" },

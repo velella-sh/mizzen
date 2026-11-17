@@ -143,6 +143,34 @@ test("reports a reference cycle", () => {
   assert.deepEqual(read.diagnostics.map((diagnostic) => diagnostic.id), ["api-reference.reference-cycle"]);
 });
 
+test("reports a YAML alias cycle instead of overflowing the stack", () => {
+  const text = `openapi: 3.1.0
+info:
+  title: Test API
+  version: "1.0"
+paths:
+  /nodes:
+    get:
+      operationId: listNodes
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Node"
+components:
+  schemas:
+    Node: &Node
+      type: object
+      properties:
+        child: *Node
+`;
+  const read = readApiReference(text, "openapi.yaml");
+  assert.equal(read.document, undefined);
+  assert.deepEqual(read.diagnostics.map((diagnostic) => diagnostic.id), ["api-reference.reference-cycle"]);
+});
+
 test("reports a reference of the wrong kind", () => {
   const text = `${spec('{ $ref: "#/components/schemas/Thing" }')}components:
   schemas:

@@ -300,6 +300,7 @@ export function readApiReference(text: string, file: string, path = "/reference/
   };
 
   const active = new Set<string>();
+  const activeSchemas = new Set<Record<string, unknown>>();
 
   /** Follows a reference chain to its target and checks the target's kind. */
   const resolve = (value: Record<string, unknown>, at: Path, kind: Kind): Located | undefined => {
@@ -390,7 +391,17 @@ export function readApiReference(text: string, file: string, path = "/reference/
     const schemaPath = located.path;
     const key = JSON.stringify(schemaPath);
     if (active.has(key)) return undefined;
+    if (activeSchemas.has(schema)) {
+      report(
+        "api-reference.reference-cycle",
+        "error",
+        `The schema "${refOf(at)}" in "${file}" returns to itself through a YAML alias.`,
+        at,
+      );
+      return undefined;
+    }
     active.add(key);
+    activeSchemas.add(schema);
 
     for (const composition of COMPOSITION_KEYS) {
       if (!(composition in schema)) continue;
@@ -434,6 +445,7 @@ export function readApiReference(text: string, file: string, path = "/reference/
           : undefined;
 
     active.delete(key);
+    activeSchemas.delete(schema);
     return {
       ...(type === undefined ? {} : { type }),
       ...(typeof schema.format === "string" ? { format: schema.format } : {}),

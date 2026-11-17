@@ -147,6 +147,43 @@ test("the redirect map passes a correct destination and fails a wrong or missing
   }
 });
 
+test("a page redirect off the allowed domain is reported and not requested", async () => {
+  const fixture = await serve((origin) => {
+    const other = origin.replace("127.0.0.1", "localhost");
+    return {
+      "/sitemap.xml": { body: sitemapOf([`${origin}/moved/`]) },
+      "/moved/": { status: 302, location: `${other}/outside/` },
+      "/outside/": { body: pageOf(`${other}/outside/`) },
+    };
+  });
+  try {
+    const result = await run(["published-site", "check", "--sitemap", fixture.sitemap]);
+    assert.equal(result.code, 1);
+    assert.match(result.out, /published-site\.domain/);
+    assert.ok(!fixture.requests.includes("/outside/"), "the off-domain destination was requested");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("a sitemap redirect off the allowed domain is reported and not requested", async () => {
+  const fixture = await serve((origin) => {
+    const other = origin.replace("127.0.0.1", "localhost");
+    return {
+      "/sitemap.xml": { status: 302, location: `${other}/outside.xml` },
+      "/outside.xml": { body: sitemapOf([`${other}/outside/`]) },
+    };
+  });
+  try {
+    const result = await run(["published-site", "check", "--sitemap", fixture.sitemap]);
+    assert.equal(result.code, 1);
+    assert.match(result.out, /published-site\.domain/);
+    assert.ok(!fixture.requests.includes("/outside.xml"), "the off-domain sitemap was requested");
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("an unusable input exits 2 before the first request", async () => {
   const fixture = await serve((origin) => ({
     "/sitemap.xml": { body: sitemapOf([`${origin}/a/`]) },
