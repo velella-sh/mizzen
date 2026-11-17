@@ -806,7 +806,8 @@
                 "imported": { "type": "string", "minLength": 1, "description": "The summary template of a `imported` event." }
               }
             },
-            "importThreshold": { "type": "integer", "minimum": 1, "description": "A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit." }
+            "importThreshold": { "type": "integer", "minimum": 1, "description": "A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit." },
+            "pages": { "type": "boolean", "description": "Build one list page per snapshot date and a newest-events page, and write the Atom feed. Default false." }
           }
         },
         "raw": {
@@ -1001,6 +1002,19 @@
             "minLength": 1
           },
           "description": "Record fields written under the JSON Feed extension key. Default []."
+        },
+        "window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["days"],
+          "properties": {
+            "days": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Last day of the window, counted from the as-of date; both ends are included, so 0 is the as-of date alone."
+            }
+          },
+          "description": "Keeps only entries dated from the as-of date to that date plus days, both included. Default: no window."
         }
       },
       "description": "One feed of a collection's records, written under feeds/."

@@ -244,19 +244,22 @@ limit and the key, never a silently truncated file.
   page uses the layout named in its front matter, else the layout `list`. Both are layout names, not
   page kinds: the page itself stays a `doc` page.
 - `LayoutProps.record` on a record page: the collection's name, the record's id, its URL, its
-  fields as data, and on the main page the URL of each named view.
+  fields as data, and on the main page the URL of each named view. A template that shows `:::changes` also
+  gets the record's events as `record.changes`, newest first.
 - `LayoutProps.list` on a list page: the records selected for that page, the groups, and the page's
   number, total, and previous and next URLs. A group of an expanded list also carries the URL of its own
   page and its count, which is how the index page links to each value.
 - `Site.collections` on every page: each collection's records with their ids and positions. A collection read
-  from an `npm:` source also carries `package.name` and `package.version`.
+  from an `npm:` source also carries `package.name` and `package.version`. A collection with a history file also
+  has `<name>.changes`, marked `readonly: true`, whose records are the events of that history.
 - A record's `keyPositions`: where each field's key sits, so a rename can point at the key and never at the value — the
   YAML or JSON key, or the CSV header cell, which every row shares.
 - A record's `normalizedDates`: each field the config marks under `dates`, written `YYYY-MM-DD` as it is in the
   source, or as a UTC ISO 8601 instant when the source holds one. The field itself keeps the value as written.
 - A record's `derived`: the values the collection's `derived` rules computed against the build's as-of date, keyed by
   the rule's name. They are computed once per build and never written back; a real field with the same name wins.
-- `Page.record` on a record page: the collection name, the record id, and the record's position.
+- `Page.record` on a record page: the collection name, the record id, and the record's position. When the
+  template shows `:::changes`, it also carries the record's events as `changes`, newest first.
 - The ordinary contract, unchanged: navigation, pager, head, islands, and the site model.
 
 The theme does not receive HTML built from field values, and it does not receive the template's
@@ -287,6 +290,6 @@ Frozen on 2026-11-15. The contract in `src/contracts/data.ts` is guarded by
 
 ## Pre-release
 
-A theme can typecheck against the frozen contract before 0.3.0 ships: `npm install @velella/mizzen@next`, then import from `@velella/mizzen/contracts`. The pre-release promises the types only, not the behaviour, and `latest` is never moved by it. The workflow publishes a new `0.3.0-next.<n>` whenever the contract changes.
+A theme can typecheck against the frozen contract before 0.3.0 ships: `npm install @velella/mizzen@next`, then import from `@velella/mizzen/contracts`. The pre-release promises the types only, not the behaviour, and `latest` is never moved by it. Pushing a `v0.3.0-next.<n>` tag publishes that version under `next`.
 
 Current pre-release: none published yet; the first is `0.3.0-next.0`. Update this line when a newer one is published.

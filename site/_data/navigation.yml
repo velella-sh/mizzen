@@ -40,6 +40,10 @@ main:
         url: /data/lists/
       - title: Dated data
         url: /data/dates/
+      - title: Calendars
+        url: /data/calendars/
+      - title: Change history
+        url: /data/changelog/
       - title: Search
         url: /data/search/
       - title: SEO

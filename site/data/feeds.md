@@ -40,6 +40,9 @@ without a date the engine can read, is left out. A feed with no entry writes no 
 `url` writes none and reports `feeds.no-url`, because a reader has no page against which to resolve a relative link.
 Selected `fields` are written on each JSON Feed item under the `_mizzen` extension key, never as core keys.
 
+A feed can also keep only the entries inside a window of days from the as-of date, so it lists what ends soon. See
+[Calendar feeds](/data/calendars/#a-feed-of-what-ends-soon).
+
 | Format | File | Media type |
 | --- | --- | --- |
 | Atom | `feeds/<name>.xml` | `application/atom+xml` |

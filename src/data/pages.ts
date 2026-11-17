@@ -24,6 +24,8 @@ import type {
 } from "../contracts/index.ts";
 import { directionFromLang } from "../content/lang.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
+import { CHANGE_FIELDS } from "./changes/collection.ts";
+import { eventsOf, recordChanges, showsChanges } from "./changes/record.ts";
 import { applyField, type FieldResult } from "../markdown/plugins/field.ts";
 import { eachItems, ifKeeps } from "../markdown/plugins/field-blocks.ts";
 import { applySnapshot } from "../markdown/plugins/snapshot.ts";
@@ -200,7 +202,7 @@ async function rewriteNode(node: Nodes, build: Build): Promise<RootContent[]> {
     return result instanceof Array ? [...result] : result.replacement === undefined ? [] : [result.replacement as RootContent];
   }
   if (isDirective(node) && node.type === "containerDirective") {
-    if (node.name === "if" || node.name === "each" || node.name === "records") {
+    if (node.name === "if" || node.name === "each" || node.name === "records" || node.name === "changes") {
       if (build.depth >= 2) {
         build.diagnostics.push({
           id: "data.block-nesting",
@@ -235,6 +237,19 @@ async function rewriteNode(node: Nodes, build: Build): Promise<RootContent[]> {
         for (const item of each.items) {
           out.push(
             ...(await rewriteChildren(children, { ...build, scope: withItem(build.scope, item), depth: build.depth + 1 })),
+          );
+        }
+        return out;
+      }
+      if (node.name === "changes") {
+        const out: RootContent[] = [];
+        for (const event of build.scope.changes ?? []) {
+          out.push(
+            ...(await rewriteChildren(children, {
+              ...build,
+              scope: { ...build.scope, fields: event, extraFields: CHANGE_FIELDS },
+              depth: build.depth + 1,
+            })),
           );
         }
         return out;
@@ -315,6 +330,11 @@ function twinNode(node: Nodes, body: string, scope: RecordScope): string {
     if (node.name === "records") {
       const selected = selectRecords(node as never, scope);
       return selected.records.map((record) => twinInner(children, body, withRecord(scope, record))).join("\n");
+    }
+    if (node.name === "changes") {
+      return (scope.changes ?? [])
+        .map((event) => twinInner(children, body, { ...scope, fields: event, extraFields: CHANGE_FIELDS }))
+        .join("\n");
     }
     return twinInner(children, body, scope);
   }
@@ -470,6 +490,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     const namedViews = viewsOf(entry, views[name] ?? {});
     const schemaFields = await schemaFieldsOf(root, entry);
     const markdownFields = new Set(entry.markdown ?? []);
+    const historyEvents = eventsOf(collections[`${name}.changes`]);
 
     /** Builds one page from one record, with its fields already localized. */
     const pageOf = async (
@@ -483,11 +504,15 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
       const source: Template = rendering.template.localized[language.code] ?? rendering.template;
       const parsed = await parseMarkdown(source.body, source.bodyLine);
       const pageFields = fieldsWithDerived({ fields, derived: record.derived });
+      const changes = showsChanges(source.body) ? recordChanges(historyEvents, record.id, fields, entry) : [];
       const scope: RecordScope = {
         collection: name,
         record,
         recordFields: pageFields,
         fields: pageFields,
+        ...(changes.length === 0
+          ? {}
+          : { changes: changes.map((event) => event as unknown as Readonly<Record<string, unknown>>) }),
         collections,
         ...(schemaFields === undefined ? {} : { schemaFields }),
         markdownFields,
@@ -585,6 +610,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
           fallbacks,
           ...(rendering.view === undefined ? {} : { view: rendering.view }),
           ...(rendering.views === undefined ? {} : { views: rendering.views }),
+          ...(changes.length === 0 ? {} : { changes }),
         },
       };
     };

@@ -14,6 +14,7 @@ import { referenceDateOf } from "../data/reference-date.ts";
 import { indexRecords } from "../outputs/search-shared.ts";
 import { entryId } from "./id.ts";
 import { originOf, type FeedEntry } from "./model.ts";
+import { feedWindow, inWindow, windowEntryId } from "./window.ts";
 
 /** Compares by code point, never by locale. */
 export function byCodePoint(a: string, b: string): number {
@@ -58,6 +59,12 @@ export function feedEntries(
   });
   for (const diagnostic of query.diagnostics) report(diagnostic);
 
+  const bounds = feedWindow(site, feed, reference.date);
+  if (bounds.error !== undefined) {
+    report(bounds.error);
+    return [];
+  }
+
   const rows = indexRecords(site, feed.collection).map(({ record, page }) => {
     const localized = localizeFields(record.fields, site.config.lang, site.config.lang).fields;
     return {
@@ -73,6 +80,7 @@ export function feedEntries(
   for (const row of filterRows(rows, query.where)) {
     const date = dateOf(row.fields, row.dates, feed.date);
     if (date === undefined) continue;
+    if (bounds.window !== undefined && !inWindow(date, bounds.window)) continue;
     const title = textOf(resolveIn(row.fields, "title").value) ?? row.record.id;
     const summary = textOf(resolveIn(row.fields, "summary").value) ?? textOf(resolveIn(row.fields, "description").value);
     const extra = feed.idField === undefined ? undefined : textOf(resolveIn(row.fields, feed.idField).value);
@@ -82,7 +90,10 @@ export function feedEntries(
       if (found.found) published[field] = found.value;
     }
     entries.push({
-      id: entryId(origin, feed.collection, row.record.id, extra),
+      id:
+        bounds.window === undefined
+          ? entryId(origin, feed.collection, row.record.id, extra)
+          : windowEntryId(site, feed, origin, row.record.id),
       title,
       link: new URL(row.page.url, origin).href,
       date,

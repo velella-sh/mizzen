@@ -106,7 +106,7 @@ export function readList(
     fail("data.list-shape", "`list` needs a `collection`.", "Write `list: { collection: posts }`.");
     return { diagnostics };
   }
-  if (options.collections[collection] === undefined || options.config.collections[collection] === undefined) {
+  if (options.collections[collection] === undefined) {
     fail(
       "data.list-collection",
       `The list names the collection "${collection}", which the site does not have.`,

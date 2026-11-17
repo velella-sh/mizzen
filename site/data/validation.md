@@ -146,6 +146,7 @@ its help names the two accepted formats.
 | `data.seo-duplicate-title` | Record pages of one language share a title. The finding names five URLs and the count of the rest; languages are never compared. | Build the title from a field that tells the records apart. |
 | `data.seo-duplicate-description` | Record pages of one language share a description. The finding names five URLs and the count of the rest. | Build the description from a field that tells the records apart. |
 | `data.json-ld-type` | A collection's `seo.jsonLd` mapping has no `@type`, so its record pages get no structured data. | Add an `@type` such as `Product` to the mapping. |
+| `data.history-line` | A line in a collection's `data-changes/<name>.jsonl` cannot be read as a change event. | Fix the line, or run `mizzen data changes` to append the events again. |
 
 ## Page directives
 

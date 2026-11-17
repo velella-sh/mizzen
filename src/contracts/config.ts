@@ -119,6 +119,14 @@ export interface FeedConfig {
   readonly idField?: string;
   /** Record fields written under the JSON Feed extension key. Default `[]`. */
   readonly fields?: readonly string[];
+  /** Keeps only entries dated from the as-of date to that date plus `days`, both included. */
+  readonly window?: FeedWindowConfig;
+}
+
+/** The date range a feed lists, starting at the as-of date and never at the build's clock. */
+export interface FeedWindowConfig {
+  /** Last day of the window, counted from the as-of date; both ends are included, so `0` is the as-of date alone. */
+  readonly days: number;
 }
 
 /** One event a calendar builds from each record: a date field, with an optional end field and a title. */
@@ -212,6 +220,8 @@ export interface CollectionChangelogConfig {
   readonly labels?: Readonly<Partial<Record<ChangelogEventType, string>>>;
   /** A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit. */
   readonly importThreshold?: number;
+  /** Build one list page per snapshot date and a newest-events page, and write the Atom feed. Default `false`. */
+  readonly pages?: boolean;
 }
 
 /** What a record's disappearance from its collection does. */

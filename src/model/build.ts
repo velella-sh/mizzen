@@ -5,6 +5,8 @@ import { loadConfig } from "../config/load.ts";
 import { loadData } from "../content/data.ts";
 import { checkSeo } from "../data/checks/seo.ts";
 import { loadCollections } from "../data/collections.ts";
+import { loadChangeCollections } from "../data/changes/collection.ts";
+import { buildChangelogPages } from "../data/changes/preset.ts";
 import { applyDataDirectives } from "../data/directives.ts";
 import { buildRecordPages, aliasUrlsOf } from "../data/pages.ts";
 import { buildListPages, keyPositionOf } from "../data/lists.ts";
@@ -177,6 +179,11 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   for (const d of data.diagnostics) diagnostics.report(d);
   const collected = await loadCollections({ root: siteRoot, config });
   for (const d of collected.diagnostics) diagnostics.report(d);
+  const history = await loadChangeCollections({ root: siteRoot, config });
+  for (const d of history.diagnostics) diagnostics.report(d);
+  const allCollections = Object.keys(history.collections).length === 0
+    ? collected.collections
+    : { ...collected.collections, ...history.collections };
   const loadedTemplates = await loadTemplates({ root: siteRoot, config });
   for (const d of loadedTemplates.diagnostics) diagnostics.report(d);
 
@@ -272,7 +279,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       parsedPages += 1;
     }
     const directives = isMarkdown
-      ? applyDataDirectives(tree, body, { data: data.data, collections: collected.collections, file: rel })
+      ? applyDataDirectives(tree, body, { data: data.data, collections: allCollections, file: rel })
       : { markdown: body, diagnostics: [] };
     for (const d of directives.diagnostics) diagnostics.report(d);
     const lang = pageLang(file.path, { config, frontMatter });
@@ -281,7 +288,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     }
     if (isMarkdown) {
       applyRecordLinks(tree, {
-        collections: collected.collections,
+        collections: allCollections,
         config: config.collections,
         base: config.base,
         prefix: prefixOfLang(config, lang.lang),
@@ -331,7 +338,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const records = await buildRecordPages({
     root: siteRoot,
     config,
-    collections: collected.collections,
+    collections: allCollections,
     templates: loadedTemplates.templates,
     views: loadedTemplates.views,
     filePrefix: repositoryFolder(config.repository?.dir),
@@ -351,7 +358,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       page: declaration.page,
       ...(position === undefined ? {} : { position }),
       config,
-      collections: collected.collections,
+      collections: allCollections,
       data: data.data,
     });
     for (const d of built.diagnostics) diagnostics.report(d);
@@ -385,6 +392,25 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     }
   }
 
+  // The changelog pages come last: they list the events of every collection whose `changelog.pages` is on, and the
+  // feed reads the record pages' URLs. A collection with no history builds nothing.
+  const changelog = buildChangelogPages({ config, collections: allCollections, data: data.data });
+  for (const d of changelog.diagnostics) diagnostics.report(d);
+  for (const generated of changelog.pages) {
+    const known = seen.get(generated.url);
+    if (known !== undefined) {
+      diagnostics.error(
+        "page.duplicate-url",
+        `Two pages have the URL ${generated.url}: ${known.file} and ${generated.source.file}.`,
+        { pos: generated.source, help: `Change the \`permalink\` of the other page, or turn off \`changelog.pages\`.` },
+      );
+      continue;
+    }
+    const hooked = await hookPage(generated);
+    seen.set(hooked.url, hooked.source);
+    pages.push(hooked);
+  }
+
   pages.sort((a, b) => byCodePoint(a.url, b.url));
 
   // The URL lock: check every record page against the URLs it published, and hand the redirects output the earlier
@@ -405,7 +431,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const aliasDiagnostics: Diagnostic[] = [];
   for (const [key, page] of preferred) {
     const record = page.record!;
-    const source = collected.collections[record.collection]?.records.find((candidate) => candidate.id === record.id);
+    const source = allCollections[record.collection]?.records.find((candidate) => candidate.id === record.id);
     const entry = config.collections[record.collection];
     if (source === undefined || entry === undefined) continue;
     published.push({ collection: record.collection, id: record.id, url: page.url, position: source.position });
@@ -458,7 +484,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   for (const page of pages) {
     // A view is another rendering of a record, not another entry in a collection's navigation list.
     if (page.record === undefined || page.record.view !== undefined) continue;
-    const record = collected.collections[page.record.collection]?.records.find(
+    const record = allCollections[page.record.collection]?.records.find(
       (candidate) => candidate.id === page.record?.id,
     );
     const byCollection = collections[page.lang] ?? {};
@@ -496,7 +522,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       pages,
       nav,
       data: data.data,
-      collections: collected.collections,
+      collections: allCollections,
       ...(gone.length === 0 ? {} : { removed: gone }),
     },
     root: siteRoot,

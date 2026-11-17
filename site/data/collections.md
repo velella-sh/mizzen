@@ -34,7 +34,8 @@ collections:
 | `schema` | string | | JSON Schema file, relative to the site root, that validates every record. |
 | `unique` | list of string | `[]` | Fields whose values must be unique; a duplicate is an error naming both records. |
 | `references` | object | `{}` | Fields that hold the id of another collection's record, keyed by field: `component: components`. |
-| `dates` | list of string | `[]` | Fields that hold a date, written `YYYY-MM-DD` or as a full ISO 8601 instant. |
+| `dates` | list of string | `[]` | Fields that hold a date, written `YYYY-MM-DD`, `YYYY-MM`, or `YYYY`, or as a full ISO 8601 instant. |
+| `derived` | object | `{}` | Values computed once per build from a date field against the as-of date, keyed by name: a count (`kind: days-left` or `days-since`) or `bands`. See [Dated data](/data/dates/). |
 | `referenceDate` | string | | The date a list's `before` and `after` compare against: `YYYY-MM-DD`, or the dot path of a `_data` value. See [Lists](/data/lists/). |
 | `markdown` | list of string | `[]` | Fields that hold Markdown, rendered through the page pipeline with their positions in the data file. |
 | `llms` | boolean | `true` | `false` keeps the collection's record pages out of `llms-full.txt`. |
@@ -45,7 +46,7 @@ collections:
 | `views` | object | `{}` | Extra named pages built from every record, each with its own `template`, `permalink`, and optional `layout`. |
 | `search` | object | | How record pages take part in search. See [Search](/data/search/). |
 | `seo` | object | | How record and list pages are described to search engines. See [SEO](/data/seo/). |
-| `changelog` | object | | How a record's changes are recorded: `changelog.track` and `changelog.ignore` name the fields, and `changelog.labels` writes each event's summary. See the [data changelog design note](https://github.com/velella-sh/mizzen/blob/main/docs/design/data-changelog.md). |
+| `changelog` | object | | How a record's changes are recorded: `changelog.track` and `changelog.ignore` name the fields, `changelog.labels` writes each event's summary, and `changelog.pages` builds the history pages and feed. See [Change history](/data/changelog/). |
 | `raw` | `false` or object | `{}` | The raw data written as `data/<name>.raw.json`, `.csv`, and `.sha256`; `raw.private` lists fields left out; `false` writes none. |
 | `index` | object | | A compact JSON index for the theme: `index.fields` and `index.bytes`. See [Feeds and machine output](/data/feeds/). |
 
