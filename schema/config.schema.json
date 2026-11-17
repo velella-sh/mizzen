@@ -31,13 +31,18 @@
       "description": "Default language of every page, as a BCP 47 tag. A page's lang wins."
     },
     "dir": {
-      "enum": ["ltr", "rtl"],
+      "enum": [
+        "ltr",
+        "rtl"
+      ],
       "description": "Default text direction. Unset, it comes from lang (rtl for fa, ar, he, ur, and the other right-to-left languages). A page's dir wins."
     },
     "languages": {
       "type": "array",
       "default": [],
-      "items": { "$ref": "#/$defs/language" },
+      "items": {
+        "$ref": "#/$defs/language"
+      },
       "description": "The site's languages in switcher order. Leave it out for a one-language site."
     },
     "source": {
@@ -49,13 +54,19 @@
     "include": {
       "type": "array",
       "default": [],
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "description": "Paths under source that discovery would skip (names starting with . or _) but should be copied or built, such as .well-known."
     },
     "exclude": {
       "type": "array",
       "default": [],
-      "items": { "type": "string", "minLength": 1 },
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
       "description": "Paths under source that are neither pages nor copied. node_modules, the output folder, and the config file are always excluded."
     },
     "navigation": {
@@ -67,15 +78,23 @@
     "collections": {
       "type": "object",
       "default": {},
-      "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
-      "additionalProperties": { "$ref": "#/$defs/collection" },
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/collection"
+      },
       "description": "Data collections by name: where their records come from and how their pages are built. Default {}."
     },
     "feeds": {
       "type": "object",
       "default": {},
-      "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
-      "additionalProperties": { "$ref": "#/$defs/feed" },
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/feed"
+      },
       "description": "Feeds of collections' records by name: which records, how many, and which formats. Default {}."
     },
     "calendars": {
@@ -88,13 +107,17 @@
     "defaults": {
       "type": "array",
       "default": [],
-      "items": { "$ref": "#/$defs/defaultsEntry" },
+      "items": {
+        "$ref": "#/$defs/defaultsEntry"
+      },
       "description": "Front matter applied to every page under a path unless the page sets the key itself. Later entries win over earlier ones; a page always wins."
     },
     "repository": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["url"],
+      "required": [
+        "url"
+      ],
       "properties": {
         "url": {
           "type": "string",
@@ -133,7 +156,9 @@
     },
     "search": {
       "oneOf": [
-        { "const": false },
+        {
+          "const": false
+        },
         {
           "type": "object",
           "additionalProperties": false,
@@ -153,7 +178,10 @@
     "network": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source", "project"],
+      "required": [
+        "source",
+        "project"
+      ],
       "properties": {
         "source": {
           "type": "string",
@@ -201,6 +229,51 @@
       },
       "description": "How old a collection's recorded snapshot may be. Default: none."
     },
+    "api": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collections"
+      ],
+      "properties": {
+        "version": {
+          "type": "string",
+          "pattern": "^v[1-9][0-9]*$",
+          "description": "The version path segment of the API, such as v1. Default v1."
+        },
+        "collections": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/apiCollection"
+          },
+          "description": "The collections published by name. A collection not named here is never published."
+        },
+        "headers": {
+          "type": "boolean",
+          "default": false,
+          "description": "true writes a _headers file with CORS and cache rules for /api/*, for hosts that read one; a _headers file the site already has is never replaced. Default false."
+        },
+        "versions": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^v[1-9][0-9]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/apiVersion"
+          },
+          "description": "Further versions of the API by name, published beside the current one (version), each with its own collections and field lists."
+        },
+        "maxFileBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Warn when an API file is larger than this many bytes, advising the NDJSON file; a file is never truncated. Default: no limit."
+        }
+      },
+      "description": "The versioned static data API written under api/<version>/. Default: none, and nothing is written."
+    },
     "stale": {
       "type": "object",
       "additionalProperties": false,
@@ -220,10 +293,18 @@
     "analytics": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["provider"],
+      "required": [
+        "provider"
+      ],
       "properties": {
         "provider": {
-          "enum": ["goatcounter", "plausible", "umami", "cloudflare", "custom"],
+          "enum": [
+            "goatcounter",
+            "plausible",
+            "umami",
+            "cloudflare",
+            "custom"
+          ],
           "description": "The tool. There is no default: a site without the key gets no script."
         },
         "site": {
@@ -243,25 +324,71 @@
         },
         "attrs": {
           "type": "object",
-          "additionalProperties": { "type": "string" },
-          "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+          "additionalProperties": {
+            "type": "string"
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
           "description": "custom only: attributes written on the script tag."
         },
         "allowedOrigins": {
           "type": "array",
           "default": [],
-          "items": { "type": "string", "pattern": "^https?://[^/]+$" },
+          "items": {
+            "type": "string",
+            "pattern": "^https?://[^/]+$"
+          },
           "description": "Outside origins the site may contact; a built page that reaches any other origin earns a warning."
         }
       },
       "allOf": [
         {
-          "if": { "properties": { "provider": { "description": "A provider that needs a site value.", "enum": ["goatcounter", "plausible", "umami", "cloudflare"] } } },
-          "then": { "required": ["site"], "properties": { "site": { "description": "Required for this provider.", "type": "string" } } }
+          "if": {
+            "properties": {
+              "provider": {
+                "description": "A provider that needs a site value.",
+                "enum": [
+                  "goatcounter",
+                  "plausible",
+                  "umami",
+                  "cloudflare"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "site"
+            ],
+            "properties": {
+              "site": {
+                "description": "Required for this provider.",
+                "type": "string"
+              }
+            }
+          }
         },
         {
-          "if": { "properties": { "provider": { "description": "The custom provider.", "const": "custom" } } },
-          "then": { "required": ["src"], "properties": { "src": { "description": "Required for the custom provider.", "type": "string" } } }
+          "if": {
+            "properties": {
+              "provider": {
+                "description": "The custom provider.",
+                "const": "custom"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "src"
+            ],
+            "properties": {
+              "src": {
+                "description": "Required for the custom provider.",
+                "type": "string"
+              }
+            }
+          }
         }
       ],
       "description": "A cookieless analytics tool, attached as one deferred script tag. Default: none."
@@ -278,7 +405,10 @@
         "fonts": {
           "type": "array",
           "default": [],
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "description": "Font files the images are drawn with, relative to the site root: `.ttf`, `.otf`, or `.woff`. No system font is ever used."
         }
       },
@@ -314,25 +444,69 @@
     "redirects": {
       "type": "object",
       "default": {},
-      "propertyNames": { "pattern": "^/" },
-      "additionalProperties": { "type": "string", "pattern": "^(/|https://)" },
+      "propertyNames": {
+        "pattern": "^/"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^(/|https://)"
+      },
       "description": "Redirect pages: each key is an old path under base, each value a path on the site or an https URL."
     },
     "outputs": {
       "type": "object",
       "default": {},
-      "additionalProperties": { "type": "boolean" },
+      "additionalProperties": {
+        "type": "boolean"
+      },
       "description": "Turns an output off by its name (false), such as twins or llms. The loader checks the names against the output registry; an unknown name is an error."
     }
   },
   "$defs": {
+    "apiCollection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fields"
+      ],
+      "properties": {
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The record fields the API publishes. A field not listed is never written."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The key the record id is published under in every file. Default id."
+        }
+      },
+      "description": "One collection of the data API."
+    },
     "language": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["code", "name", "prefix"],
+      "required": [
+        "code",
+        "name",
+        "prefix"
+      ],
       "properties": {
-        "code": { "type": "string", "minLength": 2, "description": "BCP 47 tag, such as fa." },
-        "name": { "type": "string", "minLength": 1, "description": "Name shown in the language switcher, in that language." },
+        "code": {
+          "type": "string",
+          "minLength": 2,
+          "description": "BCP 47 tag, such as fa."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name shown in the language switcher, in that language."
+        },
         "prefix": {
           "type": "string",
           "pattern": "^(/.*[^/])?$",
@@ -343,16 +517,27 @@
     "defaultsEntry": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["path", "values"],
+      "required": [
+        "path",
+        "values"
+      ],
       "properties": {
-        "path": { "type": "string", "description": "Folder relative to source; empty for every page." },
-        "values": { "type": "object", "description": "Front matter keys and values to apply." }
+        "path": {
+          "type": "string",
+          "description": "Folder relative to source; empty for every page."
+        },
+        "values": {
+          "type": "object",
+          "description": "Front matter keys and values to apply."
+        }
       }
     },
     "collection": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source"],
+      "required": [
+        "source"
+      ],
       "properties": {
         "source": {
           "type": "string",
@@ -392,19 +577,28 @@
         "unique": {
           "type": "array",
           "default": [],
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "description": "Fields whose values must be unique in the collection; a duplicate is an error naming both records."
         },
         "references": {
           "type": "object",
           "default": {},
-          "additionalProperties": { "type": "string", "minLength": 1 },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
           "description": "Fields that hold a reference to another collection's record id, keyed by field name."
         },
         "dates": {
           "type": "array",
           "default": [],
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "description": "Fields that hold a date, written YYYY-MM-DD or as a full ISO 8601 instant."
         },
         "referenceDate": {
@@ -415,7 +609,10 @@
         "markdown": {
           "type": "array",
           "default": [],
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "description": "Fields that hold Markdown, rendered through the page pipeline with their positions in the data file."
         },
         "llms": {
@@ -426,29 +623,44 @@
         "json": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["fields"],
+          "required": [
+            "fields"
+          ],
           "properties": {
             "fields": {
               "type": "array",
               "uniqueItems": true,
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "description": "Fields the page JSON publishes, in this order; empty publishes none."
             }
           },
           "description": "Which record fields the page JSON publishes. Unset publishes every field."
         },
         "onInvalid": {
-          "enum": ["error", "skip"],
+          "enum": [
+            "error",
+            "skip"
+          ],
           "default": "error",
           "description": "What an invalid record does: error fails the build; skip leaves it out of the site with a warning."
         },
         "onRemoved": {
           "oneOf": [
-            { "enum": ["error", "gone"] },
+            {
+              "enum": [
+                "error",
+                "gone"
+              ]
+            },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["redirect"],
+              "required": [
+                "redirect"
+              ],
               "properties": {
                 "redirect": {
                   "type": "string",
@@ -467,8 +679,12 @@
         "views": {
           "type": "object",
           "default": {},
-          "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
-          "additionalProperties": { "$ref": "#/$defs/view" },
+          "propertyNames": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/view"
+          },
           "description": "Extra named pages built from every record, each with its own template, URL pattern, and layout. Default {}."
         },
         "search": {
@@ -479,21 +695,30 @@
               "type": "array",
               "default": [],
               "uniqueItems": true,
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "description": "Fields written as result metadata under the field's own name. Default []."
             },
             "filters": {
               "type": "array",
               "default": [],
               "uniqueItems": true,
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "description": "Fields a reader can filter by; a list field gives one filter value per item. Default []."
             },
             "sort": {
               "type": "array",
               "default": [],
               "uniqueItems": true,
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "description": "Fields results can be ordered by: dates, numbers, or short text. Default []."
             },
             "aliases": {
@@ -577,7 +802,9 @@
         "raw": {
           "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",
           "oneOf": [
-            { "const": false },
+            {
+              "const": false
+            },
             {
               "type": "object",
               "additionalProperties": false,
@@ -586,7 +813,10 @@
                   "type": "array",
                   "default": [],
                   "uniqueItems": true,
-                  "items": { "type": "string", "minLength": 1 },
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  },
                   "description": "Fields left out of the published JSON and CSV. Default []."
                 }
               }
@@ -596,13 +826,18 @@
         "index": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["fields"],
+          "required": [
+            "fields"
+          ],
           "properties": {
             "fields": {
               "type": "array",
               "minItems": 1,
               "uniqueItems": true,
-              "items": { "type": "string", "minLength": 1 },
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
               "description": "Fields each row carries, in this order, before the record's URL."
             },
             "bytes": {
@@ -619,7 +854,10 @@
     "feed": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["collection", "date"],
+      "required": [
+        "collection",
+        "date"
+      ],
       "properties": {
         "collection": {
           "type": "string",
@@ -648,10 +886,18 @@
         },
         "formats": {
           "type": "array",
-          "default": ["atom"],
+          "default": [
+            "atom"
+          ],
           "minItems": 1,
           "uniqueItems": true,
-          "items": { "enum": ["atom", "rss", "json"] },
+          "items": {
+            "enum": [
+              "atom",
+              "rss",
+              "json"
+            ]
+          },
           "description": "Formats to write. Default [atom]."
         },
         "idField": {
@@ -663,7 +909,10 @@
           "type": "array",
           "default": [],
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "description": "Record fields written under the JSON Feed extension key. Default []."
         }
       },
@@ -738,7 +987,10 @@
     "view": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["template", "permalink"],
+      "required": [
+        "template",
+        "permalink"
+      ],
       "properties": {
         "template": {
           "type": "string",
@@ -778,6 +1030,41 @@
           "description": "Largest value of one field, in characters. Default 100000."
         }
       }
+    },
+    "apiVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collections"
+      ],
+      "properties": {
+        "collections": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/apiCollection"
+          },
+          "description": "The collections this version publishes by name."
+        },
+        "deprecated": {
+          "type": "boolean",
+          "default": false,
+          "description": "true marks the version deprecated in its index; it needs sunset and successor."
+        },
+        "sunset": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The date after which the version may be removed, YYYY-MM-DD."
+        },
+        "successor": {
+          "type": "string",
+          "pattern": "^v[1-9][0-9]*$",
+          "description": "The version consumers should move to."
+        }
+      },
+      "description": "One further version of the data API."
     }
   }
 }

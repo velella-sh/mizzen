@@ -59,6 +59,7 @@ The package installs one command, `mizzen`, from `bin/mizzen.js`, which runs the
 Usage: mizzen <command> [dir] [options]
 
 Commands:
+  api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
@@ -100,6 +101,7 @@ Options:
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
+  --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
@@ -121,6 +123,7 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 
 | Command | What it does |
 | --- | --- |
+| `mizzen api check [dir] --against <folder\|ref>` | Builds the site and compares its data API with the one at `--against`, a built folder or a git ref; exits `1` when a collection, a field, or a version is gone or a field changed type, and prints the file, the field, and a fix. Added fields pass. |
 | `mizzen build [dir] --out <dir> --theme <dir>` | Builds `dir` (default `.`) into `--out` (default `dist`). Prints diagnostics as text. A build with an error still writes the site and exits `1`. |
 | `mizzen check [dir] --format text\|json\|sarif --theme <dir>` | Builds into a temporary folder, prints only the diagnostics in the chosen format, and removes the folder. Exits `1` on an error. |
 | `mizzen data changes [name] [dir] --write --check` | Lists what changed in a collection since the state in `data-changes/`; `--write` appends the events, and `--check` fails when the data changed without an entry. |
@@ -264,6 +267,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | Name | Writes |
 | --- | --- |
 | `agents-md` | `AGENTS.md`, a guide to the built site for agents. |
+| `api` | `api/<version>/`, the data API: `index.json`, each collection's records as `<collection>.json` and `.ndjson`, one file per record, its JSON Schema, and `openapi.json`. |
 | `changelog-feed` | `changelog.xml`, an Atom feed of the changelog page's dated release headings. |
 | `code-meta-check` | No files: reports fence meta that names lines the fence does not have. |
 | `collection-index` | `data/<collection>.index.json` for each collection with `index`: a column layout of its records and page URLs, split into numbered chunks over the byte budget. |
@@ -275,6 +279,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `feed` | `changes.xml`, an Atom feed of the 30 most recently changed doc pages, when the config has `url`. |
 | `feeds` | `feeds/<name>.xml`, `feeds/<name>.rss.xml`, and `feeds/<name>.json` for each feed the config declares, in the formats it names. |
 | `footnote-check` | No files: reports footnote references with no definition. |
+| `headers` | `_headers`, CORS and cache rules for `/api/*`, when `api.headers` is `true` and the site has no `_headers` of its own. |
 | `html` | One HTML file per document page, at the page's pretty URL. |
 | `link-check` | No files: reports internal links and heading anchors that do not resolve. |
 | `llms` | `llms.txt`, following llmstxt.org. |

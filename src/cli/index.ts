@@ -19,6 +19,7 @@ import { runStale } from "./stale.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
+import { apiCheck } from "./api.ts";
 import { init } from "./init.ts";
 import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
 import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
@@ -33,7 +34,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["build", "check", "data", "dev", "diff", "doctor", "edit", "mcp", "network", "pack", "stale", "urls", "verify", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "stale", "urls", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -71,6 +72,7 @@ const SIBLING_THEME = siblingThemeRoot(import.meta.url);
 export const usage = `Usage: ${NAME} <command> [dir] [options]
 
 Commands:
+  api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
@@ -112,6 +114,7 @@ Options:
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
+  --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
@@ -279,6 +282,13 @@ type DiffOpts = {
   readonly theme?: string;
 };
 
+type ApiCheckOpts = {
+  readonly command: "api-check";
+  readonly root: string;
+  readonly against: string;
+  readonly theme?: string;
+};
+
 type McpOpts = {
   readonly command: "mcp";
   readonly root: string;
@@ -300,6 +310,7 @@ type Parsed =
         | EditVerifyOpts
         | PackOpts
         | DiffOpts
+        | ApiCheckOpts
         | VerifyOpts
         | WatchOpts
         | DataFetchOpts
@@ -589,6 +600,31 @@ function parseUrls(args: readonly string[]): Parsed {
   return { options: { command: "urls", root: root ?? ".", format } };
 }
 
+/** Parses `api check [dir] --against <folder|ref> [--theme <dir>]`. */
+function parseApi(args: readonly string[]): Parsed {
+  const [subcommand, ...rest] = args;
+  if (subcommand === undefined) return { error: "api needs a subcommand: check" };
+  if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
+  if (subcommand !== "check") return { error: `unknown api subcommand: ${subcommand}` };
+  let root: string | undefined;
+  let against: string | undefined;
+  let theme: string | undefined;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--against" || arg === "--theme") {
+      const value = rest[++i];
+      if (value === undefined || value.startsWith("-")) return { error: `${arg} needs a value` };
+      if (arg === "--against") against = value;
+      else theme = value;
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  if (against === undefined) return { error: "api check needs --against <built folder|git ref>" };
+  return { options: { command: "api-check", root: root ?? ".", against, ...(theme === undefined ? {} : { theme }) } };
+}
+
 /** Parses `diff <a> <b>` and `diff --base <ref> [dir]`. */
 function parseDiff(args: readonly string[]): Parsed {
   const dirs: string[] = [];
@@ -693,6 +729,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "urls") return parseUrls(rest);
   if (command === "init") return parseInit(rest);
   if (command === "diff") return parseDiff(rest);
+  if (command === "api") return parseApi(rest);
   if (command === "mcp") return parseMcp(rest);
   if (
     command !== "build" &&
@@ -1025,6 +1062,20 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         if (finding.severity === "error") error(`${finding.id}: ${finding.message}`);
       }
       return report.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "api-check") {
+    try {
+      const themeRoot = await resolveThemeRoot(resolve(options.root), options.theme);
+      if (themeRoot === undefined) {
+        error(`${NAME}: no theme found; set theme.name in the config or pass --theme`);
+        return 2;
+      }
+      return await apiCheck({ root: options.root, against: options.against, themeRoot, defaultLayout: DEFAULT_LAYOUT }, { write, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;

@@ -11,6 +11,7 @@ Mizzen installs one command, `mizzen`.
 Usage: mizzen <command> [dir] [options]
 
 Commands:
+  api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
@@ -52,6 +53,7 @@ Options:
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
+  --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
@@ -73,6 +75,7 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 
 | Command | What it does |
 | --- | --- |
+| `mizzen api check [dir] --against <folder\|ref>` | Builds the site and compares its data API with the one at `--against`, a built folder or a git ref; exits `1` when a collection, a field, or a version is gone or a field changed type, and prints the file, the field, and a fix. Added fields pass. |
 | `mizzen build [dir] --out <dir> --theme <dir>` | Builds `dir` (default `.`) into `--out` (default `dist`). Prints diagnostics as text. A build with an error still writes the site and exits `1`. |
 | `mizzen check [dir] --format text\|json\|sarif --theme <dir>` | Builds into a temporary folder, prints only the diagnostics in the chosen format, and removes the folder. Exits `1` on an error. |
 | `mizzen data changes [name] [dir] --write --check` | Lists what changed in a collection since the state in `data-changes/`; `--write` appends the events, and `--check` fails when the data changed without an entry. |

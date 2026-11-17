@@ -249,6 +249,15 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
       checks.push(dataErrors ? failed("data", "the data check found errors") : passed("data"));
       const summary = dataSummary(collected.stats);
       if (summary !== undefined) publish([summary]);
+      if (config.api !== undefined) {
+        diagnostics.info(
+          "doctor.api-headers",
+          config.api.headers === true
+            ? "`api.headers` writes a `_headers` file; it only takes effect on a host that reads one, and the docs name the hosts that do."
+            : "The data API writes no `_headers` file, so the host's own CORS and cache rules apply to `/api/*`.",
+          { help: "Set `api.headers: true` to write one, and check that your host reads a `_headers` file." },
+        );
+      }
       if (options.today !== undefined && config.snapshot?.maxAgeDays !== undefined) {
         const pinned = await readLock(root);
         for (const stale of staleSnapshots(pinned.lock.snapshots, config.snapshot.maxAgeDays, options.today)) {

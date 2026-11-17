@@ -296,6 +296,40 @@ export interface SnapshotConfig {
   readonly maxAgeDays?: number;
 }
 
+/** One collection of the data API: which of its fields are published, and under which key its id is written. */
+export interface ApiCollectionConfig {
+  /** The record fields the API publishes. A field not listed is never written. */
+  readonly fields: readonly string[];
+  /** The key the record id is published under in every file. Default `id`. */
+  readonly id?: string;
+}
+
+/** One further version of the data API, published beside the current one. */
+export interface ApiVersionConfig {
+  /** The published collections of this version by name, each with its own field list. */
+  readonly collections: Readonly<Record<string, ApiCollectionConfig>>;
+  /** `true` marks the version deprecated in its index; it needs `sunset` and `successor`. Default `false`. */
+  readonly deprecated?: boolean;
+  /** The date (`YYYY-MM-DD`) after which the version may be removed, for a deprecated version. */
+  readonly sunset?: string;
+  /** The version consumers should move to, for a deprecated version. */
+  readonly successor?: string;
+}
+
+/** The `api` key: the collections published as a versioned static API under `/api/<version>/`. Without the key nothing is written. */
+export interface ApiConfig {
+  /** The version path segment, such as `v1`. Default `v1`. */
+  readonly version: string;
+  /** The published collections by name; a collection not named here is never published. */
+  readonly collections: Readonly<Record<string, ApiCollectionConfig>>;
+  /** `true` writes a `_headers` file with CORS and cache rules for `/api/*`, for hosts that read one. Default `false`. */
+  readonly headers?: boolean;
+  /** Warn when an API file is larger than this many bytes. A file is never truncated. Default: no limit. */
+  readonly maxFileBytes?: number;
+  /** Further versions by name (`v1`, `v2`), published beside the current one in `version`. */
+  readonly versions?: Readonly<Record<string, ApiVersionConfig>>;
+}
+
 /** The `stale` key: how pages that name the files they describe are checked against the review lock. */
 export interface StaleConfig {
   /** Folder that a page's `covers` paths are relative to, relative to the site root. Default `.`. */
@@ -365,6 +399,8 @@ export interface SiteConfig {
   readonly dates?: DatesConfig;
   /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
   readonly snapshot?: SnapshotConfig;
+  /** The versioned static data API. Default: none, and nothing is written under `api/`. */
+  readonly api?: ApiConfig;
   /** Stale page detection. Default: none, and `covers` paths are relative to the site root. */
   readonly stale?: StaleConfig;
   /** Generated social share images. Default: none, and no image is written. */

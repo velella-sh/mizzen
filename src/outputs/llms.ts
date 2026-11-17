@@ -118,6 +118,13 @@ export const llms: Output = {
       lines.push("");
     }
 
+    if (site.config.api !== undefined && site.config.outputs.api !== false) {
+      const version = site.config.api.version;
+      lines.push("## Data API", "");
+      lines.push(`- [API index](${origin}${base}/api/${version}/index.json): the published collections as versioned JSON, keyed by record id`);
+      lines.push("");
+    }
+
     const calendars = writtenCalendars(site);
     if (calendars.length > 0) {
       lines.push("## Calendars", "");
