@@ -1,116 +1,102 @@
 ---
-title: Upgrade to 0.2.2
-description: Upgrade a 0.2.0 or 0.2.1 site without changing its Markdown, config, or existing URLs, and optionally turn a data file into a collection.
+title: Upgrade to 0.2.3
+description: Upgrade a 0.2.2 site without changing its Markdown, config, existing URLs, or published output, and try the new authoring features.
 layout: doc
 permalink: /upgrade/
 ---
 
-# Upgrade to 0.2.2
+# Upgrade to 0.2.3
 
-An existing `0.2.0` or `0.2.1` docs site needs no content migration. The data-site features are optional:
-keeping your Markdown, `mizzen.yml`, and navigation as they are does not turn any `_data` file into a collection.
+An existing `0.2.2` docs or data site needs no content migration. The new features are optional: keeping your
+Markdown, `mizzen.yml`, navigation, and theme as they are builds the same pages at the same URLs.
+
+If you are coming from `0.2.0` or `0.2.1`, collections and stable record URLs first shipped in `0.2.1`; the
+[0.2.2 upgrade guide](https://github.com/velella-sh/mizzen/blob/v0.2.2/site/upgrade.md) still applies first.
 
 ## Update and check
 
-After `0.2.2` is published, update the engine in the site's project:
+After `0.2.3` is published, update the engine in the site's project:
 
 ```sh
-npm install --save-dev @velella/mizzen@0.2.2
+npm install --save-dev @velella/mizzen@0.2.3
 npx mizzen check .
 npx mizzen build . --out dist
 npx mizzen verify dist
 ```
 
-Commit `package.json` and `package-lock.json`. Keep your existing theme; a theme that draws record or list pages
-must support the [data theme contract](/data/theme-contract/). Node 24 or later is still required.
+Commit `package.json` and `package-lock.json`. Keep your existing theme; Lateen `0.2.2` is the published theme the
+release was checked against. Node 24 or later is still required.
+
+The new `versions snapshot` command is a safe way to see a 0.2.3 feature without writing anything:
+
+```sh
+npx mizzen versions snapshot v1 --dry-run
+```
+
+It prints the pages and navigation it would copy into `v1/`. Drop `--dry-run` to write the snapshot, or read
+[Documentation versions](https://github.com/velella-sh/mizzen/blob/main/docs/docs-versions.md) first.
 
 ## What stays the same
 
-- Existing CLI commands and flags remain available. You do not need a new flag for an ordinary docs build.
-- Markdown pages, front matter, navigation, and their URLs keep working. The compatibility test compares all
-  594 HTML pages of the `0.2.0` docs fixture, including its app page, against the old engine's output with a fixed
-  render fixture; it does not assert that two different theme versions look the same.
+- Existing CLI commands and flags remain available. You do not need a new flag for an ordinary build.
+- Markdown pages, front matter, navigation, and their URLs keep working. The release compatibility test builds the
+  `0.2.2` fixture with the published `0.2.2` engine and the release tarball in separate empty projects: all 197
+  public files match byte for byte, including HTML, JSON, and Markdown twins. Every canonical link, `_redirects`,
+  and sitemap URL also matches. The only normalized value is the engine version stamp in `agent.json`.
+- The same fixture builds with the published `@velella/lateen@0.2.2` theme. Canonical links, theme assets, the
+  Mermaid diagram, and redirect destinations keep the configured `base`.
 - Existing output paths, including Markdown twins, page JSON, `llms.txt`, and the build manifest, remain available.
-  `changes.xml` and `changelog.xml` retain their existing feed shapes.
-- Existing JSON Schema files and their fields are retained. New features add schemas and fields; use the schemas
-  bundled with the installed engine rather than an older copy.
+  Existing feed and sitemap shapes are retained.
+- Existing JSON Schema files and their fields are retained. New features add optional fields and schemas; use the
+  schemas bundled with the installed engine rather than an older copy.
 - Generated JSON identifies the engine version. Consumers should read `version` from `@velella/mizzen`, not
-  require the literal string `0.2.0`. The engine version is not the document's schema version.
+  require the literal string `0.2.2`. The engine version is not the document's schema version.
+- A build still opens no network connection. `mizzen published-site check` and the network commands are explicit.
 
-## Optional additions since 0.2.0
+## Optional additions since 0.2.2
 
-Collections, templates, lists, collection search, and stable record URLs first shipped in `0.2.1`.
-`0.2.2` extends data publishing and adds the tools below. None requires a change to an ordinary docs site.
+None of these changes an ordinary docs site. The reference column points at the published documentation where one
+exists, else at the design note in the repository.
 
-| Feature | Keys or files to add | Commands and reference |
+| Feature | Keys, front matter, or files | Commands and reference |
 | --- | --- | --- |
-| Record and list pages | `collections` in `mizzen.yml`, `_templates/*.md`, and `list` front matter | [Data site quick start](/data/quick-start/); `mizzen urls check`, `build --update-urls` |
-| Feeds and search metadata | `feeds`, collection `search`, `seo`, and `index` | [Feeds](/data/feeds/), [Search](/data/search/), [SEO](/data/seo/) |
-| Social share images | `social`, an SVG template, and declared fonts | [Social images](/data/social-images/) |
-| Recorded data sources | `mizzen.lock.json` | `mizzen data fetch`, `data snapshot`, `data verify`; [Snapshots](/data/snapshots/) |
-| Dated records and calendars | `asOf`, `dates`, collection date fields and `derived`, `calendars` | `build --as-of`; [Dated data](/data/dates/), [Calendars](/data/calendars/) |
-| Versioned data API | `api` | `mizzen api check --against`; [Data API](/data/api/) |
-| Recorded change history | Collection `changelog` and `data-changes/` | `mizzen data changes`; [Change history](/data/changelog/) |
-| Several projects | `network` and `network.lock.json` | `mizzen network check`, `network update`, `network sitemap`; [Networks](/network/) |
-| Analytics and ownership verification | `analytics` and `verify` | [Analytics and verification](/analytics/) |
-| Stale page detection | `covers` front matter, optional `stale`, and `docs-review.lock.json` | `mizzen stale`, `stale mark`; [Stale pages](/data/stale-docs/) |
-| AI access and build comparisons | No required config | `mizzen mcp`, `mizzen diff`; [MCP](/mcp/), [Compare two builds](/site-diff/) |
-| Starter sites | A starter supplied by the theme | `mizzen init --list`, `init --starter`; [Install](/install/) |
+| Published-site checks | None; a published sitemap URL | `mizzen published-site check --sitemap <url>`; [Command line](/cli/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/published-site-check.md) |
+| Network sitemap and record links | `network.lock.json`; `[[project:collection/id]]` | `mizzen network sitemap`; [Several projects](/network/) |
+| Record relations | Collection `references`; related records in templates and lists | [Collections](/data/collections/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/record-relations.md) |
+| Report archive | Dated collection, list `perPage`, changelog | `mizzen data snapshot`, `data changes`; [Change history](/data/changelog/), [Snapshots](/data/snapshots/) |
+| Claim evidence | Collection `evidence` field and `:evidence[…]` | [design](https://github.com/velella-sh/mizzen/blob/main/docs/claim-evidence.md) |
+| Documented command checks | Fence `test` meta, `examples.failOnFailure` | `mizzen check`; [Configuration](/config/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/docs-command-check.md) |
+| Page tools | `tool:` front matter and a site-owned file | [Outputs](/outputs/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/page-tools.md) |
+| Blog | `blog` config and post front matter | [design](https://github.com/velella-sh/mizzen/blob/main/docs/blog.md) |
+| API reference | A pinned OpenAPI document in the config | [design](https://github.com/velella-sh/mizzen/blob/main/docs/api-reference.md) |
+| Code annotations | `annotations={…}` on a code fence | [design](https://github.com/velella-sh/mizzen/blob/main/docs/code-annotations.md) |
+| Code snippets | A fence or include that reads a source range | [design](https://github.com/velella-sh/mizzen/blob/main/docs/code-snippets.md) |
+| Shared content | `::include` with parameters and nesting | [design](https://github.com/velella-sh/mizzen/blob/main/docs/content-includes.md) |
+| Math | Inline `$…$` and block `$$` | [design](https://github.com/velella-sh/mizzen/blob/main/docs/math.md) |
+| Documentation versions | `vN/` pages and navigation | `mizzen versions snapshot <vN>`; [Command line](/cli/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/docs-versions.md) |
+| Component imports | Docusaurus, Starlight, or VitePress sources | [Docusaurus](https://github.com/velella-sh/mizzen/blob/main/docs/import-docusaurus-components.md), [Starlight](https://github.com/velella-sh/mizzen/blob/main/docs/import-starlight-components.md), [VitePress](https://github.com/velella-sh/mizzen/blob/main/docs/import-vitepress-components.md) |
+| Plugins | `mizzen.config.ts`: validator, Markdown transform, custom output | [Plugins](/plugins/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/plugin-api.md) |
+| API contract checks | `drift` config; cited TypeScript symbols | `mizzen check`, `mizzen doctor`; [design](https://github.com/velella-sh/mizzen/blob/main/docs/api-contract-check.md) |
 
-Commit lock files when you opt into the feature that writes them. A build does not fetch remote data or
-refresh snapshots, review dates, or history; the corresponding command does that explicitly.
+Commit lock files when you opt into the feature that writes them. Review the fields a collection publishes before
+enabling page JSON, raw data, feeds, or the data API; [Feeds and machine output](/data/feeds/) lists the publishing
+rules.
 
-## Turn an existing data file into a collection
+## Publishing checks before a release
 
-Suppose `_data/components.yml` already holds these records:
-
-```yaml
-- slug: button
-  name: Button
-  summary: A **button** starts an action.
-- slug: tabs
-  name: Tabs
-  summary: Tabs switch between related views.
-```
-
-Keep that file where it is. Add a collection to the existing `mizzen.yml`, leaving its other keys in place:
-
-```yaml
-collections:
-  components:
-    source: _data/components.yml
-    id: slug
-    template: _templates/components.md
-    permalink: /components/{slug}/
-    markdown: [summary]
-```
-
-Add `_templates/components.md`:
-
-```md
----
-title: "{name}"
-description: "The {name} component."
-layout: doc
----
-# :field[name]
-
-:field[summary]
-```
-
-Then check the records and accept their initial URLs:
+`mizzen check` proves the inputs, not the host. Once the site is deployed, point the check at its published
+sitemap and keep the expected redirects in a small JSON map:
 
 ```sh
-npx mizzen check .
-npx mizzen build . --out dist --update-urls
-npx mizzen urls check .
+npx mizzen published-site check --sitemap https://example.com/sitemap.xml --redirects redirects.json
 ```
 
-This adds `/components/button/` and `/components/tabs/`. It does not replace existing Markdown pages; choose a
-different `permalink` if those URLs are already occupied. Commit `urls.lock.json`: later URL changes need an
-explicit `build --update-urls`, and removed records follow the collection's `onRemoved` policy.
+The check reports a failed status, a missing or mismatched canonical URL, and a redirect that ends somewhere other
+than the mapped address. It requests only the sitemap's host unless `--domain` says otherwise, and it writes
+nothing. A recipe runs it in CI after the deploy.
 
-Every record field is published by default in the record's page JSON and raw-data downloads. Before using private
-data, restrict `collections.components.json.fields` and `raw.private`, or set `raw: false`.
-These settings do not redact template content or separately configured search, feeds, and API output.
-See [Collections](/data/collections/) and [Feeds and machine output](/data/feeds/).
+## Older data-site migration
+
+If you are upgrading a `0.2.0` or `0.2.1` site that still keeps data in ordinary Markdown pages, the
+[0.2.2 upgrade guide](https://github.com/velella-sh/mizzen/blob/v0.2.2/site/upgrade.md) walks through turning an
+existing `_data` file into a collection, accepting its first record URLs, and restricting published fields.
