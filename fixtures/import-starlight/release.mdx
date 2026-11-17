@@ -1,0 +1,45 @@
+---
+title: Publish a release
+description: A Starlight MDX page with steps, a file tree, a link card, and a custom component.
+---
+
+import { Steps, FileTree, LinkCard } from '@astrojs/starlight/components';
+import ReleaseNote from '../../components/ReleaseNote.astro';
+
+Publish a Mizzen site in three steps.
+
+<Steps>
+
+1. Build the site:
+
+   ```sh
+   node bin/mizzen.ts build site
+   ```
+
+2. Check the `site` output folder.
+3. Upload the folder to a host.
+
+</Steps>
+
+The output looks like this:
+
+<FileTree>
+
+- site/
+  - index.html
+  - guides/
+    - install/
+      - index.html
+  - sitemap.xml
+
+</FileTree>
+
+Read the [deployment guide](/guides/deploy/) before choosing a host.
+
+<LinkCard title="Deployment guide" href="/guides/deploy/" description="Configure a host, a domain, and caching." />
+
+<ReleaseNote version="0.2.3">
+
+This page is written for release 0.2.3.
+
+</ReleaseNote>
