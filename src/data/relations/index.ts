@@ -7,23 +7,16 @@
  * out: the reference check already reports the first, and the second is a permalink finding. A collection or field
  * without `references` settings has no relations.
  */
-import type { Collection, DataRecord, SiteConfig } from "../../contracts/index.ts";
+import type {
+  Collection,
+  DataRecord,
+  RecordRelations,
+  RelatedRecord,
+  SiteConfig,
+} from "../../contracts/index.ts";
 import { localizeFields, prefixOfLang, referenceTargets, urlOfRecord } from "../record-context.ts";
 
-/** One record a configured relation points at, as the page reads it. */
-export interface RelatedRecord {
-  /** The target collection's name. */
-  readonly collection: string;
-  /** The target record's id. */
-  readonly id: string;
-  /** The target record page's URL, including `base` and the page language's prefix. */
-  readonly url: string;
-  /** The target record's fields in the page's language, with `id` filled in when the source omits it. */
-  readonly fields: Readonly<Record<string, unknown>>;
-}
-
-/** A record's relations by field name; a field that resolves to nothing is absent. */
-export type RecordRelations = Readonly<Record<string, readonly RelatedRecord[]>>;
+export type { RecordRelations, RelatedRecord };
 
 /** The ids in one relation value: a scalar id, a list of ids, or nothing. */
 function idsOf(value: unknown): readonly string[] {
