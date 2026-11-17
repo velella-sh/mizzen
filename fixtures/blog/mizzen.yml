@@ -1,0 +1,8 @@
+title: Example blog
+blog:
+  posts: posts
+  route: blog
+  archive: archive
+  authors: true
+  feed: true
+  pageSize: 10
