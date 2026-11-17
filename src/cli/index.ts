@@ -17,6 +17,7 @@ import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
+import { runDocsVersion } from "./docs-version.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
@@ -35,7 +36,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -97,6 +98,8 @@ Commands:
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
+  versions snapshot <vN> [dir]
+                            Copy the current pages and navigation into a new version folder
   watch [dir]               Rebuild the site whenever a source or theme file changes
 
 Options:
@@ -129,7 +132,7 @@ Options:
   --starter <name>     For init: the theme starter to copy into the folder (default folder: .)
   --list               For init: print the theme's starters with their titles and descriptions
   --lang <a,b>         For init: keep only these of the starter's optional languages
-  --dry-run            Print the diff for edit apply without writing
+  --dry-run            For edit apply: print the diff without writing; for versions snapshot: print the files without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
   --proof <path>       Proof record for edit apply (default: <patch>.proof.json)
   -h, --help           Show this help
@@ -271,6 +274,11 @@ type StaleOpts = {
   readonly args: readonly string[];
 };
 
+type VersionsOpts = {
+  readonly command: "versions";
+  readonly args: readonly string[];
+};
+
 type EditApplyOpts = {
   readonly command: "edit-apply";
   readonly root: string;
@@ -332,7 +340,8 @@ type Parsed =
         | McpOpts
         | NetworkOpts
         | PublishedSiteOpts
-        | StaleOpts;
+        | StaleOpts
+        | VersionsOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -740,6 +749,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "stale", args: rest } };
   }
+  if (command === "versions") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "versions", args: rest } };
+  }
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "init") return parseInit(rest);
@@ -1033,6 +1046,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "stale") {
     try {
       return await runStale(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "versions") {
+    try {
+      return await runDocsVersion(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;

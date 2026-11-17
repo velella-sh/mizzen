@@ -16,6 +16,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Diagnostic, Page, Site } from "../contracts/index.ts";
+import { relationDependenciesOf } from "../data/relations/dependencies.ts";
 import { recordHash } from "./dependency-graph.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
@@ -72,32 +73,27 @@ export function recordShapeOf(site: Site): string {
 }
 
 /**
- * What a record page reads besides its own model, as a string for {@link renderPageKey}: the record's hash and the
- * hash of every record its reference fields point at, so a page is rebuilt when a record it links to changed, and
- * only then. A page that is not a record page has none; a list page carries its records in its own model.
+ * What a page reads besides its own model, as a string for {@link renderPageKey}: a record page's own hash and every
+ * record its configured relations name; a list page's rows' relations. A page whose related record changed, appeared,
+ * or was removed is a miss, and only then. A page with no records has none.
  */
 export function recordKeyOf(site: Site): (page: Page) => string {
-  const byCollection = new Map<string, Map<string, { readonly hash: string; readonly fields: Readonly<Record<string, unknown>> }>>();
+  const byCollection = new Map<string, Map<string, string>>();
   for (const [name, collection] of Object.entries(site.collections)) {
-    const records = new Map<string, { readonly hash: string; readonly fields: Readonly<Record<string, unknown>> }>();
-    for (const record of collection.records) records.set(record.id, { hash: recordHash(record), fields: record.fields });
-    byCollection.set(name, records);
+    byCollection.set(name, new Map(collection.records.map((record) => [record.id, recordHash(record)])));
   }
+  const dependenciesOf = relationDependenciesOf(site);
   return (page) => {
+    const parts: string[] = [];
     const ref = page.record;
-    if (ref === undefined) return "";
-    const own = byCollection.get(ref.collection)?.get(ref.id);
-    if (own === undefined) return "";
-    const parts = [`${ref.collection}/${ref.id}:${own.hash}`];
-    const references = site.config.collections[ref.collection]?.references ?? {};
-    for (const field of Object.keys(references).sort()) {
-      const target = references[field]!;
-      const value = own.fields[field];
-      const ids = Array.isArray(value) ? value : [value];
-      for (const id of ids) {
-        if (typeof id !== "string" && typeof id !== "number") continue;
-        parts.push(`${field}>${target}/${String(id)}:${byCollection.get(target)?.get(String(id))?.hash ?? "-"}`);
-      }
+    if (ref !== undefined) {
+      const own = byCollection.get(ref.collection)?.get(ref.id);
+      if (own === undefined) return "";
+      parts.push(`${ref.collection}/${ref.id}:${own}`);
+    }
+    for (const dependency of dependenciesOf(page)) {
+      const hash = byCollection.get(dependency.collection)?.get(dependency.id) ?? "-";
+      parts.push(`${dependency.field}>${dependency.collection}/${dependency.id}:${hash}`);
     }
     return parts.join("\n");
   };

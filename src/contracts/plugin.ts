@@ -18,6 +18,19 @@ export interface PluginHooks {
 export interface Plugin extends PluginHooks {
   /** The plugin's name, shown in diagnostics; unique among the plugins of one site's code file. */
   readonly name: string;
+  /**
+   * The plugin's own version. A cached build is reused only while this stays the same, so bump it when the plugin's
+   * behavior changes without its code or declared inputs changing.
+   */
+  readonly version?: string;
+  /** Settings that shape the plugin's output; a change retires a cached build. Compared by JSON value, not by identity. */
+  readonly settings?: unknown;
+  /**
+   * The site-relative files the plugin reads, with `/` separators. Their bytes are part of the build cache key, so a
+   * change rebuilds. A plugin that omits this list declares that its inputs cannot be tracked, and every build of a
+   * site that lists it runs cold; `[]` declares that it reads no file.
+   */
+  readonly inputs?: readonly string[];
 }
 
 /** What the site's code file default-exports: plugins and nothing else. */

@@ -1,5 +1,7 @@
 import type { Page, PageStale, Site } from "../contracts/content.ts";
+import type { DataRecord } from "../contracts/data.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
+import type { EvidenceClaim, EvidenceClaims } from "../data/evidence/validate.ts";
 import { localizeFields } from "../data/record-context.ts";
 
 /** Characters per token the estimator assumes, until a tokenizer is chosen. */
@@ -42,20 +44,61 @@ function isoDate(value: unknown): string | null {
   return null;
 }
 
+/** A parsed mapping, as the data file wrote it; an array or a scalar is not one. */
+function isMapping(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** One claim's public keys in their written order, or nothing when any of them is missing or empty. */
+function claimOf(value: unknown): EvidenceClaim[] {
+  if (!isMapping(value)) return [];
+  const { id, title, url } = value;
+  if (typeof id !== "string" || id === "") return [];
+  if (typeof title !== "string" || title === "") return [];
+  if (typeof url !== "string" || url === "") return [];
+  return [{ id, title, url }];
+}
+
+/**
+ * The public claims a record keeps under its collection's evidence field, keyed by the field they back in record field
+ * order. Every other key is private: only `id`, `title`, and `url` are picked, so a `note` never reaches an output.
+ * Absent, empty, or malformed evidence is the normal case and publishes nothing.
+ */
+function evidenceOf(record: DataRecord, field: string | undefined): EvidenceClaims | undefined {
+  if (field === undefined) return undefined;
+  const raw = record.fields[field];
+  if (!isMapping(raw)) return undefined;
+  const entries: [string, readonly EvidenceClaim[]][] = [];
+  for (const backed of Object.keys(record.fields)) {
+    if (backed === field) continue;
+    const value = raw[backed];
+    if (value === undefined) continue;
+    const claims = (Array.isArray(value) ? value : [value]).flatMap(claimOf);
+    if (claims.length > 0) entries.push([backed, claims]);
+  }
+  return entries.length === 0 ? undefined : Object.fromEntries(entries);
+}
+
 /** The record a page was built from, with the fields the collection publishes; `undefined` when the record is gone. */
 function recordOf(site: Site, page: Page): PageJsonRecord | undefined {
   const identity = page.record;
   if (identity === undefined) return undefined;
   const record = site.collections[identity.collection]?.records.find((candidate) => candidate.id === identity.id);
   if (record === undefined) return undefined;
+  const config = site.config.collections[identity.collection];
+  const hidden = config?.evidence;
   const fields = localizeFields(record.fields, page.lang, site.config.lang).fields;
-  const declared = site.config.collections[identity.collection]?.json?.fields;
-  if (declared === undefined) return { collection: identity.collection, id: identity.id, fields };
   const picked: Record<string, unknown> = {};
-  for (const field of declared) {
-    if (Object.prototype.hasOwnProperty.call(fields, field)) picked[field] = fields[field];
+  for (const field of config?.json?.fields ?? Object.keys(fields)) {
+    if (field !== hidden && Object.prototype.hasOwnProperty.call(fields, field)) picked[field] = fields[field];
   }
-  return { collection: identity.collection, id: identity.id, fields: picked };
+  const evidence = evidenceOf(record, hidden);
+  return {
+    collection: identity.collection,
+    id: identity.id,
+    fields: picked,
+    ...(evidence === undefined ? {} : { evidence }),
+  };
 }
 
 /** The list a page shows, with record ids rather than every field, which its page JSON already carries. */
@@ -99,6 +142,8 @@ interface PageJsonRecord {
   readonly id: string;
   /** The record's fields in the page's language, in the collection's declared order, or every field. */
   readonly fields: Readonly<Record<string, unknown>>;
+  /** Claims keyed by the field they back, in record field order; absent when the record has none. */
+  readonly evidence?: EvidenceClaims;
 }
 
 /** One list page's records, groups, and place in its pagination. */
