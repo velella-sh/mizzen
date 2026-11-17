@@ -6,6 +6,8 @@ main:
         url: /
       - title: Install and quickstart
         url: /install/
+      - title: Upgrade to 0.2.2
+        url: /upgrade/
   - title: Guide
     tab: true
     children:
