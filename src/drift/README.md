@@ -16,6 +16,11 @@ same repository gives the same answer.
   which anchors them at the repository root. Each result carries the span of the Markdown node that holds
   it, in document order and without duplicates at the same span. The rules are in the module's header
   comment; the cases are in `../../test/drift-code-refs.test.ts`.
+- `contract-refs.ts`: `contractRefsOf(page)` and `contractRefsIn(tree, file?)` record the inline-code claim
+  in each code reference's paragraph as a claim attached to the cited path, line, symbol, and stated member or
+  parameter. `contractTypos(refs, symbols)` reports a stated member the declaration does not have at the
+  claim's own span; a parameter name is not compared. The cases are in
+  `../../test/api-contract-check/refs.test.ts`.
 - `symbols.ts`: `exportedSymbols(source)` and `exportedSymbols({ file })` list the names a TypeScript file
   exports, with their kind and line. The scanner skips strings, comments, regular expressions, and nested
   blocks, and never throws: malformed source returns a `drift.symbols-syntax` diagnostic. The cases are in
