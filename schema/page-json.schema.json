@@ -146,6 +146,38 @@
       },
       "additionalProperties": false,
       "description": "The list this page shows."
+    },
+    "stale": {
+      "type": "object",
+      "required": ["files"],
+      "properties": {
+        "reviewed": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "The date the page was last marked as reviewed; absent when it never was."
+        },
+        "files": {
+          "type": "array",
+          "description": "The covered files that differ from the review lock, sorted by path.",
+          "items": {
+            "type": "object",
+            "required": ["path", "change"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Path relative to `stale.root`, with `/` separators."
+              },
+              "change": {
+                "enum": ["changed", "removed", "added"],
+                "description": "What happened to the file since the last review."
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "The page's covered files that changed since it was last reviewed. Absent for a page without `covers` and for a current page."
     }
   },
   "additionalProperties": false

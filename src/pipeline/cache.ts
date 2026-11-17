@@ -97,6 +97,11 @@ export interface CacheKeyOptions {
   readonly engineVersion?: string;
   /** The runtime folded into the key. Default: the running Node and ICU versions. */
   readonly runtimeVersion?: string;
+  /**
+   * The stale state of the site's covered pages, as the build attaches it to `Page.stale`. A covered file and the review
+   * lock live outside the source folder, so without this a whole-build hit would restore an older state.
+   */
+  readonly stale?: string;
 }
 
 /** The file list and diagnostics of a cache hit. */
@@ -545,6 +550,8 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   hash.update(`${CACHE_FORMAT}\0${engine}\0${runtime}\0`);
   // Review evidence moves with the repository, not the files: a commit must miss the cache that rendered the old date.
   hash.update(`repository\0${repositoryStateKey(options.root)}\0`);
+  // A covered file or the review lock can change without a source file changing.
+  hash.update(`stale\0${options.stale ?? ""}\0`);
   // The config values matter as well as the file: a missing config takes its title from the folder name.
   hash.update(`config\0${canonicalJson(options.config)}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);

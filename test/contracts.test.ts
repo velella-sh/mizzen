@@ -54,6 +54,7 @@ const page: Page = {
   markdown: "# Install\n",
   kind: "doc",
   record: { collection: "components", id: "button", position: recordPos, template: "docs/_templates/button.md", templateLine: 4, fallbacks: [] },
+  stale: { reviewed: "2026-03-01", files: [{ path: "src/config.ts", change: "changed" }] },
 };
 
 const nav: NavTree = {
@@ -125,6 +126,7 @@ test("example values of every contract type type-check and carry what the contra
     { type: "main", title: "Button", records: 1 },
   );
   assert.equal(page.record?.position.startLine, recordPos.startLine);
+  assert.equal(page.stale?.files[0]?.change, "changed");
   assert.equal(site.collections["components"]?.records[0]?.fieldPositions["title"]?.startColumn, 8);
   assert.equal(site.config.collections["components"]?.source, "_data/components.yml");
   assert.deepEqual(site.collections["components"]?.snapshot, snapshot);

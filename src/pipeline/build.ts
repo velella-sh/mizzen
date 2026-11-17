@@ -4,7 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/load.ts";
 import { discover } from "../content/discover.ts";
-import type { Diagnostic, Output, OutputContext, OutputFile, Page } from "../contracts/index.ts";
+import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, Site } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
 import { writeUrlsLock } from "../data/urls-lock.ts";
 import { MANIFEST_PATH, recordBuildHash } from "../outputs/build-hash.ts";
@@ -17,6 +17,7 @@ import { copyAssets } from "./assets.ts";
 import { buildIslandModules, islandUrl } from "../render/islands.ts";
 import { cacheKey, cacheRootOf, includedSnippets, renderSettingsKey, restoreCache, writeCache } from "./cache.ts";
 import { createDiagnostics, sortDiagnostics, type Diagnostics } from "./diagnostics.ts";
+import { stalePageStates } from "../stale/diagnostics.ts";
 import { buildDependencyGraph } from "./dependency-graph.ts";
 import { planInvalidation, type InvalidationPlan } from "./invalidation.ts";
 import { pruneRenderCache, pruneRenderEntries, readRenderInputs, recordKeyOf, recordShapeOf, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
@@ -238,6 +239,11 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const sourceDir = resolve(root, loaded.config.source);
   assertOutOutsideSource(sourceDir, out);
 
+  // Stale state compares each page's covered files with the committed review lock, never with git or a clock. It is
+  // read before the cache key because a covered file or the lock can change while every source file stays the same.
+  // It is an enrichment: a build that cannot read it still writes the site.
+  const staleBySource = await stalePageStates(root).catch((): Map<string, PageStale> => new Map());
+
   const cacheRoot =
     options.cache === true && options.updateUrls !== true && !(await exists(join(root, CODE_CONFIG_FILE)))
       ? resolve(options.cacheDir ?? cacheRootOf(root))
@@ -252,6 +258,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       outputsDir,
       ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
       ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
+      stale: JSON.stringify([...staleBySource]),
     }).catch(() => undefined);
     if (key !== undefined) {
       const hit = await restoreCache(cacheRoot, key, out).catch(() => undefined);
@@ -288,7 +295,18 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // The model hooks run once, on the assembled site and before anything is rendered from it.
   const hookedModel = await runModelHooks(code.plugins, model.site);
   for (const d of hookedModel.diagnostics) diagnostics.report(d);
-  const site = hookedModel.value;
+  // The stale state is carried on the page, so the layout and the page JSON see what `mizzen stale` reports. A page
+  // without `covers`, or one whose files are current, has none.
+  const site: Site =
+    staleBySource.size === 0
+      ? hookedModel.value
+      : {
+          ...hookedModel.value,
+          pages: hookedModel.value.pages.map((page) => {
+            const stale = staleBySource.get(page.source.file);
+            return stale === undefined ? page : { ...page, stale };
+          }),
+        };
   for (const d of await placeholderDiagnostics(site)) diagnostics.report(d);
 
   // Trust and drift are computed once, from this build's pages, and handed to the theme through `site.data` before any
