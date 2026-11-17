@@ -118,6 +118,32 @@ test("a record page whose record is gone carries no record object", async () => 
   assert.ok(!("record" in file!.body));
 });
 
+test("a stale page carries its review date and changed files and validates against the schema", async () => {
+  const stalePage = page("/guide/install/", {
+    stale: {
+      reviewed: "2026-03-01",
+      files: [
+        { path: "src/config.ts", change: "changed" },
+        { path: "src/gone.ts", change: "removed" },
+      ],
+    },
+  });
+  const [file] = await bodies(site([], [stalePage]));
+  assert.deepEqual(file!.body.stale, {
+    reviewed: "2026-03-01",
+    files: [
+      { path: "src/config.ts", change: "changed" },
+      { path: "src/gone.ts", change: "removed" },
+    ],
+  });
+  assert.equal(validate(file!.body), true, JSON.stringify(validate.errors));
+});
+
+test("a page without a stale state carries no stale object", async () => {
+  const [file] = await bodies(site([], [page("/guide/install/")]));
+  assert.ok(!("stale" in file!.body));
+});
+
 test("a list page carries its record ids, groups, and pagination and validates against the schema", async () => {
   const listPage = page("/posts/", {
     list: {

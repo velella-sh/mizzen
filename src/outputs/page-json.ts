@@ -1,4 +1,4 @@
-import type { Page, Site } from "../contracts/content.ts";
+import type { Page, PageStale, Site } from "../contracts/content.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
 import { localizeFields } from "../data/record-context.ts";
 
@@ -139,6 +139,8 @@ interface PageJson {
   readonly record?: PageJsonRecord;
   /** The list this page shows; absent on every other page. */
   readonly list?: PageJsonList;
+  /** The covered files that changed since the last review; absent on a page without `covers` and on a current page. */
+  readonly stale?: PageStale;
 }
 
 /**
@@ -174,6 +176,7 @@ export const pageJson: Output = {
         tokens: Math.ceil(page.markdown.length / CHARS_PER_TOKEN),
         ...(record === undefined ? {} : { record }),
         ...(list === undefined ? {} : { list }),
+        ...(page.stale === undefined ? {} : { stale: page.stale }),
       };
       files.push({
         path,

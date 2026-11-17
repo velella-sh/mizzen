@@ -68,6 +68,22 @@ export interface Heading {
   readonly pos: SourcePos;
 }
 
+/** One covered file that differs from a page's review lock. */
+export interface PageStaleFile {
+  /** Path relative to `stale.root`, with `/` separators. */
+  readonly path: string;
+  /** What happened to the file since the last review. */
+  readonly change: "changed" | "removed" | "added";
+}
+
+/** A page whose covered files changed since it was last marked as reviewed. */
+export interface PageStale {
+  /** `YYYY-MM-DD` of the last review; absent when the page was never marked. */
+  readonly reviewed?: string;
+  /** The files that differ, sorted by path. */
+  readonly files: readonly PageStaleFile[];
+}
+
 /** One page of the site model. */
 export interface Page {
   /** Output URL including `base`, such as `/evergreen/guide/install/`. */
@@ -99,6 +115,11 @@ export interface Page {
    * A page that sets none keeps its bytes and its hash when the as-of date moves.
    */
   readonly dates?: boolean;
+  /**
+   * The covered files that changed since the page was last reviewed; unset on a page without `covers` and on one whose
+   * files are current. Read from the review lock and the files as they are, never from git.
+   */
+  readonly stale?: PageStale;
 }
 
 /** A record the URL lock published that its collection no longer holds. */

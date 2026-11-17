@@ -61,6 +61,8 @@ main:
         url: /config/
       - title: Front matter
         url: /front-matter/
+      - title: Stale pages
+        url: /data/stale-docs/
       - title: Data findings
         url: /data/validation/
       - title: Feeds and machine output
