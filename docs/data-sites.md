@@ -111,7 +111,8 @@ A collection that names both `template` and `permalink` builds one page per reco
 A record page's front matter layout is the template's `layout`, else `record`. Its `Page.record` names the collection, the
 id, the record's position, the template, and the fields that fell back to the default language. `LayoutProps.record`
 carries the fields in the page's language and a `links` map that resolves each configured reference field to the URL of
-the record it points at.
+the record it points at. It also carries `related`: each configured relation's records, with their collection, id, URL,
+and fields, in the order the record writes them; the key is absent when the collection declares no relations.
 
 A collection may declare `views`: extra named pages built from the same record, each with its own template, URL pattern,
 and layout. A view page's canonical URL is the record's main page, and the main page's `Page.record.views` (also

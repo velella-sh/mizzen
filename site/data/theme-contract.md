@@ -27,6 +27,7 @@ Set on a record page; unset on every other page.
 | `url` | string | The record page's URL, including `base`. |
 | `fields` | object | The record's fields, or only those the page named. |
 | `links` | object | Reference fields resolved to the URL of the record page they point at, keyed by field. |
+| `related` | object | Each configured reference field's records, with their collection, id, URL, and fields, in the record's own order; absent when the collection declares no relations. |
 | `views` | object | URL of every view of this record, keyed by view name. Main page only. |
 
 ## `LayoutProps.list`
