@@ -76,6 +76,11 @@ The site's `base` becomes `/` plus the project's `path`. A `base` in the config 
 | `mizzen network update --accept` | Accepts changed pages, clearing their "changed" marks. |
 | `mizzen network sitemap [dir] --url <origin> --out <dir>` | Writes the organization's `sitemap.xml` index and a `robots.txt` that names it. |
 
+The index lists the root site's own sitemaps and each public project's: run the command after the root build, in the
+same output folder. A one-file root `sitemap.xml` keeps its bytes as `sitemap-pages.xml`; a split root index keeps its
+child files. `robots.txt` keeps the build's other rules and replaces its `Sitemap:` line with the index. Paths are read
+as URL segments, so a leading or trailing slash changes nothing, and a project is listed once.
+
 The lock holds no date, so two updates on the same input write the same file.
 
 ## Links between projects
