@@ -126,7 +126,7 @@ test("a pending hook misses its deadline, later hooks still run, and no timer su
   assert.ok(diagnostic?.message.includes(`"stuck"`), `the plugin is named: ${diagnostic?.message}`);
   assert.ok(diagnostic?.message.includes("content hook"), diagnostic?.message ?? "");
   assert.ok(diagnostic?.message.includes("37 ms"), `the limit is named: ${diagnostic?.message}`);
-  assert.equal(diagnostic?.pos?.file, CODE_CONFIG_FILE, "the diagnostic points at the site's code file");
+  assert.deepEqual(diagnostic?.pos, pos, "the diagnostic points at the page that caused it");
 
   assert.equal(timers.armedAt(37), 2, "each hooked plugin gets its own deadline timer");
   assert.equal(timers.clearedAt(37), 2, "every deadline timer is cleared when the stage completes");
@@ -234,7 +234,7 @@ test("a malformed page is refused at the plugin that returned it", async () => {
   assert.ok(title?.message.includes(`"bad title"`), title?.message ?? "");
   assert.ok(title?.message.includes("content hook"), title?.message ?? "");
   assert.ok(title?.message.includes("`title`"), `the malformed field is named: ${title?.message}`);
-  assert.equal(title?.pos?.file, CODE_CONFIG_FILE);
+  assert.deepEqual(title?.pos, pos, "the diagnostic points at the page that caused it");
   assert.ok(heading?.message.includes("`headings[0].depth`"), heading?.message ?? "");
 
   assert.equal(result.value.title, "kept", "the last valid page is kept");

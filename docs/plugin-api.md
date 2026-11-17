@@ -31,6 +31,8 @@ export default {
 - A default export that is not `{ plugins: [...] }` is one `plugin.invalid-code-config` error, and no plugin runs.
 - An entry that is not an object with a non-empty `name`, or has a hook that is not a function, is one
   `plugin.invalid-plugin` error. That entry is dropped and the sound entries still run.
+- A later entry with the same `name` as an earlier one is one `plugin.duplicate-name` error. That entry is dropped and
+  the first one keeps the name, so a diagnostic always names one plugin.
 - Other exports of the file are ignored. The file sets no `mizzen.yml` key and is never copied to the output.
 - The module is imported once per build with a content hash in its URL, so an edited file is imported again.
 
@@ -88,13 +90,16 @@ the same path, with no diagnostic.
 | `plugin.load-failed` | Node cannot import the code file. |
 | `plugin.invalid-code-config` | The default export is not `{ plugins: [...] }`. |
 | `plugin.invalid-plugin` | One entry is not a plugin; that entry is dropped. |
+| `plugin.duplicate-name` | A later plugin repeats an earlier name; that entry is dropped. |
 | `plugin.hook-failed` | A hook threw, rejected, or returned an unusable value; the value before it is kept. |
 | `plugin.hook-timeout` | A hook missed the deadline; the value before it is kept. |
 
-Every diagnostic is an error. Today its position is the first line of `mizzen.config.ts`, and its message names the
-plugin and stage in prose. The deadline is 10 seconds per hook call, measured by the runner and not configurable from
-`mizzen.yml`. It stops the runner waiting, not the hook: a synchronous hook cannot be preempted, and a timed-out
-asynchronous hook keeps running in the process until it settles.
+Every diagnostic is an error. A content hook's diagnostic is positioned at the page's source, and a model or outputs
+hook's at the first line of `mizzen.config.ts`; every message names the plugin and stage in prose. Duplicate names are
+refused at load: the first plugin keeps the name and a later one is dropped with `plugin.duplicate-name`. The deadline
+is 10 seconds per hook call, measured by the runner and not configurable from `mizzen.yml`. It stops the runner waiting,
+not the hook: a synchronous hook cannot be preempted, and a timed-out asynchronous hook keeps running in the process
+until it settles.
 
 ## Trusted-code policy
 
