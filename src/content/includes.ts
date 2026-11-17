@@ -3,7 +3,8 @@ import { dirname, relative, resolve, sep } from "node:path";
 import type { Diagnostic, SourcePos } from "../contracts/index.ts";
 import { canonicalize, escapes, parseLineRange, type LineRange } from "./code-snippets/read.ts";
 import { parseFrontMatter } from "./frontmatter.ts";
-import { bindIncludeParams, includeParamsOf, substituteIncludeParams } from "./include-params.ts";
+import { bindIncludeParams, includeParamsOf, substitutePieces } from "./include-params.ts";
+import { finalizeSpans, shiftDrafts, spanDraft, type IncludeSpan, type SpanDraft } from "./include-spans.ts";
 
 /**
  * Expands `::include` directives before the Markdown stage, because a Markdown plugin has no site root and no page
@@ -21,12 +22,11 @@ import { bindIncludeParams, includeParamsOf, substituteIncludeParams } from "./i
  * Includes inside an included file are expanded too, with that file's folder as the base, up to `maxDepth`.
  * A line inside a fenced code block is text, never a directive.
  *
- * Source positions: the body keeps its starting line, and every text line that is not an include keeps its own line
- * only until the first include expands, because a snippet adds or removes lines. Diagnostics name the file that
- * holds the directive and its line there — an included file for a nested include, the page for a top-level one —
- * while `data-src` on rendered blocks still counts lines in the page. That is as far as a splice can map without
- * changing the contract's one-file `SourcePos`. Paths shown in diagnostics and dependency records stay
- * source-relative as spelled, even when the bytes came through a symlink; only cycle keys are canonical.
+ * Source positions: every copied line and every substituted value records where it came from, so the result's `spans`
+ * map a position in the expanded body back to its fragment, its line after front matter and `lines`, or the placeholder
+ * a value replaced. Diagnostics name the file that holds the directive and its line there — an included file for a
+ * nested include, the page for a top-level one. Paths shown in diagnostics and dependency records stay source-relative
+ * as spelled, even when the bytes came through a symlink; only cycle keys are canonical.
  */
 
 /** What {@link expandIncludes} needs to expand one body. */
@@ -67,6 +67,8 @@ export interface IncludeResult {
   readonly diagnostics: readonly Diagnostic[];
   /** Every directive's target, in the order the directives were read; a cycle's closing edge is included. */
   readonly includes: readonly IncludeDependency[];
+  /** Where each copied line and each substituted value came from; empty when the body has no include. */
+  readonly spans: readonly IncludeSpan[];
 }
 
 /** The directive alone on a line, with an optional label and optional attributes. */
@@ -199,6 +201,55 @@ function contentOf(
   };
 }
 
+/** Expanded text and the source span of each run in it. */
+interface Expanded {
+  readonly text: string;
+  readonly drafts: readonly SpanDraft[];
+}
+
+/** Concatenates pieces, rebasing each piece's spans onto the text before it. */
+function join(parts: readonly Expanded[]): Expanded {
+  let text = "";
+  const drafts: SpanDraft[] = [];
+  for (const part of parts) {
+    drafts.push(...shiftDrafts(part.drafts, text.length));
+    text += part.text;
+  }
+  return { text, drafts };
+}
+
+/**
+ * One line as expanded text: copied when the body has no parameters, else split at each value so every run keeps its
+ * own origin. A value's column is its placeholder's first `{`, and its span is the whole placeholder.
+ */
+function expandedLine(
+  text: string,
+  displayPath: string,
+  line: number,
+  params: ReadonlyMap<string, string> | undefined,
+): Expanded {
+  if (params === undefined) {
+    const content = strip(text);
+    const draft = spanDraft(0, content, displayPath, line);
+    return { text, drafts: draft === undefined ? [] : [draft] };
+  }
+  const parts: Expanded[] = [];
+  for (const piece of substitutePieces(text, params)) {
+    const content = strip(piece.text);
+    const draft = spanDraft(
+      0,
+      content,
+      displayPath,
+      line,
+      piece.sourceAt + 1,
+      piece.substituted ? piece.sourceLength : content.length,
+      piece.substituted,
+    );
+    parts.push({ text: piece.text, drafts: draft === undefined ? [] : [draft] });
+  }
+  return join(parts);
+}
+
 /** Expands one directive line, returning the text that replaces it, or `undefined` to drop the line. */
 async function expandDirective(
   scope: Scope,
@@ -211,7 +262,7 @@ async function expandDirective(
     readonly attrs: string | undefined;
   },
   stack: readonly Frame[],
-): Promise<string | undefined> {
+): Promise<Expanded | undefined> {
   const pos = posOf(input.displayPath, input.lineNo, input.lineText.length);
   const attributes = attributesOf(input.attrs ?? "");
   const path = (input.label ?? "").trim() !== "" ? input.label!.trim() : (attributes.path ?? "").trim();
@@ -332,8 +383,7 @@ async function expandDirective(
   scope.diagnostics.push(...declaration.diagnostics);
   const binding = bindIncludeParams(declaration, attributes, pos);
   scope.diagnostics.push(...binding.diagnostics);
-  const expanded = await expandBody(scope, content.text, content.line, rel, display, [...stack, { key, display }], binding.values);
-  return expanded;
+  return expandBody(scope, content.text, content.line, rel, display, [...stack, { key, display }], binding.values);
 }
 
 /** Expands every directive of one body; `stack` holds the files already being expanded, outermost first. */
@@ -345,19 +395,19 @@ async function expandBody(
   displayPath: string,
   stack: readonly Frame[],
   params?: ReadonlyMap<string, string>,
-): Promise<string> {
-  if (!body.includes("::include")) {
-    return params === undefined ? body : substituteIncludeParams(body, params);
-  }
+): Promise<Expanded> {
   const lines = body.split(/(?<=\n)/);
+  if (!body.includes("::include")) {
+    return join(lines.map((line, i) => expandedLine(line, displayPath, bodyLine + i, params)));
+  }
   const fenced = fencedLines(lines);
-  const out: string[] = [];
+  const parts: Expanded[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const text = strip(line);
     const match = fenced[i] === true ? null : DIRECTIVE.exec(text);
     if (match === null) {
-      out.push(params === undefined ? line : substituteIncludeParams(line, params));
+      parts.push(expandedLine(line, displayPath, bodyLine + i, params));
       continue;
     }
     const replacement = await expandDirective(
@@ -365,11 +415,12 @@ async function expandBody(
       { relPath, displayPath, lineNo: bodyLine + i, lineText: text, label: match[1], attrs: match[2] },
       stack,
     );
-    if (replacement === undefined || replacement === "") continue;
+    if (replacement === undefined || replacement.text === "") continue;
     // A snippet without a final newline must not merge with the line that follows the directive.
-    out.push(line.endsWith("\n") && !replacement.endsWith("\n") ? `${replacement}\n` : replacement);
+    const newline = line.endsWith("\n") && !replacement.text.endsWith("\n") ? "\n" : "";
+    parts.push({ text: replacement.text + newline, drafts: replacement.drafts });
   }
-  return out.join("");
+  return join(parts);
 }
 
 /**
@@ -379,7 +430,7 @@ async function expandBody(
  */
 export async function expandIncludes(options: ExpandIncludesOptions): Promise<IncludeResult> {
   if (!options.body.includes("::include")) {
-    return { body: options.body, bodyLine: options.bodyLine, diagnostics: [], includes: [] };
+    return { body: options.body, bodyLine: options.bodyLine, diagnostics: [], includes: [], spans: [] };
   }
   const file = options.file.split("\\").join("/");
   const displayFile = options.displayFile ?? file;
@@ -399,6 +450,12 @@ export async function expandIncludes(options: ExpandIncludesOptions): Promise<In
   };
   const page = await canonicalize(resolve(sourceDir, file));
   const stack: Frame[] = [{ key: keyOf(page.real), display: displayFile }];
-  const body = await expandBody(scope, options.body, options.bodyLine, file, displayFile, stack);
-  return { body, bodyLine: options.bodyLine, diagnostics, includes };
+  const expanded = await expandBody(scope, options.body, options.bodyLine, file, displayFile, stack);
+  return {
+    body: expanded.text,
+    bodyLine: options.bodyLine,
+    diagnostics,
+    includes,
+    spans: finalizeSpans(expanded.drafts, expanded.text, options.bodyLine),
+  };
 }

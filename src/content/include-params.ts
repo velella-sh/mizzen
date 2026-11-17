@@ -200,12 +200,29 @@ export function bindIncludeParams(
   return { values, diagnostics };
 }
 
+/** One piece of a substitution, and where the text it replaces sits in the input. */
+export interface SubstitutePiece {
+  /** The text the piece contributes. */
+  readonly text: string;
+  /** 0-based offset in the output where the piece starts. */
+  readonly at: number;
+  /** 0-based offset in the input where the piece starts. */
+  readonly sourceAt: number;
+  /** Characters of the input the piece covers; the placeholder's length for a value. */
+  readonly sourceLength: number;
+  /** True for a parameter value, whose source span is its placeholder. */
+  readonly substituted: boolean;
+}
+
 /**
- * Replaces the declared parameters of one piece of text. An undeclared name stays as written. A backslash escapes the
- * braces: an odd run keeps the run and the placeholder, an even run leaves half of it and substitutes.
+ * Replaces the declared parameters of one piece of text as pieces, so a caller can keep source spans. An undeclared
+ * name stays as written. A backslash escapes the braces: an odd run keeps the run and the placeholder, an even run
+ * leaves half of it and substitutes.
  */
-export function substituteIncludeParams(text: string, values: ReadonlyMap<string, string>): string {
-  if (values.size === 0 || !text.includes("{{")) return text;
+export function substitutePieces(text: string, values: ReadonlyMap<string, string>): readonly SubstitutePiece[] {
+  const whole = [{ text, at: 0, sourceAt: 0, sourceLength: text.length, substituted: false }];
+  if (values.size === 0 || !text.includes("{{")) return whole;
+  const pieces: SubstitutePiece[] = [];
   let out = "";
   let last = 0;
   for (const match of text.matchAll(PLACEHOLDER)) {
@@ -215,9 +232,34 @@ export function substituteIncludeParams(text: string, values: ReadonlyMap<string
     let start = at;
     while (start > last && text.charAt(start - 1) === "\\") start--;
     const run = at - start;
-    out += text.slice(last, start);
-    out += run % 2 === 1 ? "\\".repeat(run) + match[0] : "\\".repeat(run >> 1) + value;
+    if (start > last) {
+      const between = text.slice(last, start);
+      pieces.push({ text: between, at: out.length, sourceAt: last, sourceLength: between.length, substituted: false });
+      out += between;
+    }
+    if (run % 2 === 1) {
+      const kept = text.slice(start, at) + match[0];
+      pieces.push({ text: kept, at: out.length, sourceAt: start, sourceLength: kept.length, substituted: false });
+      out += kept;
+    } else {
+      if (run > 0) {
+        const half = "\\".repeat(run >> 1);
+        pieces.push({ text: half, at: out.length, sourceAt: start, sourceLength: run >> 1, substituted: false });
+        out += half;
+      }
+      pieces.push({ text: value, at: out.length, sourceAt: at, sourceLength: match[0].length, substituted: true });
+      out += value;
+    }
     last = at + match[0].length;
   }
-  return last === 0 ? text : out + text.slice(last);
+  if (last === 0) return whole;
+  if (last < text.length) {
+    pieces.push({ text: text.slice(last), at: out.length, sourceAt: last, sourceLength: text.length - last, substituted: false });
+  }
+  return pieces;
+}
+
+/** Replaces the declared parameters of one piece of text. */
+export function substituteIncludeParams(text: string, values: ReadonlyMap<string, string>): string {
+  return substitutePieces(text, values).map((piece) => piece.text).join("");
 }

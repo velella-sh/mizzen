@@ -15,6 +15,7 @@ import { planUrls, readUrlsLock, urlKey, type PublishedUrl, type UrlsPlan } from
 import { loadTemplates } from "../data/template.ts";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
+import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
 import { permalink } from "../content/permalink.ts";
@@ -92,26 +93,29 @@ function posOf(file: string, line: number, endLine = line): SourcePos {
   return { file, line, column: 1, endLine, endColumn: 1 };
 }
 
-/** Headings with their positions, taken from the top-level `h` nodes in document order. */
+/** Headings with their positions, from the top-level `h` nodes and the expanded body's source spans. */
 function headingsOf(
   tree: { readonly children: readonly { readonly type: string }[] },
   collected: readonly { readonly depth: number; readonly text: string; readonly id: string }[],
   file: string,
+  spans: readonly IncludeSpan[] = [],
 ): Heading[] {
   const nodes = tree.children.filter((n): n is MdHeading => n.type === "heading");
   return collected.map((h, i) => {
-    const start = nodes[i]?.position?.start;
-    const end = nodes[i]?.position?.end;
+    const position = nodes[i]?.position;
+    const start = position?.start;
+    const end = position?.end;
     const line = start?.line ?? 1;
     const column = start?.column ?? 1;
     const endLine = end?.line ?? line;
     const endColumn =
       endLine === line ? Math.max(column, (end?.column ?? column) - 1) : Math.max(1, (end?.column ?? 1) - 1);
+    const mapped = position === undefined || spans.length === 0 ? undefined : sourceSpanOf(spans, position.start, position.end);
     return {
       depth: h.depth as Heading["depth"],
       id: h.id,
       text: h.text,
-      pos: { file, line, column, endLine, endColumn },
+      pos: mapped ?? { file, line, column, endLine, endColumn },
     };
   });
 }
@@ -259,6 +263,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     // Includes expand before the Markdown stage: only here is the site root known, so a Markdown plugin cannot read
     // the included file. The expanded body is the page's Markdown from then on, so twins, search, and links see it.
     let body = fm.body;
+    let spans: readonly IncludeSpan[] = [];
     if (isMarkdown) {
       const included = await expandIncludes({
         body: fm.body,
@@ -269,6 +274,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       });
       for (const d of included.diagnostics) diagnostics.report(d);
       body = included.body;
+      spans = included.spans;
       const transformed = await runMarkdownHooks(plugins, { path: file.path, markdown: body }, posOf(rel, fm.bodyLine));
       for (const d of transformed.diagnostics) diagnostics.report(d);
       body = transformed.value.markdown;
@@ -313,9 +319,9 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     let html = body;
     let headings: Heading[] = [];
     if (isMarkdown) {
-      const out = await markdownToHtml(tree, rel);
+      const out = await markdownToHtml(tree, rel, spans);
       html = out.html;
-      headings = headingsOf(tree, out.headings, rel);
+      headings = headingsOf(tree, out.headings, rel, spans);
     }
 
     const draft: Page = {
