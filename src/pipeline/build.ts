@@ -11,6 +11,7 @@ import { MANIFEST_PATH, recordBuildHash } from "../outputs/build-hash.ts";
 import { driftPagesOf, driftRoot } from "../outputs/drift-report.ts";
 import { trustAsOf, trustPagesOf, trustRoot } from "../outputs/trust.ts";
 import { CODE_CONFIG_FILE, loadCodeConfig, runModelHooks, runOutputsHooks } from "../plugins/hooks.ts";
+import { pluginInputs } from "../plugins/dependencies.ts";
 import { createCssBundler, type CssBundle } from "../render/css.ts";
 import { loadRegistry } from "../render/registry.ts";
 import { copyAssets } from "./assets.ts";
@@ -205,12 +206,13 @@ function assertOutOutsideSource(sourceDir: string, out: string): void {
  * the output's file is skipped, with no diagnostic. Only when the staging folder is complete is it swapped in, so `out`
  * is never half-written. Outputs switched off by `outputs` in the config do not run.
  *
- * With `cache`, a build whose config, source, navigation, theme, outputs, layout options, and engine version are
- * unchanged restores the previous output instead of building again. Config and navigation are in the same key as the
- * pages, so changing either invalidates every page. When that whole-build entry misses, each page's Markdown parse is
- * kept under `<cache>/pages/` and keyed by its expanded body, body line, plugin names and orders, and the engine
- * version, so only the pages that changed are parsed again. A site with a code file always builds cold: what the
- * plugins import cannot be part of the key, so a hit could restore stale output.
+ * With `cache`, a build whose config, source, navigation, theme, outputs, layout options, engine version, and plugin
+ * declarations are unchanged restores the previous output instead of building again. Config and navigation are in the
+ * same key as the pages, so changing either invalidates every page. When that whole-build entry misses, each page's
+ * Markdown parse is kept under `<cache>/pages/` and keyed by its expanded body, body line, plugin names and orders, and
+ * the engine version, so only the pages that changed are parsed again. A site whose code file lists a plugin that
+ * declares no inputs always builds cold: what the plugin reads cannot be part of the key, so a hit could restore stale
+ * output.
  *
  * With `workers` above 1, pages render in worker threads, and the site written is byte for byte the one a single
  * process writes. A worker that fails renders its pages in this process, with a `render.worker-failed` warning.
@@ -244,8 +246,16 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // It is an enrichment: a build that cannot read it still writes the site.
   const staleBySource = await stalePageStates(root).catch((): Map<string, PageStale> => new Map());
 
+  // The site's code file is read before the cache: its plugin declarations are part of the key, and a plugin that
+  // declares no inputs means the build cannot be cached. Its problems are diagnostics, not a failed build, so they are
+  // reported below whether the build runs or the cache restores their record.
+  const code = await loadCodeConfig(root);
+  // A code file that could not load may read modules the declarations cannot name, so nothing about it is cached.
+  const codeFailed = code.diagnostics.some((finding) => finding.id === "plugin.load-failed");
+  const pluginKey = codeFailed ? undefined : await pluginInputs(code.plugins, root).catch(() => undefined);
+
   const cacheRoot =
-    options.cache === true && options.updateUrls !== true && !(await exists(join(root, CODE_CONFIG_FILE)))
+    options.cache === true && options.updateUrls !== true && pluginKey !== undefined
       ? resolve(options.cacheDir ?? cacheRootOf(root))
       : undefined;
   let key: string | undefined;
@@ -256,9 +266,11 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       config: loaded.config,
       themeRoot,
       outputsDir,
+      out,
       ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
       ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
       stale: JSON.stringify([...staleBySource]),
+      ...(pluginKey === undefined ? {} : { pluginKey }),
     }).catch(() => undefined);
     if (key !== undefined) {
       const hit = await restoreCache(cacheRoot, key, out).catch(() => undefined);
@@ -279,9 +291,6 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // which pages still render to the bytes they had? Its key covers the config, navigation, data, theme, outputs, and
   // every page's front matter but not a page's body, so a body-only edit retires that one page and nothing else.
   const renderRoot = cacheRoot === undefined ? undefined : join(cacheRoot, "render");
-  // The site's code file is read after the cache, which it never shares a key with. Its problems are diagnostics, not a
-  // failed build: the pages still build and the plugin that could not load costs only its own work.
-  const code = await loadCodeConfig(root);
   for (const d of code.diagnostics) diagnostics.report(d);
 
   const model = await buildModel(root, {
@@ -357,6 +366,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           outputsDir,
           ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
           ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
+          ...(pluginKey === undefined ? {} : { pluginKey }),
           ...(Object.keys(site.collections).length === 0 ? {} : { recordShape: recordShapeOf(site) }),
         }).catch(() => undefined);
   const recordKey = recordKeyOf(site);

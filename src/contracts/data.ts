@@ -133,6 +133,21 @@ export interface PageRecord {
   readonly changes?: readonly ChangeEvent[];
 }
 
+/** One record a configured relation points at, as the page reads it. */
+export interface RelatedRecord {
+  /** The target collection's name. */
+  readonly collection: string;
+  /** The target record's id. */
+  readonly id: string;
+  /** The target record page's URL, including `base` and the page language's prefix. */
+  readonly url: string;
+  /** The target record's fields in the page's language, with `id` filled in when the source omits it. */
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+/** A record's relations by field name; a field that resolves to nothing is absent. */
+export type RecordRelations = Readonly<Record<string, readonly RelatedRecord[]>>;
+
 /** A record as a layout receives it: its identity, its URL, and the fields the page asked for. */
 export interface RecordProps {
   /** The collection's name. */
@@ -145,6 +160,8 @@ export interface RecordProps {
   readonly fields: Readonly<Record<string, unknown>>;
   /** Reference fields resolved to the URL of the record page they point at, keyed by field name. */
   readonly links: Readonly<Record<string, string>>;
+  /** Each configured relation's records in the record's own order; absent when it resolves to nothing. */
+  readonly related?: RecordRelations;
   /**
    * Values the collection's `derived` rules computed for this record, keyed by the derived name; absent when the
    * collection declares none or the record has no date to derive from.

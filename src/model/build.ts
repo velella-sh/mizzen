@@ -29,6 +29,7 @@ import { loadNavigation } from "../nav/from-yaml.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
 import { pageCache, parseMarkdownWithCache, type PageCache } from "../pipeline/page-cache.ts";
 import { runContentHooks } from "../plugins/hooks.ts";
+import { runMarkdownHooks, runValidateHooks } from "../plugins/content-extension.ts";
 import { applyProjectLinks } from "../links/project-link.ts";
 import { loadLockedNetwork, type LoadedNetwork } from "../network/load.ts";
 import { applyFacts } from "./facts.ts";
@@ -52,7 +53,7 @@ export interface BuildModelOptions {
    * unchanged page is not parsed again. Front matter, includes, and every later stage still run every build.
    */
   readonly pageCacheDir?: string;
-  /** The site's plugins: their `content` hook runs once on every page before the site model is assembled. */
+  /** The site's plugins: the `markdown`, `content`, and `validate` hooks run on every page, and `model` on the assembled site. */
   readonly plugins?: readonly Plugin[];
   /** Accept every current record URL, moving a changed one into `urls.lock.json`'s `previous`; `mizzen build --update-urls` sets this. */
   readonly updateUrls?: boolean;
@@ -141,11 +142,13 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   let parsedPages = 0;
   const plugins = options.plugins ?? [];
 
-  /** Runs the `content` hook on a page that is complete, before navigation and data are built from it. */
+  /** Runs the `content` hook on a page that is complete, then the `validate` hooks on the final page. */
   const hookPage = async (page: Page): Promise<Page> => {
     const result = await runContentHooks(plugins, page);
     for (const d of result.diagnostics) diagnostics.report(d);
-    return result.value;
+    const validated = await runValidateHooks(plugins, result.value);
+    for (const d of validated.diagnostics) diagnostics.report(d);
+    return validated.value;
   };
 
   const loaded = loadConfig(siteRoot);
@@ -272,6 +275,9 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       for (const d of included.diagnostics) diagnostics.report(d);
       body = included.body;
       spans = included.spans;
+      const transformed = await runMarkdownHooks(plugins, { path: file.path, markdown: body }, posOf(rel, fm.bodyLine));
+      for (const d of transformed.diagnostics) diagnostics.report(d);
+      body = transformed.value.markdown;
     }
     let tree: Root;
     if (!isMarkdown) {

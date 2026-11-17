@@ -3,7 +3,8 @@
  * when every input that shaped it is unchanged.
  *
  * The key is one SHA-256 of the site's config file and its resolved config values, every discovered source file (pages,
- * assets, app pages, and `_data`), each collection's history file, the navigation file, every file of the theme, every
+ * assets, app pages, and `_data`), every file a code snippet may read (including folders discovery skips), each
+ * collection's history file, the navigation file, every file of the theme, every
  * file of the outputs folder, the
  * `defaultLayout` and `themeFiles` options, the engine's version, the runtime's version, and {@link CACHE_FORMAT}.
  * Paths and bytes count; timestamps do not. Config and navigation are part of the same hash as the pages, so changing
@@ -32,6 +33,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { setTimeout as sleep } from "node:timers/promises";
 import { CONFIG_FILE } from "../config/load.ts";
 import type { Diagnostic, SiteConfig } from "../contracts/index.ts";
+import { snippetSources } from "../content/code-snippets/dependencies.ts";
 import { discover } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { repositoryStateKey } from "../model/reviewers.ts";
@@ -89,6 +91,8 @@ export interface CacheKeyOptions {
   readonly themeRoot: string;
   /** Absolute folder the outputs are read from. */
   readonly outputsDir: string;
+  /** Absolute output folder, left out of the snippet walk when it sits inside the source folder. */
+  readonly out?: string;
   /** Layout for a page that names none. */
   readonly defaultLayout?: string;
   /** Theme files copied into the output. */
@@ -102,6 +106,8 @@ export interface CacheKeyOptions {
    * lock live outside the source folder, so without this a whole-build hit would restore an older state.
    */
   readonly stale?: string;
+  /** The digest of the site's plugin declarations and declared inputs; empty or absent for a site without plugins. */
+  readonly pluginKey?: string;
 }
 
 /** The file list and diagnostics of a cache hit. */
@@ -512,6 +518,16 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   for (const file of files) {
     inputs.push({ label: `source/${file.kind}/${file.path}`, path: join(options.sourceDir, file.path) });
   }
+  // A snippet may read any file under the source folder, including one in a folder discovery skips. Discovery's
+  // list is above; these are the rest, so an edited, moved, or deleted source misses the cache.
+  const discovered = new Set(files.map((file) => file.path));
+  for (const path of await snippetSources({
+    sourceDir: options.sourceDir,
+    ...(options.out === undefined ? {} : { skip: [options.out] }),
+  })) {
+    if (discovered.has(path)) continue;
+    inputs.push({ label: `snippet/${path}`, path: join(options.sourceDir, path) });
+  }
 
   // The navigation file may live outside the source folder, so it is hashed on its own as well.
   inputs.push({ label: "navigation", path: resolve(options.root, options.config.navigation) });
@@ -556,6 +572,8 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   hash.update(`config\0${canonicalJson(options.config)}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);
+  // A plugin's version, settings, declared inputs, and code file shape its output; its digest covers them all.
+  hash.update(`plugins\0${options.pluginKey ?? ""}\0`);
   for (let index = 0; index < inputs.length; index++) {
     hash.update(`${inputs[index]!.label}\0${digests[index]!}\0`);
   }
@@ -614,6 +632,8 @@ export interface RenderSettingsOptions {
   readonly themeFiles?: readonly string[] | undefined;
   readonly engineVersion?: string | undefined;
   readonly runtimeVersion?: string | undefined;
+  /** The digest of the site's plugin declarations and declared inputs; a plugin change always retires every render. */
+  readonly pluginKey?: string | undefined;
   /**
    * The site's shape without its records' fields: every page's URL and title, the navigation, and each collection's
    * record ids. When it is given, the source bytes of a collection are not part of the key, because a record page is
@@ -705,6 +725,8 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   hash.update(`config\0${canonicalJson({ ...options.config, asOf: undefined })}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
   if (options.recordShape !== undefined) hash.update(`recordShape\0${options.recordShape}\0`);
+  // A model hook can change site data every page reads, so a plugin change retires every render.
+  hash.update(`plugins\0${options.pluginKey ?? ""}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);
   for (let index = 0; index < inputs.length; index++) {
     hash.update(`${inputs[index]!.label}\0${digests[index]!}\0`);

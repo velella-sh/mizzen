@@ -117,9 +117,9 @@ test("the documents run npm scripts that exist", () => {
 
 test("the documents name CLI commands and entry points that exist", () => {
   const patterns = [
-    /^\| `mizzen ([a-z]+(?: [a-z]+)?)/gm,
-    /\bnpx mizzen ([a-z]+)/g,
-    /\bnode bin\/mizzen\.ts ([a-z]+)/g,
+    /^\| `mizzen ([a-z][a-z-]*(?: [a-z][a-z-]*)?)/gm,
+    /\bnpx mizzen ([a-z][a-z-]*)/g,
+    /\bnode bin\/mizzen\.ts ([a-z][a-z-]*)/g,
   ];
   for (const [file, text] of DOCUMENTS) {
     for (const pattern of patterns) {

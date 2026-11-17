@@ -70,7 +70,33 @@
         },
         "fields": {
           "type": "object",
-          "description": "The record's fields in the page's language: every field, or the fields the collection's `json.fields` names."
+          "description": "The record's fields in the page's language: every field, or the fields the collection's `json.fields` names. The raw evidence field is never one of them."
+        },
+        "evidence": {
+          "type": "object",
+          "description": "Claims keyed by the field they back, in record field order; each claim has only its public id, title, and url. Absent when the record has none.",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "title", "url"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Stable id, unique within this field's list."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Readable label for the source."
+                },
+                "url": {
+                  "type": "string",
+                  "description": "Absolute https URL or root-relative path of the source."
+                }
+              },
+              "additionalProperties": false
+            }
+          }
         }
       },
       "additionalProperties": false,

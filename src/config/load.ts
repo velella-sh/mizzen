@@ -540,6 +540,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
         : {}),
       ...(isPlainObject(entry) && typeof entry.llms === "boolean" ? { llms: entry.llms } : {}),
       ...(json === undefined ? {} : { json }),
+      ...(typeof entry.evidence === "string" ? { evidence: entry.evidence } : {}),
       ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
       ...(onRemoved === undefined ? {} : { onRemoved }),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),

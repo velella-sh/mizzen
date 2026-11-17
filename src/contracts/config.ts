@@ -271,6 +271,8 @@ export interface CollectionConfig {
   readonly llms?: boolean;
   /** Which record fields the page JSON publishes. Default: every field. */
   readonly json?: CollectionJsonConfig;
+  /** Top-level record field that maps the record's other fields to the claims that back them; absent keeps evidence off. */
+  readonly evidence?: string;
   /** What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. Default `error`. */
   readonly onInvalid?: "error" | "skip";
   /** What a record that was published and is no longer in the collection does. Default `error` once `urls.lock.json` exists. */
