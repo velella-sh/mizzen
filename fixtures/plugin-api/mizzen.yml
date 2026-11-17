@@ -1,0 +1,6 @@
+title: Plugin API fixture
+description: "A site that runs a content validator, a page transformation, a model pass, and a custom output."
+url: https://example.com
+base: ""
+lang: en
+exclude: ["README.md"]
