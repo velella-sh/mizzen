@@ -2,6 +2,7 @@ import { readFile, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import type { Diagnostic, SourcePos } from "../contracts/index.ts";
 import { parseFrontMatter } from "./frontmatter.ts";
+import { bindIncludeParams, includeParamsOf, substituteIncludeParams } from "./include-params.ts";
 
 /**
  * Expands `::include` directives before the Markdown stage, because a Markdown plugin has no site root and no page
@@ -237,9 +238,9 @@ function contentOf(
   display: string,
   range: LineRange | undefined,
   pos: SourcePos,
-): { readonly text: string; readonly line: number } | undefined {
+): { readonly text: string; readonly line: number; readonly data: Readonly<Record<string, unknown>> } | undefined {
   const stripped = parseFrontMatter(text, display);
-  if (range === undefined) return { text: stripped.body, line: stripped.bodyLine };
+  if (range === undefined) return { text: stripped.body, line: stripped.bodyLine, data: stripped.data };
   const lines = stripped.body.split(/(?<=\n)/);
   if (range.start > lines.length || range.end > lines.length) {
     scope.diagnostics.push(
@@ -252,7 +253,11 @@ function contentOf(
     );
     return undefined;
   }
-  return { text: lines.slice(range.start - 1, range.end).join(""), line: stripped.bodyLine + range.start - 1 };
+  return {
+    text: lines.slice(range.start - 1, range.end).join(""),
+    line: stripped.bodyLine + range.start - 1,
+    data: stripped.data,
+  };
 }
 
 /** Expands one directive line, returning the text that replaces it, or `undefined` to drop the line. */
@@ -384,7 +389,11 @@ async function expandDirective(
 
   const content = contentOf(scope, text, display, range, pos);
   if (content === undefined) return undefined;
-  const expanded = await expandBody(scope, content.text, content.line, rel, display, [...stack, { key, display }]);
+  const declaration = includeParamsOf(content.data, text, display);
+  scope.diagnostics.push(...declaration.diagnostics);
+  const binding = bindIncludeParams(declaration, attributes, pos);
+  scope.diagnostics.push(...binding.diagnostics);
+  const expanded = await expandBody(scope, content.text, content.line, rel, display, [...stack, { key, display }], binding.values);
   return expanded;
 }
 
@@ -396,8 +405,11 @@ async function expandBody(
   relPath: string,
   displayPath: string,
   stack: readonly Frame[],
+  params?: ReadonlyMap<string, string>,
 ): Promise<string> {
-  if (!body.includes("::include")) return body;
+  if (!body.includes("::include")) {
+    return params === undefined ? body : substituteIncludeParams(body, params);
+  }
   const lines = body.split(/(?<=\n)/);
   const fenced = fencedLines(lines);
   const out: string[] = [];
@@ -406,7 +418,7 @@ async function expandBody(
     const text = strip(line);
     const match = fenced[i] === true ? null : DIRECTIVE.exec(text);
     if (match === null) {
-      out.push(line);
+      out.push(params === undefined ? line : substituteIncludeParams(line, params));
       continue;
     }
     const replacement = await expandDirective(
