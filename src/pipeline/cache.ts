@@ -102,6 +102,8 @@ export interface CacheKeyOptions {
    * lock live outside the source folder, so without this a whole-build hit would restore an older state.
    */
   readonly stale?: string;
+  /** The digest of the site's plugin declarations and declared inputs; empty or absent for a site without plugins. */
+  readonly pluginKey?: string;
 }
 
 /** The file list and diagnostics of a cache hit. */
@@ -556,6 +558,8 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   hash.update(`config\0${canonicalJson(options.config)}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);
+  // A plugin's version, settings, declared inputs, and code file shape its output; its digest covers them all.
+  hash.update(`plugins\0${options.pluginKey ?? ""}\0`);
   for (let index = 0; index < inputs.length; index++) {
     hash.update(`${inputs[index]!.label}\0${digests[index]!}\0`);
   }
@@ -614,6 +618,8 @@ export interface RenderSettingsOptions {
   readonly themeFiles?: readonly string[] | undefined;
   readonly engineVersion?: string | undefined;
   readonly runtimeVersion?: string | undefined;
+  /** The digest of the site's plugin declarations and declared inputs; a plugin change always retires every render. */
+  readonly pluginKey?: string | undefined;
   /**
    * The site's shape without its records' fields: every page's URL and title, the navigation, and each collection's
    * record ids. When it is given, the source bytes of a collection are not part of the key, because a record page is
@@ -705,6 +711,8 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   hash.update(`config\0${canonicalJson({ ...options.config, asOf: undefined })}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
   if (options.recordShape !== undefined) hash.update(`recordShape\0${options.recordShape}\0`);
+  // A model hook can change site data every page reads, so a plugin change retires every render.
+  hash.update(`plugins\0${options.pluginKey ?? ""}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);
   for (let index = 0; index < inputs.length; index++) {
     hash.update(`${inputs[index]!.label}\0${digests[index]!}\0`);
