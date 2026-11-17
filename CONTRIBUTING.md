@@ -34,9 +34,11 @@ A change to behavior needs a test beside the others in `test/`. A change to the 
 
 ## Releasing
 
-Publishing a GitHub Release publishes the same version to npm. The [`release`](.github/workflows/release.yml) workflow does the rest: it checks that the tag is `v<package.json version>` and is on `main`, runs the tests, type check, and package smoke test, packs one tarball, and publishes that exact tarball with provenance. A version with a suffix (`0.4.0-rc.1`) goes to the `next` dist-tag; any other goes to `latest`.
+Pushing a tag `v<version>` or publishing a GitHub Release publishes that version to npm. The [`release`](.github/workflows/release.yml) workflow does the rest: it checks that the tag is `v<package.json version>` and is on `main`, runs the tests, type check, and package smoke test, packs one tarball, and publishes that exact tarball with provenance. A version with a suffix (`0.4.0-rc.1`) goes to the `next` dist-tag; any other goes to `latest`.
 
-To release: bump `version` in `package.json`, move the changelog fragments, merge to `main`, then create a release tagged `v<version>` on that commit. If a publish fails, run the `release` workflow by hand with the same tag; a version already on npm is skipped.
+To release: bump `version` in `package.json` (and `src/index.ts`), move the changelog fragments, merge to `main`, then push the tag or create a release on that commit. If a publish fails, run the `release` workflow by hand with the same tag; a version already on npm is skipped.
+
+To publish a pre-release without moving `latest`, use a suffix version such as `0.3.0-next.0` and tag it `v0.3.0-next.0`. It is published under `next` like any other release.
 
 ### One-time setup
 
@@ -45,7 +47,3 @@ There is no npm token. npm trusted publishing lets the workflow publish with its
 1. On npmjs.com, open `@velella/mizzen` → Settings → Trusted publisher → GitHub Actions: organization `velella-sh`, repository `mizzen`, workflow `release.yml`, environment `npm`.
 2. In the repository settings, create an environment named `npm`. Optionally add required reviewers to approve each publish, and restrict it to release tags.
 3. Optionally set the package's publishing access to "Require two-factor authentication and disallow tokens", so only this workflow can publish.
-
-### Pre-releases
-
-The [`publish-next`](.github/workflows/publish-next.yml) workflow publishes `0.3.0-next.<n>` under the `next` dist-tag whenever `src/contracts/` or the contract freeze snapshot changes on `main` (or when run by hand). It uses the same tests, smoke test, `npm` environment, trusted publishing, and provenance as `release`, never touches `latest`, and does not change `package.json` in the repository. npm accepts one trusted publisher per package, so until a token is configured, add `publish-next.yml` as an additional trusted publisher if npm allows it, or point the single entry at the workflow you use. Raise `NEXT_BASE` in the workflow when the next minor starts.
