@@ -20,6 +20,7 @@ import type {
 import type { Calendar } from "../dates/calendars.ts";
 import { fieldsWithDerived } from "./derived.ts";
 import { recordUrlsOf, type RecordUrlMap } from "./permalink.ts";
+import { relatedProps } from "./relations/query.ts";
 
 /** What one record page's directives read. */
 export interface RecordScope {
@@ -306,6 +307,7 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
     url: page.url,
     fields,
     links,
+    ...relatedProps(site.collections, site.config, record.collection, fields, page.lang),
     ...(source.derived === undefined ? {} : { derived: source.derived }),
     ...(record.views === undefined ? {} : { views: record.views }),
     ...(record.changes === undefined ? {} : { changes: record.changes }),

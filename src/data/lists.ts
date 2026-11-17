@@ -31,6 +31,7 @@ import { paginateRows, type Slice } from "./paginate.ts";
 import { filterRows, parseQuery, sortRows, type Row } from "./query.ts";
 import { referenceDateOf } from "./reference-date.ts";
 import { fieldsWithDerived } from "./derived.ts";
+import { relatedProps } from "./relations/query.ts";
 
 /** How one page declares its list. */
 export interface ListSpec {
@@ -401,6 +402,7 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
       url: urlMap.urls.get(row.id)?.url ?? "",
       fields: picked,
       links,
+      ...relatedProps(collections, config, spec.collection, row.fields, page.lang),
       ...(row.record.derived === undefined ? {} : { derived: row.record.derived }),
     };
     props.set(row.id, record);
