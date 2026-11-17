@@ -1,1 +1,0 @@
-- **`mizzen mcp`** serves a site to an AI client over MCP on stdio: search, read a page, find a block's source span, propose a diff, and read diagnostics, packs, and records. It is read-only unless `--allow-edits` adds `apply_edit`; `--print-config <client>` prints the client setup.

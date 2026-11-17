@@ -1,1 +1,0 @@
-- **Stable URLs page.** `site/data/urls.md` explains `urls.lock.json`, `urls check`, `--update-urls`, removed-record policies, aliases, and `urls.json`.

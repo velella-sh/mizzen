@@ -1,2 +1,0 @@
-- **A guide to data sites.** `site/data/index.md` explains collections, records, templates, and list pages with one small example and links to each reference page.
-- **Calendar feeds reference.** `site/data/calendars.md` covers the `calendars` config, events, reminders, event ids, subscribing from a calendar app, and the window feed, and a test compares the documented keys with the config schema.
