@@ -36,8 +36,27 @@ export default {
 - Other exports of the file are ignored. The file sets no `mizzen.yml` key and is never copied to the output.
 - The module is imported once per build with a content hash in its URL, so an edited file is imported again.
 
-A site with a code file always builds cold: what its imports read cannot be part of the cache key, so a cache hit
-could restore stale output. The epic later replaces this with declared plugin inputs (#604).
+A plugin declares its cache inputs beside its name and hooks: `version`, `settings`, and `inputs`, the site-relative
+files its code reads. A site whose plugins all declare `inputs` is cached, and a change to a declared version, a
+setting, a declared file, or the code file misses. A plugin without `inputs` cannot be tracked, and a site that lists
+one always builds cold.
+
+## Cache and declared inputs
+
+`mizzen build` reuses a previous build when its inputs are unchanged. A plugin's own code and everything it reads are
+part of that key:
+
+- `version` is the plugin's own version; bump it when its behavior changes without its code or declared inputs changing.
+- `settings` is any JSON value that shapes its output; it is compared by value, so key order and identity do not count.
+- `inputs` lists the site-relative files its code reads, with `/` separators. Their bytes are hashed, and a missing file
+  is tracked too: creating it misses.
+- The site's code file is always part of the key. A file a plugin imports and reads must be declared in `inputs`.
+
+A plugin that omits `inputs` declares that its inputs cannot be tracked, so every build runs cold, as it did before this
+rule. `inputs: []` says the plugin reads no file. A declaration the engine cannot honor — an absolute path, or one that
+leaves the site — also builds cold, because the file it names cannot be part of the key. Declaring a file whose bytes do
+not reach the output costs only cache misses, never stale output. The hooks do not run on a cache hit, but the code file
+is imported once per build to read its declarations, so its top-level code does run.
 
 ## Stages and order
 
@@ -110,8 +129,8 @@ and none is planned. Running an untrusted plugin is arbitrary code execution wit
 
 The bounds above are about predictability, not security. The deadline limits how long the engine waits; the copy
 limits mutation; the return checks catch a malformed value. None of them stops a plugin from reading or writing any
-file or opening a socket, and the engine cannot see what a plugin read. That is why a site with a code file builds
-cold until declared inputs exist (#604).
+file or opening a socket, and the engine cannot see what a plugin read: only the files a plugin declares in `inputs` are
+part of the cache key, and a plugin that declares none keeps the site cold.
 
 ## Determinism boundary
 
@@ -125,7 +144,7 @@ plugin keeps its side of that promise by:
 - using only site-relative paths in anything it reports or writes.
 
 A plugin that cannot meet these rules makes the build non-deterministic, and the engine has no way to detect it. The
-cache rules for declared plugin inputs follow in #604.
+cache rules for declared plugin inputs are in [Cache and declared inputs](#cache-and-declared-inputs).
 
 ## Audit: gaps this epic closes
 
