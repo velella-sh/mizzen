@@ -147,6 +147,14 @@ its help names the two accepted formats.
 | `data.seo-duplicate-description` | Record pages of one language share a description. The finding names five URLs and the count of the rest. | Build the description from a field that tells the records apart. |
 | `data.json-ld-type` | A collection's `seo.jsonLd` mapping has no `@type`, so its record pages get no structured data. | Add an `@type` such as `Product` to the mapping. |
 | `data.history-line` | A line in a collection's `data-changes/<name>.jsonl` cannot be read as a change event. | Fix the line, or run `mizzen data changes` to append the events again. |
+| `data.evidence-shape` | The `evidence` field is not a mapping of field names to claims, or a field's value is neither a claim nor a list of claims. | Write `evidence: <field>` and one claim mapping or a list of them. |
+| `data.evidence-field` | An evidence key names no top-level field of the record. | Use a field the record has. |
+| `data.evidence-claim` | A claim is not a mapping, or is missing a non-empty string `id`, `title`, or `url`. | Write all three as non-empty strings. |
+| `data.evidence-url` | A claim URL is not an absolute `https:` URL or a root-relative path. | Use `https:` or `/path`. |
+| `data.evidence-duplicate-id` | Two claims in one field share an id. | Give each claim its own id. |
+| `data.report-run-invalid` | A run record has no id, date, or commit, so it cannot name the inputs it scanned. | Add the three fields the run collection expects. |
+| `data.report-run-duplicate-id` | Two records publish the same run id. | Give each run its own id. |
+| `data.report-run-untracked-overwrite` | A run id is published with different pinned inputs than before. | Keep the run's inputs fixed, or publish it under a new id. |
 
 ## Page directives
 

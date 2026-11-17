@@ -37,6 +37,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `opensearch` | `opensearch.xml`, the site's search as an OpenSearch provider, when the config has `url`. |
 | `page-agent` | One JSON file per document page with an `agent:` block (`agent.json` for a pretty URL): URL, source, and the page's instructions. |
 | `page-json` | One JSON file per document page (`index.json` for a pretty URL): URL, title, description, headings, source, last change, and estimated tokens; a record page adds its collection, id, and published fields, a list page adds its record ids, groups, and pagination, and a page with a stale `covers` state adds its review date and changed files. |
+| `page-tools` | Copies the file a page selects with `tool:` to its site-relative output path; a missing file is an error at the page's front matter. |
 | `pages-files` | `.nojekyll`, and `CNAME` when the config's `url` is a custom domain on GitHub Pages. |
 | `reading-time` | `reading-time.json`, the word count and reading minutes of each doc page. |
 | `redirects` | One HTML redirect page per old path, and `_redirects` for hosts that read it. |
