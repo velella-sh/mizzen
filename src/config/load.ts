@@ -33,6 +33,8 @@ import type {
   DefaultsEntry,
   Diagnostic,
   Direction,
+  CalendarConfig,
+  CalendarEventConfig,
   FeedConfig,
   FeedFormat,
   LanguageConfig,
@@ -194,7 +196,57 @@ export function loadConfigText(source: string, file: string, folderTitle: string
     });
   }
 
+  diagnostics.push(...calendarDiagnostics(raw, collections, file, doc, lineCounter));
+
   return { config: applyDefaults(raw, folderTitle), diagnostics };
+}
+
+/** Findings about calendars the schema cannot see: an unknown collection, a date field the collection does not declare as a date. */
+function calendarDiagnostics(
+  raw: Record<string, unknown>,
+  collections: Readonly<Record<string, CollectionConfig>>,
+  file: string,
+  doc: Document.Parsed,
+  lineCounter: LineCounter,
+): Diagnostic[] {
+  const found: Diagnostic[] = [];
+  const at = (path: (string | number)[]) => {
+    const pair = getMapPair(doc, path);
+    return posFromNode(file, lineCounter, isNode(pair?.value) ? pair.value : doc.contents);
+  };
+  for (const [name, calendar] of Object.entries(calendarsFrom(raw.calendars))) {
+    const collection = collections[calendar.collection];
+    if (collection === undefined) {
+      found.push({
+        id: "config.calendars-collection",
+        severity: "error",
+        message: `The calendar "${name}" lists the collection "${calendar.collection}", which the site does not have.`,
+        pos: at(["calendars", name, "collection"]),
+        help: "Name a collection the config declares.",
+      });
+      continue;
+    }
+    const dates = collection.dates ?? [];
+    calendar.events.forEach((event, index) => {
+      for (const key of ["field", "end"] as const) {
+        const field = event[key];
+        if (field === undefined || dates.includes(field)) continue;
+        found.push({
+          id: "config.calendars-date-field",
+          severity: "error",
+          message: `The calendar "${name}" takes the event "${event.name}" from "${field}", which is not one of the dates of the collection "${calendar.collection}".`,
+          pos: eventPos(doc, file, lineCounter, name, index, key),
+          help: `List "${field}" under dates in the collection, or name a date field.`,
+        });
+      }
+    });
+  }
+  return found;
+}
+
+function eventPos(doc: Document.Parsed, file: string, lineCounter: LineCounter, name: string, index: number, key: string) {
+  const node = doc.getIn(["calendars", name, "events", index, key], true);
+  return posFromNode(file, lineCounter, isNode(node) ? node : doc.contents);
 }
 
 function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteConfig {
@@ -231,6 +283,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
         : "_data/navigation.yml",
     collections: collectionsFrom(raw.collections),
     feeds: feedsFrom(raw.feeds),
+    calendars: calendarsFrom(raw.calendars),
     defaults: Array.isArray(raw.defaults) ? (raw.defaults as DefaultsEntry[]) : [],
     ...(repository === undefined ? {} : { repository }),
     theme,
@@ -454,6 +507,38 @@ function feedsFrom(value: unknown): Readonly<Record<string, FeedConfig>> {
     };
   }
   return feeds;
+}
+
+/** The declared calendars, keeping only entries the schema accepts. */
+function calendarsFrom(value: unknown): Readonly<Record<string, CalendarConfig>> {
+  if (!isPlainObject(value)) return {};
+  const calendars: Record<string, CalendarConfig> = {};
+  for (const [name, entry] of Object.entries(value)) {
+    if (!isPlainObject(entry) || typeof entry.collection !== "string" || !Array.isArray(entry.events)) continue;
+    const events: CalendarEventConfig[] = [];
+    for (const item of entry.events) {
+      if (!isPlainObject(item) || typeof item.name !== "string" || typeof item.field !== "string") continue;
+      events.push({
+        name: item.name,
+        field: item.field,
+        ...(typeof item.end === "string" ? { end: item.end } : {}),
+        ...(typeof item.title === "string" ? { title: item.title } : {}),
+      });
+    }
+    if (events.length === 0) continue;
+    const where = isPlainObject(entry.where) ? entry.where : undefined;
+    calendars[name] = {
+      collection: entry.collection,
+      ...(where === undefined ? {} : { where }),
+      events,
+      ...(Array.isArray(entry.reminders)
+        ? { reminders: entry.reminders.filter((r): r is string => typeof r === "string") }
+        : {}),
+      ...(typeof entry.groupBy === "string" ? { groupBy: entry.groupBy } : {}),
+      ...(typeof entry.limit === "number" && Number.isSafeInteger(entry.limit) && entry.limit > 0 ? { limit: entry.limit } : {}),
+    };
+  }
+  return calendars;
 }
 
 /** A collection's search settings, keeping only the keys the schema accepts. `undefined` when it sets none. */

@@ -121,6 +121,34 @@ export interface FeedConfig {
   readonly fields?: readonly string[];
 }
 
+/** One event a calendar builds from each record: a date field, with an optional end field and a title. */
+export interface CalendarEventConfig {
+  /** Event name, kept in the event id, such as `eol`. Lowercase words joined by hyphens or camel case is fine; unique per calendar. */
+  readonly name: string;
+  /** Record field that holds the event's date; it must be one of the collection's `dates`. */
+  readonly field: string;
+  /** Record field that holds the last day of a multi-day event; it must be one of the collection's `dates`. */
+  readonly end?: string;
+  /** Title template; `{field}` names a record field. Default `{title}`. */
+  readonly title?: string;
+}
+
+/** One calendar of a collection's records, declared in the site config and written under `calendars/`. */
+export interface CalendarConfig {
+  /** Collection whose records the calendar lists. */
+  readonly collection: string;
+  /** Which records it lists, written like a list page's `where`. Default: every record. */
+  readonly where?: Readonly<Record<string, unknown>>;
+  /** Events built from each record. At least one. */
+  readonly events: readonly CalendarEventConfig[];
+  /** Reminders before each event as whole days, such as `30d`. Default: none. */
+  readonly reminders?: readonly string[];
+  /** Record field whose values each get a calendar of their own under `calendars/<name>/`. */
+  readonly groupBy?: string;
+  /** Largest number of events in one file. Default: no limit. */
+  readonly limit?: number;
+}
+
 /** A feed file's format. */
 export type FeedFormat = "atom" | "rss" | "json";
 
@@ -349,6 +377,8 @@ export interface SiteConfig {
   readonly collections: Readonly<Record<string, CollectionConfig>>;
   /** Feeds of collections' records by name: which records, how many, and which formats. Default `{}`. */
   readonly feeds: Readonly<Record<string, FeedConfig>>;
+  /** Calendars of collections' dated records by name, written as `.ics` files. Default `{}`. */
+  readonly calendars?: Readonly<Record<string, CalendarConfig>>;
   /** Front matter applied by folder; later entries win over earlier ones, and a page always wins. Default `[]`. */
   readonly defaults: readonly DefaultsEntry[];
   /** Where the source lives, for edit links. */

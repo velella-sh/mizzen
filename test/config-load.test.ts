@@ -164,6 +164,49 @@ test("feeds keep their keys, and an unknown collection points at its line", () =
   assert.equal(diagnostics[0]?.pos?.line, 10);
 });
 
+test("calendars keep their keys, and an unknown collection or a non-date field points at its line", () => {
+  const src = [
+    "collections:",
+    "  runtimes:",
+    "    source: _data/runtimes.yml",
+    "    dates: [eol]",
+    "calendars:",
+    "  eol:",
+    "    collection: runtimes",
+    "    events:",
+    "      - { name: eol, field: eol, title: \"{name} ends\" }",
+    "      - { name: support, field: eol, end: supportEnd }",
+    "    reminders: [30d]",
+    "  missing:",
+    "    collection: nope",
+    "    events: [{ name: a, field: eol }]",
+    "",
+  ].join("\n");
+  const { config, diagnostics } = loadConfigText(src, F, "Example");
+  assert.deepEqual(config.calendars?.eol, {
+    collection: "runtimes",
+    events: [
+      { name: "eol", field: "eol", title: "{name} ends" },
+      { name: "support", field: "eol", end: "supportEnd" },
+    ],
+    reminders: ["30d"],
+  });
+  assert.deepEqual(diagnostics.map((d) => d.id), ["config.calendars-date-field", "config.calendars-collection"]);
+  assert.equal(diagnostics[0]?.pos?.line, 10);
+  assert.equal(diagnostics[1]?.pos?.line, 13);
+});
+
+test("a site without calendars has none, and an empty events list is one error", () => {
+  assert.deepEqual(loadConfigText("title: A\n", F, "Example").config.calendars, {});
+  const { diagnostics } = loadConfigText(
+    "collections:\n  r:\n    source: r.yml\ncalendars:\n  c:\n    collection: r\n    events: []\n",
+    F,
+    "Example",
+  );
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0]?.id, "config.invalid");
+});
+
 test("a collection keeps its URL keys, and a bad onRemoved is reported", () => {
   const src = [
     "collections:",

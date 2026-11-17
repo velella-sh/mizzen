@@ -1,5 +1,6 @@
 import type { NavGroup, NavItem, NavLink, Page, Site } from "../contracts/index.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
+import { writtenCalendars } from "../calendar/links.ts";
 import { isAppPage } from "./app-pages.ts";
 import { indexRecords } from "./search-shared.ts";
 
@@ -121,6 +122,15 @@ export const llms: Output = {
       const version = site.config.api.version;
       lines.push("## Data API", "");
       lines.push(`- [API index](${origin}${base}/api/${version}/index.json): the published collections as versioned JSON, keyed by record id`);
+      lines.push("");
+    }
+
+    const calendars = writtenCalendars(site);
+    if (calendars.length > 0) {
+      lines.push("## Calendars", "");
+      for (const c of calendars) {
+        lines.push(`- [${linkText(c.name)}](${origin}${base}/${c.file}): ${c.events} ${c.events === 1 ? "event" : "events"}`);
+      }
       lines.push("");
     }
 
