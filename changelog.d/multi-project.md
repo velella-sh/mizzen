@@ -1,1 +1,0 @@
-- **Several projects under one domain:** the `network` config key, `mizzen network check|update|sitemap`, `network.lock.json`, `[[project:/path/]]` links, one search and one sitemap index across projects; see `site/network.md`.

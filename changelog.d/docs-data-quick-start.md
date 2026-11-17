@@ -1,1 +1,0 @@
-- **Data site quick start.** `site/data/quick-start.md` builds a small catalogue from one data file in five steps; its files are checked by building them.
