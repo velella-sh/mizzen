@@ -4,6 +4,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "no
 import { extname, join } from "node:path";
 import { before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { version } from "../src/index.ts";
 
 const PACKAGE = fileURLToPath(new URL("../", import.meta.url));
 const DIST = join(PACKAGE, "dist");
@@ -63,12 +64,18 @@ test("a consumer typechecks against the built entry points", () => {
     consumer,
     `import { version } from "@velella/mizzen";
 import type {
-  Chrome, Collection, Component, DataRecord, Diagnostic, Layout, ListProps, Output, Page, PageRecord, Plugin, RecordPos, RecordProps, Site, SiteConfig, SourcePos,
+  AnalyticsConfig, ApiConfig, CalendarConfig, CalendarLink, ChangeEvent, Chrome, Collection, CollectionSnapshot,
+  Component, DataRecord, DatesConfig, Diagnostic, Head, Layout, ListProps, NetworkConfig, Output, Page, PageRecord,
+  PageStale, Plugin, RecordPos, RecordProps, ScriptTag, Site, SiteConfig, SiteNetwork, SnapshotConfig, SocialConfig,
+  SourcePos, StaleConfig,
 } from "@velella/mizzen/contracts";
 
 export const engine: string = version;
 export type Surface = [SourcePos, Diagnostic, SiteConfig, Page, Site, Output, Plugin, Layout, Chrome, Component];
 export type Data = [Collection, DataRecord, RecordPos, PageRecord, RecordProps, ListProps];
+export type Publishing = [ApiConfig, CalendarConfig, CalendarLink, ChangeEvent, CollectionSnapshot, DatesConfig,
+  SnapshotConfig, SocialConfig, StaleConfig, PageStale, AnalyticsConfig, NetworkConfig, SiteNetwork, ScriptTag,
+  Head["scripts"]];
 `,
   );
   try {
@@ -99,6 +106,39 @@ test("package.json exposes only the two public entries and the manifest, all bui
     assert.match(module, /^\.\/dist\/.+\.js$/, `${subpath} runtime comes from dist`);
     assert.ok(existsSync(join(PACKAGE, types)), `${types} exists after a build`);
     assert.ok(existsSync(join(PACKAGE, module)), `${module} exists after a build`);
+  }
+});
+
+test("source, package, and lockfile identify the same engine version", () => {
+  const lock = JSON.parse(readFileSync(join(PACKAGE, "package-lock.json"), "utf8"));
+  assert.equal(version, manifest.version);
+  assert.equal(lock.version, version);
+  assert.equal(lock.packages[""].version, version);
+});
+
+test("the tarball lists every schema, including the 0.2.0 schemas and every docs reference", () => {
+  const [packed] = JSON.parse(execFileSync("npm", ["pack", "--dry-run", "--ignore-scripts", "--json"], {
+    cwd: PACKAGE,
+    encoding: "utf8",
+    shell: process.platform === "win32",
+    maxBuffer: 4 * 1024 * 1024,
+  })) as { files: { path: string }[] }[];
+  assert.ok(packed, "npm pack returned a file list");
+  const paths = new Set(packed.files.map((file) => file.path));
+  const legacy = [
+    "config", "context-pack", "context-request", "diagnostics", "drift", "edit-audit",
+    "front-matter", "manifest", "review-coverage", "sourcemap", "trust",
+  ];
+  for (const name of legacy) assert.ok(paths.has(`schema/${name}.schema.json`), `0.2.0 schema: ${name}`);
+  for (const name of readdirSync(join(PACKAGE, "schema"))) {
+    if (name.endsWith(".json")) assert.ok(paths.has(`schema/${name}`), `unpacked schema: ${name}`);
+  }
+  const site = join(PACKAGE, "site");
+  for (const path of readdirSync(site, { recursive: true }) as string[]) {
+    if (!path.endsWith(".md")) continue;
+    for (const [reference] of readFileSync(join(site, path), "utf8").matchAll(/\bschema\/[\w.-]+\.json\b/g)) {
+      assert.ok(paths.has(reference), `${path} references an unpacked schema: ${reference}`);
+    }
   }
 });
 

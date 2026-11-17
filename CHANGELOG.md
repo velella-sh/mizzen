@@ -4,6 +4,7 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+- **Upgrade guide.** [Upgrading a 0.2.0 or 0.2.1 site to 0.2.2](site/upgrade.md), including what stays compatible and how to turn an existing `_data` file into a collection.
 - **Social share images.** With `social.template` set, the `social-images` output draws a 1200 by 630 PNG for every page from an SVG template and fonts the site declares, and the head points `og:image` at it. The bytes are the same on every operating system.
 - **`mizzen diff <a> <b>`** compares two builds: pages added, removed, changed (by section), and moved, URLs that stopped answering, changed files, and changed records, as text, JSON (`schema/site-diff.schema.json`), or a pull request comment. `--base <ref>` builds a git ref for you, and `--fail-on` sets what exits `1`. A GitHub Actions recipe is in `recipes/site-diff.yml`.
 
@@ -98,4 +99,3 @@ selection, omission, and token it spent.
 ## 0.1.0
 
 First release: the `mizzen` CLI and library, compiled to JavaScript with type declarations, plus the JSON schemas.
-
