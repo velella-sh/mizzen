@@ -1,0 +1,42 @@
+---
+title: Publish a release
+description: A Starlight Markdoc page with steps, a file tree, a link card, and a custom tag.
+---
+
+Publish a Mizzen site in three steps.
+
+{% steps %}
+
+1. Build the site:
+
+   ```sh
+   node bin/mizzen.ts build site
+   ```
+
+2. Check the `site` output folder.
+3. Upload the folder to a host.
+
+{% /steps %}
+
+The output looks like this:
+
+{% filetree %}
+
+- site/
+  - index.html
+  - guides/
+    - install/
+      - index.html
+  - sitemap.xml
+
+{% /filetree %}
+
+Read the [deployment guide](/guides/deploy/) before choosing a host.
+
+{% linkcard title="Deployment guide" href="/guides/deploy/" description="Configure a host, a domain, and caching." /%}
+
+{% releaseNote version="0.2.3" %}
+
+This page is written for release 0.2.3.
+
+{% /releaseNote %}
