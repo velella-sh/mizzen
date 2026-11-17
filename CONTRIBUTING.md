@@ -48,9 +48,9 @@ Only npm downloads are cached; installations still use `npm ci`.
 
 ## Releasing
 
-Pushing a tag `v<version>` or publishing a GitHub Release publishes that version to npm. The [`release`](.github/workflows/release.yml) workflow does the rest: it checks that the tag is `v<package.json version>` and is on `main`, runs the tests with the 95% coverage gate, type check, and package smoke test, packs one tarball, checks the full data benchmark, and publishes that exact tarball with provenance. A version with a suffix (`0.4.0-rc.1`) goes to the `next` dist-tag; any other goes to `latest`.
+Pushing a tag `v<version>` or publishing a GitHub Release publishes that version to npm. The [`release`](.github/workflows/release.yml) workflow does the rest: it checks that the tag is `v<package.json version>` and is on `main`, runs the tests with the 95% coverage gate, type check, and package smoke test, packs one tarball, checks the full data benchmark, publishes that exact tarball with provenance, and creates a GitHub Release. A version with a suffix (`0.4.0-rc.1`) goes to the `next` dist-tag and becomes a GitHub prerelease; any other goes to `latest`, with GitHub choosing its Latest release automatically.
 
-To release: bump `version` in `package.json` (and `src/index.ts`), move the changelog fragments, merge to `main`, then push the tag or create a release on that commit. If a publish fails, run the `release` workflow by hand with the same tag; a version already on npm is skipped.
+To release: bump `version` in `package.json` (and `src/index.ts`), move the changelog fragments, merge to `main`, then push the tag or create a release on that commit. If a publish fails, run the `release` workflow by hand with the same tag; a version already on npm is not republished, and a missing GitHub Release is created.
 
 To publish a pre-release without moving `latest`, use a suffix version such as `0.3.0-next.0` and tag it `v0.3.0-next.0`. It is published under `next` like any other release.
 

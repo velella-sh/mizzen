@@ -129,8 +129,6 @@ jobs:
           retention-days: 14
 
   performance:
-    needs: verify
-    if: needs.verify.outputs.published != 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/benchmark.yml
@@ -167,3 +165,23 @@ jobs:
           npm install --global --silent npm@^11.5.1
           npm publish "$RUNNER_TEMP"/dist/*.tgz --access public --provenance --tag "$DIST_TAG"
           echo "Published ${{ needs.verify.outputs.version }} to \`$DIST_TAG\`" >> "$GITHUB_STEP_SUMMARY"
+
+  github-release:
+    needs: [verify, publish]
+    if: always() && needs.verify.result == 'success' && (needs.verify.outputs.published == 'true' || needs.publish.result == 'success')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ env.TAG }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          DIST_TAG: ${{ needs.verify.outputs.dist-tag }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then exit 0; fi
+          args=()
+          if [ "$DIST_TAG" = next ]; then args+=(--prerelease --latest=false); fi
+          gh release create "$TAG" --verify-tag --title "Mizzen $VERSION" --generate-notes "${args[@]}"
