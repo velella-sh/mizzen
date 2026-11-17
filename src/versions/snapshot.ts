@@ -58,6 +58,8 @@ export interface SnapshotOptions {
   readonly root: string;
   /** The new version folder name, such as `v3`. */
   readonly version: string;
+  /** Plan the snapshot and write nothing; `files` is what would be written. */
+  readonly dryRun?: boolean;
   /** Test seam; the CLI never sets it. */
   readonly hooks?: SnapshotHooks;
 }
@@ -287,6 +289,7 @@ export async function createSnapshot(options: SnapshotOptions): Promise<Snapshot
 
   const staged: { readonly path: string; readonly text: string }[] = pages.map((page) => ({ path: page.path, text: page.text }));
   staged.push({ path: navigationRelative, text: navigation });
+  if (options.dryRun === true) return { version, folder, files: staged.map((file) => file.path).sort(byCodePoint) };
 
   let staging: string | undefined;
   const written: string[] = [];
