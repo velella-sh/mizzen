@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Packs Mizzen and Lateen, installs both tarballs into an empty project, and builds the Lateen docs site with the
-# installed `mizzen` command. It proves the published packages work from node_modules, not from a checkout.
+# installed `mizzen` command, then checks the example data site. The engine runs from node_modules, not a checkout.
 # Usage: scripts/smoke-package.sh [mizzen-dir] [lateen-dir]   (defaults: ../mizzen and ../lateen)
 set -euo pipefail
 
@@ -51,3 +51,5 @@ TS
 "$mizzen/node_modules/.bin/tsc" --noEmit --strict --skipLibCheck --module nodenext --moduleResolution nodenext \
   --target es2023 --allowImportingTsExtensions contract-check.ts
 echo "the tarball alone exposes the data contract types"
+
+bash "$mizzen/scripts/smoke-example.sh" "$mizzen" "$lateen"
