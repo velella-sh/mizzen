@@ -1,0 +1,91 @@
+- slug: button
+  name: Button
+  summary: |
+    A **button** starts an action. It carries a label and one of three
+    intents: `primary`, `secondary`, or `danger`.
+
+    - Use one primary button per view.
+    - The label is a verb.
+  status: stable
+  released: 2026-01-12
+  region: north
+- slug: dialog
+  name: Dialog
+  summary: |
+    A **dialog** asks for a decision or shows a short form. It traps focus
+    until the reader closes it.
+  status: stable
+  released: 2026-01-19
+  region: north
+- slug: tooltip
+  name: Tooltip
+  summary: |
+    A **tooltip** names an icon. It never holds an action or a paragraph.
+  status: stable
+  released: 2026-02-02
+  region: coastal
+- slug: banner
+  name: Banner
+  summary: |
+    A **banner** announces a state of the whole site, not of one page.
+  status: beta
+  released: 2026-02-16
+  region: central
+- slug: tabs
+  name: Tabs
+  summary: |
+    **Tabs** split one page into views of the same subject rather than
+    steps of a task.
+  status: stable
+  released: 2026-03-02
+  region: coastal
+- slug: table
+  name: Table
+  summary: |
+    A **table** compares records by column. It never holds nested tables.
+  status: stable
+  released: 2026-03-09
+  region: central
+- slug: callout
+  name: Callout
+  summary: |
+    A **callout** marks a warning, a note, or a limit inside the text.
+  status: stable
+  released: 2026-03-23
+  region: island
+- slug: stepper
+  name: Stepper
+  summary: |
+    A **stepper** shows how far a reader is through a task of several pages.
+  status: beta
+  released: 2026-04-06
+  region: highland
+- slug: code-block
+  name: Code block
+  summary: |
+    A **code block** keeps the source of an example. Line numbers are part
+    of the block, not of the page.
+  status: stable
+  released: 2026-04-20
+  region: north
+- slug: search-box
+  name: Search box
+  summary: |
+    A **search box** queries the site's own index and never a remote one.
+  status: beta
+  released: 2026-05-04
+  region: central
+- slug: pager
+  name: Pager
+  summary: |
+    A **pager** links the pages before and after this one in the same trail.
+  status: stable
+  released: 2026-05-18
+  region: coastal
+- slug: sidebar
+  name: Sidebar
+  summary: |
+    A **sidebar** holds the site's navigation. It scrolls on its own.
+  status: deprecated
+  released: 2026-06-01
+  region: south

@@ -1,0 +1,62 @@
+{
+  "4.0.0": {
+    "date": "2026-01-12",
+    "status": "stable",
+    "summary": "First release of the catalogue: button, dialog, and tooltip.",
+    "component": "button"
+  },
+  "4.1.0": {
+    "date": "2026-02-02",
+    "status": "stable",
+    "summary": "Adds the banner and the tabs.",
+    "component": "banner"
+  },
+  "4.2.0": {
+    "date": "2026-02-16",
+    "status": "stable",
+    "summary": "Adds the table.\n\nThe dialog keeps its scroll position.",
+    "component": "table"
+  },
+  "4.3.0": {
+    "date": "2026-03-02",
+    "status": "beta",
+    "summary": "Adds the callout and the stepper.",
+    "component": "callout"
+  },
+  "4.4.0": {
+    "date": "2026-03-23",
+    "status": "beta",
+    "summary": "Adds the code block, with line numbers.",
+    "component": "code-block"
+  },
+  "4.5.0": {
+    "date": "2026-04-20",
+    "status": "stable",
+    "summary": "Adds the search box.\n\nSearch reads the site's own index.",
+    "component": "search-box"
+  },
+  "4.6.0": {
+    "date": "2026-05-04",
+    "status": "stable",
+    "summary": "Adds the pager.",
+    "component": "pager"
+  },
+  "4.7.0": {
+    "date": "2026-05-18",
+    "status": "stable",
+    "summary": "The tooltip no longer opens on touch.",
+    "component": "tooltip"
+  },
+  "4.8.0": {
+    "date": "2026-06-01",
+    "status": "beta",
+    "summary": "The sidebar is deprecated and keeps working.",
+    "component": "sidebar"
+  },
+  "4.9.0": {
+    "date": "2026-06-15",
+    "status": "stable",
+    "summary": "Fixes the dialog's focus trap.",
+    "component": "dialog"
+  }
+}
