@@ -24,6 +24,11 @@ export interface SnippetSourcesOptions {
  */
 const SKIP_DIRS = new Set(["node_modules", ".git", ".mizzen", "dist"]);
 
+/** Lock files are build bookkeeping, not content, so writing one never misses the cache. */
+function isLockFile(name: string): boolean {
+  return name === "mizzen.lock.json" || name.endsWith(".lock.json");
+}
+
 /** Compares by code point, never by locale. */
 function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
@@ -56,6 +61,7 @@ export async function snippetSources(options: SnippetSourcesOptions): Promise<st
         if (SKIP_DIRS.has(entry.name)) continue;
         await walk(abs, path);
       } else if (entry.isFile()) {
+        if (isLockFile(entry.name)) continue;
         found.push(path);
       }
     }

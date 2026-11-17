@@ -17,10 +17,9 @@ test("an include splices source lines as page Markdown, without a fence or a lan
   const page = site.pages.find((candidate) => candidate.url === "/guide/")!;
   assert.match(page.markdown, /export function add\(a: number, b: number\): number \{/);
   assert.doesNotMatch(page.markdown, /```/);
-  // Bare source lines are paragraphs: no <pre>, and the block's position is the page's line, not example.ts.
+  // Bare source lines are paragraphs: no <pre>, and each line keeps the fragment's position (#609).
   assert.doesNotMatch(page.html, /<pre/);
-  assert.match(page.html, /data-src="guide\.md:7:/);
-  assert.doesNotMatch(page.html, /data-src="example\.ts:/);
+  assert.match(page.html, /data-src="example\.ts:2:1-4:1"/);
 });
 
 test("a fence cannot wrap an include, so the insertion point cannot set a language", async () => {

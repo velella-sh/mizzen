@@ -105,11 +105,18 @@ const FROZEN: Shape = {
     "url": "string",
     "fields": "Readonly<Record<string, unknown>>",
     "links": "Readonly<Record<string, string>>",
+    "related": "?RecordRelations",
     "derived": "?Readonly<Record<string, unknown>>",
     "views": "?Readonly<Record<string, string>>",
     "calendar": "?string",
     "calendars": "?readonly CalendarLink[]",
     "changes": "?readonly ChangeEvent[]",
+  },
+  RelatedRecord: {
+    "collection": "string",
+    "id": "string",
+    "url": "string",
+    "fields": "Readonly<Record<string, unknown>>",
   },
   CalendarLink: {
     "name": "string",

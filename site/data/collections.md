@@ -40,6 +40,7 @@ collections:
 | `markdown` | list of string | `[]` | Fields that hold Markdown, rendered through the page pipeline with their positions in the data file. |
 | `llms` | boolean | `true` | `false` keeps the collection's record pages out of `llms-full.txt`. |
 | `json` | object | every field | `json.fields` lists the record fields the page JSON publishes, in order; an empty list publishes none. |
+| `evidence` | string | | Top-level field that maps a record's fields to the claims that back them. Each claim has an `id`, `title`, and `url`, and the page JSON publishes the same claims. |
 | `onInvalid` | `error` or `skip` | `error` | What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. |
 | `onRemoved` | `error`, `gone`, or `{redirect}` | `error` once `urls.lock.json` exists | What a record that was published and is no longer in the collection does. See [Stable URLs](/data/urls/). |
 | `limits` | object | | Limits on the source: `limits.bytes` (default 2097152), `limits.records` (default 10000), and `limits.field` (default 100000 characters). |
