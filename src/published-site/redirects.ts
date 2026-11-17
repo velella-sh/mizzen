@@ -3,9 +3,11 @@
  * the map expects. A loop, a chain longer than the hop limit, and a wrong destination are separate findings. The
  * caller supplies the fetcher, so a test never opens a connection, and no redirect is followed off the allowed domain.
  */
+import { isRedirectStatus, REDIRECT_HOP_LIMIT } from "./fetch.ts";
 
 /** How many redirects one address may follow. */
-export const REDIRECT_HOP_LIMIT = 5;
+export { REDIRECT_HOP_LIMIT };
+
 /** How long one request may take. */
 export const REDIRECT_TIMEOUT_MS = 10_000;
 
@@ -15,6 +17,7 @@ export type PublishedSiteFetchLike = (url: string, init?: RequestInit) => Promis
 /** The redirect findings this unit reports. */
 export type RedirectProblem =
   | "published-site.domain"
+  | "published-site.status"
   | "published-site.unreachable"
   | "published-site.redirect-mismatch"
   | "published-site.redirect-loop"
@@ -90,12 +93,20 @@ async function follow(
       const detail = err instanceof Error ? err.message : String(err);
       return [finding("published-site.unreachable", current, `The request to ${current} failed: ${detail}.`)];
     }
-    const location = response.status >= 300 && response.status < 400 ? response.headers.get("location") : null;
+    const location = isRedirectStatus(response.status) ? response.headers.get("location") : null;
     if (location === null) {
+      if (!response.ok) {
+        return [finding("published-site.status", current, `The page returned ${response.status}, expected 2xx.`, { expected: "2xx", actual: String(response.status) })];
+      }
       if (current === expected) return [];
       return [finding("published-site.redirect-mismatch", source, `The redirect ended at ${current}, expected ${expected}.`, { expected, actual: current })];
     }
-    const next = normalize(location, current);
+    let next: string;
+    try {
+      next = normalize(location, current);
+    } catch {
+      return [finding("published-site.redirect-mismatch", source, `The redirect from ${current} names an invalid location ${JSON.stringify(location)}.`, { expected, actual: location })];
+    }
     const nextHost = hostnameOf(new URL(next));
     if (nextHost !== allowed) {
       return [finding("published-site.domain", next, `The redirect from ${current} leaves the allowed domain ${allowed} for ${next}.`, { expected: allowed, actual: nextHost })];

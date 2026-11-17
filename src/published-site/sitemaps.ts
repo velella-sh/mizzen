@@ -4,6 +4,7 @@
  * order; duplicates, a cycle, a foreign host, and every documented limit become findings rather than silent changes.
  */
 import { gunzipSync } from "node:zlib";
+import { fetchFollowingRedirects, type RedirectFinding } from "./fetch.ts";
 
 /** The most `<loc>` values one sitemap file may hold. */
 export const SITEMAP_MAX_LOCS = 50_000;
@@ -24,7 +25,10 @@ export type SitemapFindingId =
   | "published-site.sitemap-cycle"
   | "published-site.sitemap-limit"
   | "published-site.sitemap-duplicate"
-  | "published-site.domain";
+  | "published-site.domain"
+  | "published-site.redirect-mismatch"
+  | "published-site.redirect-loop"
+  | "published-site.redirect-chain";
 
 /** One problem found while reading sitemaps. */
 export interface SitemapFinding {
@@ -78,11 +82,17 @@ function problemOf(error: unknown): string {
 }
 
 /** Reads one sitemap response; a `.xml.gz` address is decompressed and the uncompressed size is bounded. */
-async function readSitemapFile(url: string, fetch: SitemapFetchLike): Promise<string> {
-  const response = await fetch(url, { redirect: "follow", signal: AbortSignal.timeout(SITEMAP_TIMEOUT_MS) });
+async function readSitemapFile(
+  url: string,
+  domain: string,
+  fetch: SitemapFetchLike,
+): Promise<{ readonly xml?: string; readonly finding?: RedirectFinding }> {
+  const followed = await fetchFollowingRedirects(url, domain, { signal: AbortSignal.timeout(SITEMAP_TIMEOUT_MS) }, fetch);
+  if (followed.finding !== undefined) return { finding: followed.finding };
+  const response = followed.response;
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   let bytes = new Uint8Array(await response.arrayBuffer());
-  if (new URL(url).pathname.endsWith(".gz")) {
+  if (new URL(followed.final).pathname.endsWith(".gz")) {
     try {
       bytes = new Uint8Array(gunzipSync(bytes, { maxOutputLength: SITEMAP_MAX_BYTES + 1 }));
     } catch (error) {
@@ -91,7 +101,7 @@ async function readSitemapFile(url: string, fetch: SitemapFetchLike): Promise<st
     }
   }
   if (bytes.byteLength > SITEMAP_MAX_BYTES) throw new SitemapTooLarge(`The sitemap is larger than ${SITEMAP_MAX_BYTES} bytes.`);
-  return new TextDecoder().decode(bytes);
+  return { xml: new TextDecoder().decode(bytes) };
 }
 
 /**
@@ -173,9 +183,9 @@ export async function enumerateSitemaps(options: {
     }
     read.add(href);
     files += 1;
-    let xml: string;
+    let file: { readonly xml?: string; readonly finding?: RedirectFinding };
     try {
-      xml = await readSitemapFile(href, options.fetch);
+      file = await readSitemapFile(href, domain, options.fetch);
     } catch (error) {
       if (error instanceof SitemapTooLarge) {
         limit(href, error.message, `at most ${SITEMAP_MAX_BYTES} bytes`, `more than ${SITEMAP_MAX_BYTES} bytes`);
@@ -184,6 +194,11 @@ export async function enumerateSitemaps(options: {
       add("published-site.sitemap", "error", href, `The sitemap ${href} could not be fetched: ${problemOf(error)}.`);
       return;
     }
+    if (file.finding !== undefined) {
+      findings.push(file.finding);
+      return;
+    }
+    const xml = file.xml!;
     const locs = locsOf(xml);
     if (locs.length > SITEMAP_MAX_LOCS) {
       limit(href, `The sitemap has ${locs.length} <loc> values, more than the ${SITEMAP_MAX_LOCS} allowed.`, `at most ${SITEMAP_MAX_LOCS} <loc> values`, String(locs.length));

@@ -1,0 +1,2 @@
+- Published-site checks stop at off-domain redirects, reject non-2xx redirect destinations, and report malformed redirect locations instead of throwing.
+- OpenAPI reference reading reports cyclic YAML aliases instead of overflowing the stack.
