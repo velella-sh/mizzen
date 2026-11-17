@@ -186,3 +186,7 @@ cache rules for declared plugin inputs are in [Cache and declared inputs](#cache
 
 The fixture's pages all pass the validator, so a build is clean. The inventory lists pages in the model's URL order
 with a fixed key order and one final line feed, so two builds give the same bytes.
+
+The published, runnable version is `examples/plugin-api/`, with a short walkthrough in `recipes/plugin-api.md`.
+`test/plugin-api/acceptance.test.ts` builds it, checks that all three hooks reach the output, and compares repeated
+and incremental builds with a full one.
