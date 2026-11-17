@@ -1,0 +1,263 @@
+openapi: 3.1.0
+info:
+  title: Catalogue API
+  version: 1.0.0
+  description: |
+    Read and change the interface parts a catalogue lists.
+
+    Every request and response is JSON, except the problem details of an error, which use
+    `application/problem+json`.
+servers:
+  - url: https://api.example.com/v1
+tags:
+  - name: Components
+    description: The interface parts the catalogue lists.
+  - name: Releases
+    description: Published versions of the catalogue.
+paths:
+  /components:
+    get:
+      operationId: listComponents
+      summary: List components
+      description: |
+        Lists every component that matches the filters, in catalogue order.
+
+        Use `status` and `region` together to narrow the list; a filter the request does not
+        name is not applied.
+      tags: [Components]
+      parameters:
+        - name: status
+          in: query
+          description: Return only components in this lifecycle state.
+          schema:
+            type: string
+            enum: [stable, beta, deprecated]
+        - $ref: "#/components/parameters/Region"
+        - name: limit
+          in: query
+          description: The largest number of components to return.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Every component that matches the filters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Component"
+              examples:
+                two:
+                  summary: Two components, one region
+                  value:
+                    - slug: button
+                      name: Button
+                      status: stable
+                      region: north
+                      summary: Starts one action.
+                      released: "2026-01-12"
+                    - slug: dialog
+                      name: Dialog
+                      status: beta
+                      region: north
+                      summary: Asks for a decision.
+                      released: null
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    post:
+      operationId: createComponent
+      summary: Create a component
+      description: Adds one component and returns it as stored.
+      tags: [Components]
+      requestBody:
+        required: true
+        description: The component to add.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComponentInput"
+            examples:
+              tooltip:
+                summary: A tooltip in the north region
+                value:
+                  name: Tooltip
+                  status: stable
+                  region: north
+                  summary: Names an icon.
+      responses:
+        "201":
+          description: The component, as stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Component"
+              examples:
+                created:
+                  summary: The stored tooltip
+                  value:
+                    slug: tooltip
+                    name: Tooltip
+                    status: stable
+                    region: north
+                    summary: Names an icon.
+                    released: null
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /components/{slug}:
+    parameters:
+      - $ref: "#/components/parameters/ComponentSlug"
+    get:
+      operationId: getComponent
+      summary: Get a component
+      description: Returns one component by its slug.
+      tags: [Components]
+      responses:
+        "200":
+          description: The component.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Component"
+              example:
+                slug: button
+                name: Button
+                status: stable
+                region: north
+                summary: Starts one action.
+                released: "2026-01-12"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteComponent
+      summary: Delete a component
+      description: Removes one component. A removed component cannot be read again.
+      tags: [Components]
+      responses:
+        "204":
+          description: The component was removed.
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /releases:
+    get:
+      operationId: listReleases
+      summary: List releases
+      description: Lists published releases, newest first.
+      tags: [Releases]
+      deprecated: true
+      parameters:
+        - name: since
+          in: query
+          description: Return only releases published on or after this day.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Every release from `since` onward.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Release"
+components:
+  parameters:
+    ComponentSlug:
+      name: slug
+      in: path
+      required: true
+      description: The component's slug, such as `button`.
+      schema:
+        type: string
+        pattern: "^[a-z][a-z0-9-]*$"
+      example: button
+    Region:
+      name: region
+      in: query
+      description: Return only components in this region.
+      schema:
+        $ref: "#/components/schemas/Region"
+      example: north
+  responses:
+    BadRequest:
+      description: The request was not a valid component.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            invalid-status:
+              summary: A status the catalogue does not know
+              value:
+                code: invalid-status
+                message: "status is not one of stable, beta, deprecated"
+    NotFound:
+      description: No component has that slug.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Component:
+      type: object
+      description: One interface part in the catalogue.
+      required: [slug, name, status, region, released]
+      properties:
+        slug:
+          type: string
+          pattern: "^[a-z][a-z0-9-]*$"
+        name:
+          type: string
+        status:
+          type: string
+          enum: [stable, beta, deprecated]
+        region:
+          $ref: "#/components/schemas/Region"
+        summary:
+          type: string
+          description: One sentence about the component.
+        released:
+          type: [string, "null"]
+          format: date
+          description: The day the component shipped, or `null` when it has not shipped.
+    ComponentInput:
+      type: object
+      description: The fields a request sets when it creates a component.
+      required: [name, status, region]
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum: [stable, beta, deprecated]
+        region:
+          $ref: "#/components/schemas/Region"
+        summary:
+          type: string
+    Region:
+      type: string
+      description: A region the catalogue groups components by.
+      enum: [north, coastal, central, south]
+    Release:
+      type: object
+      description: One published version of the catalogue.
+      required: [version, date]
+      properties:
+        version:
+          type: string
+        date:
+          type: string
+          format: date
+    Problem:
+      type: object
+      description: The problem details of a failed request.
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
