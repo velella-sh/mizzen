@@ -1,7 +1,7 @@
 import type { Page, PageStale, Site } from "../contracts/content.ts";
-import type { DataRecord } from "../contracts/data.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
-import type { EvidenceClaim, EvidenceClaims } from "../data/evidence/validate.ts";
+import { publicEvidenceOf } from "../data/evidence/public.ts";
+import type { EvidenceClaims } from "../data/evidence/validate.ts";
 import { localizeFields } from "../data/record-context.ts";
 
 /** Characters per token the estimator assumes, until a tokenizer is chosen. */
@@ -44,41 +44,6 @@ function isoDate(value: unknown): string | null {
   return null;
 }
 
-/** A parsed mapping, as the data file wrote it; an array or a scalar is not one. */
-function isMapping(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/** One claim's public keys in their written order, or nothing when any of them is missing or empty. */
-function claimOf(value: unknown): EvidenceClaim[] {
-  if (!isMapping(value)) return [];
-  const { id, title, url } = value;
-  if (typeof id !== "string" || id === "") return [];
-  if (typeof title !== "string" || title === "") return [];
-  if (typeof url !== "string" || url === "") return [];
-  return [{ id, title, url }];
-}
-
-/**
- * The public claims a record keeps under its collection's evidence field, keyed by the field they back in record field
- * order. Every other key is private: only `id`, `title`, and `url` are picked, so a `note` never reaches an output.
- * Absent, empty, or malformed evidence is the normal case and publishes nothing.
- */
-function evidenceOf(record: DataRecord, field: string | undefined): EvidenceClaims | undefined {
-  if (field === undefined) return undefined;
-  const raw = record.fields[field];
-  if (!isMapping(raw)) return undefined;
-  const entries: [string, readonly EvidenceClaim[]][] = [];
-  for (const backed of Object.keys(record.fields)) {
-    if (backed === field) continue;
-    const value = raw[backed];
-    if (value === undefined) continue;
-    const claims = (Array.isArray(value) ? value : [value]).flatMap(claimOf);
-    if (claims.length > 0) entries.push([backed, claims]);
-  }
-  return entries.length === 0 ? undefined : Object.fromEntries(entries);
-}
-
 /** The record a page was built from, with the fields the collection publishes; `undefined` when the record is gone. */
 function recordOf(site: Site, page: Page): PageJsonRecord | undefined {
   const identity = page.record;
@@ -92,7 +57,7 @@ function recordOf(site: Site, page: Page): PageJsonRecord | undefined {
   for (const field of config?.json?.fields ?? Object.keys(fields)) {
     if (field !== hidden && Object.prototype.hasOwnProperty.call(fields, field)) picked[field] = fields[field];
   }
-  const evidence = evidenceOf(record, hidden);
+  const evidence = publicEvidenceOf(record, hidden);
   return {
     collection: identity.collection,
     id: identity.id,

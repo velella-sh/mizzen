@@ -19,6 +19,8 @@ import type {
 } from "../contracts/index.ts";
 import type { Calendar } from "../dates/calendars.ts";
 import { fieldsWithDerived } from "./derived.ts";
+import { withoutEvidence } from "./evidence/public.ts";
+import type { EvidenceClaims } from "./evidence/validate.ts";
 import { recordUrlsOf, type RecordUrlMap } from "./permalink.ts";
 import { relatedProps } from "./relations/query.ts";
 
@@ -44,6 +46,8 @@ export interface RecordScope {
   readonly markdownFields: ReadonlySet<string>;
   /** Names the collection derives from a date, readable and printable like fields. */
   readonly derivedFields?: ReadonlySet<string>;
+  /** The public claims that back this record's fields, when its collection names an evidence field. */
+  readonly evidence?: EvidenceClaims;
   /** The calendar dates are written in. */
   readonly calendar: Calendar;
   /** The page's language. */
@@ -283,7 +287,7 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
   const config = site.config.collections[record.collection];
   const localized = localizeFields(source.fields, page.lang, site.config.lang);
   const idFields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
-  const fields = fieldsWithDerived({ fields: idFields, derived: source.derived });
+  const fields = fieldsWithDerived({ fields: withoutEvidence(idFields, config?.evidence), derived: source.derived });
   const prefix = prefixOfLang(site.config, page.lang);
   const links: Record<string, string> = {};
   for (const [field, collection] of Object.entries(referenceTargets(config))) {
