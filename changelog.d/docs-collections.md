@@ -1,1 +1,0 @@
-- **Collections reference.** `site/data/collections.md` lists every `collections.<name>` key with its type, default, and an example, the source kinds, and the lock file; a test fails when a schema key is missing from the page.

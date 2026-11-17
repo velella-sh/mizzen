@@ -1,1 +1,0 @@
-- **Search, SEO, and social image pages.** `site/data/search.md`, `seo.md`, and `social-images.md` list each config key, the files written, and the contracts a theme or template follows; tests check every key is on its page.

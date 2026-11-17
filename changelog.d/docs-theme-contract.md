@@ -1,1 +1,0 @@
-- **Theme contract for data pages.** `site/data/theme-contract.md` describes `LayoutProps.record`, `LayoutProps.list`, `search-facets.json`, the collection index, and what a theme must do, with a link to the shared `fixtures/data-site`.

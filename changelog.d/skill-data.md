@@ -1,1 +1,0 @@
-- **The Skill covers data sites.** `skills/mizzen/SKILL.md` gains a data workflow: where the docs are, how to edit a record, check the URL lock, and see the site diff; `test/skill.test.ts` checks it.

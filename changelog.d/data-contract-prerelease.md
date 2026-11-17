@@ -1,1 +1,0 @@
-- **Pre-release of the data contract.** A `v0.3.0-next.<n>` tag publishes that version to npm under the `next` dist-tag, with provenance; `latest` is never moved. The package smoke test now installs the tarball in an empty folder and imports the contract types from `@velella/mizzen/contracts`.
