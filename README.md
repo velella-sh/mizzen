@@ -376,15 +376,19 @@ export default {
 
 A site without the file is an ordinary site: no plugins, no diagnostics. A file Node cannot import, or a default export without a `plugins` list, is one error naming the file. An entry that is not a plugin is dropped with an error and the sound entries still run.
 
-A plugin is a `name` for diagnostics and any of three hooks. Each hook receives a value and returns the value the next plugin receives; none mutates its input. A hook may be async, and it is awaited before the next plugin runs.
+A plugin is a `name` for diagnostics and any of five hooks. Each hook receives a value and returns the value the next plugin receives; none mutates its input. A hook may be async, and it is awaited before the next plugin runs.
 
 | Hook | Runs | Receives | Returns |
 | --- | --- | --- | --- |
+| `markdown` | Once per page, after includes and before Markdown is parsed. | `MarkdownSource` | `string`, with the same line count |
 | `content` | Once per page, after its Markdown is parsed and before the site model is assembled. | `Page` | `Page` |
+| `validate` | Once per final page, after the `content` hooks. | `Page` | `readonly Diagnostic[]` |
 | `model` | Once, after the site model is assembled and before anything is rendered. | `Site` | `Site` |
 | `outputs` | Once, with the files the outputs produced and the site they came from, before the files are written. | `readonly OutputFile[]`, `Site` | `readonly OutputFile[]` |
 
-A hook that throws, or returns something the stage cannot use, is an error naming the plugin. The value the stage carried before that plugin is kept and the plugins after it still run, so one bad plugin costs its own work and nothing more. The diagnostic id is `plugin.hook-failed`.
+A hook that throws, returns something the stage cannot use, or misses its 10-second deadline is `plugin.hook-failed` or `plugin.hook-timeout`; the message names the plugin and the stage. The value the stage carried before that plugin is kept and the plugins after it still run, so one bad plugin costs its own work and nothing more.
+
+The runnable example is [examples/plugin-api/](examples/plugin-api/README.md). [recipes/plugin-api.md](recipes/plugin-api.md) walks through the same hooks, and [docs/plugin-api.md](docs/plugin-api.md) is the full contract.
 
 <!-- readme-example: plugin -->
 ```ts
@@ -400,7 +404,9 @@ const banner: Plugin = {
 export default { plugins: [banner] };
 ```
 
-The loader and the hook runners are `loadCodeConfig()`, `runContentHooks()`, `runModelHooks()`, and `runOutputsHooks()` in `src/plugins/hooks.ts`. Each runner returns `{ value, diagnostics }` and never fails the stage. `build()` loads `mizzen.config.ts` and runs every hook in the order above, once per stage, before anything is written. A site with a code file always builds cold, since what its imports read cannot be part of the cache key, and the file itself is never copied into the output.
+The loader is `loadCodeConfig()` and the hook runners are `runMarkdownHooks()`, `runContentHooks()`, `runValidateHooks()`, `runModelHooks()`, and `runOutputsHooks()` in `src/plugins/`. Each runner returns `{ value, diagnostics }` and never fails the stage. `build()` loads `mizzen.config.ts` and runs every hook in the order above, once per stage, before anything is written. The file itself is never copied into the output.
+
+A plugin also declares its cache inputs: `version`, `settings`, and `inputs`, the site-relative files its code reads. A site whose plugins all declare `inputs` is cached, and a change to a declared version, setting, declared file, or the code file misses. A plugin that omits `inputs` declares that its inputs cannot be tracked, so a site that lists it always builds cold; `inputs: []` declares that it reads no file.
 
 ## Layout
 
