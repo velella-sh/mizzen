@@ -15,13 +15,13 @@ Measured by `scripts/bench-data.ts` on Apple M5 (darwin/arm64), Node 22.23.1, th
 
 | Records | Case | Time | Budget | Peak memory | Budget | Index | Pages rendered | Pages reused |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1,000 | cold build, no cache | 3.3 s | 7.0 s | 314 MB | 650 MB | – | 1,011 | 0 |
+| 1,000 | cold build, no cache | 3.3 s | 13.0 s | 314 MB | 650 MB | – | 1,011 | 0 |
 | 1,000 | nothing changed | 0.8 s | 2.0 s | 196 MB | 420 MB | – | 0 | 0 |
-| 1,000 | one record edited | 5.0 s | 12.0 s | 394 MB | 900 MB | – | 1 | 1,010 |
+| 1,000 | one record edited | 5.0 s | 16.0 s | 394 MB | 900 MB | – | 1 | 1,010 |
 | 1,000 | search index alone | 0.1 s | 1.0 s | 171 MB | 400 MB | 931 KB | – | – |
-| 10,000 | cold build, no cache | 37.7 s | 80.0 s | 4,034 MB | 8,000 MB | – | 10,101 | 0 |
+| 10,000 | cold build, no cache | 37.7 s | 140.0 s | 4,034 MB | 8,000 MB | – | 10,101 | 0 |
 | 10,000 | nothing changed | 4.1 s | 10.0 s | 369 MB | 800 MB | – | 0 | 0 |
-| 10,000 | one record edited | 49.4 s | 110.0 s | 4,141 MB | 8,000 MB | – | 1 | 10,100 |
+| 10,000 | one record edited | 49.4 s | 165.0 s | 4,141 MB | 8,000 MB | – | 1 | 10,100 |
 | 10,000 | search index alone | 1.4 s | 8.0 s | 387 MB | 1,000 MB | 3,665 KB | – | – |
 
 The budgets are what the `data benchmark` CI job enforces; the measurements are one machine's, and a slower runner is why a budget is about twice the number next to it.

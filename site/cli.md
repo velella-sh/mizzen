@@ -14,7 +14,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
-  data changes [name] [dir] List a collection's pending history events (--write appends, --check fails on any)
+  data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
@@ -44,6 +44,7 @@ Options:
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
+  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
@@ -74,6 +75,7 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | --- | --- |
 | `mizzen build [dir] --out <dir> --theme <dir>` | Builds `dir` (default `.`) into `--out` (default `dist`). Prints diagnostics as text. A build with an error still writes the site and exits `1`. |
 | `mizzen check [dir] --format text\|json\|sarif --theme <dir>` | Builds into a temporary folder, prints only the diagnostics in the chosen format, and removes the folder. Exits `1` on an error. |
+| `mizzen data changes [name] [dir] --write --check` | Lists what changed in a collection since the state in `data-changes/`; `--write` appends the events, and `--check` fails when the data changed without an entry. |
 | `mizzen data fetch [dir] --check` | Fetches every `https:` collection source, stores its bytes under `.mizzen/data/`, and writes `mizzen.lock.json`; `--check` compares without writing. A source that is new, changed, or over its limit is a failure. |
 | `mizzen data snapshot <name> [dir] --allow-dirty` | Records the last commit that touched a file collection, and its commit date, under `snapshots` in `mizzen.lock.json`; refuses a file with uncommitted changes unless `--allow-dirty`. See [Recorded snapshots](/data/snapshots/). |
 | `mizzen data verify [dir]` | Compares each collection with the lock and prints the first differing record with its source position; exits `1` on a difference and never writes. |
@@ -95,6 +97,8 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen watch [dir] --out <dir> --theme <dir>` | Builds `dir` once, then rebuilds whenever a source or theme file changes. Changes are debounced and builds run one at a time, in order; an unchanged build is restored from `.mizzen/cache`. Ctrl-C stops the watcher. |
 
 `--out` is resolved from the current working directory, not from the site root, for `build`, `dev`, `pack`, and `watch`; `dev`'s default is `<site>/.mizzen/dev` and `watch`'s is `<site>/.mizzen/watch`. `check` is the command to use in CI: it never touches `dist`. `pack` reads the site model and never the theme, so it needs no theme root.
+
+`--as-of <YYYY-MM-DD|today>` (for `build`, `check`, and `watch`) sets the day the build pretends it is, and wins over the config's `asOf` key. `today` reads the system date once, at the command's edge, and prints it; the build itself never reads a clock, so the same data and the same as-of date give the same bytes.
 
 `--workers <n|auto>` (for `build` and `check`) renders pages in `n` worker threads, each one loading the theme; `auto` is the CPU count minus one. The site written is byte for byte the one `--workers 1` writes, diagnostics included. The default is `1`: a small site would pay for threads it cannot use, so a large one opts in with `--workers auto`. A worker that fails renders its pages in the main thread and adds a `render.worker-failed` warning. There is no config key, because how many cores a machine has is a machine setting, not a property of the site.
 

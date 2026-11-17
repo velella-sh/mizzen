@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { basename, join, relative, resolve } from "node:path";
 import type { ErrorObject } from "ajv";
 import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
+import { checkAsOf } from "../dates/as-of.ts";
 import {
   isMap,
   isScalar,
@@ -25,6 +26,7 @@ import type {
   CollectionSearchConfig,
   CollectionSeoConfig,
   CollectionViewConfig,
+  DatesConfig,
   DefaultsEntry,
   Diagnostic,
   Direction,
@@ -146,6 +148,20 @@ export function loadConfigText(source: string, file: string, folderTitle: string
     }
   }
 
+  if (typeof raw.asOf === "string") {
+    const problem = checkAsOf(raw.asOf);
+    if (problem !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(raw.asOf)) {
+      const pair = getMapPair(doc, ["asOf"]);
+      diagnostics.push({
+        id: "config.as-of",
+        severity: "error",
+        message: `\`asOf\` is not a date: ${problem}`,
+        pos: posFromNode(file, lineCounter, isNode(pair?.value) ? pair.value : doc.contents),
+        help: "Write a real day as YYYY-MM-DD.",
+      });
+    }
+  }
+
   const collections = collectionsFrom(raw.collections);
   for (const [name, feed] of Object.entries(feedsFrom(raw.feeds))) {
     if (collections[feed.collection] !== undefined) continue;
@@ -173,6 +189,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const verify = verifyFrom(raw.verify);
   const network = networkFrom(raw.network);
   const snapshot = snapshotFrom(raw.snapshot);
+  const dates = datesFrom(raw.dates);
   const social = socialFrom(raw.social);
   const stale = staleFrom(raw.stale);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
@@ -201,6 +218,8 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(analytics === undefined ? {} : { analytics }),
     ...(verify === undefined ? {} : { verify }),
     ...(network === undefined ? {} : { network }),
+    ...(typeof raw.asOf === "string" && checkAsOf(raw.asOf) === undefined ? { asOf: raw.asOf } : {}),
+    ...(dates === undefined ? {} : { dates }),
     ...(snapshot === undefined ? {} : { snapshot }),
     ...(stale === undefined ? {} : { stale }),
     ...(social === undefined ? {} : { social }),
@@ -246,6 +265,12 @@ function snapshotFrom(value: unknown): SnapshotConfig | undefined {
   if (!isPlainObject(value)) return undefined;
   const days = value.maxAgeDays;
   return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
+}
+
+/** The dates key, kept only with a calendar the schema accepts. */
+function datesFrom(value: unknown): DatesConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  return value.calendar === "gregorian" || value.calendar === "jalali" ? { calendar: value.calendar } : undefined;
 }
 
 /** The stale key, keeping a string `root` and a known `severity`; the schema check reports an invalid one. */

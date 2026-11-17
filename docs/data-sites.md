@@ -273,6 +273,8 @@ source. It may rely on the field names a site declared, never on a fixed list of
 Every change to a collection can be recorded in an append-only history file that the site shows and feeds. See the
 [data changelog design note](design/data-changelog.md).
 
+Dates, the as-of date, and days left are described in [dated data](design/dated-data.md).
+
 ## Frozen on
 
 Frozen on 2026-11-15. The contract in `src/contracts/data.ts` is guarded by
