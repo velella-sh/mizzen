@@ -1,1 +1,7 @@
 *.ics -text
+
+# Test data and tooling, not engine source: fixtures hold foreign input formats
+# (MDX, mdoc, HTML, JS) and the smoke scripts drive the packaged CLI.
+fixtures/** linguist-vendored
+scripts/** linguist-vendored
+bin/mizzen.js linguist-vendored
