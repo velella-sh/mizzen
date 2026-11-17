@@ -422,7 +422,10 @@ interface KeyInput {
  * remote or package source reads, and `urls.lock.json` decides which record URLs are accepted, which ones redirect, and
  * which findings a build reports. A lock file's absence is part of the key too, so creating or deleting one misses.
  */
-async function collectionInputs(options: { readonly root: string; readonly config: SiteConfig }): Promise<KeyInput[]> {
+async function collectionInputs(
+  options: { readonly root: string; readonly config: SiteConfig },
+  withSources = true,
+): Promise<KeyInput[]> {
   const names = Object.keys(options.config.collections);
   if (names.length === 0) return [];
   const inputs: KeyInput[] = [
@@ -432,7 +435,9 @@ async function collectionInputs(options: { readonly root: string; readonly confi
   const lock = (await readLock(options.root).catch(() => undefined))?.lock;
   for (const name of names.sort(byCodePoint)) {
     const source = options.config.collections[name]!.source;
-    if (source.startsWith("npm:")) {
+    if (!withSources) {
+      // The records' own bytes are keyed one by one, by the page each reaches; only what shapes every record stays.
+    } else if (source.startsWith("npm:")) {
       const resolved = await resolveNpmSource(options.root, source).catch(() => undefined);
       if (resolved?.source === undefined) continue;
       inputs.push({ label: `collection/${name}/package`, path: resolved.source.packageFile });
@@ -597,6 +602,24 @@ export interface RenderSettingsOptions {
   readonly themeFiles?: readonly string[] | undefined;
   readonly engineVersion?: string | undefined;
   readonly runtimeVersion?: string | undefined;
+  /**
+   * The site's shape without its records' fields: every page's URL and title, the navigation, and each collection's
+   * record ids. When it is given, the source bytes of a collection are not part of the key, because a record page is
+   * keyed by its own record and the records it references (see `renderPageKey`) and a list page by its collection. A
+   * layout that reads another record's fields without being a list page is outside that contract.
+   */
+  readonly recordShape?: string | undefined;
+}
+
+/** The absolute paths of the local files that collections read, which a record-keyed render cache keys per record. */
+function localCollectionSources(options: { readonly root: string; readonly config: SiteConfig }): Set<string> {
+  const paths = new Set<string>();
+  for (const collection of Object.values(options.config.collections)) {
+    const source = collection.source;
+    if (source.startsWith("npm:") || /^[a-z][a-z\d+.-]*:/i.test(source)) continue;
+    paths.add(resolve(options.root, source));
+  }
+  return paths;
 }
 
 /** The SHA-256 of the settings {@link RenderSettingsOptions} describes, for the per-page render cache. */
@@ -608,10 +631,12 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   // The locked network decides the base, the project links, and what themes see, so its bytes are part of the key.
   if (options.config.network !== undefined) inputs.push({ label: "network-lock", path: join(options.root, NETWORK_LOCK_FILE) });
 
+  const recordKeyed = options.recordShape !== undefined ? localCollectionSources(options) : new Set<string>();
   for (const file of await discover(options.sourceDir, {
     include: options.config.include,
     exclude: options.config.exclude,
   })) {
+    if (recordKeyed.has(join(options.sourceDir, file.path))) continue;
     // A doc page's body is its own render key; its front matter is shared with every page that shows its title.
     if (file.kind === "doc") {
       inputs.push({ label: `page/${file.path}`, path: join(options.sourceDir, file.path), frontMatterOnly: true });
@@ -624,7 +649,7 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   }
 
   inputs.push({ label: "navigation", path: resolve(options.root, options.config.navigation) });
-  inputs.push(...(await collectionInputs(options)));
+  inputs.push(...(await collectionInputs(options, options.recordShape === undefined)));
 
   for (const file of await filesUnder(options.themeRoot)) {
     inputs.push({
@@ -665,6 +690,7 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   hash.update(`repository\0${repositoryStateKey(options.root)}\0`);
   hash.update(`config\0${canonicalJson(options.config)}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
+  if (options.recordShape !== undefined) hash.update(`recordShape\0${options.recordShape}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);
   for (let index = 0; index < inputs.length; index++) {
     hash.update(`${inputs[index]!.label}\0${digests[index]!}\0`);

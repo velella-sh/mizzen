@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import { basename, join, relative, resolve } from "node:path";
 import type { ErrorObject } from "ajv";
 import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
+import { checkAsOf } from "../dates/as-of.ts";
 import {
   isMap,
   isScalar,
@@ -19,11 +20,13 @@ import type {
   VerifyConfig,
   CollectionConfig,
   CollectionIndexConfig,
+  CollectionChangelogConfig,
   CollectionRawConfig,
   CollectionJsonConfig,
   CollectionSearchConfig,
   CollectionSeoConfig,
   CollectionViewConfig,
+  DatesConfig,
   DefaultsEntry,
   Diagnostic,
   Direction,
@@ -34,6 +37,7 @@ import type {
   LanguageConfig,
   NetworkConfig,
   SnapshotConfig,
+  StaleConfig,
   RepositoryConfig,
   SearchConfig,
   SiteConfig,
@@ -146,6 +150,20 @@ export function loadConfigText(source: string, file: string, folderTitle: string
     }
   }
 
+  if (typeof raw.asOf === "string") {
+    const problem = checkAsOf(raw.asOf);
+    if (problem !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(raw.asOf)) {
+      const pair = getMapPair(doc, ["asOf"]);
+      diagnostics.push({
+        id: "config.as-of",
+        severity: "error",
+        message: `\`asOf\` is not a date: ${problem}`,
+        pos: posFromNode(file, lineCounter, isNode(pair?.value) ? pair.value : doc.contents),
+        help: "Write a real day as YYYY-MM-DD.",
+      });
+    }
+  }
+
   const collections = collectionsFrom(raw.collections);
   for (const [name, feed] of Object.entries(feedsFrom(raw.feeds))) {
     if (collections[feed.collection] !== undefined) continue;
@@ -223,7 +241,9 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const verify = verifyFrom(raw.verify);
   const network = networkFrom(raw.network);
   const snapshot = snapshotFrom(raw.snapshot);
+  const dates = datesFrom(raw.dates);
   const social = socialFrom(raw.social);
+  const stale = staleFrom(raw.stale);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -251,7 +271,10 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(analytics === undefined ? {} : { analytics }),
     ...(verify === undefined ? {} : { verify }),
     ...(network === undefined ? {} : { network }),
+    ...(typeof raw.asOf === "string" && checkAsOf(raw.asOf) === undefined ? { asOf: raw.asOf } : {}),
+    ...(dates === undefined ? {} : { dates }),
     ...(snapshot === undefined ? {} : { snapshot }),
+    ...(stale === undefined ? {} : { stale }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -295,6 +318,22 @@ function snapshotFrom(value: unknown): SnapshotConfig | undefined {
   if (!isPlainObject(value)) return undefined;
   const days = value.maxAgeDays;
   return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
+}
+
+/** The dates key, kept only with a calendar the schema accepts. */
+function datesFrom(value: unknown): DatesConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  return value.calendar === "gregorian" || value.calendar === "jalali" ? { calendar: value.calendar } : undefined;
+}
+
+/** The stale key, keeping a string `root` and a known `severity`; the schema check reports an invalid one. */
+function staleFrom(value: unknown): StaleConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const severity = value.severity;
+  const out: { root?: string; severity?: "info" | "warning" | "error" } = {};
+  if (typeof value.root === "string" && value.root !== "") out.root = value.root;
+  if (severity === "info" || severity === "warning" || severity === "error") out.severity = severity;
+  return Object.keys(out).length === 0 ? undefined : out;
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */
@@ -347,6 +386,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const onRemoved = onRemovedFrom(entry.onRemoved);
     const json = collectionJsonFrom(entry.json);
     const raw = collectionRawFrom(entry.raw);
+    const changelog = collectionChangelogFrom(entry.changelog);
     collections[name] = {
       source: entry.source,
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
@@ -372,6 +412,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(seo === undefined ? {} : { seo }),
       ...(index === undefined ? {} : { index }),
       ...(raw === undefined ? {} : { raw }),
+      ...(changelog === undefined ? {} : { changelog }),
     };
   }
   return collections;
@@ -504,6 +545,29 @@ function collectionRawFrom(value: unknown): false | CollectionRawConfig | undefi
   if (!isPlainObject(value)) return undefined;
   const hidden = fieldsFrom(value.private);
   return hidden === undefined ? {} : { private: hidden };
+}
+
+const CHANGELOG_TYPES = ["added", "removed", "changed", "renamed", "imported"] as const;
+
+/** A collection's changelog settings, keeping only what the schema accepts. */
+function collectionChangelogFrom(value: unknown): CollectionChangelogConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const track = fieldsFrom(value.track);
+  const ignore = fieldsFrom(value.ignore);
+  const labels: Partial<Record<(typeof CHANGELOG_TYPES)[number], string>> = {};
+  if (isPlainObject(value.labels)) {
+    for (const type of CHANGELOG_TYPES) {
+      const text = value.labels[type];
+      if (typeof text === "string" && text !== "") labels[type] = text;
+    }
+  }
+  const threshold = value.importThreshold;
+  return {
+    ...(track === undefined ? {} : { track }),
+    ...(ignore === undefined ? {} : { ignore }),
+    ...(Object.keys(labels).length === 0 ? {} : { labels }),
+    ...(typeof threshold === "number" && Number.isSafeInteger(threshold) && threshold >= 1 ? { importThreshold: threshold } : {}),
+  };
 }
 
 /** `onRemoved` as the contract holds it: one of the words, or a redirect to a safe site path. */

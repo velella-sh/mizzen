@@ -24,6 +24,9 @@ sections:
       - title: Command line
         url: cli/
         meta: reference
+      - title: Data site quick start
+        url: data/quick-start/
+        meta: guide
   - title: Build
     url: outputs/
     description: What a build writes besides the pages, and how to extend it.

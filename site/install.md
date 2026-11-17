@@ -20,6 +20,17 @@ npm install --save-dev @velella/mizzen @velella/lateen
 
 Installing both packages in `package.json` pins the versions for the next person.
 
+## Start from a theme starter
+
+A theme can ship starter sites. List them, then copy one into a new folder:
+
+```sh
+npx mizzen init --list
+npx mizzen init --starter docs my-docs
+```
+
+`init` finds the theme the way `build` does: `--theme`, else `theme.name` in the config, else the default theme. It copies the theme's `starters/<name>/` folder into the target, leaves out the starter's own `starter.json`, and refuses a folder that is not empty. A starter that declares optional languages in `starter.json` keeps all of them unless you pass `--lang`, which keeps only the ones you name.
+
 ## Write a page
 
 Put a Markdown file in the folder. Front matter is optional; without it the title is the first `h1`.
@@ -56,6 +67,10 @@ npx mizzen build . --out dist
 ```
 
 `check` builds to a temporary folder and prints only the diagnostics, so it is the command to run before you commit. `dev` serves the site and reloads the browser when a file changes. `build` writes the site to `dist`. A build fails on an unknown config key, an unknown layout, or two files that write the same path.
+
+## Build pages from data
+
+If your content is a table of records rather than prose, build a page for each record from a YAML, JSON, or CSV file. The [data site quick start](/data/quick-start/) does it in five minutes, and [Data sites](/data/) explains the ideas.
 
 ## Publish to GitHub Pages
 

@@ -45,3 +45,7 @@ There is no npm token. npm trusted publishing lets the workflow publish with its
 1. On npmjs.com, open `@velella/mizzen` → Settings → Trusted publisher → GitHub Actions: organization `velella-sh`, repository `mizzen`, workflow `release.yml`, environment `npm`.
 2. In the repository settings, create an environment named `npm`. Optionally add required reviewers to approve each publish, and restrict it to release tags.
 3. Optionally set the package's publishing access to "Require two-factor authentication and disallow tokens", so only this workflow can publish.
+
+### Pre-releases
+
+The [`publish-next`](.github/workflows/publish-next.yml) workflow publishes `0.3.0-next.<n>` under the `next` dist-tag whenever `src/contracts/` or the contract freeze snapshot changes on `main` (or when run by hand). It uses the same tests, smoke test, `npm` environment, trusted publishing, and provenance as `release`, never touches `latest`, and does not change `package.json` in the repository. npm accepts one trusted publisher per package, so until a token is configured, add `publish-next.yml` as an additional trusted publisher if npm allows it, or point the single entry at the workflow you use. Raise `NEXT_BASE` in the workflow when the next minor starts.

@@ -1,0 +1,1 @@
+- **Start a site from a theme starter.** `mizzen init --starter <name> [dir]` copies the theme's `starters/<name>/` folder into a new folder, `--list` prints the theme's starters with the title and description from each `starter.json`, and `--lang` keeps only the named optional languages. It resolves the theme as `build` does and refuses a folder that is not empty.
