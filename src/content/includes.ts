@@ -1,6 +1,7 @@
-import { readFile, realpath } from "node:fs/promises";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { readFile } from "node:fs/promises";
+import { dirname, relative, resolve, sep } from "node:path";
 import type { Diagnostic, SourcePos } from "../contracts/index.ts";
+import { canonicalize, escapes, parseLineRange, type LineRange } from "./code-snippets/read.ts";
 import { parseFrontMatter } from "./frontmatter.ts";
 
 /**
@@ -99,12 +100,6 @@ interface Scope {
   readonly includes: IncludeDependency[];
 }
 
-/** A 1-based inclusive range of lines. */
-interface LineRange {
-  readonly start: number;
-  readonly end: number;
-}
-
 /** The line without its terminator. */
 const strip = (line: string): string => line.replace(/\r?\n$/, "");
 
@@ -128,18 +123,6 @@ function attributesOf(text: string): Record<string, string> {
     attributes[key] = match[2] ?? match[3] ?? match[4] ?? "";
   }
   return attributes;
-}
-
-/** `2-10` or `4` as a line range; `undefined` when it is not one. */
-function parseLines(text: string): LineRange | undefined {
-  const match = /^(\d+)(?:-(\d+))?$/.exec(text.trim());
-  if (!match) return undefined;
-  const start = Number(match[1]);
-  const end = match[2] === undefined ? start : Number(match[2]);
-  if (start < 1 || end < start) return undefined;
-  // A range that large would never fit a file; refuse early rather than overflow a number.
-  if (end > Number.MAX_SAFE_INTEGER) return undefined;
-  return { start, end };
 }
 
 /** Which lines of `lines` sit inside a fenced code block; the fences themselves do not. */
@@ -179,50 +162,6 @@ function prefixOf(displayFile: string, file: string): string {
 /** The path shown for a source-relative `path`. */
 function displayOf(scope: Scope, path: string): string {
   return scope.prefix + path;
-}
-
-/** True when `against`, a `relative()` result against a root, leaves that root. */
-function escapes(against: string): boolean {
-  return against === "" || against === ".." || against.startsWith(`..${sep}`) || isAbsolute(against);
-}
-
-/** The real path {@link canonicalize} answers with, plus whether the path itself exists. */
-interface Canonical {
-  /** Real path, with symbolic links resolved. */
-  readonly real: string;
-  /** False when the path does not exist, or when the filesystem could not be asked at all. */
-  readonly exists: boolean;
-}
-
-/**
- * The real path of an absolute `path`, resolving every symbolic link on it, which is what makes the source
- * boundary hold for the file that would actually be read rather than for the spelling of the directive.
- *
- * Components that do not exist yet are re-joined onto the real path of the nearest ancestor that does, so a
- * missing file behind a symlink is still located where its link points. A lookup that fails for another reason
- * (a loop, a permission the operating system refuses) answers with the lexical path and `exists: false`; the read
- * that follows then reports the operating system's own error, exactly as it did before, and cannot succeed
- * either, because reading needs the same permission on every component.
- */
-async function canonicalize(path: string): Promise<Canonical> {
-  const missing: string[] = [];
-  let current = path;
-  for (;;) {
-    try {
-      const real = await realpath(current);
-      if (missing.length === 0) return { real, exists: true };
-      const rest = missing.slice().reverse();
-      return { real: resolve(real, ...rest), exists: false };
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      const parent = dirname(current);
-      if ((code !== "ENOENT" && code !== "ENOTDIR" && code !== "ELOOP") || parent === current) {
-        return { real: path, exists: false };
-      }
-      missing.unshift(basename(current));
-      current = parent;
-    }
-  }
 }
 
 /** The real path a cycle is keyed by, `/`-separated so the key is stable. */
@@ -286,7 +225,7 @@ async function expandDirective(
   const rangeText = attributes.lines;
   let range: LineRange | undefined;
   if (rangeText !== undefined) {
-    range = parseLines(rangeText);
+    range = parseLineRange(rangeText);
     if (range === undefined) {
       scope.diagnostics.push(
         problem(
