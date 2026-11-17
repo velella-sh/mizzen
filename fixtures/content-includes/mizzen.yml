@@ -1,0 +1,3 @@
+title: Content includes fixture
+navigation: _data/navigation.yml
+exclude: ["README.md"]
