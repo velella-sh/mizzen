@@ -1,0 +1,53 @@
+# Copy to .github/workflows/published-site-check.yml.
+#
+# Checks the site that SITEMAP_URL names: every page in its sitemap or sitemap index must answer 2xx and name itself
+# as canonical, and every address in the optional redirect map must redirect where it says. A finding fails the job.
+#
+# Set the SITEMAP_URL repository variable to the public sitemap, such as https://example.org/sitemap.xml. No domain is
+# built in. To run the same check locally against a fixture, start any static server and point the command at it:
+#
+#   npx mizzen published-site check --sitemap http://127.0.0.1:8000/sitemap.xml
+#
+# Set REDIRECTS_FILE to a JSON redirect map in the repository to check old addresses too. The check opens no connection
+# during a build; this workflow is the only place it runs.
+name: published-site-check
+
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: published-site-check
+  cancel-in-progress: true
+
+env:
+  SITEMAP_URL: ${{ vars.SITEMAP_URL }}
+  MIZZEN_VERSION: latest
+
+jobs:
+  check:
+    if: vars.SITEMAP_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Mizzen
+        run: npm install --no-save --no-audit --no-fund "@velella/mizzen@${MIZZEN_VERSION}"
+      - name: Check the published site
+        env:
+          REDIRECTS_FILE: ${{ vars.REDIRECTS_FILE }}
+        run: |
+          set -euo pipefail
+          args=(--sitemap "$SITEMAP_URL")
+          if [ -n "$REDIRECTS_FILE" ]; then args+=(--redirects "$REDIRECTS_FILE"); fi
+          npx mizzen published-site check "${args[@]}" | tee "$GITHUB_STEP_SUMMARY"

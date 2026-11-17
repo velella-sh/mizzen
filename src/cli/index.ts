@@ -15,6 +15,7 @@ import { dataFetch, dataSnapshot } from "./data.ts";
 import { verifyData } from "../data/verify.ts";
 import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
+import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
@@ -34,7 +35,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "stale", "urls", "verify", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -91,6 +92,7 @@ Commands:
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
   network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
+  published-site check      Check a published site from --sitemap <url>: status, canonical URL, redirects
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   urls check [dir]          Compare record page URLs with urls.lock.json
@@ -100,7 +102,10 @@ Commands:
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for edit apply, edit verify, and urls check; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for edit apply, edit verify, urls check, and published-site check; markdown or json for pack
+  --sitemap <url>      Sitemap or sitemap index URL for published-site check
+  --domain <host>      The one host published-site check may request (default: the sitemap's host)
+  --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
   --hash <hex>         Expected build hash for verify (default: the manifest's)
   --site <dir>         Site root for edit verify (default: .)
   --doctor             Rerun the doctor for edit verify
@@ -256,6 +261,11 @@ type NetworkOpts = {
   readonly args: readonly string[];
 };
 
+type PublishedSiteOpts = {
+  readonly command: "published-site";
+  readonly args: readonly string[];
+};
+
 type StaleOpts = {
   readonly command: "stale";
   readonly args: readonly string[];
@@ -321,6 +331,7 @@ type Parsed =
         | InitOpts
         | McpOpts
         | NetworkOpts
+        | PublishedSiteOpts
         | StaleOpts;
     };
 
@@ -721,6 +732,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "network", args: rest } };
   }
+  if (command === "published-site") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "published-site", args: rest } };
+  }
   if (command === "stale") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "stale", args: rest } };
@@ -1027,6 +1042,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "network") {
     try {
       return await runNetwork(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "published-site") {
+    try {
+      return await runPublishedSite(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
