@@ -1,0 +1,7 @@
+main:
+  - title: Guide
+    children:
+      - title: Install
+        url: /guide/install/
+      - title: Upgrade
+        url: /guide/upgrade/

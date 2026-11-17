@@ -1,0 +1,7 @@
+title: Versions fixture
+description: Three documentation states for the version lifecycle tests.
+lang: en
+defaults:
+  - path: ""
+    values:
+      layout: doc
