@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "targets": [
+    {
+      "project": "ebb",
+      "public": true,
+      "urls": "../target/urls.json",
+      "previous": "../target/urls.lock.json"
+    }
+  ]
+}

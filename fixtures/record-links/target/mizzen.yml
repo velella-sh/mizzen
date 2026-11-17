@@ -1,0 +1,9 @@
+title: Ebb
+url: https://example.org
+base: /ebb
+collections:
+  items:
+    source: _data/items.yml
+    template: _templates/item.md
+    permalink: /items/{name|slug}/
+    onRemoved: gone
