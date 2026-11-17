@@ -1,0 +1,8 @@
+title: Report archive gallery
+description: Two published scan runs, shown by a latest page and a filterable gallery.
+collections:
+  scans:
+    source: _data/scans.yml
+    template: _templates/scan.md
+    permalink: /scans/{id}/
+    dates: [date]
