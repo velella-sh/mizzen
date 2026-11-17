@@ -61,8 +61,17 @@ test("full benchmarks are scheduled, manual, and gate publishing at the exact re
   const release = workflow("release");
   assert.deepEqual(release.jobs.publish!.needs, ["verify", "performance"]);
   assert.equal(release.jobs.performance!.uses, "./.github/workflows/benchmark.yml");
+  assert.equal(release.jobs.performance!.needs, undefined, "benchmark runs alongside verification");
   assert.equal(release.jobs.performance!.with!.ref, "refs/tags/${{ github.event.release.tag_name || inputs.tag || github.ref_name }}");
   assert.ok(release.jobs.verify!.steps!.some((step) => step.run === "npm run test:coverage"));
+  const githubRelease = release.jobs["github-release"]!;
+  assert.deepEqual(githubRelease.needs, ["verify", "publish"]);
+  assert.match(githubRelease.if!, /needs\.publish\.result == 'success'/);
+  assert.match(githubRelease.if!, /needs\.verify\.outputs\.published == 'true'/);
+  assert.match(githubRelease.steps![0]!.run!, /gh release create "\$TAG" --verify-tag .*--generate-notes/);
+  assert.match(githubRelease.steps![0]!.run!, /--prerelease/);
+  assert.match(githubRelease.steps![0]!.run!, /--latest=false/);
+  assert.doesNotMatch(githubRelease.steps![0]!.run!, /--latest(?:\s|$)/);
 });
 
 test("nightly failures notify without executing code or artifacts from the failed run", () => {
