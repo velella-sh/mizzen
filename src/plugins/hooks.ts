@@ -33,7 +33,7 @@ export const CODE_CONFIG_FILE = "mizzen.config.ts";
 export type HookName = keyof PluginHooks;
 
 /** The hook names in pipeline order. */
-const HOOK_NAMES: readonly HookName[] = ["content", "model", "outputs"];
+const HOOK_NAMES: readonly HookName[] = ["markdown", "content", "validate", "model", "outputs"];
 
 /** Options of {@link loadCodeConfig}. */
 export interface LoadCodeOptions {
@@ -59,10 +59,10 @@ export interface HookResult<T> {
 }
 
 /** What a stage does with one plugin's hook and the value the stage carries. */
-type HookCall<T> = (plugin: Plugin, value: T) => MaybePromise<T>;
+export type HookCall<T> = (plugin: Plugin, value: T) => MaybePromise<T>;
 
 /** Names what a hook must return ("a page", "a page whose `url` is not a string"), or `undefined` when it is usable. */
-type ValueCheck<T> = (value: T) => string | undefined;
+export type ValueCheck<T> = (value: T) => string | undefined;
 
 async function exists(path: string): Promise<boolean> {
   try {
@@ -198,7 +198,7 @@ export async function loadCodeConfig(siteRoot: string, options: LoadCodeOptions 
           file,
           "plugin.invalid-plugin",
           `Plugin ${index + 1} of ${file} is dropped: ${problem}.`,
-          "Every entry of `plugins` is an object with a `name` and any of the `content`, `model`, and `outputs` hooks.",
+          "Every entry of `plugins` is an object with a `name` and any of the `content`, `markdown`, `model`, `outputs`, and `validate` hooks.",
         ),
       );
       return;
@@ -250,7 +250,7 @@ function copyOf<T>(value: T): T {
  * {@link copyOf copy} of the stage's value, so a mutation made before a throw, a deadline, or an unusable return stays
  * in that copy; a usable return value is kept as it is.
  */
-async function runStage<T>(
+export async function runStage<T>(
   plugins: readonly Plugin[],
   hook: HookName,
   start: T,

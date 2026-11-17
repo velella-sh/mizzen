@@ -4,9 +4,9 @@ Status: accepted. Epic: plugin-api (#599). Audit issue: #600.
 
 ## Purpose
 
-A site adds behavior in `mizzen.config.ts`: validate pages, change the model, and add files. The engine promises a
-deterministic build, so what a plugin may read, change, and return is a contract and not advice. This note audits the
-hooks as they exist, fixes their public contract, and states the trusted-code policy. The sample site is
+A site adds behavior in `mizzen.config.ts`: validate pages, transform Markdown, change the model, and add files. The
+engine promises a deterministic build, so what a plugin may read, change, and return is a contract and not advice. This
+note audits the hooks as they exist, fixes their public contract, and states the trusted-code policy. The sample site is
 `fixtures/plugin-api/`.
 
 ## How plugins are enabled
@@ -60,12 +60,14 @@ is imported once per build to read its declarations, so its top-level code does 
 
 ## Stages and order
 
-A build runs config, discover, front matter, Markdown, HTML, site model, render, and outputs. The three hooks sit at
-three points:
+A build runs config, discover, front matter, Markdown, HTML, site model, render, and outputs. The five hooks sit at
+four points:
 
 | Hook | Stage | Runs | Input | Output |
 | --- | --- | --- | --- | --- |
+| `markdown` | Markdown | Once per page, after includes and before parsing. | `MarkdownSource` | `string` |
 | `content` | Model assembly | Once per page, after the page's front matter, Markdown, HTML, title, URL, language, and headings are final, and before navigation is assembled. | `Page` | `Page` |
+| `validate` | Model assembly | Once per final page, after the `content` hook. | `Page` | `readonly Diagnostic[]` |
 | `model` | Site model | Once, after the model is assembled, before anything is rendered. | `Site` | `Site` |
 | `outputs` | Outputs | Once, with the files every enabled output produced, before any file is written. | `readonly OutputFile[]`, `Site` | `readonly OutputFile[]` |
 
@@ -73,11 +75,22 @@ Plugins run in the order the code file lists them. Each hook receives the value 
 plugin that does not implement the hook is skipped. A hook may be synchronous or return a promise; it is awaited
 before the next plugin runs.
 
+`markdown` sees every page's body after includes and before parsing, as `{ path, markdown }`. The string a hook returns
+is parsed instead, and the next `markdown` hook sees it. The returned text must have the same number of lines as the
+body it replaces, so heading and diagnostic positions stay those of the source; a different line count is a
+`plugin.hook-failed` at the page source and the text before that hook is parsed. Rendered HTML, headings, and the
+Markdown twin all come from the transformed body, so they agree.
+
 `content` sees every page, including app pages, record pages, and generated list pages. Pages are hooked one at a
 time: a source page before the record and list pages built from it. The page order is deterministic for fixed input,
 but a plugin should not depend on it. The page's `html` and `markdown` are already final here, so changing `markdown`
-alone leaves the rendered page and its Markdown twin disagreeing. A transformation of Markdown itself needs a stage
-before parsing, which this contract does not yet offer (#602).
+alone leaves the rendered page and its Markdown twin disagreeing; use `markdown` for a transformation of Markdown
+itself.
+
+`validate` reads each final page once, after every `content` hook, and returns the findings it made. Each hook reads a
+copy of the page, so a mutation cannot reach the model. The findings are added to the build's diagnostics as returned,
+with their own `pos`; a thrown or rejected hook, a missed deadline, or a return that is not a list of diagnostics is a
+`plugin.hook-failed` at the page source, and the plugins after it still run.
 
 `model` receives the assembled site: pages sorted by URL, the navigation tree, `_data`, and collections. The site it
 returns is the one the theme and every output read, so a page it changes is rendered changed.
@@ -102,7 +115,9 @@ the same path, with no diagnostic.
 - The engine checks what a hook returns before the next plugin sees it. A page must have a URL starting with `/`, a
   source position, a front matter object, a title, a language, a text direction, HTML and Markdown strings, a kind,
   and headings with a depth of 1 to 6, an id, text, and a position. A site must have a config object, a page list, a
-  navigation tree, and a data object. The check covers shape, not cross-page rules such as two pages sharing a URL.
+  navigation tree, and a data object. A `markdown` hook must return a string whose line count is the body's, and a
+  `validate` hook a list of diagnostics with an `id`, a `severity`, and a `message`. The check covers shape, not
+  cross-page rules such as two pages sharing a URL.
 
 | Diagnostic id | Cause |
 | --- | --- |
@@ -110,11 +125,12 @@ the same path, with no diagnostic.
 | `plugin.invalid-code-config` | The default export is not `{ plugins: [...] }`. |
 | `plugin.invalid-plugin` | One entry is not a plugin; that entry is dropped. |
 | `plugin.duplicate-name` | A later plugin repeats an earlier name; that entry is dropped. |
-| `plugin.hook-failed` | A hook threw, rejected, or returned an unusable value; the value before it is kept. |
+| `plugin.hook-failed` | A hook threw, rejected, or returned an unusable value, including a Markdown body with a different line count; the value before it is kept. |
 | `plugin.hook-timeout` | A hook missed the deadline; the value before it is kept. |
 
-Every diagnostic is an error. A content hook's diagnostic is positioned at the page's source, and a model or outputs
-hook's at the first line of `mizzen.config.ts`; every message names the plugin and stage in prose. Duplicate names are
+Every diagnostic in this table is an error. A `markdown`, `content`, or `validate` hook's diagnostic is positioned at
+the page's source, and a model or outputs hook's at the first line of `mizzen.config.ts`; every message names the plugin
+and stage in prose. Findings a `validate` hook returns keep their own severity and position. Duplicate names are
 refused at load: the first plugin keeps the name and a later one is dropped with `plugin.duplicate-name`. The deadline
 is 10 seconds per hook call, measured by the runner and not configurable from `mizzen.yml`. It stops the runner waiting,
 not the hook: a synchronous hook cannot be preempted, and a timed-out asynchronous hook keeps running in the process
@@ -152,8 +168,7 @@ cache rules for declared plugin inputs are in [Cache and declared inputs](#cache
 | --- | --- |
 | Two plugins may share a name; diagnostics then cannot say which one. | #601 |
 | A hook failure points at the code file, not at the page that caused it. | #601 |
-| A content hook can only report a validation problem by throwing, which is a hook failure and not a finding. | #602 |
-| There is no Markdown stage, so a Markdown transformation cannot keep positions and rendered HTML in step. | #602 |
+| A content hook had no finding channel and Markdown had no stage before parsing; `validate` returns diagnostics and `markdown` transforms the body with its positions kept. | #602 |
 | A custom output is a file appended to the `outputs` list; it cannot be declared and its owner is not tracked. | #603 |
 | A site with a code file always builds cold. | #604 |
 | The executable examples live only in the README snippet. | #605 |
@@ -164,7 +179,7 @@ cache rules for declared plugin inputs are in [Cache and declared inputs](#cache
 
 | Plugin | Hook | What it shows |
 | --- | --- | --- |
-| `require-description` | `content` | A validation rule on every page. A missing description fails the hook, which is the only report available today. |
+| `require-description` | `content` | A validation rule on every page. A missing description fails the hook. |
 | `reading-time` | `content` | A page transformation. It sees the resolved Markdown and runs after the validator. |
 | `inventory` | `model` | One pass over the assembled site. It fixes the list the custom output writes. |
 | `write-inventory` | `outputs` | A custom file added to the build as `plugin-api/inventory.json`. |
