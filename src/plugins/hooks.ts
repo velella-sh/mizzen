@@ -2,7 +2,16 @@ import { createHash } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { Diagnostic, MaybePromise, OutputFile, Page, Plugin, PluginHooks, Site } from "../contracts/index.ts";
+import type {
+  Diagnostic,
+  MaybePromise,
+  OutputFile,
+  Page,
+  Plugin,
+  PluginHooks,
+  Site,
+  SourcePos,
+} from "../contracts/index.ts";
 import {
   DEFAULT_HOOK_POLICY,
   isHookDeadline,
@@ -72,18 +81,22 @@ function detailOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** The position of the code file itself, for a problem that is about the file rather than a page: its first line. */
+const CODE_CONFIG_POS: SourcePos = { file: CODE_CONFIG_FILE, line: 1, column: 1, endLine: 1, endColumn: 1 };
+
 /** An error about the code file itself; the file is the whole problem, so its position is its first line. */
 function fileDiagnostic(file: string, id: string, message: string, help: string): Diagnostic {
-  return { id, severity: "error", message, pos: { file, line: 1, column: 1, endLine: 1, endColumn: 1 }, help };
+  return { id, severity: "error", message, pos: { ...CODE_CONFIG_POS, file }, help };
 }
 
 /**
- * An error about one plugin's hook, naming the plugin so the site owner knows which one to fix, at the code file the
- * plugins come from.
+ * An error about one plugin's hook, naming the plugin and the stage so the site owner knows which one to fix, at the
+ * page the hook was given when the stage has one, else at the code file the plugins come from.
  */
 function hookDiagnostic(
   plugin: Plugin,
   message: string,
+  pos: SourcePos,
   id = "plugin.hook-failed",
   help = "Fix the plugin or remove it from the site's code file.",
 ): Diagnostic {
@@ -91,7 +104,7 @@ function hookDiagnostic(
     id,
     severity: "error",
     message: `Plugin "${plugin.name}" ${message}`,
-    pos: { file: CODE_CONFIG_FILE, line: 1, column: 1, endLine: 1, endColumn: 1 },
+    pos,
     help,
   };
 }
@@ -114,6 +127,8 @@ function pluginProblem(value: unknown): string | undefined {
  * `{ plugins: [...] }` and sets no config key, so anything else it exports is read by nobody. A file
  * Node cannot import and a default export that is not a code config each come back as one error that names the file,
  * with no plugins; an entry that is not a plugin comes back as an error and is dropped, and the sound entries still run.
+ * Names are unique: a later entry named like an earlier one is dropped and reported, so a diagnostic always names one
+ * plugin.
  */
 export async function loadCodeConfig(siteRoot: string, options: LoadCodeOptions = {}): Promise<LoadedCode> {
   const root = resolve(siteRoot);
@@ -174,6 +189,7 @@ export async function loadCodeConfig(siteRoot: string, options: LoadCodeOptions 
 
   const diagnostics: Diagnostic[] = [];
   const plugins: Plugin[] = [];
+  const seenNames = new Set<string>();
   listed.forEach((entry, index) => {
     const problem = pluginProblem(entry);
     if (problem !== undefined) {
@@ -187,7 +203,20 @@ export async function loadCodeConfig(siteRoot: string, options: LoadCodeOptions 
       );
       return;
     }
-    plugins.push(entry as Plugin);
+    const plugin = entry as Plugin;
+    if (seenNames.has(plugin.name)) {
+      diagnostics.push(
+        fileDiagnostic(
+          file,
+          "plugin.duplicate-name",
+          `Plugin ${index + 1} of ${file} is dropped: another plugin is already named "${plugin.name}".`,
+          "Give every plugin a unique name.",
+        ),
+      );
+      return;
+    }
+    seenNames.add(plugin.name);
+    plugins.push(plugin);
   });
 
   return { plugins, diagnostics };
@@ -215,10 +244,11 @@ function copyOf<T>(value: T): T {
  * Runs one hook of every plugin in the order the plugins are listed, so each hook gets what the hook before it returned.
  *
  * A plugin that does not implement the hook is skipped, and a promise is awaited before the next plugin runs. A hook
- * that misses the policy's deadline, throws, or returns a value the stage cannot use is an error naming the plugin; the
- * value the stage carried before that plugin is kept and the plugins after it still run, so one bad plugin costs its
- * own work and nothing more. Each hook is called with a {@link copyOf copy} of the stage's value, so a mutation made
- * before a throw, a deadline, or an unusable return stays in that copy; a usable return value is kept as it is.
+ * that misses the policy's deadline, throws, or returns a value the stage cannot use is an error naming the plugin and
+ * the stage, at the page the stage carried when it has one; the value the stage carried before that plugin is kept and
+ * the plugins after it still run, so one bad plugin costs its own work and nothing more. Each hook is called with a
+ * {@link copyOf copy} of the stage's value, so a mutation made before a throw, a deadline, or an unusable return stays
+ * in that copy; a usable return value is kept as it is.
  */
 async function runStage<T>(
   plugins: readonly Plugin[],
@@ -226,6 +256,7 @@ async function runStage<T>(
   start: T,
   call: HookCall<T>,
   check: ValueCheck<T>,
+  sourceOf: (value: T) => SourcePos,
   policy: HookPolicy,
 ): Promise<HookResult<T>> {
   const timeoutMs = resolveHookTimeout(policy);
@@ -238,7 +269,11 @@ async function runStage<T>(
       const expected = check(next);
       if (expected !== undefined) {
         diagnostics.push(
-          hookDiagnostic(plugin, `returned ${expected} from its ${hook} hook; the value before it is kept.`),
+          hookDiagnostic(
+            plugin,
+            `returned ${expected} from its ${hook} hook; the value before it is kept.`,
+            sourceOf(value),
+          ),
         );
         continue;
       }
@@ -249,13 +284,14 @@ async function runStage<T>(
           hookDiagnostic(
             plugin,
             `did not finish its ${hook} hook within ${timeoutMs} ms; the value before it is kept.`,
+            sourceOf(value),
             "plugin.hook-timeout",
             "Make the hook finish sooner, or raise the deadline of the hook policy.",
           ),
         );
         continue;
       }
-      diagnostics.push(hookDiagnostic(plugin, `failed in its ${hook} hook: ${detailOf(err)}.`));
+      diagnostics.push(hookDiagnostic(plugin, `failed in its ${hook} hook: ${detailOf(err)}.`, sourceOf(value)));
     }
   }
   return { value, diagnostics };
@@ -267,7 +303,7 @@ export function runContentHooks(
   page: Page,
   policy: HookPolicy = DEFAULT_HOOK_POLICY,
 ): Promise<HookResult<Page>> {
-  return runStage(plugins, "content", page, (plugin, value) => plugin.content!(value), pageProblem, policy);
+  return runStage(plugins, "content", page, (plugin, value) => plugin.content!(value), pageProblem, (value) => value.source, policy);
 }
 
 /** Runs the `model` hooks of the assembled `site`: once, before anything is rendered. */
@@ -276,7 +312,7 @@ export function runModelHooks(
   site: Site,
   policy: HookPolicy = DEFAULT_HOOK_POLICY,
 ): Promise<HookResult<Site>> {
-  return runStage(plugins, "model", site, (plugin, value) => plugin.model!(value), siteProblem, policy);
+  return runStage(plugins, "model", site, (plugin, value) => plugin.model!(value), siteProblem, () => CODE_CONFIG_POS, policy);
 }
 
 /**
@@ -296,6 +332,7 @@ export function runOutputsHooks(
     files,
     (plugin, value) => plugin.outputs!(value, copyOf(site)),
     outputFilesProblem,
+    () => CODE_CONFIG_POS,
     policy,
   );
 }

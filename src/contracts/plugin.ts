@@ -4,7 +4,7 @@ import type { OutputFile } from "./output.ts";
 /** A value or a promise of one. */
 export type MaybePromise<T> = T | Promise<T>;
 
-/** The hooks a plugin can implement. Each receives a value and returns the (possibly changed) value; none mutates its input. */
+/** The hooks a plugin can implement. The engine runs each hook of every plugin in the order the code file lists them. */
 export interface PluginHooks {
   /** Called for each page after its Markdown is parsed and before the site model is assembled. */
   content?(page: Page): MaybePromise<Page>;
@@ -14,9 +14,9 @@ export interface PluginHooks {
   outputs?(files: readonly OutputFile[], site: Site): MaybePromise<readonly OutputFile[]>;
 }
 
-/** A plugin: a name for diagnostics and the hooks it implements. Unused until `engine.plugins` lands. */
+/** A plugin: a name for diagnostics and the hooks it implements. */
 export interface Plugin extends PluginHooks {
-  /** The plugin's name, shown in diagnostics. */
+  /** The plugin's name, shown in diagnostics; unique among the plugins of one site's code file. */
   readonly name: string;
 }
 
