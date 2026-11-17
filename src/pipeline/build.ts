@@ -266,6 +266,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       config: loaded.config,
       themeRoot,
       outputsDir,
+      out,
       ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
       ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
       stale: JSON.stringify([...staleBySource]),

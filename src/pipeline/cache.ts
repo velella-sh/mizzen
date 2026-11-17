@@ -3,7 +3,8 @@
  * when every input that shaped it is unchanged.
  *
  * The key is one SHA-256 of the site's config file and its resolved config values, every discovered source file (pages,
- * assets, app pages, and `_data`), each collection's history file, the navigation file, every file of the theme, every
+ * assets, app pages, and `_data`), every file a code snippet may read (including folders discovery skips), each
+ * collection's history file, the navigation file, every file of the theme, every
  * file of the outputs folder, the
  * `defaultLayout` and `themeFiles` options, the engine's version, the runtime's version, and {@link CACHE_FORMAT}.
  * Paths and bytes count; timestamps do not. Config and navigation are part of the same hash as the pages, so changing
@@ -32,6 +33,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "nod
 import { setTimeout as sleep } from "node:timers/promises";
 import { CONFIG_FILE } from "../config/load.ts";
 import type { Diagnostic, SiteConfig } from "../contracts/index.ts";
+import { snippetSources } from "../content/code-snippets/dependencies.ts";
 import { discover } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { repositoryStateKey } from "../model/reviewers.ts";
@@ -89,6 +91,8 @@ export interface CacheKeyOptions {
   readonly themeRoot: string;
   /** Absolute folder the outputs are read from. */
   readonly outputsDir: string;
+  /** Absolute output folder, left out of the snippet walk when it sits inside the source folder. */
+  readonly out?: string;
   /** Layout for a page that names none. */
   readonly defaultLayout?: string;
   /** Theme files copied into the output. */
@@ -513,6 +517,16 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   });
   for (const file of files) {
     inputs.push({ label: `source/${file.kind}/${file.path}`, path: join(options.sourceDir, file.path) });
+  }
+  // A snippet may read any file under the source folder, including one in a folder discovery skips. Discovery's
+  // list is above; these are the rest, so an edited, moved, or deleted source misses the cache.
+  const discovered = new Set(files.map((file) => file.path));
+  for (const path of await snippetSources({
+    sourceDir: options.sourceDir,
+    ...(options.out === undefined ? {} : { skip: [options.out] }),
+  })) {
+    if (discovered.has(path)) continue;
+    inputs.push({ label: `snippet/${path}`, path: join(options.sourceDir, path) });
   }
 
   // The navigation file may live outside the source folder, so it is hashed on its own as well.
