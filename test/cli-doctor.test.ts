@@ -242,6 +242,7 @@ test("the data check passes and fails on its own, and doctor reports the counts"
       runtime: "passed",
       config: "passed",
       content: "passed",
+      drift: "passed",
       data: "passed",
       theme: "passed",
       render: "passed",

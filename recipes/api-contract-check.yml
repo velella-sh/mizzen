@@ -1,0 +1,57 @@
+# Copy to .github/workflows/api-contract-check.yml.
+#
+# Fails a pull request when a page no longer matches the API it documents. The check reads every `path:line`
+# reference, compares the inline signature in its paragraph with the TypeScript declaration, and reports a changed
+# parameter, a removed symbol, or a moved symbol at the documentation claim. An unchecked claim is printed as a
+# warning and does not fail the job.
+#
+# A contract failure is a warning by default. Raise it in the site config, so this workflow gates on it:
+#
+#   drift:
+#     severity: error
+#
+# Change SITE to your site folder. The job reads `--format json`, so the claim's path and line reach the log and a
+# later step can read them; the JSON is uploaded either way, including the unchecked findings of a passing run.
+name: api-contract-check
+
+on:
+  pull_request:
+
+permissions: {}
+
+concurrency:
+  group: api-contract-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  SITE: docs
+  MIZZEN_VERSION: latest
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Mizzen
+        run: npm install --no-save --no-audit --no-fund "@velella/mizzen@${MIZZEN_VERSION}"
+      - name: Check the documented API
+        run: |
+          set -uo pipefail
+          npx mizzen doctor "$SITE" --format json > "$RUNNER_TEMP/api-contract-check.json"
+          status=$?
+          cat "$RUNNER_TEMP/api-contract-check.json"
+          exit "$status"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-contract-check
+          path: ${{ runner.temp }}/api-contract-check.json
+          retention-days: 3

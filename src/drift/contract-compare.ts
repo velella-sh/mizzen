@@ -22,7 +22,7 @@
  * promoted here; `compare.ts` keeps that comparison. Findings point at the documentation claim and come
  * in page order, then reference order, with one result per claim and citation.
  */
-import type { Diagnostic, Page } from "../contracts/index.ts";
+import type { Diagnostic, Page, Severity } from "../contracts/index.ts";
 import { DEFAULT_TOLERANCE } from "./compare.ts";
 import { contractRefsOf, type ContractRef } from "./contract-refs.ts";
 import { resolveContractSymbol, type ContractResolution } from "./contract-resolver.ts";
@@ -47,6 +47,11 @@ export interface ContractCompareOptions {
   readonly root: string;
   /** How many lines the cited line may differ from a declaration line. Defaults to 5. */
   readonly tolerance?: number;
+  /**
+   * How a contract failure is reported: a mismatch, a removed symbol, or a moved symbol. Defaults to
+   * `warning`; a site raises it to `error` in `drift.severity`. An unchecked claim stays a warning.
+   */
+  readonly severity?: Severity;
 }
 
 /**
@@ -59,6 +64,7 @@ export async function compareContractClaims(
   options: ContractCompareOptions,
 ): Promise<ContractCheck[]> {
   const tolerance = normalizeTolerance(options.tolerance);
+  const severity = options.severity ?? "warning";
   const checks: ContractCheck[] = [];
   const seen = new Set<string>();
 
@@ -67,7 +73,7 @@ export async function compareContractClaims(
       const key = claimKey(ref);
       if (seen.has(key)) continue;
       seen.add(key);
-      checks.push(await compareContractClaim(ref, options.root, tolerance));
+      checks.push(await compareContractClaim(ref, options.root, tolerance, severity));
     }
   }
 
@@ -79,6 +85,7 @@ async function compareContractClaim(
   ref: ContractRef,
   root: string,
   tolerance: number,
+  severity: Severity,
 ): Promise<ContractCheck> {
   const documented = documentedClaim(ref.text);
   if (documented === null) {
@@ -87,7 +94,7 @@ async function compareContractClaim(
 
   const resolution = await resolveContractSymbol(ref.path, ref.symbol, { root });
   if (resolution.state === "missing") {
-    return { ref, state: "missing", diagnostic: missing(ref) };
+    return { ref, state: "missing", diagnostic: missing(ref, severity) };
   }
   if (resolution.state === "ambiguous") {
     return { ref, state: "unchecked", diagnostic: unchecked(ref, ambiguousReason(resolution)) };
@@ -98,13 +105,17 @@ async function compareContractClaim(
 
   const symbol = resolution.symbol;
   if (resolution.file === ref.path && !nearDeclaration(ref, symbol, tolerance)) {
-    return { ref, state: "moved", diagnostic: moved(ref, symbol.line, tolerance) };
+    return { ref, state: "moved", diagnostic: moved(ref, symbol.line, tolerance, severity) };
   }
 
   const check = checkDocumentedSignature(documented, symbol);
   if (check.state === "match") return { ref, state: "match" };
   if (check.state === "mismatch") {
-    return { ref, state: "mismatch", diagnostic: mismatched(ref, symbol.signatures ?? [], symbol.name, symbol.kind) };
+    return {
+      ref,
+      state: "mismatch",
+      diagnostic: mismatched(ref, symbol.signatures ?? [], symbol.name, symbol.kind, severity),
+    };
   }
   return { ref, state: "unchecked", diagnostic: unchecked(ref, check.reason) };
 }
@@ -151,10 +162,10 @@ function normalizeTolerance(value: number | undefined): number {
 }
 
 /** The page names a symbol the cited file no longer exports. */
-function missing(ref: ContractRef): Diagnostic {
+function missing(ref: ContractRef, severity: Severity): Diagnostic {
   return {
     id: "drift.missing-symbol",
-    severity: "warning",
+    severity,
     message: `"${ref.path}" does not export "${ref.symbol}", which this page claims at line ${ref.line}.`,
     pos: ref.pos,
     help: "Update the reference to the symbol's new name, or remove it.",
@@ -167,11 +178,12 @@ function mismatched(
   signatures: readonly { readonly text: string; readonly line: number }[],
   name: string,
   kind: string,
+  severity: Severity,
 ): Diagnostic {
   const actual = signatures.map((signature) => `"${signature.text}" (line ${signature.line})`);
   return {
     id: "drift.signature-mismatch",
-    severity: "warning",
+    severity,
     message: `"${ref.path}" declares "${name}" as ${actual.length === 0 ? `a ${kind}` : actual.join(" or ")}, but this page documents "${ref.text}" at line ${ref.pos.line}.`,
     pos: ref.pos,
     help: "Update this documentation to match the declaration, or change the code.",
@@ -190,10 +202,10 @@ function unchecked(ref: ContractRef, reason: string): Diagnostic {
 }
 
 /** The page names a symbol that exists, but its declaration moved outside the tolerance. */
-function moved(ref: ContractRef, line: number, tolerance: number): Diagnostic {
+function moved(ref: ContractRef, line: number, tolerance: number, severity: Severity): Diagnostic {
   return {
     id: "drift.moved-symbol",
-    severity: "warning",
+    severity,
     message: `"${ref.path}" declares "${ref.symbol}" at line ${line}; the cited line is ${ref.line}, outside the ${tolerance}-line tolerance.`,
     pos: ref.pos,
     help: `Point the reference at line ${line}, or update the page to match the code.`,

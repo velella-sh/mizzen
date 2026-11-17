@@ -23,6 +23,7 @@ import { buildModel } from "../model/build.ts";
 import { build } from "../pipeline/build.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
 import { loadRegistry } from "../render/registry.ts";
+import { driftDiagnosticsOf } from "../outputs/drift-report.ts";
 import { coverageDiagnostics, type DoctorCheck, type DoctorCheckId, type DoctorReport } from "./doctor-report.ts";
 
 /** The oldest Node.js major the engine runs on, from `engines` in package.json. */
@@ -215,6 +216,7 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
   const sourceExists = source !== undefined && (await exists(source));
   const missingSource = `the source folder "${sourceName ?? ""}" does not exist`;
 
+  let model: Awaited<ReturnType<typeof buildModel>> | undefined;
   if (source === undefined) {
     checks.push(skipped("content", SKIP_CONFIG));
   } else if (!sourceExists) {
@@ -224,17 +226,36 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
     checks.push(skipped("content", missingSource));
   } else {
     try {
-      const model = await buildModel(root);
-      publish(model.diagnostics);
-      const network = networkSummary(model);
+      const built = await buildModel(root);
+      model = built;
+      publish(built.diagnostics);
+      const network = networkSummary(built);
       if (network !== undefined) publish([network]);
-      const contentErrors = model.diagnostics.some(
+      const contentErrors = built.diagnostics.some(
         (found) => isError(found) && !found.id.startsWith("config.") && !found.id.startsWith("data."),
       );
       checks.push(contentErrors ? failed("content", "the content check found errors") : passed("content"));
     } catch (err) {
       diagnostics.error("doctor.content-failed", `The content check could not run: ${messageOf(err)}`, { help: CHECK_HELP });
       checks.push(failed("content", "the content check could not run"));
+    }
+  }
+
+  // Drift is only a gate when its report is enabled; a hand-written `site.data.drift` never hides a fresh finding.
+  if (config === undefined) {
+    checks.push(skipped("drift", SKIP_CONFIG));
+  } else if (config.outputs["drift-report"] === false) {
+    checks.push(skipped("drift", "the drift report is turned off by `outputs`"));
+  } else if (model === undefined) {
+    checks.push(skipped("drift", source === undefined ? SKIP_CONFIG : missingSource));
+  } else {
+    try {
+      const findings = await driftDiagnosticsOf(model.site, { root, data: { pages: {} } });
+      publish(findings);
+      checks.push(findings.some(isError) ? failed("drift", "the drift check found errors") : passed("drift"));
+    } catch (err) {
+      diagnostics.error("doctor.drift-failed", `The drift check could not run: ${messageOf(err)}`, { help: CHECK_HELP });
+      checks.push(failed("drift", "the drift check could not run"));
     }
   }
 

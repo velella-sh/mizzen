@@ -35,6 +35,7 @@ import type {
   DerivedRuleConfig,
   Diagnostic,
   Direction,
+  DriftConfig,
   CalendarConfig,
   CalendarEventConfig,
   ExamplesConfig,
@@ -341,6 +342,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const dates = datesFrom(raw.dates);
   const social = socialFrom(raw.social);
   const stale = staleFrom(raw.stale);
+  const drift = driftFrom(raw.drift);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -374,6 +376,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(snapshot === undefined ? {} : { snapshot }),
     ...(api === undefined ? {} : { api }),
     ...(stale === undefined ? {} : { stale }),
+    ...(drift === undefined ? {} : { drift }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -477,6 +480,13 @@ function staleFrom(value: unknown): StaleConfig | undefined {
   if (typeof value.root === "string" && value.root !== "") out.root = value.root;
   if (severity === "info" || severity === "warning" || severity === "error") out.severity = severity;
   return Object.keys(out).length === 0 ? undefined : out;
+}
+
+/** The drift key, keeping a known `severity`; the schema check reports an invalid one. */
+function driftFrom(value: unknown): DriftConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const severity = value.severity;
+  return severity === "info" || severity === "warning" || severity === "error" ? { severity } : undefined;
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

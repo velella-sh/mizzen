@@ -394,6 +394,12 @@ export interface StaleConfig {
   readonly severity?: "info" | "warning" | "error";
 }
 
+/** The `drift` key: how the API contract findings `drift.json` writes are reported. */
+export interface DriftConfig {
+  /** How a contract failure (a mismatch, a removed symbol, or a moved symbol) is reported. Default `warning`. */
+  readonly severity?: "info" | "warning" | "error";
+}
+
 /** The `social` key: generated share images. Without the key no image is written. */
 export interface SocialConfig {
   /** Template used by every page that does not name its own: `_templates/social/<template>.svg` in the source folder. */
@@ -461,6 +467,8 @@ export interface SiteConfig {
   readonly api?: ApiConfig;
   /** Stale page detection. Default: none, and `covers` paths are relative to the site root. */
   readonly stale?: StaleConfig;
+  /** How the API contract findings `drift.json` writes are reported. Default: none, and a contract failure is a warning. */
+  readonly drift?: DriftConfig;
   /** Generated social share images. Default: none, and no image is written. */
   readonly social?: SocialConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */

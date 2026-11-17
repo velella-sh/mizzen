@@ -1,0 +1,3 @@
+title: API contract check, breaking
+drift:
+  severity: error
