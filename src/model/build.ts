@@ -5,6 +5,7 @@ import { loadConfig } from "../config/load.ts";
 import { blocksOf } from "../blocks/parse.ts";
 import { blocksLockOf, readBlocksLock, type BlocksLock } from "../blocks/lock.ts";
 import { matchBlockIds } from "../blocks/match.ts";
+import { anchorReferencesIn } from "../blocks/references.ts";
 import { loadData } from "../content/data.ts";
 import { checkSeo } from "../data/checks/seo.ts";
 import { loadCollections } from "../data/collections.ts";
@@ -122,6 +123,18 @@ function withAliasAnchors(html: string, blocks: readonly Block[]): string {
     if (at < 0 || close < 0) continue;
     const spans = aliases.map((alias) => `<span id="${escapeAttr(alias)}"></span>`).join("");
     result = `${result.slice(0, close + 1)}${spans}${result.slice(close + 1)}`;
+  }
+  return result;
+}
+
+/** Adds each block's stable id to the element its `data-src` names, so HTML, Markdown, and the source map agree. */
+function withBlockIds(html: string, blocks: readonly Block[]): string {
+  let result = html;
+  for (const block of blocks) {
+    const src = `data-src="${formatSpan(block.pos)}"`;
+    const at = result.indexOf(src);
+    if (at < 0) continue;
+    result = `${result.slice(0, at + src.length)} data-block="${block.id}"${result.slice(at + src.length)}`;
   }
   return result;
 }
@@ -438,14 +451,41 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     )
     : undefined;
   for (const entry of staged) {
-    const blocks = matchedBlocks?.get(entry.page.source.file);
+    const blocks = matchedBlocks?.get(entry.page.source.file) ?? entry.page.blocks;
     const page = blocks === undefined
       ? entry.page
-      : { ...entry.page, blocks, html: withAliasAnchors(entry.page.html, blocks) };
+      : { ...entry.page, blocks, html: withBlockIds(withAliasAnchors(entry.page.html, blocks), blocks) };
     add(page, entry.path, entry.order);
     // A page a duplicate URL kept out of the model declares no list either.
     if (entry.list !== undefined && pages.at(-1) === page) {
       listDeclarations.push({ page, text: entry.list.text, file: entry.list.file });
+    }
+  }
+
+  // A block the lock recorded but this build does not have was removed, so a link that still names its anchor lands
+  // on nothing. Each reference is named with its own location, for review before the lock is rewritten.
+  if (blocksLock.found) {
+    const present = new Set<string>();
+    for (const blocks of matchedBlocks?.values() ?? []) for (const block of blocks) present.add(block.id);
+    const references = new Map<string, SourcePos[]>();
+    for (const entry of staged) {
+      const found = await anchorReferencesIn(entry.page.markdown, entry.page.source.file, entry.page.source.line);
+      for (const [anchor, spans] of found) references.set(anchor, [...(references.get(anchor) ?? []), ...spans]);
+    }
+    for (const [id, recorded] of Object.entries(blocksLock.lock.blocks ?? {})) {
+      if (present.has(id)) continue;
+      for (const anchor of new Set([recorded.anchor, ...(recorded.aliases ?? [])])) {
+        if (anchor === undefined) continue;
+        for (const pos of references.get(anchor) ?? []) {
+          diagnostics.report({
+            id: "blocks.removed",
+            severity: "warning",
+            message: `The link to #${anchor} names block "${id}", which was removed from ${recorded.file}.`,
+            pos,
+            help: "Point the link at the block's new location, or remove it.",
+          });
+        }
+      }
     }
   }
 
