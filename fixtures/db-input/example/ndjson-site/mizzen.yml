@@ -1,0 +1,5 @@
+title: NDJSON catalog
+collections:
+  products:
+    source: _data/products.ndjson
+    id: sku
