@@ -19,8 +19,22 @@ function schema(fields: Record<string, { readonly type: string; readonly values?
   });
 }
 
-const BEFORE = schema({ id: { type: "string" }, legacy: { type: "string" }, title: { type: "string" } });
-const AFTER = schema({ author: { type: "string" }, id: { type: "string" }, slug: { type: "string" }, title: { type: "string" } }, ["title", "slug"]);
+const BEFORE = schema({
+  id: { type: "string" },
+  legacy: { type: "string" },
+  status: { type: "string", values: ["draft", "published"] },
+  title: { type: "string" },
+});
+const AFTER = schema(
+  {
+    author: { type: "string" },
+    id: { type: "number" },
+    slug: { type: "string" },
+    status: { type: "string", values: ["published"] },
+    title: { type: "string" },
+  },
+  ["title", "slug"],
+);
 
 function tree(): string {
   const root = mkdtempSync(join(tmpdir(), "data-schema-evolution-"));
@@ -69,6 +83,31 @@ test("compareSchemas reports an added required field as an error and an added op
   assert.deepEqual(compareSchemas(current, current), []);
 });
 
+test("compareSchemas reports a type change and each removed enum value with both versions", () => {
+  const fields = { id: { required: true, type: "string" }, status: { required: false, type: "string", enum: ["draft", "published", "archived"] } };
+  const currentFields = { id: { required: true, type: "number" }, status: { required: false, type: "string", enum: ["published"] } };
+  const changes = compareSchemas(
+    { version: "after", file: "_data/items.schema.json", fields: currentFields },
+    { version: "before", file: "_data/items.schema.json", fields },
+  );
+  assert.deepEqual(
+    changes.map(({ id, severity, field, change }) => ({ id, severity, field, change })),
+    [
+      { id: "data.schema-type-change", severity: "error", field: "id", change: "type-changed" },
+      { id: "data.schema-enum-removed", severity: "error", field: "status", change: "enum-removed" },
+      { id: "data.schema-enum-removed", severity: "error", field: "status", change: "enum-removed" },
+    ],
+  );
+  assert.match(changes[0]?.message ?? "", /`id` changed type from `string` to `number`; baseline before -> now after/);
+  assert.deepEqual(
+    changes.slice(1).map((change) => change.message),
+    [
+      'field `status` no longer accepts "archived"; baseline before -> now after',
+      'field `status` no longer accepts "draft"; baseline before -> now after',
+    ],
+  );
+});
+
 test("data schema reports the fields a schema added and removed, in text and JSON", async () => {
   const root = tree();
   assert.equal((await dataSnapshot({ root, name: "items" })).code, 0);
@@ -78,8 +117,10 @@ test("data schema reports the fields a schema added and removed, in text and JSO
   assert.equal(text.code, 0, text.output);
   assert.match(text.output, /items: _data\/items\.schema\.json, baseline [0-9a-f]{12} -> now [0-9a-f]{12}/);
   assert.match(text.output, / {2}warning data\.schema-optional-field-added: field `author` was added as optional; baseline [0-9a-f]{12} -> now [0-9a-f]{12}/);
+  assert.match(text.output, / {2}error data\.schema-type-change: field `id` changed type from `string` to `number`; baseline [0-9a-f]{12} -> now [0-9a-f]{12}/);
   assert.match(text.output, / {2}warning data\.schema-field-removed: field `legacy` was removed; baseline [0-9a-f]{12} -> now [0-9a-f]{12}/);
   assert.match(text.output, / {2}error data\.schema-required-field-added: field `slug` is required, and earlier records lack it; baseline [0-9a-f]{12} -> now [0-9a-f]{12}/);
+  assert.match(text.output, / {2}error data\.schema-enum-removed: field `status` no longer accepts "draft"; baseline [0-9a-f]{12} -> now [0-9a-f]{12}/);
   assert.match(text.output, /skipped notes: no schema is declared or recorded/);
 
   const baseline = sha256(BEFORE);
@@ -105,6 +146,15 @@ test("data schema reports the fields a schema added and removed, in text and JSO
             current,
           },
           {
+            id: "data.schema-type-change",
+            severity: "error",
+            field: "id",
+            change: "type-changed",
+            message: `field \`id\` changed type from \`string\` to \`number\`; baseline ${baseline.slice(0, 12)} -> now ${now.slice(0, 12)}`,
+            baseline,
+            current,
+          },
+          {
             id: "data.schema-field-removed",
             severity: "warning",
             field: "legacy",
@@ -119,6 +169,15 @@ test("data schema reports the fields a schema added and removed, in text and JSO
             field: "slug",
             change: "added",
             message: `field \`slug\` is required, and earlier records lack it; baseline ${baseline.slice(0, 12)} -> now ${now.slice(0, 12)}`,
+            baseline,
+            current,
+          },
+          {
+            id: "data.schema-enum-removed",
+            severity: "error",
+            field: "status",
+            change: "enum-removed",
+            message: `field \`status\` no longer accepts "draft"; baseline ${baseline.slice(0, 12)} -> now ${now.slice(0, 12)}`,
             baseline,
             current,
           },

@@ -79,6 +79,23 @@ export function compareSchemas(current: SchemaSnapshot, baseline: SchemaSnapshot
       }
     } else if (was !== undefined && now === undefined) {
       push({ id: "data.schema-field-removed", severity: "warning", field, change: "removed", message: `field \`${field}\` was removed` });
+    } else if (was !== undefined && now !== undefined) {
+      if (was.type !== undefined && now.type !== undefined && was.type !== now.type) {
+        push({
+          id: "data.schema-type-change",
+          severity: "error",
+          field,
+          change: "type-changed",
+          message: `field \`${field}\` changed type from \`${was.type}\` to \`${now.type}\``,
+        });
+      }
+      if (was.enum !== undefined && now.enum !== undefined) {
+        const kept = new Set(now.enum.map(stableKey));
+        const removed = was.enum.filter((value) => !kept.has(stableKey(value))).sort((a, b) => (stableKey(a) < stableKey(b) ? -1 : stableKey(a) > stableKey(b) ? 1 : 0));
+        for (const value of removed) {
+          push({ id: "data.schema-enum-removed", severity: "error", field, change: "enum-removed", message: `field \`${field}\` no longer accepts ${stableKey(value)}` });
+        }
+      }
     }
   }
   return changes;
@@ -87,6 +104,11 @@ export function compareSchemas(current: SchemaSnapshot, baseline: SchemaSnapshot
 /** A schema version short enough for one line of text; the JSON report carries the whole hash. */
 function short(version: string): string {
   return version.slice(0, 12);
+}
+
+/** An enum value as comparable, printable text. */
+function stableKey(value: unknown): string {
+  return JSON.stringify(value) ?? "";
 }
 
 /** Compares every collection's schema with the one its snapshot recorded. */
