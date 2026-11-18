@@ -140,11 +140,38 @@ export function importReport(
   return `${lines.join("\n")}\n`;
 }
 
+/** The policy that decides whether the items a person still has to do fail the command. */
+export interface ImportPolicy {
+  /** Exit 1 while any manual item has no recorded decision. */
+  readonly failOnManual?: boolean;
+  /** Diagnostic ids recorded as reviewed; an item whose id is here no longer fails the policy. */
+  readonly allow?: readonly string[];
+}
+
+/** How many manual items no recorded decision covers. */
+function unresolvedItems(diagnostics: readonly Diagnostic[], policy: ImportPolicy): number {
+  const allow = policy.allow ?? [];
+  return diagnostics.filter((finding) => !allow.includes(finding.id)).length;
+}
+
+/** 1 when an error needs fixing or the policy is on and an item is unresolved, else 0. */
+function importStatus(diagnostics: readonly Diagnostic[], policy: ImportPolicy): number {
+  if (diagnostics.some((finding) => finding.severity === "error")) return 1;
+  return policy.failOnManual === true && unresolvedItems(diagnostics, policy) > 0 ? 1 : 0;
+}
+
 /**
  * Reads the source, maps every file, prints the preview, and exits 1 when a mapping is an error. With `out`, writes the
  * mapped project there instead, but only when nothing is an error and the destination is empty and outside the source.
+ * `policy` can also fail the command while a manual item lacks a recorded decision.
  */
-export async function runImport(name: string, root: string, io: ImportIo, out?: string): Promise<number> {
+export async function runImport(
+  name: string,
+  root: string,
+  io: ImportIo,
+  out?: string,
+  policy: ImportPolicy = {},
+): Promise<number> {
   const importer = importerNamed(name);
   if (importer === undefined) {
     const names = IMPORTERS.map((known) => known.name).join(", ");
@@ -163,7 +190,7 @@ export async function runImport(name: string, root: string, io: ImportIo, out?: 
     io.log(
       importReport(name, source.root, mappings, outcome.config.source === undefined, found, accuracy, coverage).replace(/\n$/, ""),
     );
-    return found.some((finding) => finding.severity === "error") ? 1 : 0;
+    return importStatus(found, policy);
   }
 
   const destination = resolve(out);
@@ -185,5 +212,5 @@ export async function runImport(name: string, root: string, io: ImportIo, out?: 
       files: generated.files,
     }).replace(/\n$/, ""),
   );
-  return all.some((finding) => finding.severity === "error") ? 1 : 0;
+  return importStatus(all, policy);
 }

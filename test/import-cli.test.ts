@@ -55,6 +55,31 @@ test("import plain previews each destination and the MDX warning", async () => {
   assert.match(report, /^1 manual item, 0 errors\.$/m);
 });
 
+test("import fails on an unresolved manual item only with --fail-on-manual, and --allow records a decision", async () => {
+  const root = tree({ "index.md": "[gone](./gone.md)\n", "notes.mdx": "# Notes\n" });
+  const run = async (...args: string[]) => {
+    const { logs, errors, io } = capture();
+    const status = await main(["import", "plain", root, ...args], io);
+    assert.deepEqual(errors, []);
+    return { status, report: logs.join("\n") };
+  };
+
+  const open = await run();
+  assert.equal(open.status, 0);
+  assert.match(open.report, /^2 manual items, 0 errors\.$/m);
+
+  const gated = await run("--fail-on-manual");
+  assert.equal(gated.status, 1);
+  assert.match(gated.report, /import\.mdx/);
+  assert.match(gated.report, /import\.unresolved-link/);
+
+  const resolved = await run("--fail-on-manual", "--allow", "import.mdx");
+  assert.equal(resolved.status, 1, "one recorded decision does not cover the other item");
+
+  const allowed = await run("--fail-on-manual", "--allow", "import.mdx,import.unresolved-link");
+  assert.equal(allowed.status, 0);
+});
+
 test("import with an unknown importer exits 2", async () => {
   const root = tree({ "index.md": "# Home\n" });
   const { logs, errors, io } = capture();
@@ -71,4 +96,6 @@ test("import usage errors exit 2 and print the help", async () => {
   assert.match(errors.join("\n"), /import needs an importer name/);
   assert.equal(await main(["import", "plain", "a", "b"], io), 2);
   assert.match(errors.join("\n"), /unexpected argument: b/);
+  assert.equal(await main(["import", "plain", "a", "--allow"], io), 2);
+  assert.match(errors.join("\n"), /--allow needs a value/);
 });

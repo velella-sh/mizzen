@@ -88,7 +88,7 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
-  import <name> <dir>         Preview a migration; --out <dir> writes it to an empty folder outside the source
+  import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
@@ -127,6 +127,8 @@ Options:
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
+  --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
+  --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
@@ -322,6 +324,8 @@ type ImportOpts = {
   readonly name: string;
   readonly root: string;
   readonly out?: string;
+  readonly failOnManual?: boolean;
+  readonly allow?: readonly string[];
 };
 
 type Parsed =
@@ -736,11 +740,13 @@ function parseMcp(args: readonly string[]): Parsed {
   return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
 }
 
-/** Parses `import <name> [dir] [--out <dir>]`. */
+/** Parses `import <name> [dir] [--out <dir>] [--fail-on-manual] [--allow <ids>]`. */
 function parseImport(args: readonly string[]): Parsed {
   let name: string | undefined;
   let root: string | undefined;
   let out: string | undefined;
+  let failOnManual = false;
+  const allow: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "-h" || arg === "--help") return { help: true };
@@ -748,13 +754,31 @@ function parseImport(args: readonly string[]): Parsed {
       const next = args[++i];
       if (next === undefined || next.startsWith("-")) return { error: "--out needs a value" };
       out = next;
+    } else if (arg === "--fail-on-manual") {
+      failOnManual = true;
+    } else if (arg === "--allow") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-") || next.trim() === "") return { error: "--allow needs a value" };
+      for (const id of next.split(",")) {
+        const trimmed = id.trim();
+        if (trimmed !== "" && !allow.includes(trimmed)) allow.push(trimmed);
+      }
     } else if (arg.startsWith("-")) return { error: `unknown option for import: ${arg}` };
     else if (name === undefined) name = arg;
     else if (root === undefined) root = arg;
     else return { error: `unexpected argument: ${arg}` };
   }
   if (name === undefined) return { error: "import needs an importer name: mizzen import <name> [dir]" };
-  return { options: { command: "import", name, root: root ?? ".", ...(out === undefined ? {} : { out }) } };
+  return {
+    options: {
+      command: "import",
+      name,
+      root: root ?? ".",
+      ...(out === undefined ? {} : { out }),
+      ...(failOnManual ? { failOnManual: true } : {}),
+      ...(allow.length === 0 ? {} : { allow }),
+    },
+  };
 }
 
 /** Parses `argv` after the process name. */
@@ -1133,7 +1157,10 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   if (options.command === "import") {
     try {
-      return await runImport(options.name, options.root, { log, error }, options.out);
+      return await runImport(options.name, options.root, { log, error }, options.out, {
+        ...(options.failOnManual === undefined ? {} : { failOnManual: options.failOnManual }),
+        ...(options.allow === undefined ? {} : { allow: options.allow }),
+      });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
