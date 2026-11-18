@@ -29,7 +29,7 @@ test("the fixture site's pages and assets come from srcDir", async () => {
       ["docs/index.md", "index.md"],
     ],
   );
-  assert.deepEqual(outcome.assets, [{ source: "docs/public/logo.svg", destination: "public/logo.svg" }]);
+  assert.deepEqual(outcome.assets, [{ source: "docs/public/logo.svg", destination: "logo.svg" }]);
   assert.deepEqual(
     outcome.files.map((file) => file.path),
     [".vitepress/config.mjs", "docs/guide/page.md", "docs/index.md", "docs/public/logo.svg"],

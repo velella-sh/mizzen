@@ -87,6 +87,7 @@ export function buildMappings(
   pages: readonly ImportedPage[],
   assets: readonly ImportedAsset[],
   config: ImportedConfig,
+  base = "",
 ): MappingResult {
   const pageBySource = new Map(pages.map((page) => [page.source, page]));
   const assetBySource = new Map(assets.map((asset) => [asset.source, asset]));
@@ -119,7 +120,7 @@ export function buildMappings(
     if (page !== undefined) {
       const destination = claim(file.path, page.destination);
       if (destination === undefined) mappings.push({ source: file.path, kind: file.kind, reason: file.reason ?? "the destination is invalid" });
-      else mappings.push({ source: file.path, kind: file.kind, destination, url: permalink(destination) });
+      else mappings.push({ source: file.path, kind: file.kind, destination, url: permalink(destination, { base }) });
       continue;
     }
     if (file.kind === "content") {
@@ -141,7 +142,7 @@ export function buildMappings(
     if (asset !== undefined) {
       const destination = claim(file.path, asset.destination);
       if (destination === undefined) mappings.push({ source: file.path, kind: file.kind, reason: file.reason ?? "the destination is invalid" });
-      else mappings.push({ source: file.path, kind: file.kind, destination, url: `/${destination}` });
+      else mappings.push({ source: file.path, kind: file.kind, destination, url: `${base}/${destination}` });
       continue;
     }
     if (file.kind === "asset") {
