@@ -131,6 +131,12 @@ test("a text directive becomes an inline sl-component with its label as children
   assert.equal(textOf(component.node), "widget");
 });
 
+test("a colon-number in prose stays text instead of becoming a component", async () => {
+  const tree = await parseMarkdown("Text reaches 4.5:1 here, and video keeps 16:9.\n");
+  assert.equal(componentsOf(tree).length, 0);
+  assert.equal(textOf(tree), "Text reaches 4.5:1 here, and video keeps 16:9.");
+});
+
 test("an alert with only its marker has no children", async () => {
   const tree = await parseMarkdown("> [!CAUTION]\n");
   assert.deepEqual((onlyComponent(componentsOf(tree)).node as { children: Nodes[] }).children, []);

@@ -37,6 +37,9 @@ interface AnyDirective {
   data?: Record<string, unknown>;
 }
 
+/** A component name: the theme's folder names, never a number such as the `1` in `4.5:1`. */
+const COMPONENT_NAME = /^[A-Za-z][A-Za-z0-9_-]*$/;
+
 function isDirective(node: unknown): node is AnyDirective {
   const type = (node as { type?: unknown }).type;
   return type === "containerDirective" || type === "leafDirective" || type === "textDirective";
@@ -88,6 +91,10 @@ function walk(parent: Parent): void {
           position: child.position,
         };
       }
+    }
+    if (node.type === "textDirective" && !COMPONENT_NAME.test(node.name) && (node.children === undefined || node.children.length === 0)) {
+      // `4.5:1` reads as a text directive named `1`; a bare non-name stays the text the author wrote.
+      node = { type: "text", value: `:${node.name}`, position: node.position };
     }
     if (isDirective(node)) toComponent(node);
     if ("children" in node) walk(node as Parent);
