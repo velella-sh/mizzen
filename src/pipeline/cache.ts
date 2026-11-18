@@ -573,8 +573,9 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   // The config values matter as well as the file: a missing config takes its title from the folder name.
   hash.update(`config\0${canonicalJson(options.config)}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
-  // A preview changes every page's robots and canonical, so its pages are never the ones a normal build rendered.
-  hash.update(`preview\0${options.preview?.canonicalBase ?? ""}\0`);
+  // A preview changes every page's robots and canonical, so its pages are never the ones a normal build rendered. The
+  // commit names the report the entry holds, so a preview of another commit is never answered by this one.
+  hash.update(`preview\0${options.preview?.canonicalBase ?? ""}\0${options.preview?.commit ?? ""}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);
   // A plugin's version, settings, declared inputs, and code file shape its output; its digest covers them all.
   hash.update(`plugins\0${options.pluginKey ?? ""}\0`);

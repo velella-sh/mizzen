@@ -327,6 +327,8 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `version-diff` | `diff/<version>/<path>.json` for each adjacent pair of versions whose page sections differ. |
 | `versions` | `versions.json`, the versions each page path exists in and how it differs from the newest. |
 
+A preview build also writes `.mizzen/doctor.json`: the `doctor --format json` report of that build, the count of each severity, and the base and canonical it was built under.
+
 `outputs` in `mizzen.yml` turns one off by name:
 
 ```yaml

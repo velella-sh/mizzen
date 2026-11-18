@@ -18,7 +18,7 @@ import { loadRegistry } from "../render/registry.ts";
 import { copyAssets } from "./assets.ts";
 import { buildIslandModules, islandUrl } from "../render/islands.ts";
 import { cacheKey, cacheRootOf, includedSnippets, renderSettingsKey, restoreCache, writeCache } from "./cache.ts";
-import { createDiagnostics, sortDiagnostics, type Diagnostics } from "./diagnostics.ts";
+import { createDiagnostics, diagnosticsReport, sortDiagnostics, type Diagnostics } from "./diagnostics.ts";
 import { stalePageStates } from "../stale/diagnostics.ts";
 import { buildDependencyGraph } from "./dependency-graph.ts";
 import { planInvalidation, type InvalidationPlan } from "./invalidation.ts";
@@ -121,6 +121,34 @@ function isOutput(value: unknown): value is Output {
   if (typeof value !== "object" || value === null) return false;
   const { name, run } = value as { name?: unknown; run?: unknown };
   return typeof name === "string" && typeof run === "function";
+}
+
+/** Where a preview build publishes its result, relative to the output folder. */
+const PREVIEW_REPORT_PATH = ".mizzen/doctor.json";
+
+/**
+ * The result of one preview build: the version 1 diagnostics report `mizzen doctor --format json` prints, plus the
+ * counts and the base and canonical that name the preview. The build owns this path, so a preview always describes
+ * itself; a normal build writes no report at all.
+ */
+function previewReport(site: Site, preview: PreviewPolicy, findings: readonly Diagnostic[]): string {
+  const { version, diagnostics } = diagnosticsReport(findings);
+  const counts = { error: 0, warning: 0, info: 0 };
+  for (const finding of findings) counts[finding.severity] += 1;
+  return `${JSON.stringify(
+    {
+      version,
+      preview: {
+        base: site.config.base,
+        canonicalBase: preview.canonicalBase,
+        ...(preview.commit === undefined ? {} : { commit: preview.commit }),
+      },
+      counts,
+      diagnostics,
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 /**
@@ -228,6 +256,9 @@ function assertOutOutsideSource(sourceDir: string, out: string): void {
  *
  * With `workers` above 1, pages render in worker threads, and the site written is byte for byte the one a single
  * process writes. A worker that fails renders its pages in this process, with a `render.worker-failed` warning.
+ *
+ * A preview build (`preview`) also writes `.mizzen/doctor.json`: its diagnostics with codes and positions, the counts
+ * of each severity, and the base and canonical that name the preview, so CI reads the result from the output itself.
  *
  * Problems in the content and the theme come back as diagnostics; a throw means a bug, such as an output or layout
  * that threw, and leaves `out` as it was. `out` must not be the source folder nor sit inside it, unless its name
@@ -691,13 +722,19 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
 
     // The build's one hash goes into the manifest last, so every other file is in place (#1252). The manifest that
     // records the hash is left out of it, and a site file that replaced the generated manifest is left alone.
+    const findings = sortDiagnostics(diagnostics.all);
+    if (preview !== undefined) {
+      const abs = join(staging, PREVIEW_REPORT_PATH);
+      await mkdir(dirname(abs), { recursive: true });
+      await writeFile(abs, previewReport(site, preview, findings));
+      written.push(PREVIEW_REPORT_PATH);
+    }
     const usesAsOf = site.pages.some((page) => page.dates === true);
     if (claimed.get(MANIFEST_PATH) === "manifest" && !assetPaths.has(MANIFEST_PATH)) {
       await recordBuildHash(staging, usesAsOf ? site.config.asOf : undefined);
     }
 
     const fileList = [...written].sort(byCodePoint);
-    const findings = sortDiagnostics(diagnostics.all);
     if (cacheRoot !== undefined && key !== undefined) await writeCache(cacheRoot, key, staging, fileList, findings);
 
     await commit(staging, out);
