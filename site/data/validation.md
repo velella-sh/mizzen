@@ -163,6 +163,19 @@ its help names the two accepted formats.
 | `data.report-run-duplicate-id` | Two records publish the same run id. | Give each run its own id. |
 | `data.report-run-untracked-overwrite` | A run id is published with different pinned inputs than before. | Keep the run's inputs fixed, or publish it under a new id. |
 
+## Quality rules
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.quality-baseline` | `data-quality.json` is missing, is not JSON, is the wrong shape, or has no entry for a rule's scope. | Run `mizzen data quality --write` and commit `data-quality.json`. |
+| `data.quality-collection` | A quality rule names a collection the config does not declare or could not load. | Point the rule at a loaded collection. |
+| `data.quality-field` | A freshness rule has no `field`. | Write `field: <date field>` in `mizzen.yml`. |
+| `data.quality-max-age` | A freshness rule has no `maxAgeDays`. | Write `maxAgeDays: <days>` in `mizzen.yml`. |
+| `data.quality-date` | A record has no valid date in the freshness field. | Write `YYYY-MM-DD`, `YYYY-MM`, `YYYY`, or a full ISO 8601 instant. |
+| `data.quality-bounds` | A threshold or outlier rule has neither `min` nor `max`. | Write `min`, `max`, or both. |
+| `data.quality-max-drop` | A coverage or count rule has no `maxDrop`. | Write `maxDrop`: percentage points for coverage, records for count. |
+| `data.quality-exception` | A dated exception has expired, or it held back no finding. | Remove the exception, move its `until` date, or fix the rule/record/field it names. |
+
 ## Page directives
 
 | ID | Meaning | Fix |
