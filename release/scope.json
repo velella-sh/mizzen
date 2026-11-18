@@ -1,0 +1,113 @@
+{
+  "version": "0.2.4",
+  "features": [
+    {
+      "id": "import-docusaurus",
+      "title": "Docusaurus migration",
+      "status": "shipped",
+      "case": "imports"
+    },
+    {
+      "id": "import-mkdocs",
+      "title": "MkDocs and Material migration",
+      "status": "shipped",
+      "case": "imports"
+    },
+    {
+      "id": "import-starlight",
+      "title": "Starlight migration",
+      "status": "shipped",
+      "case": "imports"
+    },
+    {
+      "id": "import-vitepress",
+      "title": "VitePress migration",
+      "status": "shipped",
+      "case": "imports"
+    },
+    {
+      "id": "semantic-diff",
+      "title": "Semantic change review",
+      "status": "shipped",
+      "case": "diff"
+    },
+    {
+      "id": "reference-lifecycle",
+      "title": "References that survive renames and moves",
+      "status": "shipped",
+      "case": "references"
+    },
+    {
+      "id": "block-ids",
+      "title": "Stable block ids",
+      "status": "shipped",
+      "case": "blocks"
+    },
+    {
+      "id": "build-performance",
+      "title": "Measured build performance",
+      "status": "shipped",
+      "case": "performance"
+    },
+    {
+      "id": "blog",
+      "title": "Blog routes and Atom output",
+      "status": "shipped",
+      "case": "blog"
+    },
+    {
+      "id": "api-reference",
+      "title": "OpenAPI reference routes and navigation",
+      "status": "shipped",
+      "case": "api-reference"
+    },
+    {
+      "id": "annotations",
+      "title": "Code annotation data and diagnostics",
+      "status": "shipped",
+      "case": "annotations"
+    },
+    {
+      "id": "versions",
+      "title": "Selected docs version at the canonical URL",
+      "status": "shipped",
+      "case": "versions"
+    },
+    {
+      "id": "data-schema-evolution",
+      "title": "Collection schema versions and upgrades",
+      "status": "shipped",
+      "case": "schema"
+    },
+    {
+      "id": "data-quality",
+      "title": "Data quality rules and snapshots",
+      "status": "shipped",
+      "case": "quality"
+    },
+    {
+      "id": "record-lifecycle",
+      "title": "Record retirement, replacement, and restore",
+      "status": "shipped",
+      "case": "lifecycle"
+    },
+    {
+      "id": "data-impact",
+      "title": "Data change impact review",
+      "status": "shipped",
+      "case": "records"
+    },
+    {
+      "id": "publish-preview",
+      "title": "Pull request previews and rollback",
+      "status": "shipped",
+      "case": "preview"
+    },
+    {
+      "id": "first-project",
+      "title": "First project samples and guides",
+      "status": "shipped",
+      "case": "starters"
+    }
+  ]
+}
