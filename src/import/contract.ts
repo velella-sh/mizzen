@@ -68,6 +68,8 @@ export interface ImportOutcome {
   readonly pages: readonly ImportedPage[];
   readonly assets: readonly ImportedAsset[];
   readonly config: ImportedConfig;
+  /** The generated navigation, when the source declared one. */
+  readonly navigation?: ImportedConfig;
   readonly diagnostics: readonly Diagnostic[];
 }
 
