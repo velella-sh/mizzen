@@ -134,6 +134,15 @@ export interface RemovedRecord {
   readonly target?: string;
 }
 
+/**
+ * How a preview build treats search engines: every page is `noindex`, and its canonical points at the preview's URL
+ * rather than the production site's. Front matter `canonical_url` still wins.
+ */
+export interface PreviewPolicy {
+  /** The absolute URL a page's canonical starts with: this base followed by the page's own URL. */
+  readonly canonicalBase: string;
+}
+
 /** The site model: everything a build knows, assembled once and read by rendering and outputs. */
 export interface Site {
   /** The site config. */
@@ -150,4 +159,6 @@ export interface Site {
   readonly removed?: readonly RemovedRecord[];
   /** The shared network, from the locked file; unset for a site that has no `network` key. */
   readonly network?: SiteNetwork;
+  /** The preview policy, from `--preview-canonical`; unset for a normal build. */
+  readonly preview?: PreviewPolicy;
 }

@@ -1,5 +1,6 @@
 // One source built twice under two preview bases: the pages, their links, their assets, and the manifest follow
-// whichever base the build was given, never the config's.
+// whichever base the build was given, never the config's. A preview build also sets the index and canonical policy:
+// every page is `noindex` and its canonical points at the chosen URL, unless its front matter names one.
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -53,6 +54,51 @@ test("two preview base paths give two builds their own links, assets, and manife
         "output paths stay relative to the folder that deploys under the base",
       );
     }
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("a preview build marks every page noindex and points its canonical at the preview URL", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "build-preview-policy-"));
+  try {
+    const theme = join(parent, "theme");
+    tree(theme, {
+      "src/index.ts": 'export const theme = { name: "t", folders: ["layouts"] };\n',
+      "layouts/doc.ts":
+        'export default (p: any) => `<html><head>${p.head.meta.map((m: any) => `<meta name="${m.name}" content="${m.content}">`).join("")}${p.head.links.map((l: any) => `<link rel="${l.rel}" href="${l.href}">`).join("")}</head><body>${p.page.html}</body></html>`;\n',
+    });
+    const site = join(parent, "site");
+    tree(site, {
+      "mizzen.yml": "title: Preview\nurl: https://example.com\n",
+      "index.md": "---\ntitle: Home\nlayout: doc\n---\n\nHello\n",
+      "pinned.md": "---\ntitle: Pinned\nlayout: doc\ncanonical_url: https://elsewhere.test/pinned/\n---\n\nPinned\n",
+    });
+    const canonical = (html: string): string | undefined => /<link rel="canonical" href="([^"]+)">/.exec(html)?.[1];
+
+    const normal = join(parent, "normal");
+    await build({ root: site, out: normal, themeRoot: theme, defaultLayout: "doc", basePath: "/preview/pr-1" });
+    const normalHome = readFileSync(join(normal, "index.html"), "utf8");
+    assert.equal(normalHome.includes('content="noindex"'), false, "a normal build stays indexable");
+    assert.equal(canonical(normalHome), undefined, "a normal build's head is unchanged");
+
+    const preview = join(parent, "preview");
+    const result = await build({
+      root: site,
+      out: preview,
+      themeRoot: theme,
+      defaultLayout: "doc",
+      basePath: "/preview/pr-1",
+      preview: { canonicalBase: "https://preview.example.com/" },
+    });
+    assert.deepEqual(result.diagnostics.filter((d) => d.severity === "error"), []);
+
+    const home = readFileSync(join(preview, "index.html"), "utf8");
+    assert.match(home, /<meta name="robots" content="noindex">/);
+    assert.equal(canonical(home), "https://preview.example.com/preview/pr-1/", "the canonical is the chosen URL and the page's URL");
+    const pinned = readFileSync(join(preview, "pinned/index.html"), "utf8");
+    assert.match(pinned, /<meta name="robots" content="noindex">/);
+    assert.equal(canonical(pinned), "https://elsewhere.test/pinned/", "front matter canonical_url still wins");
   } finally {
     rmSync(parent, { recursive: true, force: true });
   }

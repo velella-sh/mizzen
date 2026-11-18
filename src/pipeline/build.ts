@@ -5,7 +5,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/load.ts";
 import { normalizeBase } from "../content/permalink.ts";
 import { discover } from "../content/discover.ts";
-import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, Site } from "../contracts/index.ts";
+import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, PreviewPolicy, Site } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
 import { writeUrlsLock } from "../data/urls-lock.ts";
 import { MANIFEST_PATH, recordBuildHash } from "../outputs/build-hash.ts";
@@ -67,6 +67,12 @@ export interface BuildOptions {
    * that path, so each preview gets its own. Wins over the config's `base`.
    */
   readonly basePath?: string;
+  /**
+   * The preview policy from `--preview-canonical`: every page is `noindex` and its canonical points at
+   * `canonicalBase` and the page's own URL. Wins over `config.url` for the canonical; front matter `canonical_url`
+   * still wins over both.
+   */
+  readonly preview?: PreviewPolicy;
 }
 
 /** What {@link build} wrote and found. */
@@ -240,6 +246,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
 
   // The config is read before the cache so the source folder is known without building the model.
   const basePath = options.basePath === undefined ? undefined : normalizeBase(options.basePath);
+  const preview = options.preview;
   const loadedConfig = loadConfig(root);
   const loaded = {
     ...loadedConfig,
@@ -282,6 +289,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
       stale: JSON.stringify([...staleBySource]),
       ...(pluginKey === undefined ? {} : { pluginKey }),
+      ...(preview === undefined ? {} : { preview }),
     }).catch(() => undefined);
     if (key !== undefined) {
       const hit = await restoreCache(cacheRoot, key, out).catch(() => undefined);
@@ -310,6 +318,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     ...(options.updateUrls === true ? { updateUrls: true } : {}),
     ...(options.asOf === undefined ? {} : { asOf: options.asOf }),
     ...(basePath === undefined ? {} : { base: basePath }),
+    ...(preview === undefined ? {} : { preview }),
   });
   for (const d of model.diagnostics) diagnostics.report(d);
 
@@ -379,6 +388,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
           ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
           ...(pluginKey === undefined ? {} : { pluginKey }),
+          ...(preview === undefined ? {} : { preview }),
           ...(Object.keys(site.collections).length === 0 ? {} : { recordShape: recordShapeOf(site) }),
         }).catch(() => undefined);
   const recordKey = recordKeyOf(site);

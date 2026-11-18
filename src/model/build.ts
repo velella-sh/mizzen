@@ -20,7 +20,7 @@ import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
 import { normalizeBase, permalink } from "../content/permalink.ts";
 import { resolveTitle } from "../content/title.ts";
-import type { Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
+import type { Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, PreviewPolicy, Site, SourcePos } from "../contracts/index.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { applyRecordLinks } from "../markdown/plugins/links.ts";
@@ -61,6 +61,8 @@ export interface BuildModelOptions {
   readonly asOf?: string;
   /** The site `base` from `--base`; it wins over the config's `base`, so one source builds under a preview path. */
   readonly base?: string;
+  /** The preview policy from `--preview-canonical`; the site keeps it, so every render and output marks the page. */
+  readonly preview?: PreviewPolicy;
   /** The clock the stale-lock warning reads; a test sets it. Default: `Date.now`. */
   readonly now?: () => number;
 }
@@ -546,7 +548,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   });
   for (const d of applied.diagnostics) diagnostics.report(d);
 
-  const site = network?.site === undefined ? applied.site : { ...applied.site, network: network.site };
+  const settled = network?.site === undefined ? applied.site : { ...applied.site, network: network.site };
+  const site = options.preview === undefined ? settled : { ...settled, preview: options.preview };
   return {
     site,
     diagnostics: sortDiagnostics(diagnostics.all),
