@@ -104,6 +104,7 @@ Options:
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --update-urls        For build: accept changed record URLs and write urls.lock.json
+  --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
@@ -308,6 +309,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `related` | `related.json`, the few pages each doc page is most related to. |
 | `review-coverage` | `review-coverage.json`, each doc page's review policy, reviewers, last review, and coverage state. |
 | `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
+| `blocks` | `blocks.json`, every recorded block's id, page URL, source file, and line, for a stable deep link. |
 | `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
 | `social-images` | `assets/social/<page>.png`, a 1200 by 630 share image per page drawn from an SVG template, when the config sets `social`. The page head points at it. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |

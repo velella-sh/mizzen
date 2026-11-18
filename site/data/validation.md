@@ -166,3 +166,12 @@ its help names the two accepted formats.
 | `data.table-unknown-source` | A `::data-table` names a source that is no collection and holds no records. | Use a collection name or a path to a list in `_data`. |
 | `data.table-unknown-column` | A `::data-table` names a column the records do not have. | Use a field path the records hold. |
 | `data.table-where` | A `::data-table` filter is malformed. | Write one pair with its value quoted, such as `where="status=stable"`. |
+
+## Blocks
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.blocks-lock-invalid` | `blocks.lock.json` is not JSON or does not match its schema. | Fix the file, or run `mizzen build --update-blocks` to write it again. |
+| `blocks.invalid-id` | A declared block id is not a lower-case slug, so the block falls back to an automatic id. | Write the id as lower-case letters, digits, and hyphens. |
+| `blocks.marker-unused` | A `<!-- {#id} -->` marker has no block after it. | Move the marker directly above the block it names, or remove it. |
+| `blocks.duplicate-id` | Two blocks share an id. | Give each block its own id; the message names both files and lines. |
