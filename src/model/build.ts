@@ -2,6 +2,10 @@ import { readFile } from "node:fs/promises";
 import { join, posix, relative, resolve } from "node:path";
 import type { Heading as MdHeading, Root } from "mdast";
 import { loadConfig } from "../config/load.ts";
+import { blocksOf } from "../blocks/parse.ts";
+import { blocksLockOf, readBlocksLock, type BlocksLock } from "../blocks/lock.ts";
+import { matchBlockIds } from "../blocks/match.ts";
+import { anchorReferencesIn } from "../blocks/references.ts";
 import { loadData } from "../content/data.ts";
 import { checkSeo } from "../data/checks/seo.ts";
 import { loadCollections } from "../data/collections.ts";
@@ -23,7 +27,7 @@ import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
 import { normalizeBase, permalink } from "../content/permalink.ts";
 import { resolveTitle } from "../content/title.ts";
-import type { Diagnostic, FrontMatter, Heading, NavItem, NavTree, Page, Plugin, PreviewPolicy, Site, SourcePos } from "../contracts/index.ts";
+import type { Block, Diagnostic, FrontMatter, Heading, NavItem, NavTree, Page, Plugin, PreviewPolicy, Site, SourcePos } from "../contracts/index.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { applyRecordLinks } from "../markdown/plugins/links.ts";
@@ -31,6 +35,7 @@ import { navFromFolders, type FolderPage } from "../nav/from-folders.ts";
 import { loadNavigation } from "../nav/from-yaml.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
 import { pageCache, parseMarkdownWithCache, type PageCache } from "../pipeline/page-cache.ts";
+import { formatSpan } from "../source/spans.ts";
 import { runContentHooks } from "../plugins/hooks.ts";
 import { runMarkdownHooks, runValidateHooks } from "../plugins/content-extension.ts";
 import { applyProjectLinks } from "../links/project-link.ts";
@@ -47,6 +52,8 @@ export interface ModelResult {
   readonly parsedPages: number;
   /** What the URL lock check made of this build; the model is what writes `urls.lock.json` with `--update-urls`. */
   readonly urls: UrlsPlan;
+  /** Every page block's id, as `blocks.lock.json` holds it; the build writes it with `--update-blocks`. */
+  readonly blocksLock: BlocksLock;
 }
 
 /** Options of {@link buildModel}. */
@@ -60,6 +67,8 @@ export interface BuildModelOptions {
   readonly plugins?: readonly Plugin[];
   /** Accept every current record URL, moving a changed one into `urls.lock.json`'s `previous`; `mizzen build --update-urls` sets this. */
   readonly updateUrls?: boolean;
+  /** Give every page its block ids and write `blocks.lock.json`; `mizzen build --update-blocks` sets this. */
+  readonly updateBlocks?: boolean;
   /** The as-of date from `--as-of`, `YYYY-MM-DD`; it wins over the config's `asOf`. */
   readonly asOf?: string;
   /** The site `base` from `--base`; it wins over the config's `base`, so one source builds under a preview path. */
@@ -98,6 +107,43 @@ function repositoryFolder(dir: string | undefined): string {
 /** The file position, relative to the repository root, a path under `source` has. */
 function posOf(file: string, line: number, endLine = line): SourcePos {
   return { file, line, column: 1, endLine, endColumn: 1 };
+}
+
+/** The attribute value an alias anchor needs: a slug is safe, a declared heading id may not be. */
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Puts each earlier anchor back into a page's HTML: an empty `<span id>` just inside the opening tag of the block that
+ * carries the alias, found by the block's exact `data-src` span. A block whose element the HTML does not hold is left
+ * alone; the alias is then only a lock entry.
+ */
+function withAliasAnchors(html: string, blocks: readonly Block[]): string {
+  let result = html;
+  for (const block of blocks) {
+    const aliases = (block.aliases ?? []).filter((alias) => alias !== block.anchor);
+    if (aliases.length === 0) continue;
+    const src = `data-src="${formatSpan(block.pos)}"`;
+    const at = result.indexOf(src);
+    const close = at < 0 ? -1 : result.indexOf(">", at + src.length);
+    if (at < 0 || close < 0) continue;
+    const spans = aliases.map((alias) => `<span id="${escapeAttr(alias)}"></span>`).join("");
+    result = `${result.slice(0, close + 1)}${spans}${result.slice(close + 1)}`;
+  }
+  return result;
+}
+
+/** Adds each block's stable id to the element its `data-src` names, so HTML, Markdown, and the source map agree. */
+function withBlockIds(html: string, blocks: readonly Block[]): string {
+  let result = html;
+  for (const block of blocks) {
+    const src = `data-src="${formatSpan(block.pos)}"`;
+    const at = result.indexOf(src);
+    if (at < 0) continue;
+    result = `${result.slice(0, at + src.length)} data-block="${block.id}"${result.slice(at + src.length)}`;
+  }
+  return result;
 }
 
 /** Headings with their positions, from the top-level `h` nodes and the expanded body's source spans. */
@@ -235,10 +281,24 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const loadedTemplates = await loadTemplates({ root: siteRoot, config });
   for (const d of loadedTemplates.diagnostics) diagnostics.report(d);
 
+  // Block ids are on only once the site has a lock or has just asked for one, so every other site keeps its model.
+  const blocksLock = await readBlocksLock(siteRoot);
+  for (const d of blocksLock.diagnostics) diagnostics.report(d);
+  const useBlocks = blocksLock.found || options.updateBlocks === true;
+
   const pages: Page[] = [];
   const folderPages: FolderPage[] = [];
   const seen = new Map<string, SourcePos>();
+  /** Every block id the model holds, and where it first appeared; ids are unique site-wide. */
+  const blockIds = new Map<string, SourcePos>();
   const appRoots = new Set<string>();
+  /** Pages built from the source files, waiting for the site-wide block match before they join the model. */
+  const staged: {
+    readonly page: Page;
+    readonly path: string;
+    readonly order: unknown;
+    readonly list?: { readonly text: string; readonly file: string };
+  }[] = [];
   /** Pages whose front matter declares a list, and the source text the `list` key sits in; built once records exist. */
   const listDeclarations: { readonly page: Page; readonly text: string; readonly file: string }[] = [];
 
@@ -253,6 +313,35 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       return;
     }
     seen.set(page.url, page.source);
+    for (const block of page.blocks ?? []) {
+      const earlier = blockIds.get(block.id);
+      if (earlier !== undefined) {
+        diagnostics.error(
+          "blocks.duplicate-id",
+          `The block id ${JSON.stringify(block.id)} is used twice: ${earlier.file}:${earlier.line} and ${block.pos.file}:${block.pos.line}.`,
+          { pos: block.pos, help: "Give one of the two blocks a different id." },
+        );
+        continue;
+      }
+      blockIds.set(block.id, block.pos);
+    }
+    const anchors = new Map<string, Block>();
+    for (const block of page.blocks ?? []) if (block.anchor !== undefined) anchors.set(block.anchor, block);
+    const aliasOwners = new Map<string, Block>();
+    for (const block of page.blocks ?? []) {
+      for (const alias of block.aliases ?? []) {
+        const earlier = aliasOwners.get(alias) ?? anchors.get(alias);
+        if (earlier !== undefined && earlier !== block) {
+          diagnostics.error(
+            "blocks.alias-conflict",
+            `The anchor ${JSON.stringify(alias)} is already taken on ${page.source.file}: ${earlier.pos.file}:${earlier.pos.line} and ${block.pos.file}:${block.pos.line}.`,
+            { pos: block.pos, help: "Rename one of the two headings so an old link still lands on the right one." },
+          );
+          continue;
+        }
+        aliasOwners.set(alias, block);
+      }
+    }
     pages.push(page);
     if (nav && page.kind === "doc" && page.record === undefined) {
       folderPages.push({
@@ -272,8 +361,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       appRoots.add(folder);
       const indexFile = fileOf(`${folder}/index.html`);
       const lang = pageLang(`${folder}/index.html`, { config });
-      add(
-        await hookPage({
+      staged.push({
+        page: await hookPage({
           url: appUrl(folder, config.base),
           source: posOf(indexFile, 1),
           frontMatter: {},
@@ -285,9 +374,9 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
           markdown: "",
           kind: "app",
         }),
-        `${folder}/index.html`,
-        undefined,
-      );
+        path: `${folder}/index.html`,
+        order: undefined,
+      });
       continue;
     }
     if (file.kind !== "doc") continue;
@@ -333,6 +422,10 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       tree = await parseMarkdown(body, fm.bodyLine);
       parsedPages += 1;
     }
+    const pageBlocks = isMarkdown && useBlocks
+      ? blocksOf({ file: rel, tree, markdown: body, bodyLine: fm.bodyLine })
+      : undefined;
+    for (const d of pageBlocks?.diagnostics ?? []) diagnostics.report(d);
     const directives = isMarkdown
       ? applyDataDirectives(tree, body, { data: data.data, collections: allCollections, file: rel })
       : { markdown: body, diagnostics: [] };
@@ -380,6 +473,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       lang: lang.lang,
       dir: lang.dir,
       headings,
+      ...(pageBlocks === undefined ? {} : { blocks: pageBlocks.blocks }),
       html,
       markdown: directives.markdown,
       kind: "doc",
@@ -388,10 +482,58 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     // exactly one `content` hook and the declaring page is never hooked twice.
     const declaresList = draft.frontMatter.list !== undefined;
     const page = declaresList ? draft : await hookPage(draft);
-    add(page, file.path, page.frontMatter.order, !postUrl.has(file.path));
+    staged.push({
+      page,
+      path: file.path,
+      order: page.frontMatter.order,
+      ...(declaresList ? { list: { text, file: rel } } : {}),
+    });
+  }
+
+  // A block can move to another page, so ids are matched across every staged page before any of them joins the model;
+  // duplicate detection and the output then see the ids the build carries.
+  const matchedBlocks = blocksLock.found
+    ? matchBlockIds(
+      blocksLock.lock,
+      staged.map((entry) => ({ file: entry.page.source.file, blocks: entry.page.blocks ?? [] })),
+    )
+    : undefined;
+  for (const entry of staged) {
+    const blocks = matchedBlocks?.get(entry.page.source.file) ?? entry.page.blocks;
+    const page = blocks === undefined
+      ? entry.page
+      : { ...entry.page, blocks, html: withBlockIds(withAliasAnchors(entry.page.html, blocks), blocks) };
+    add(page, entry.path, entry.order, !postUrl.has(entry.path));
     // A page a duplicate URL kept out of the model declares no list either.
-    if (declaresList && pages.at(-1) === page) {
-      listDeclarations.push({ page, text, file: rel });
+    if (entry.list !== undefined && pages.at(-1) === page) {
+      listDeclarations.push({ page, text: entry.list.text, file: entry.list.file });
+    }
+  }
+
+  // A block the lock recorded but this build does not have was removed, so a link that still names its anchor lands
+  // on nothing. Each reference is named with its own location, for review before the lock is rewritten.
+  if (blocksLock.found) {
+    const present = new Set<string>();
+    for (const blocks of matchedBlocks?.values() ?? []) for (const block of blocks) present.add(block.id);
+    const references = new Map<string, SourcePos[]>();
+    for (const entry of staged) {
+      const found = await anchorReferencesIn(entry.page.markdown, entry.page.source.file, entry.page.source.line);
+      for (const [anchor, spans] of found) references.set(anchor, [...(references.get(anchor) ?? []), ...spans]);
+    }
+    for (const [id, recorded] of Object.entries(blocksLock.lock.blocks ?? {})) {
+      if (present.has(id)) continue;
+      for (const anchor of new Set([recorded.anchor, ...(recorded.aliases ?? [])])) {
+        if (anchor === undefined) continue;
+        for (const pos of references.get(anchor) ?? []) {
+          diagnostics.report({
+            id: "blocks.removed",
+            severity: "warning",
+            message: `The link to #${anchor} names block "${id}", which was removed from ${recorded.file}.`,
+            pos,
+            help: "Point the link at the block's new location, or remove it.",
+          });
+        }
+      }
     }
   }
 
@@ -660,5 +802,6 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     diagnostics: sortDiagnostics(diagnostics.all),
     parsedPages,
     urls,
+    blocksLock: blocksLockOf(pages, blocksLock.lock),
   };
 }

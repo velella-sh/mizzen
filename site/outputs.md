@@ -29,6 +29,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
 | `link-check` | No files: reports internal links and heading anchors that do not resolve. |
 | `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
+| `blocks` | `blocks.json`, every recorded block's id, page URL, source file, and line, for a stable deep link. |
 | `llms` | `llms.txt`, following llmstxt.org. |
 | `llms-full` | `llms-full.txt`, every page's Markdown in one file. |
 | `calendars` | `calendars/<name>.ics` and one file per `groupBy` value, from the `calendars` config. |

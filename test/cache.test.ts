@@ -703,6 +703,45 @@ test("a URL lock change is never answered by an entry built before it", async ()
   }
 });
 
+test("a block lock is a cache input, so creating and changing it both miss", async () => {
+  const { root, theme, outputs, options } = keyFixture();
+  const lock = (pages: Record<string, Record<string, number>>): string =>
+    `${JSON.stringify({ version: 1, pages })}\n`;
+  try {
+    const missing = await cacheKey(options);
+    writeFileSync(join(root, "blocks.lock.json"), lock({}));
+    const created = await cacheKey(options);
+    assert.notEqual(created, missing, "creating the lock misses");
+
+    writeFileSync(join(root, "blocks.lock.json"), lock({ "index.md": { intro: 3 } }));
+    assert.notEqual(await cacheKey(options), created, "changing the lock misses");
+  } finally {
+    clean(root, theme, outputs);
+  }
+});
+
+test("updateBlocks disables the whole-build cache", async () => {
+  const root = tree({ "mizzen.yml": "title: Cache\n", "index.md": "# Home\n" });
+  const theme = makeTheme("one");
+  const { parent, out, cacheDir } = scratch();
+  try {
+    const result = await build({
+      root,
+      out,
+      themeRoot: theme,
+      defaultLayout: "doc",
+      cache: true,
+      cacheDir,
+      updateBlocks: true,
+    });
+    assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+    assert.equal(entries(cacheDir).length, 0, "a build that writes the lock keeps no cache entry");
+    assert.equal(existsSync(join(root, ".mizzen")), false);
+  } finally {
+    clean(root, theme, parent);
+  }
+});
+
 test("the render cache keeps the families a page skipped and refuses a malformed list", async () => {
   const dir = mkdtempSync(join(tmpdir(), "render-cache-"));
   try {
