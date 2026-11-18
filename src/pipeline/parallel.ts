@@ -41,6 +41,7 @@ import { opensearchLink } from "../outputs/opensearch.ts";
 import { analyticsScripts } from "../analytics/script.ts";
 import { verificationMeta } from "../outputs/verification.ts";
 import { feedLinks } from "../feeds/links.ts";
+import { canonicalOf } from "../outputs/head-meta.ts";
 import { loadRegistry, type ThemeRegistry } from "../render/registry.ts";
 import { recordPropsWithCalendar } from "../outputs/record-calendar.ts";
 import { renderPage, type ThemeComponent } from "../render/render.ts";
@@ -155,17 +156,24 @@ function placeOf(site: Site, page: Page): { trail: Trail; pager: Pager } {
   return { trail: [], pager: {} };
 }
 
-/** The head of a page: its title, description, `hreflang` alternates, the OpenSearch link when the site has a URL, and its collection's feeds. */
+/** The head of a page: its title, description, `hreflang` alternates, the OpenSearch link when the site has a URL, and its collection's feeds. A preview build adds `robots: noindex` and the preview's canonical to every page. */
 function headOf(site: Site, page: Page): Head {
   const description = page.frontMatter.description;
   const search = opensearchLink(site);
+  const canonical = site.preview === undefined ? undefined : canonicalOf(site, page);
   return {
     title: page.title,
     meta: [
       ...(typeof description === "string" ? [{ name: "description", content: description }] : []),
+      ...(site.preview === undefined ? [] : [{ name: "robots", content: "noindex" }]),
       ...verificationMeta(site, page),
     ],
-    links: [...hreflangLinks(site, page), ...(search === undefined ? [] : [search]), ...feedLinks(site, page)],
+    links: [
+      ...(canonical === undefined ? [] : [{ rel: "canonical", href: canonical }]),
+      ...hreflangLinks(site, page),
+      ...(search === undefined ? [] : [search]),
+      ...feedLinks(site, page),
+    ],
     jsonLd: [],
     scripts: analyticsScripts(site, page),
   };
