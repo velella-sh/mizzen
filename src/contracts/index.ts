@@ -2,7 +2,7 @@
 export type { SourcePos } from "./source.ts";
 export type { Diagnostic, DiagnosticFix, Severity } from "./diagnostic.ts";
 export type { AnalyticsConfig, ApiCollectionConfig, ApiConfig, ApiVersionConfig, AnalyticsProvider, CalendarConfig, CalendarEventConfig, VerifyConfig, ChangelogEventType, CollectionChangelogConfig, CollectionConfig, CollectionIndexConfig, CollectionJsonConfig, CollectionLifecycleConfig, CollectionRawConfig, CollectionSearchConfig, CollectionSeoConfig, CollectionViewConfig, DataLimitsConfig, DatesConfig, DefaultsEntry, DerivedBandConfig, DerivedBandsConfig, DerivedCountConfig, DerivedKind, DerivedRuleConfig, Direction, DriftConfig, ExamplesConfig, FeedConfig, FeedFormat, FeedWindowConfig, LanguageConfig, NetworkConfig, QualityConfig, QualityException, QualityRule, QualityRuleKind, RepositoryConfig, SearchConfig, SiteConfig, SnapshotConfig, SocialConfig, StaleConfig, ThemeConfig } from "./config.ts";
-export type { CalendarLink, ChangeEvent, Collection, CollectionSnapshot, DataRecord, DataStats, ListGroup, ListPagination, ListProps, PageRecord, RecordPos, RecordProps, RecordRelations, RelatedRecord } from "./data.ts";
+export type { CalendarLink, ChangeEvent, Collection, CollectionSnapshot, DataRecord, DataStats, ListGroup, ListPagination, ListProps, PageRecord, RecordPos, RecordProps, RecordRelations, RelatedRecord, SchemaFieldSnapshot, SchemaSnapshot } from "./data.ts";
 export type { AgentInstructions, FrontMatter, Heading, Page, PageKind, PageStale, PageStaleFile, PageStatus, PreviewPolicy, Site } from "./content.ts";
 export type { NavGroup, NavItem, NavLink, NavTree, Pager, Trail } from "./nav.ts";
 export type { Output, OutputBuild, OutputContext, OutputFile } from "./output.ts";
