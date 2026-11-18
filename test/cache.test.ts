@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadConfig } from "../src/config/load.ts";
@@ -512,6 +513,47 @@ test("a file list that does not match the output writes no entry", async () => {
   try {
     await writeCache(cacheDir, "b".repeat(64), source, ["index.html", "missing.html"], []);
     assert.equal(existsSync(cacheDir), false, "a partial build is never cached");
+  } finally {
+    clean(source, parent);
+  }
+});
+
+test("a written entry holds exactly the manifest's files, each hash covering the output's bytes", async () => {
+  const { parent, cacheDir } = scratch();
+  const source = tree({ "index.html": "<h1>Home</h1>\n", "assets/app.js": "console.log(1);\n", "assets/css/site.css": "body {}\n" });
+  const key = "c".repeat(64);
+  const files = ["index.html", "assets/app.js", "assets/css/site.css"];
+  try {
+    // Written out of order: the entry, its manifest, and its hashes must all describe the sorted list.
+    await writeCache(cacheDir, key, source, [...files].reverse(), []);
+    const entry = join(cacheDir, key);
+    const manifest = JSON.parse(readFileSync(join(entry, "manifest.json"), "utf8")) as {
+      files: string[];
+      hashes: Record<string, string>;
+    };
+    assert.deepEqual(manifest.files, [...files].sort(), "the manifest lists exactly the output files, sorted");
+    assert.deepEqual(Object.keys(manifest.hashes).sort(), manifest.files, "every listed file has a hash, and no other file does");
+
+    const copied: string[] = [];
+    const walk = (dir: string): void => {
+      for (const item of readdirSync(dir, { withFileTypes: true })) {
+        const path = join(dir, item.name);
+        if (item.isDirectory()) walk(path);
+        else copied.push(relative(join(entry, "out"), path));
+      }
+    };
+    walk(join(entry, "out"));
+    assert.deepEqual(copied.sort(), manifest.files, "the entry's files are exactly the manifest's, with nothing extra");
+
+    for (const file of files) {
+      const output = readFileSync(join(source, file));
+      assert.deepEqual(readFileSync(join(entry, "out", file)), output, `${file} is copied byte for byte`);
+      assert.equal(
+        manifest.hashes[file],
+        createHash("sha256").update(output).digest("hex"),
+        `${file}'s hash is the bytes of its copy`,
+      );
+    }
   } finally {
     clean(source, parent);
   }
