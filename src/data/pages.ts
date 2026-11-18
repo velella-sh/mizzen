@@ -40,6 +40,7 @@ import { markdownFieldBlocks } from "./markdown-field.ts";
 import { recordSourcePos, recordUrl, recordUrlsOf } from "./permalink.ts";
 import { localizeFields, prefixed, prefixOfLang, type RecordScope } from "./record-context.ts";
 import { fieldsWithDerived } from "./derived.ts";
+import { lifecycleOf, replacementOf } from "./lifecycle.ts";
 import type { Template } from "./template.ts";
 import { viewUrls, viewsOf } from "./views.ts";
 
@@ -431,6 +432,8 @@ interface Rendering {
   readonly canonical?: string;
   /** The URL of every view, on the main page. */
   readonly views?: Readonly<Record<string, string>>;
+  /** URL of the record that replaces this retired record, when the collection names one. */
+  readonly replacement?: string;
 }
 
 /**
@@ -511,6 +514,8 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     const schemaFields = await schemaFieldsOf(root, entry);
     const markdownFields = new Set(entry.markdown ?? []);
     const historyEvents = eventsOf(collections[`${name}.changes`]);
+    // Lifecycle findings are about the record, not the language it is built in, so each one is reported once.
+    const lifecycleReported = new Set<string>();
 
     /** Builds one page from one record, with its fields already localized. */
     const pageOf = async (
@@ -632,6 +637,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
           fallbacks,
           ...(rendering.view === undefined ? {} : { view: rendering.view }),
           ...(rendering.views === undefined ? {} : { views: rendering.views }),
+          ...(rendering.replacement === undefined ? {} : { replacementUrl: rendering.replacement }),
           ...(changes.length === 0 ? {} : { changes }),
         },
       };
@@ -667,11 +673,37 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
         });
       }
       const collided = new Set(urlMap.collisions.flatMap((collision) => collision.ids));
+      const lifecycles = new Map(prepared.map(({ record, fields }) => [record.id, lifecycleOf(fields, entry.lifecycle)]));
+      /** Reports a lifecycle finding at the record's own line, once per build. */
+      const reportLifecycle = (record: DataRecord, finding: Diagnostic): void => {
+        const key = `${finding.id}\u0000${finding.message}`;
+        if (lifecycleReported.has(key)) return;
+        lifecycleReported.add(key);
+        diagnostics.push({
+          ...finding,
+          pos: recordSourcePos({ ...record.position, file: prefixed(record.position.file, filePrefix) }),
+        });
+      };
+      for (const { record } of prepared) {
+        for (const finding of lifecycles.get(record.id)!.diagnostics) reportLifecycle(record, finding);
+      }
 
       for (const { record, fields, fallbacks } of prepared) {
         if (collided.has(record.id)) continue;
         const main = urlMap.urls.get(record.id);
         if (main?.url === undefined) continue;
+
+        const lifecycle = lifecycles.get(record.id)!;
+        const replacement = replacementOf(lifecycle, record.id, (id) => urlMap.urls.get(id)?.url);
+        if (replacement.kind === "missing") {
+          reportLifecycle(record, {
+            id: "lifecycle.replacement-unknown",
+            severity: "error",
+            message: `Record "${record.id}" names "${replacement.id}" as its lifecycle replacement, but ${name} holds no record with that id.`,
+            help: `Set "${entry.lifecycle?.replacement}" to an existing record id.`,
+          });
+        }
+        const replacementUrl = replacement.kind === "found" ? replacement.url : undefined;
 
         const suffix = urlMap.suffixes.get(record.id);
         const viewPaths = viewUrls(
@@ -689,7 +721,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
 
         pages.push(
           await pageOf(
-            { template, ...(Object.keys(viewPaths).length === 0 ? {} : { views: viewPaths }) },
+            { template, ...(Object.keys(viewPaths).length === 0 ? {} : { views: viewPaths }), ...(replacementUrl === undefined ? {} : { replacement: replacementUrl }) },
             main.url,
             record,
             language,

@@ -74,3 +74,24 @@ export function lifecycleOf(
 
   return { state, retired, replacementId, url, machine, diagnostics };
 }
+
+/** What a retired record's replacement field names: nothing, a record page, or an id that page list does not hold. */
+export type Replacement =
+  | { readonly kind: "none" }
+  | { readonly kind: "found"; readonly url: string }
+  | { readonly kind: "missing"; readonly id: string };
+
+/**
+ * Resolves a record's replacement id to the page URL of the record that holds it. The id is stable, so a replacement
+ * whose slug, and so URL, changed still resolves; a self reference is `none`, since `lifecycleOf` already reports it.
+ */
+export function replacementOf(
+  lifecycle: RecordLifecycle,
+  id: string,
+  urlOf: (id: string) => string | undefined,
+): Replacement {
+  const replacementId = lifecycle.replacementId;
+  if (replacementId === undefined || replacementId === id) return { kind: "none" };
+  const url = urlOf(replacementId);
+  return url === undefined ? { kind: "missing", id: replacementId } : { kind: "found", url };
+}
