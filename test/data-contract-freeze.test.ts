@@ -72,6 +72,16 @@ const FROZEN: Shape = {
     "schemas": "number",
     "unchecked": "readonly string[]",
   },
+  SchemaFieldSnapshot: {
+    "type": "?string",
+    "required": "boolean",
+    "enum": "?readonly unknown[]",
+  },
+  SchemaSnapshot: {
+    "version": "string",
+    "file": "string",
+    "fields": "Readonly<Record<string, SchemaFieldSnapshot>>",
+  },
   Collection: {
     "name": "string",
     "source": "string",
@@ -86,6 +96,7 @@ const FROZEN: Shape = {
     "capturedAt": "?string",
     "tool": "?string",
     "toolVersion": "?string",
+    "schema": "?SchemaSnapshot",
   },
   PageRecord: {
     "collection": "string",

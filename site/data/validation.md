@@ -130,6 +130,13 @@ its help names the two accepted formats.
 | --- | --- | --- |
 | `data.schema-missing` | The schema file a collection names cannot be read. | Check `collections.<name>.schema` in `mizzen.yml`. |
 | `data.schema-invalid` | The schema is not JSON, is not an object, or cannot be compiled. | Fix the schema; write out a remote `$ref` in the file, since a build reads no network. |
+| `data.schema-required-field-added` | A required field the recorded baseline did not have; records recorded before it lack the field. | Fill the field in those records, make it optional, or record the collection again after updating its data. |
+| `data.schema-optional-field-added` | A field the recorded baseline did not have, added as optional; earlier records still validate. A warning. | Nothing, or record the collection again to make it the new baseline. |
+| `data.schema-field-removed` | A field the recorded baseline had is gone from the schema. A warning. | Keep the field, or update the data and record the collection again. |
+| `data.schema-field-renamed` | A `schemaRenames` entry maps a baseline field to its new name, so the change is read as a rename, not a removal and an addition. A warning. | Update the data to the new name and record the collection again. |
+| `data.schema-type-change` | A field's declared JSON type differs from the baseline's, so earlier records may no longer validate. | Migrate the records to the new type, or restore the field's type. |
+| `data.schema-enum-removed` | A schema `enum` no longer accepts a value the baseline accepted; a record may still hold it. | Keep the value, or update the records that use it and record the collection again. |
+| `data.schema-rename-conflict` | A record holds both the old and the new name of a `schemaRenames` pair; the new value is kept. A warning. | Remove the old field from the record, or drop the rename. |
 | `data.record-invalid` | A record fails its collection's schema. The message names the record and the field, and points at the field's value. | Fix the field the message names. |
 | `data.records-skipped` | Info: how many records the build left out because they failed validation. | Fix each record's finding, or set `collections.<name>.onInvalid: skip`. |
 | `data.duplicate-id` | Two records share an id. | Give each record its own id. |

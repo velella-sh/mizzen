@@ -15,7 +15,8 @@ import { SOCIAL_IMAGE_SIZE, socialImagePath } from "../social/image-path.ts";
  *
  * Rules (front matter keys from `schema/front-matter/base.schema.json`):
  * - `canonical_url` from front matter wins over the page's own URL; a canonical needs `config.url`, so without it
- *   there is no canonical link.
+ *   there is no canonical link. A preview build (`Site.preview`) points every page without one at `canonicalBase` and
+ *   the page's own URL, and marks every page `noindex`.
  * - `description` from front matter wins; the home page falls back to the site `description`.
  * - `image` from front matter is the social image; it needs `config.url` to become absolute. Without one, a site that
  *   sets `social.template` gets the generated image of the `social-images` output (see `src/social/image-path.ts`).
@@ -92,6 +93,26 @@ function itemList(site: Site, page: Page): Readonly<Record<string, unknown>> | u
 }
 
 /**
+ * The canonical a page declares. `canonical_url` front matter wins, then a preview's `canonicalBase`, then the
+ * collection's `seo.canonical` field, then the page's own URL. Page two onwards of a list is its own page, so it never
+ * takes the canonical its first page's front matter names.
+ */
+export function canonicalOf(site: Site, page: Page): string | undefined {
+  const later = isLaterListPage(page);
+  const named = later ? undefined : text(page.frontMatter.canonical_url);
+  if (named !== undefined) return absolute(site, named);
+  const preview = site.preview;
+  if (preview !== undefined) {
+    const base = preview.canonicalBase.replace(/\/+$/, "");
+    if (/^https?:\/\//i.test(base)) return `${base}${page.url}`;
+  }
+  const field = later ? undefined : seoConfigOf(site, page)?.canonical;
+  const record =
+    field === undefined || text(site.config.url) === undefined ? undefined : text(mainRecordOf(site, page)?.fields[field]);
+  return record === undefined ? absolute(site, page.url) : absolute(site, record);
+}
+
+/**
  * Computes the `<head>` of one page: the document title, its meta and link tags, and its JSON-LD objects.
  *
  * @param site The whole site model, for the site title, base, URL, and description.
@@ -105,12 +126,7 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
   const title = home ? siteTitle : `${page.title}${TITLE_SEPARATOR}${siteTitle}`;
 
   const description = text(page.frontMatter.description) ?? (home ? text(site.config.description) : undefined);
-  // Page two onwards of a list is its own page: it never takes the canonical its first page's front matter names.
-  const recordCanonicalField = seoConfigOf(site, page)?.canonical;
-  const recordCanonical =
-    recordCanonicalField === undefined || text(site.config.url) === undefined ? undefined : text(mainRecordOf(site, page)?.fields[recordCanonicalField]);
-  const canonicalSource = isLaterListPage(page) ? undefined : (text(page.frontMatter.canonical_url) ?? recordCanonical);
-  const canonical = canonicalSource === undefined ? absolute(site, page.url) : absolute(site, canonicalSource);
+  const canonical = canonicalOf(site, page);
   const social = page.frontMatter.og !== false;
 
   const ownImage = text(page.frontMatter.image);
@@ -133,7 +149,7 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
     meta.push({ name: "twitter:card", content: image === undefined ? "summary" : "summary_large_image" });
   }
 
-  if (isNoindex(site, page)) meta.push({ name: "robots", content: "noindex" });
+  if (site.preview !== undefined || isNoindex(site, page)) meta.push({ name: "robots", content: "noindex" });
   meta.push(...verificationMeta(site, page));
 
   const links: LinkTag[] = canonical === undefined ? [] : [{ rel: "canonical", href: canonical }];

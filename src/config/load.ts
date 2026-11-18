@@ -605,7 +605,8 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
   for (const [name, entry] of Object.entries(value)) {
     if (!isPlainObject(entry) || typeof entry.source !== "string") continue;
     const unique = fieldsFrom(entry.unique);
-    const references = referencesFrom(entry.references);
+    const references = stringMapFrom(entry.references);
+    const renames = stringMapFrom(entry.schemaRenames);
     const dates = fieldsFrom(entry.dates);
     const views = viewsFrom(entry.views);
     const search = collectionSearchFrom(entry.search);
@@ -625,6 +626,8 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(typeof entry.disambiguate === "string" ? { disambiguate: entry.disambiguate } : {}),
       ...(typeof entry.aliases === "string" ? { aliases: entry.aliases } : {}),
       ...(typeof entry.schema === "string" ? { schema: entry.schema } : {}),
+      ...(renames === undefined ? {} : { schemaRenames: renames }),
+      ...(entry.onSchemaChange === "error" || entry.onSchemaChange === "warn" ? { onSchemaChange: entry.onSchemaChange } : {}),
       ...(unique === undefined ? {} : { unique }),
       ...(references === undefined ? {} : { references }),
       ...(dates === undefined ? {} : { dates }),
@@ -878,8 +881,8 @@ function fieldsFrom(value: unknown): readonly string[] | undefined {
   return value.filter((field): field is string => typeof field === "string");
 }
 
-/** A field-to-collection mapping, keeping only string values; `undefined` when the key is not a mapping. */
-function referencesFrom(value: unknown): Readonly<Record<string, string>> | undefined {
+/** A mapping of one name to another, keeping only string values; `undefined` when the key is not a mapping. */
+function stringMapFrom(value: unknown): Readonly<Record<string, string>> | undefined {
   if (!isPlainObject(value)) return undefined;
   const references: Record<string, string> = {};
   for (const [field, collection] of Object.entries(value)) {

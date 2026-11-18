@@ -111,6 +111,11 @@ test("the manifest validates against its schema", async () => {
   const text = String((await run(site([page("/"), page("/guide/install/", "doc", { layout: "doc" })]))).contents);
   const parsed: unknown = JSON.parse(text);
   assert.equal(validate(parsed), true, ajv.errorsText(validate.errors));
+
+  const preview = String(
+    (await run({ ...site([page("/")]), preview: { canonicalBase: "https://preview.example.com/", commit: "abc" } })).contents,
+  );
+  assert.equal(validate(JSON.parse(preview)), true, ajv.errorsText(validate.errors));
 });
 
 test("fixtures/docs-site lists every doc page, in URL order, with no app page", async () => {
