@@ -24,11 +24,16 @@ import { unified } from "unified";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { expandIncludes } from "../content/includes.ts";
+import { unsafeIdReason } from "../api/ids.ts";
+import { apiCollections, apiDir } from "../api/model.ts";
+import { apiVersions } from "../api/versions.ts";
 import type { Diagnostic, Page, Site, SourcePos } from "../contracts/index.ts";
 import type { DataLock } from "../data/lock.ts";
 import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
 import { URLS_LOCK_FILE } from "../data/urls-lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
+import { feedIsWritten } from "../feeds/entries.ts";
+import { feedFile } from "../feeds/files.ts";
 import { sortDiagnostics } from "./diagnostics.ts";
 
 /** What a node stands for. A file has one kind: its role in the build, with discovery's role winning. */
@@ -46,6 +51,11 @@ export interface DependencyNode {
   readonly derived?: boolean;
   /** True when a dependency names this file but it does not exist. Such a node has an error diagnostic. */
   readonly missing?: boolean;
+  /**
+   * What an output node is, beyond being an output: a paginated or expanded list page, a feed file, or an API file.
+   * A page output leaves this unset. Only outputs carry it.
+   */
+  readonly role?: "list" | "feed" | "api";
   /** SHA-256 of a record's id and fields, so a change to one record is seen without comparing the file. Record nodes only. */
   readonly hash?: string;
 }
@@ -712,7 +722,7 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
   for (const [path, pages] of pagesByPath) {
     for (const page of pages) {
       const outputId = outputNodeId(page.url);
-      addNode({ id: outputId, kind: "output", path: page.url });
+      addNode({ id: outputId, kind: "output", path: page.url, ...(page.list === undefined ? {} : { role: "list" }) });
       addEdge(outputId, fileNodeId(path));
       addEdge(outputId, navigationId);
       for (const dataId of blanketDataIds) addEdge(outputId, dataId);
@@ -720,12 +730,17 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
   }
 
   // A record page reads its record and its template. A list page reads its collection as a whole, because a record
-  // that was edited to match its filter joins a page it was not on before.
+  // that was edited to match its filter joins a page it was not on before, and each record it shows, so the outputs
+  // that consume one record are known without building a list again.
   const templateNodes = new Set<string>();
+  const addRecordEdge = (from: string, collection: string, id: string): void => {
+    const node = recordNodeId(collection, id);
+    if (recordNodes.has(node)) addEdge(from, node);
+  };
   for (const page of options.site.pages) {
     if (page.record === undefined && page.list === undefined) continue;
     const outputId = outputNodeId(page.url);
-    addNode({ id: outputId, kind: "output", path: page.url });
+    addNode({ id: outputId, kind: "output", path: page.url, ...(page.list === undefined ? {} : { role: "list" }) });
     if (page.record !== undefined) {
       const recordId = recordNodeId(page.record.collection, page.record.id);
       if (recordNodes.has(recordId)) addEdge(outputId, recordId);
@@ -740,6 +755,63 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     }
     if (page.list !== undefined && collectionPaths.has(page.list.collection)) {
       addEdge(outputId, collectionNodeId(page.list.collection));
+      // Every page of a paginated or expanded list is its own output, so the records each one shows link to it.
+      for (const record of page.list.records) addRecordEdge(outputId, page.list.collection, record.id);
+      for (const group of page.list.groups) for (const record of group.records) addRecordEdge(outputId, page.list.collection, record.id);
+    }
+  }
+
+  // A feed lists its collection's records through the filter a list page uses, so it depends on the collection as a
+  // whole: a record edited to match the filter joins the feed even though no output page names it yet.
+  if (config.outputs.feeds !== false) {
+    for (const name of Object.keys(config.feeds).sort(byCodePoint)) {
+      const feed = config.feeds[name]!;
+      if (!feedIsWritten(options.site, name)) continue;
+      for (const format of feed.formats ?? ["atom"]) {
+        const path = `/${feedFile(name, format)}`;
+        const id = outputNodeId(path);
+        addNode({ id, kind: "output", path, role: "feed" });
+        if (collectionPaths.has(feed.collection)) addEdge(id, collectionNodeId(feed.collection));
+      }
+    }
+  }
+
+  // The API writes one file per published record and one aggregate per version and collection. A record file depends on
+  // its record; an aggregate holds every record of its collection, so it depends on the collection as a whole.
+  if (config.api !== undefined && config.outputs.api !== false) {
+    for (const version of apiVersions(options.site, () => {})) {
+      const scoped: Site = {
+        ...options.site,
+        config: { ...config, api: { version: version.version, collections: version.collections } },
+      };
+      const dir = apiDir(scoped);
+      const collections = apiCollections(scoped);
+      const aggregate = (file: string, dependencies: readonly string[]): void => {
+        const path = `/${file}`;
+        const id = outputNodeId(path);
+        addNode({ id, kind: "output", path, role: "api" });
+        for (const dependency of dependencies) addEdge(id, dependency);
+      };
+      const published = collections.filter((collection) => collectionPaths.has(collection.name));
+      const all = published.map((collection) => collectionNodeId(collection.name));
+      aggregate(`${dir}/index.json`, all);
+      aggregate(`${dir}/openapi.json`, all);
+      for (const collection of collections) {
+        const collectionId = collectionNodeId(collection.name);
+        const depends = collectionPaths.has(collection.name) ? [collectionId] : [];
+        aggregate(`${dir}/${collection.name}.json`, depends);
+        aggregate(`${dir}/${collection.name}.ndjson`, depends);
+        if (collection.hasSchema) aggregate(`${dir}/schemas/${collection.name}.json`, depends);
+        for (const record of collection.records) {
+          if (unsafeIdReason(record.id) !== undefined) continue;
+          const recordId = recordNodeId(collection.name, record.id);
+          if (!recordNodes.has(recordId)) continue;
+          const path = `/${dir}/${collection.name}/${record.id}.json`;
+          const id = outputNodeId(path);
+          addNode({ id, kind: "output", path, role: "api" });
+          addEdge(id, recordId);
+        }
+      }
     }
   }
 
@@ -835,6 +907,108 @@ export function affectedNodes(graph: DependencyGraph, changed: readonly string[]
   return [...affected].filter((id) => !seeds.has(id)).sort(byCodePoint);
 }
 
+/** The affected output ids, grouped by what each output is. */
+export interface AffectedOutputs {
+  /** Ordinary page outputs, including record pages. */
+  readonly page: readonly string[];
+  /** List pages. */
+  readonly list: readonly string[];
+  /** Feed files. */
+  readonly feed: readonly string[];
+  /** API files. */
+  readonly api: readonly string[];
+}
+
+/** What {@link affectedNodes} says to rebuild, as output ids grouped by role, each group sorted. */
+export function affectedOutputs(graph: DependencyGraph, recordIds: readonly string[]): AffectedOutputs {
+  const groups: { page: string[]; list: string[]; feed: string[]; api: string[] } = {
+    page: [],
+    list: [],
+    feed: [],
+    api: [],
+  };
+  const affected = new Set(affectedNodes(graph, recordIds));
+  for (const node of graph.nodes) {
+    if (node.kind !== "output" || !affected.has(node.id)) continue;
+    groups[node.role ?? "page"].push(node.id);
+  }
+  for (const ids of Object.values(groups)) ids.sort(byCodePoint);
+  return groups;
+}
+
+/** Why one output must be rebuilt: the record that changed and how the output reads it. */
+export interface AffectedOutputReason {
+  /** Node id of the changed record. */
+  readonly record: string;
+  /** `record` when the output reads that record, `collection` when it reads the collection as a whole. */
+  readonly relation: "record" | "collection";
+}
+
+/** One output in the invalidation plan, with the changed records that reach it. */
+export interface ExplainedOutput {
+  /** Output node id. */
+  readonly id: string;
+  /** The output's URL. */
+  readonly path: string;
+  /** What the output is. */
+  readonly role: "page" | "list" | "feed" | "api";
+  /** Every changed record that reaches this output, sorted by record id. */
+  readonly reasons: readonly AffectedOutputReason[];
+  /** True when the graph is incomplete and names no reason for this output. */
+  readonly unknown?: true;
+}
+
+/**
+ * The outputs {@link affectedNodes} would rebuild for `recordIds`, each with the changed records that reach it and
+ * whether it reads the record or its collection. A direct record edge wins over a collection edge, because it is the
+ * narrower answer. Outputs are sorted by id and reasons by record, so two plans for one change are identical.
+ *
+ * An incomplete graph asks for every output; one the graph cannot explain is marked `unknown` rather than guessed.
+ */
+export function explainAffectedOutputs(graph: DependencyGraph, recordIds: readonly string[]): ExplainedOutput[] {
+  const collectionOf = new Map<string, string>();
+  for (const edge of graph.edges) {
+    if (edge.from.startsWith(COLLECTION) && edge.to.startsWith(RECORD)) collectionOf.set(edge.to, edge.from);
+  }
+  const wanted = new Set(recordIds);
+  const records = new Set<string>();
+  for (const node of graph.nodes) {
+    if (node.kind === "record" && (wanted.has(node.id) || wanted.has(node.path))) records.add(node.id);
+  }
+
+  const dependencies = new Map<string, Set<string>>();
+  for (const edge of graph.edges) {
+    const set = dependencies.get(edge.from);
+    if (set === undefined) dependencies.set(edge.from, new Set([edge.to]));
+    else set.add(edge.to);
+  }
+
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  const incomplete = graph.incomplete !== undefined && graph.incomplete.length > 0;
+  const outputs: ExplainedOutput[] = [];
+  for (const id of affectedNodes(graph, recordIds)) {
+    const node = nodes.get(id);
+    if (node === undefined || node.kind !== "output") continue;
+    const deps = dependencies.get(id) ?? new Set<string>();
+    const reasons: AffectedOutputReason[] = [];
+    for (const record of records) {
+      const collection = collectionOf.get(record);
+      if (deps.has(record)) reasons.push({ record, relation: "record" });
+      else if (collection !== undefined && deps.has(collection)) reasons.push({ record, relation: "collection" });
+    }
+    reasons.sort((a, b) => byCodePoint(a.record, b.record));
+    outputs.push({
+      id: node.id,
+      path: node.path,
+      role: node.role ?? "page",
+      reasons,
+      ...(incomplete && reasons.length === 0 ? { unknown: true as const } : {}),
+    });
+  }
+  outputs.sort((a, b) => byCodePoint(a.id, b.id));
+  return outputs;
+}
+
 /**
  * The graph as JSON with a trailing newline. Nodes and edges are sorted here too, so two graphs built from the
  * same files serialize identically whatever order discovery or insertion used.
@@ -846,6 +1020,7 @@ export function serializeDependencyGraph(graph: DependencyGraph): string {
     path: node.path,
     ...(node.derived === true ? { derived: true } : {}),
     ...(node.missing === true ? { missing: true } : {}),
+    ...(node.role === undefined ? {} : { role: node.role }),
     ...(node.hash === undefined ? {} : { hash: node.hash }),
   }));
   const edges = sortedEdges(graph.edges).map((edge) => ({

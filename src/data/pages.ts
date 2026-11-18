@@ -20,6 +20,7 @@ import type {
   Heading,
   Page,
   RecordPos,
+  Site,
   SiteConfig,
 } from "../contracts/index.ts";
 import { directionFromLang } from "../content/lang.ts";
@@ -805,4 +806,54 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
   }
 
   return { pages, retired, diagnostics };
+}
+
+/** A record the publish policy covers that produces no page. */
+export interface RecordWithoutOutput {
+  /** The collection's name. */
+  readonly collection: string;
+  /** The record's id. */
+  readonly id: string;
+  /** The finding that kept the URL pattern from being filled, or a fixed sentence when a page was built nowhere. */
+  readonly reason: string;
+}
+
+/** Text order by code point, so the report is the same whatever the host's locale. */
+function byCodePoint(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * Every record a collection's publish policy covers that the site has no page for, sorted by collection then id. A
+ * collection is covered when it names both a template and a URL pattern. The reason is the finding that kept the
+ * record's URL from being filled, or a fixed sentence when a URL was filled but no page was built from it, such as a
+ * URL two records share.
+ */
+export function recordsWithoutOutput(site: Pick<Site, "config" | "collections" | "pages">): RecordWithoutOutput[] {
+  const published = new Set<string>();
+  for (const page of site.pages) {
+    if (page.record !== undefined && page.record.view === undefined) {
+      published.add(`${page.record.collection}\u0000${page.record.id}`);
+    }
+  }
+  const missing: RecordWithoutOutput[] = [];
+  for (const [name, entry] of Object.entries(site.config.collections)) {
+    if (entry.template === undefined || entry.permalink === undefined) continue;
+    const collection = site.collections[name];
+    if (collection === undefined) continue;
+    for (const record of collection.records) {
+      if (published.has(`${name}\u0000${record.id}`)) continue;
+      const localized = localizeFields(record.fields, site.config.lang, site.config.lang).fields;
+      const fields = localized["id"] === undefined ? { ...localized, id: record.id } : localized;
+      const finding = recordUrl(name, record.id, fields, entry, { base: site.config.base, position: record.position })
+        .diagnostic;
+      missing.push({
+        collection: name,
+        id: record.id,
+        reason: finding?.message ?? "No page was built for the record.",
+      });
+    }
+  }
+  missing.sort((a, b) => byCodePoint(a.collection, b.collection) || byCodePoint(a.id, b.id));
+  return missing;
 }
