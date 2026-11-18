@@ -488,6 +488,41 @@ const records: AcceptanceCase = {
   },
 };
 
+const themeHooks: AcceptanceCase = {
+  id: "theme-hooks",
+  title: "Inline directives and theme overrides",
+  run: (ctx) => {
+    const site = join(ctx.dir, "theme-hooks-site");
+    tree(join(site, "theme"), {
+      "src/index.ts": 'export const theme = { name: "hooks", folders: ["layouts", "components"] };\n',
+      "layouts/doc.ts": 'export default (p: any) => `<html><body class="theme">${p.page.html}</body></html>`;\n',
+      "components/term/index.ts": 'export const directive = "term";\nexport default ({ props, html }: any) => `<a class="term" href="#${props.id}">${html}</a>`;\n',
+    });
+    tree(site, {
+      "theme-own/doc.ts": 'export default (p: any) => `<html><body class="site"><main>${p.page.html}</main></body></html>`;\n',
+      "index.md": "---\ntitle: Home\nlayout: doc\n---\n\nA :term[widget]{id=w1} here.\n",
+      "mizzen.yml": "title: Hooks\n",
+    });
+
+    const themed = build(ctx, site, join(site, "theme"));
+    const themedHtml = read(themed, "index.html");
+    check(themedHtml.includes('class="theme"'), "the theme layout was not used");
+    check(themedHtml.includes('<a class="term" href="#w1"'), "the inline directive did not reach the theme component");
+
+    tree(site, { "mizzen.yml": "title: Hooks\ntheme:\n  overrides:\n    layouts:\n      doc: theme-own/doc.ts\n" });
+    const overridden = build(ctx, site, join(site, "theme"));
+    const html = read(overridden, "index.html");
+    check(html.includes('class="site"') && html.includes("<main>"), "the site layout did not replace the theme's");
+    check(!html.includes('class="theme"'), "the theme layout still drew the page");
+    check(html.includes('<a class="term" href="#w1"'), "an unselected component no longer comes from the theme");
+
+    tree(site, { "mizzen.yml": "title: Hooks\ntheme:\n  overrides:\n    components:\n      nosuch: theme-own/doc.ts\n" });
+    const bad = ctx.mizzen(["build", site, "--out", join(ctx.dir, "out-bad"), "--theme", join(site, "theme")], ctx.dir);
+    check(bad.status !== 0, "a bad override built successfully");
+    check(`${bad.stdout}${bad.stderr}`.includes("theme.overrides.components.nosuch"), "the bad override is not named");
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   blog,
@@ -497,6 +532,7 @@ export const CASES: readonly AcceptanceCase[] = [
   imports,
   diff,
   records,
+  themeHooks,
   schema,
   quality,
   lifecycle,

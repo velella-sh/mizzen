@@ -30,11 +30,23 @@ export interface RepositoryConfig {
 }
 
 /** Which theme builds the site and the options handed to it. */
+/** Units a site may replace without editing or forking its theme. Paths are relative to the site root. */
+export interface ThemeOverridesConfig {
+  /** Layout name → the site module that replaces it. */
+  readonly layouts?: Readonly<Record<string, string>>;
+  /** Chrome part name → the site module that replaces it. */
+  readonly chrome?: Readonly<Record<string, string>>;
+  /** Component name → the site module that replaces it. */
+  readonly components?: Readonly<Record<string, string>>;
+}
+
 export interface ThemeConfig {
   /** Theme package or folder. Default: the theme that ships with the engine. */
   readonly name?: string;
   /** Passed to the theme unread; the theme validates it against its own schema. */
   readonly options?: Readonly<Record<string, unknown>>;
+  /** Site modules that replace selected theme units; every other unit stays the theme's. */
+  readonly overrides?: ThemeOverridesConfig;
 }
 
 /** Search settings. */

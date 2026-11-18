@@ -302,7 +302,7 @@ export async function doctorReport(options: DoctorOptions): Promise<DoctorReport
     checks.push(skipped("theme", SKIP_NO_THEME));
   } else {
     try {
-      const registry = await loadRegistry(themeRoot);
+      const registry = await loadRegistry(themeRoot, { siteRoot: root, overrides: config?.theme.overrides });
       publish(registry.diagnostics);
       checks.push(registry.diagnostics.some(isError) ? failed("theme", "the theme check found errors") : passed("theme"));
     } catch (err) {

@@ -36,6 +36,10 @@ The site config file. Every key is optional; an unknown key is an error.
 | `theme` | object |  | The theme that builds the site and the options handed to it. |
 | `theme.name` | string |  | Theme package or folder. Default: the theme that ships with the engine. |
 | `theme.options` | object |  | Handed to the theme unread; the theme validates it against its own schema. |
+| `theme.overrides` | object |  | Site modules that replace selected theme units. The path is relative to the site root; a missing file, a path outside the root, or a name the theme does not have is an error. Every unit not named here stays the theme's. |
+| `theme.overrides.layouts` | object |  | Layout name → the site module that replaces it. |
+| `theme.overrides.chrome` | object |  | Chrome part name → the site module that replaces it. |
+| `theme.overrides.components` | object |  | Component name → the site module that replaces it. |
 | `search` | `false` or object | `{}` | false builds no search index. As an object, text sets how much of each page's body the index keeps. |
 | `search.text` | integer | `300` | The most characters of a page's body the index keeps. Titles and headings are always indexed. |
 | `examples` | object | none | How the `examples-report` output treats a failed example. |

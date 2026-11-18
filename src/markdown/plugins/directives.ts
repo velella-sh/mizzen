@@ -29,7 +29,18 @@ const ALERT = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(?:\r?\n|$)/;
 export const name = "directives";
 export const order = 20;
 
-type DirectiveNode = Extract<RootContent, { type: "containerDirective" | "leafDirective" }>;
+/** The runtime shape common to block and inline directives; remark-directive adds `textDirective` to phrasing nodes. */
+interface AnyDirective {
+  readonly type: string;
+  readonly name: string;
+  readonly attributes?: Readonly<Record<string, string | null>>;
+  data?: Record<string, unknown>;
+}
+
+function isDirective(node: unknown): node is AnyDirective {
+  const type = (node as { type?: unknown }).type;
+  return type === "containerDirective" || type === "leafDirective" || type === "textDirective";
+}
 
 /** The alert kind of a blockquote that opens with `[!KIND]`, or `undefined` for a plain quote. */
 function alertKind(quote: Blockquote): string | undefined {
@@ -53,7 +64,7 @@ function bodyOf(quote: Blockquote): Blockquote["children"] {
 }
 
 /** Writes the hast element a directive becomes: `sl-component` with its name and attributes. */
-function toComponent(node: DirectiveNode): void {
+function toComponent(node: AnyDirective): void {
   const props: Record<string, string> = {};
   for (const [key, value] of Object.entries(node.attributes ?? {})) props[key] = value ?? "";
   const hProperties: Record<string, string> = { name: node.name, "data-props": JSON.stringify(props) };
@@ -78,7 +89,7 @@ function walk(parent: Parent): void {
         };
       }
     }
-    if (node.type === "containerDirective" || node.type === "leafDirective") toComponent(node);
+    if (isDirective(node)) toComponent(node);
     if ("children" in node) walk(node as Parent);
     return node;
   });

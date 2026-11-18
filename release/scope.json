@@ -108,6 +108,18 @@
       "title": "First project samples and guides",
       "status": "shipped",
       "case": "starters"
+    },
+    {
+      "id": "text-directives",
+      "title": "Inline directives as theme components",
+      "status": "shipped",
+      "case": "theme-hooks"
+    },
+    {
+      "id": "theme-overrides",
+      "title": "Site modules that replace theme units",
+      "status": "shipped",
+      "case": "theme-hooks"
     }
   ]
 }

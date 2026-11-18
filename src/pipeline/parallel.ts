@@ -30,6 +30,7 @@
  */
 import { Worker, isMainThread, parentPort } from "node:worker_threads";
 import type { Page, Site } from "../contracts/content.ts";
+import type { ThemeOverridesConfig } from "../contracts/config.ts";
 import type { Diagnostic, DiagnosticFix } from "../contracts/diagnostic.ts";
 import type { Pager, Trail } from "../contracts/nav.ts";
 import type { SourcePos } from "../contracts/source.ts";
@@ -94,6 +95,10 @@ export const DEFAULT_RENDER_DEADLINE_MS = 60_000;
 export interface RenderPoolOptions {
   /** The theme's root folder, as the worker loads it: `src/index.ts` and the unit folders beside it. */
   readonly themeRoot: string;
+  /** The site root. An override path is resolved against it and may not leave it. */
+  readonly siteRoot?: string | undefined;
+  /** Site modules that replace selected theme units. */
+  readonly overrides?: ThemeOverridesConfig | undefined;
   /** The site model, copied to every worker once. */
   readonly site: Site;
   /** The registry this process loaded; the pool renders with it when a worker cannot render a page. */
@@ -304,6 +309,8 @@ export function isRenderTimeout(error: unknown): error is RenderTimeoutError {
 type InitMessage = {
   readonly type: "init";
   readonly themeRoot: string;
+  readonly siteRoot: string | undefined;
+  readonly overrides: ThemeOverridesConfig | undefined;
   readonly site: Site;
   readonly defaultLayout: string | undefined;
 };
@@ -422,7 +429,7 @@ function startWorker(): void {
   let state: WorkerState | undefined;
   port.on("message", (message: Request) => {
     if (message.type === "init") {
-      void loadRegistry(message.themeRoot).then(
+      void loadRegistry(message.themeRoot, { siteRoot: message.siteRoot, overrides: message.overrides }).then(
         (registry) => {
           state = { registry, site: message.site, defaultLayout: message.defaultLayout };
           port.postMessage({ type: "ready" } satisfies Reply);
@@ -477,6 +484,8 @@ interface Slot {
 /** What every worker is told once, before its first batch. */
 interface PoolState {
   readonly themeRoot: string;
+  readonly siteRoot: string | undefined;
+  readonly overrides: ThemeOverridesConfig | undefined;
   readonly site: Site;
   readonly registry: ThemeRegistry;
   readonly defaultLayout: string | undefined;
@@ -517,6 +526,8 @@ class WorkerPool implements RenderPool {
       worker.postMessage({
         type: "init",
         themeRoot: state.themeRoot,
+        siteRoot: state.siteRoot,
+        overrides: state.overrides,
         site: state.site,
         defaultLayout: state.defaultLayout,
       } satisfies InitMessage);
@@ -804,6 +815,8 @@ export function createRenderPool(options: RenderPoolOptions): RenderPool {
   }
   const state: PoolState = {
     themeRoot: options.themeRoot,
+    siteRoot: options.siteRoot,
+    overrides: options.overrides,
     site: options.site,
     registry: options.registry,
     defaultLayout: options.defaultLayout,

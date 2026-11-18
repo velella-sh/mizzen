@@ -123,6 +123,14 @@ test("an alert whose marker stands alone keeps its later paragraphs and drops th
   );
 });
 
+test("a text directive becomes an inline sl-component with its label as children", async () => {
+  const tree = await parseMarkdown("A :term[widget]{id=w1} here.\n");
+  const component = onlyComponent(componentsOf(tree));
+  assert.equal(component.name, "term");
+  assert.deepEqual(component.props, { id: "w1" });
+  assert.equal(textOf(component.node), "widget");
+});
+
 test("an alert with only its marker has no children", async () => {
   const tree = await parseMarkdown("> [!CAUTION]\n");
   assert.deepEqual((onlyComponent(componentsOf(tree)).node as { children: Nodes[] }).children, []);
