@@ -1,1 +1,0 @@
-- The catalog, report, and mixed first-project samples build from the installed package in the release smoke test.

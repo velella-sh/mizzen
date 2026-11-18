@@ -76,6 +76,8 @@ docs and data sites need no content migration; the new features are opt-in. The
   once per page.
 - A site-download preview writes one folder with its manifest, so a base-path preview and its rollback use the same
   bytes.
+- Data quality baselines stay intact when config or collection loading fails, and a data migration source outside the
+  site is refused on every platform.
 
 ### Compatibility
 

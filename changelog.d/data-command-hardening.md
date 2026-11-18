@@ -1,1 +1,0 @@
-- Keep data quality baselines intact when config or collection loading fails, and refuse data migration sources outside the site on every platform.
