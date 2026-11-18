@@ -82,7 +82,7 @@ export function isFetchableUrl(url: URL): boolean {
 }
 
 /** One failure with the id a test and a reader can name. */
-function failure(id: string, message: string, help?: string): ApiFetchResult {
+function failure(id: string, message: string, help?: string): { readonly diagnostic: Diagnostic } {
   return { diagnostic: { id, severity: "error", message, ...(help === undefined ? {} : { help }) } };
 }
 
@@ -292,7 +292,7 @@ function recordsOf(response: { readonly value: unknown; readonly page: number; r
  */
 export async function fetchApiSource(options: ApiFetchOptions): Promise<ApiFetchResult> {
   const parsed = fetchableUrl(options.source, options.collection);
-  if (parsed.url === undefined) return { diagnostic: parsed.diagnostic };
+  if (parsed.url === undefined) return { diagnostic: parsed.diagnostic! };
   const base = parsed.url;
   const pagination = options.pagination;
   const allowed = new Set<string>([base.origin]);
@@ -348,7 +348,7 @@ export async function fetchApiSource(options: ApiFetchOptions): Promise<ApiFetch
       return failure("data.api-invalid-json", `Page ${pageNumber} of collection "${options.collection}" is not valid JSON: ${detail}`);
     }
     const extracted = recordsOf({ value, page: pageNumber, path: options.records, collection: options.collection });
-    if (extracted.records === undefined) return { diagnostic: extracted.diagnostic };
+    if (extracted.records === undefined) return { diagnostic: extracted.diagnostic! };
     const pageRecords = extracted.records;
 
     for (const record of pageRecords) {
