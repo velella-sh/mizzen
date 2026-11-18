@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 import type { Diagnostic } from "../contracts/index.ts";
 import { FILE_KINDS } from "../import/inventory.ts";
 import type { Importer } from "../import/contract.ts";
+import { accuracyReport, type AccuracyCounts, type AccuracyReport } from "../import/accuracy.ts";
 import { CONFIG_DESTINATION, buildMappings, type ImportMapping } from "../import/mapping.ts";
 import { generateProject } from "../import/generate.ts";
 import { rewriteLinks } from "../import/links.ts";
@@ -47,6 +48,30 @@ function diagnosticLine(finding: Diagnostic): string {
   return `  ${where}${finding.id}  ${finding.message}`;
 }
 
+/** Status counts as `4 full, 0 approximate, 1 manual`. */
+function statusCounts(counts: AccuracyCounts): string {
+  return `${counts.full} full, ${counts.approximate} approximate, ${counts.manual} manual`;
+}
+
+/** The accuracy section: file and block counts, then every file and each block that is not full. */
+function accuracyLines(report: AccuracyReport): string[] {
+  const blocks = report.counts.blocks;
+  const lines = [
+    "Accuracy:",
+    `  ${counted(report.files.length, "file")}: ${statusCounts(report.counts.files)}`,
+    `  ${counted(blocks.full + blocks.approximate + blocks.manual, "block")}: ${statusCounts(blocks)}`,
+  ];
+  for (const file of report.files) {
+    lines.push(`  ${file.source}  ${file.status}`);
+    for (const block of file.blocks) {
+      if (block.status === "full") continue;
+      const note = block.note === undefined ? "" : `  ${block.note}`;
+      lines.push(`    ${file.source}:${block.line}  ${block.status}${note}`);
+    }
+  }
+  return lines;
+}
+
 /** The destination a generation filled, for a report that must not claim it was a preview. */
 export interface GeneratedDestination {
   readonly path: string;
@@ -54,9 +79,9 @@ export interface GeneratedDestination {
 }
 
 /**
- * The whole report, in inventory order: the non-empty kinds, then the manual items, then the counts. `generated` says
- * the importer wrote the config rather than converting one, so its destination is reported too. `destination` is
- * absent for a preview and names the folder just written for a generation.
+ * The whole report, in inventory order: the non-empty kinds, the accuracy of every file, then the manual items and the
+ * counts. `generated` says the importer wrote the config rather than converting one, so its destination
+ * is reported too. `destination` is absent for a preview and names the folder just written for a generation.
  */
 export function importReport(
   name: string,
@@ -64,6 +89,7 @@ export function importReport(
   mappings: readonly ImportMapping[],
   generated: boolean,
   diagnostics: readonly Diagnostic[],
+  accuracy: AccuracyReport,
   destination?: GeneratedDestination,
 ): string {
   const header =
@@ -79,6 +105,7 @@ export function importReport(
     else lines.push(`${kind}:`);
     for (const mapping of group) lines.push(mappingLine(mapping));
   }
+  lines.push(...accuracyLines(accuracy));
   lines.push("Manual items:");
   if (diagnostics.length === 0) lines.push("  none");
   else for (const finding of diagnostics) lines.push(diagnosticLine(finding));
@@ -106,18 +133,32 @@ export async function runImport(name: string, root: string, io: ImportIo, out?: 
   const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config);
   const links = rewriteLinks(outcome.pages, mappings);
   const found = [...outcome.diagnostics, ...diagnostics, ...links.diagnostics];
+  const accuracy = accuracyReport(links.pages, mappings, found);
   if (out === undefined) {
-    io.log(importReport(name, source.root, mappings, outcome.config.source === undefined, found).replace(/\n$/, ""));
+    io.log(
+      importReport(name, source.root, mappings, outcome.config.source === undefined, found, accuracy).replace(/\n$/, ""),
+    );
     return found.some((finding) => finding.severity === "error") ? 1 : 0;
   }
 
   const destination = resolve(out);
   const generated = found.some((finding) => finding.severity === "error")
     ? { files: [] as readonly string[], diagnostics: [] as readonly Diagnostic[] }
-    : generateProject({ source, destination, mappings, pages: links.pages, assets: outcome.assets, config: outcome.config });
+    : generateProject({
+        source,
+        destination,
+        mappings,
+        pages: links.pages,
+        assets: outcome.assets,
+        config: outcome.config,
+        sections: { accuracy },
+      });
   const all = [...found, ...generated.diagnostics];
   io.log(
-    importReport(name, source.root, mappings, outcome.config.source === undefined, all, { path: destination, files: generated.files }).replace(/\n$/, ""),
+    importReport(name, source.root, mappings, outcome.config.source === undefined, all, accuracy, {
+      path: destination,
+      files: generated.files,
+    }).replace(/\n$/, ""),
   );
   return all.some((finding) => finding.severity === "error") ? 1 : 0;
 }

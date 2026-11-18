@@ -27,12 +27,25 @@ export const MAPPING_DESTINATION = ".mizzen-import.json";
 /** The record's format version; a reader that does not know it must not guess. */
 export const MAPPING_VERSION = 1;
 
+/** Extra report sections the generated record carries beside the mapping, when the command computed them. */
+export interface ImportRecordSections {
+  readonly accuracy?: unknown;
+}
+
 /** The mapping record as the generated file's exact text: every input path, sorted by source. */
-export function mappingRecord(mappings: readonly ImportMapping[]): string {
+export function mappingRecord(mappings: readonly ImportMapping[], sections: ImportRecordSections = {}): string {
   const files = [...mappings]
     .sort((a, b) => (a.source < b.source ? -1 : a.source > b.source ? 1 : 0))
     .map(({ source, kind, destination, url, reason }) => ({ source, kind, destination, url, reason }));
-  return `${JSON.stringify({ version: MAPPING_VERSION, files }, null, 2)}\n`;
+  return `${JSON.stringify(
+    {
+      version: MAPPING_VERSION,
+      files,
+      ...(sections.accuracy === undefined ? {} : { accuracy: sections.accuracy }),
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 /** What {@link buildMappings} found. */

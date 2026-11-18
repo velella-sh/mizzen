@@ -77,6 +77,29 @@ test("import plain --out writes the mapped project into an empty folder and leav
       { source: "logo.png", kind: "asset", destination: "logo.png", url: "/logo.png" },
       { source: "mizzen.yml", kind: "config", destination: "mizzen.yml" },
     ],
+    accuracy: {
+      files: [
+        {
+          source: "guide/intro.mdx",
+          destination: "guide/intro.md",
+          status: "approximate",
+          blocks: [
+            {
+              line: 1,
+              status: "approximate",
+              note: "copied as Markdown; its JSX components need a person to convert them",
+            },
+          ],
+        },
+        { source: "index.md", destination: "index.md", status: "full", blocks: [{ line: 1, status: "full" }] },
+        { source: "logo.png", destination: "logo.png", status: "full", blocks: [{ line: 1, status: "full" }] },
+        { source: "mizzen.yml", destination: "mizzen.yml", status: "full", blocks: [{ line: 1, status: "full" }] },
+      ],
+      counts: {
+        files: { full: 3, approximate: 1, manual: 0 },
+        blocks: { full: 3, approximate: 1, manual: 0 },
+      },
+    },
   });
   assert.match(logs.join("\n"), /wrote 5 files|5 files written/);
 });

@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, realpathSync, statSync, writeFileSy
 import { dirname, join, resolve, sep } from "node:path";
 import type { Diagnostic } from "../contracts/index.ts";
 import type { ImportedAsset, ImportedConfig, ImportedPage, ImportSource } from "./contract.ts";
-import { CONFIG_DESTINATION, MAPPING_DESTINATION, mappingRecord, safeDestination, type ImportMapping } from "./mapping.ts";
+import { CONFIG_DESTINATION, MAPPING_DESTINATION, mappingRecord, safeDestination, type ImportMapping, type ImportRecordSections } from "./mapping.ts";
 
 /** Everything the generator may write, in the destinations the mapping chose. */
 export interface GenerateRequest {
@@ -18,6 +18,8 @@ export interface GenerateRequest {
   readonly pages: readonly ImportedPage[];
   readonly assets: readonly ImportedAsset[];
   readonly config: ImportedConfig;
+  /** The accuracy and coverage reports, written into the mapping record. */
+  readonly sections?: ImportRecordSections;
 }
 
 /** The files written, relative to the destination, and every reason nothing was written. */
@@ -58,7 +60,7 @@ function targetsOf(request: GenerateRequest): Target[] {
       contents: request.config.contents,
       ...(request.config.source === undefined ? {} : { source: request.config.source }),
     },
-    { kind: "text", destination: MAPPING_DESTINATION, contents: mappingRecord(request.mappings) },
+    { kind: "text", destination: MAPPING_DESTINATION, contents: mappingRecord(request.mappings, request.sections) },
   ];
   for (const mapping of request.mappings) {
     const { destination } = mapping;
