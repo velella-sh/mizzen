@@ -3,6 +3,7 @@ import type { Page, Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { siteOrigins } from "../analytics/origins.ts";
 import { twinUrl } from "./twins.ts";
+import { dataHash } from "./urls.ts";
 
 /** Where the manifest lands, relative to the output folder. */
 const FILE = ".mizzen/manifest.json";
@@ -20,9 +21,9 @@ function hashOf(text: string): string {
 /**
  * Strips the site `base` from a page URL, along whole path segments only. Mirrors the HTML output: every URL the
  * model carries includes `base`, while the output folder is what deploys under `base` (GitHub Pages project sites),
- * so the file path must not repeat it.
+ * so the file path must not repeat it. A preview's diff reads its pages at the public base the same way.
  */
-function underBase(url: string, base: string): string {
+export function underBase(url: string, base: string): string {
   if (base === "") return url;
   if (url === base || url.startsWith(`${base}/`)) return url.slice(base.length) || "/";
   return url;
@@ -87,6 +88,9 @@ interface Claim {
  * copied as assets, not pages the engine renders, and they write no output of their own. A page lists the files its
  * enabled outputs write: the HTML file and the Markdown twin, each unless `outputs` turns that output off.
  *
+ * A preview build adds one field, `preview`: the commit it was built from, when known, and the data hash `urls.json`
+ * writes. A normal build keeps its manifest unchanged.
+ *
  */
 export const manifest: Output = {
   name: "manifest",
@@ -139,7 +143,16 @@ export const manifest: Output = {
     // A site that uses the as-of date records it, because a page's bytes may depend on it; a site that does not keeps
     // its manifest and its build hash unchanged when the date moves.
     const asOf = site.pages.some((page) => page.dates === true) ? site.config.asOf : undefined;
-    const json = `${JSON.stringify({ version: 1, ...(asOf === undefined ? {} : { asOf }), ...(site.config.analytics === undefined ? {} : { origins: siteOrigins(site) }), pages }, null, 2)}\n`;
+    // A preview says which code and data it came from, so two previews are tellable apart. The data hash is the same
+    // one `urls.json` writes; the commit is left out when the build does not know it.
+    const preview =
+      site.preview === undefined
+        ? undefined
+        : {
+            ...(site.preview.commit === undefined ? {} : { commit: site.preview.commit }),
+            dataHash: dataHash(site),
+          };
+    const json = `${JSON.stringify({ version: 1, base, ...(asOf === undefined ? {} : { asOf }), ...(site.config.analytics === undefined ? {} : { origins: siteOrigins(site) }), ...(preview === undefined ? {} : { preview }), pages }, null, 2)}\n`;
     return [{ path: FILE, contents: json }];
   },
 };

@@ -40,6 +40,19 @@ The lock keeps one entry per collection under `snapshots`. A lock without snapsh
 | `capturedAt` | A `YYYY-MM-DD` date, or a UTC instant to the second. A millisecond timestamp is refused. |
 | `tool` | The tool that recorded it, such as `git` or `npm`. |
 | `toolVersion` | That tool's version. |
+| `schema` | The schema the collection had then: its version (SHA-256 of the file), its file, and its fields. |
+
+## Compare a schema with the baseline
+
+`mizzen data schema` compares each collection's current schema with the one its snapshot recorded and names the fields
+the schema added or removed, with the baseline version and the current schema's version and file.
+
+```bash
+mizzen data schema              # every collection, as text
+mizzen data schema --format json
+```
+
+It reads only; the baseline changes when `mizzen data snapshot` or `mizzen data fetch` records the collection again.
 
 ## Show it on a page
 

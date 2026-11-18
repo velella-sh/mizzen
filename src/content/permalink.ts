@@ -11,6 +11,12 @@ export interface PermalinkOptions {
 
 const PAGE_EXT = /\.(md|markdown|html|htm)$/i;
 
+/** Normalizes a site base: `/docs/` and `docs` both become `/docs`; `""`, `/`, and whitespace become `""`. */
+export function normalizeBase(base: string): string {
+  const trimmed = base.trim().replace(/^\/+|\/+$/g, "");
+  return trimmed === "" ? "" : `/${trimmed}`;
+}
+
 /** Normalize a site-relative path so it starts with `/`. */
 function asUrlPath(value: string): string {
   const trimmed = value.trim();
