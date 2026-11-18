@@ -76,6 +76,11 @@ The rules these rows encode:
 - **`versions.json` keeps its meaning.** It lists the pages inside version folders and their versioned URLs, never the
   canonical alias and never a current page. The sitemap chooses one URL per page and does not list both.
 
+The public build applies this policy to the site it renders: the default release's pages appear at both URLs, current
+docs are left out, the copy at the versioned URL carries the canonical URL in `canonical_url`, and it also carries
+`aliasOf` so the sitemap can skip the second entry. The model itself keeps one page per source file; routing happens
+when the build is assembled.
+
 ## Snapshot boundary
 
 A snapshot copies current content and navigation into a new version folder and nothing else:
@@ -129,5 +134,6 @@ current pages at `/` and the versioned pages at `/v1/` and `/v2/`; the URL polic
 | --- | --- |
 | Snapshot content and navigation | `src/versions/snapshot.ts` (#594) |
 | Default selection and canonical routes | `src/versions/routing.ts` (#595) |
+| Apply routing in the public build | `src/versions/apply.ts` (#867) |
 | Snapshot, default, and old commands | `src/cli/docs-version.ts` (#597) |
 | End-to-end releases | `test/docs-versions/acceptance.test.ts` (#598) |

@@ -24,6 +24,7 @@ import { buildIslandModules, islandUrl } from "../render/islands.ts";
 import { cacheKey, cacheRootOf, includedSnippets, renderSettingsKey, restoreCache, writeCache } from "./cache.ts";
 import { createDiagnostics, diagnosticsReport, sortDiagnostics, type Diagnostics } from "./diagnostics.ts";
 import { stalePageStates } from "../stale/diagnostics.ts";
+import { applyVersionRouting } from "../versions/apply.ts";
 import { buildDependencyGraph } from "./dependency-graph.ts";
 import { planInvalidation, type InvalidationPlan } from "./invalidation.ts";
 import { pruneRenderCache, pruneRenderEntries, readRenderInputs, recordKeyOf, recordShapeOf, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
@@ -403,14 +404,19 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // The model hooks run once, on the assembled site and before anything is rendered from it.
   const hookedModel = await runModelHooks(code.plugins, model.site);
   for (const d of hookedModel.diagnostics) diagnostics.report(d);
+  // Version routing decides what the public build writes: the default release also answers at the unprefixed URL and
+  // current docs stay out of the output while a release is default. The model keeps one page per source file.
+  const versioned = applyVersionRouting(hookedModel.value.pages, hookedModel.value.data.versions, hookedModel.value.config.base);
+  for (const d of versioned.diagnostics) diagnostics.report(d);
+  const hookedSite: Site = versioned.pages === hookedModel.value.pages ? hookedModel.value : { ...hookedModel.value, pages: versioned.pages };
   // The stale state is carried on the page, so the layout and the page JSON see what `mizzen stale` reports. A page
   // without `covers`, or one whose files are current, has none.
   const site: Site =
     staleBySource.size === 0
-      ? hookedModel.value
+      ? hookedSite
       : {
-          ...hookedModel.value,
-          pages: hookedModel.value.pages.map((page) => {
+          ...hookedSite,
+          pages: hookedSite.pages.map((page) => {
             const stale = staleBySource.get(page.source.file);
             return stale === undefined ? page : { ...page, stale };
           }),
