@@ -268,7 +268,13 @@ test("data migrate previews a renamed record and a rejected one by line without 
     assert.match(result.output, /items: _data\/items\.yml, schema _data\/items\.schema\.json/);
     assert.match(result.output, / {2}2 records, 1 renamed, 1 rejected/);
     assert.match(result.output, / {2}sample \{"id":"a","title":"A","slug":"old-a"\}/);
-    assert.match(result.output, / {2}error _data\/items\.yml:5: Field "title" of record "b" in "items" must be a string\./);
+    assert.match(result.output, / {2}error _data\/items\.yml:5: data\.record-invalid: Field "title" of record "b" in "items" must be a string\./);
+    const loaded = await loadCollections({ root, config: loadConfig(root).config });
+    const invalid = loaded.diagnostics.filter((diagnostic) => diagnostic.id === "data.record-invalid");
+    assert.equal(invalid.length, 1, JSON.stringify(loaded.diagnostics));
+    const pos = invalid[0]!.pos!;
+    assert.ok(invalid[0]!.message.startsWith("Field \"title\" of record \"b\""));
+    assert.ok(result.output.includes(`${pos.file}:${pos.line}: data.record-invalid`), result.output);
     assert.deepEqual(readFileSync(join(root, "_data/items.yml")), before);
   } finally {
     rmSync(root, { recursive: true, force: true });

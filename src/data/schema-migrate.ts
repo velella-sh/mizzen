@@ -29,7 +29,7 @@ export interface DataMigrateResult {
 function lineOf(diagnostic: Diagnostic): string {
   const pos = diagnostic.pos;
   const at = pos === undefined ? "" : `${pos.file}:${pos.line}: `;
-  return `  ${diagnostic.severity} ${at}${diagnostic.message}`;
+  return `  ${diagnostic.severity} ${at}${diagnostic.id}: ${diagnostic.message}`;
 }
 
 /** Previews every selected collection without writing; the whole site when no collection is named. */
