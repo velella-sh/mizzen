@@ -208,6 +208,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const pages: Page[] = [];
   const folderPages: FolderPage[] = [];
   const seen = new Map<string, SourcePos>();
+  /** Every block id the model holds, and where it first appeared; ids are unique site-wide. */
+  const blockIds = new Map<string, SourcePos>();
   const appRoots = new Set<string>();
   /** Pages whose front matter declares a list, and the source text the `list` key sits in; built once records exist. */
   const listDeclarations: { readonly page: Page; readonly text: string; readonly file: string }[] = [];
@@ -223,6 +225,18 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       return;
     }
     seen.set(page.url, page.source);
+    for (const block of page.blocks ?? []) {
+      const earlier = blockIds.get(block.id);
+      if (earlier !== undefined) {
+        diagnostics.error(
+          "blocks.duplicate-id",
+          `The block id ${JSON.stringify(block.id)} is used twice: ${earlier.file}:${earlier.line} and ${block.pos.file}:${block.pos.line}.`,
+          { pos: block.pos, help: "Give one of the two blocks a different id." },
+        );
+        continue;
+      }
+      blockIds.set(block.id, block.pos);
+    }
     pages.push(page);
     if (page.kind === "doc" && page.record === undefined) {
       folderPages.push({
