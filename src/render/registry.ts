@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile, readdir, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { ThemeOverridesConfig } from "../contracts/config.ts";
@@ -87,13 +87,13 @@ async function overrideModule(
   const setting = `theme.overrides.${folder}.${name}`;
   const root = options.siteRoot;
   if (root === undefined) {
-    diagnostics.push(diagnostic("registry.override-root", `"${setting}" cannot be read without a site root.`));
+    diagnostics.push(diagnostic("overrides.outside-site", `"${setting}" cannot be read without a site root.`));
     return undefined;
   }
   const trimmed = raw.trim();
   if (trimmed === "" || isAbsolute(trimmed)) {
     diagnostics.push(
-      diagnostic("registry.override-outside", `"${setting}" must be a path relative to the site root, not "${raw}".`, "Write the module path relative to the site root, such as theme/doc.ts."),
+      diagnostic("overrides.outside-site", `"${setting}" must be a path relative to the site root, not "${raw}".`, "Write the module path relative to the site root, such as theme/doc.ts."),
     );
     return undefined;
   }
@@ -101,17 +101,31 @@ async function overrideModule(
   const rel = relative(root, abs);
   if (rel === "" || rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     diagnostics.push(
-      diagnostic("registry.override-outside", `"${setting}" leaves the site root: "${raw}".`, "Keep the module inside the site."),
+      diagnostic("overrides.outside-site", `"${setting}" leaves the site root: "${raw}".`, "Keep the module inside the site."),
     );
     return undefined;
   }
   if (!(await exists(abs))) {
     diagnostics.push(
-      diagnostic("registry.override-missing", `"${setting}" names "${raw}", which does not exist.`, "Create the module or remove the override."),
+      diagnostic("overrides.missing-file", `"${setting}" names "${raw}", which does not exist.`, "Create the module or remove the override."),
+    );
+    return undefined;
+  }
+  const real = await realpath(abs).catch(() => undefined);
+  const rootReal = await realpath(root).catch(() => undefined);
+  if (real === undefined || rootReal === undefined || (real !== rootReal && !real.startsWith(`${rootReal}${sep}`))) {
+    diagnostics.push(
+      diagnostic("overrides.outside-site", `"${setting}" resolves outside the site root through a symbolic link: "${raw}".`, "Keep the module and every folder it goes through inside the site."),
     );
     return undefined;
   }
   return { abs, file: rel.split(sep).join("/") };
+}
+
+/** A site override's CSS sidecar, `<file>.css` beside the module; a replacement brings no client island. */
+async function overrideCss(abs: string): Promise<string | undefined> {
+  const css = abs.replace(/\.ts$/, ".css");
+  return (await exists(css)) ? css : undefined;
 }
 
 /** Compares by code point, never by locale. */
@@ -261,21 +275,28 @@ export async function loadRegistry(themeRoot: string, options: RegistryOptions =
         const file = override?.file ?? rel;
         const imported = await importUnit(override?.abs ?? join(themeRoot, rel), file);
         if ("diagnostic" in imported) {
-          diagnostics.push(imported.diagnostic);
+          diagnostics.push(
+            override === undefined
+              ? imported.diagnostic
+              : diagnostic("overrides.invalid-export", imported.diagnostic.message, "Fix the site module's import or export."),
+          );
           continue;
         }
         if (!isFunction(imported.mod.default)) {
           diagnostics.push(
-            diagnostic("registry.missing-default", `"${file}" must default-export a layout function.`, "Export the layout as `export default`."),
+            override === undefined
+              ? diagnostic("registry.missing-default", `"${file}" must default-export a layout function.`, "Export the layout as `export default`.")
+              : diagnostic("overrides.invalid-export", `"${file}" must default-export a layout function.`, "Export the layout as `export default`."),
           );
           continue;
         }
         const cssRel = `${folder}/${unitName}.css`;
+        const css = override === undefined ? ((await exists(join(themeRoot, cssRel))) ? cssRel : undefined) : await overrideCss(override.abs);
         layouts[unitName] = {
           name: unitName,
           layout: imported.mod.default as Layout,
           file,
-          ...(override === undefined && (await exists(join(themeRoot, cssRel))) ? { css: cssRel } : {}),
+          ...(css === undefined ? {} : { css }),
         };
       }
       continue;
@@ -312,17 +333,25 @@ export async function loadRegistry(themeRoot: string, options: RegistryOptions =
       const file = override?.file ?? rel;
       const imported = await importUnit(override?.abs ?? abs, file);
       if ("diagnostic" in imported) {
-        diagnostics.push(imported.diagnostic);
+        diagnostics.push(
+          override === undefined
+            ? imported.diagnostic
+            : diagnostic("overrides.invalid-export", imported.diagnostic.message, "Fix the site module's import or export."),
+        );
         continue;
       }
       if (!isFunction(imported.mod.default)) {
         diagnostics.push(
-          diagnostic("registry.missing-default", `"${file}" must default-export a ${folder === "chrome" ? "chrome" : "component"} function.`, "Export the unit as `export default`."),
+          override === undefined
+            ? diagnostic("registry.missing-default", `"${file}" must default-export a ${folder === "chrome" ? "chrome" : "component"} function.`, "Export the unit as `export default`.")
+            : diagnostic("overrides.invalid-export", `"${file}" must default-export a ${folder === "chrome" ? "chrome" : "component"} function.`, "Export the unit as `export default`."),
         );
         continue;
       }
 
-      const sides = override === undefined ? await sideFiles(themeRoot, folder, unitName) : {};
+      const overrideSide = override === undefined ? undefined : await overrideCss(override.abs);
+      const sides: { css?: string; client?: string } =
+        override === undefined ? await sideFiles(themeRoot, folder, unitName) : overrideSide === undefined ? {} : { css: overrideSide };
 
       if (folder === "chrome") {
         const entry: RegisteredChrome = {
@@ -368,7 +397,7 @@ export async function loadRegistry(themeRoot: string, options: RegistryOptions =
       if (known[folder as UnitFolder].has(name)) continue;
       diagnostics.push(
         diagnostic(
-          "registry.override-unknown",
+          "overrides.unknown-unit",
           `"theme.overrides.${folder}.${name}" names no ${folder === "layouts" ? "layout" : folder === "chrome" ? "chrome part" : "component"} "${name}" in theme "${theme.name}".`,
           "Use the name of a unit the theme has, or remove the override.",
         ),

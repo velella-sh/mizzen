@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -28,6 +28,7 @@ test("an override replaces its unit and every other unit keeps the theme's", asy
     tree(join(parent, "theme"), THEME);
     tree(join(parent, "site"), {
       "theme/doc.ts": 'export default () => "site doc";\n',
+      "theme/doc.css": ".site-shell { color: red; }\n",
       "theme/badge.ts": 'export const directive = "badge";\nexport default () => "site badge";\n',
     });
     const registry = await loadRegistry(join(parent, "theme"), {
@@ -38,7 +39,7 @@ test("an override replaces its unit and every other unit keeps the theme's", asy
     assert.deepEqual(registry.diagnostics, []);
     assert.equal(registry.layouts.doc?.file, "theme/doc.ts");
     assert.equal(registry.layouts.doc?.layout({} as never), "site doc");
-    assert.equal(registry.layouts.doc?.css, undefined, "a replaced layout brings its own CSS");
+    assert.equal(registry.layouts.doc?.css, join(parent, "site/theme/doc.css"), "a replaced layout brings its own CSS");
     assert.equal(registry.components.badge?.component({} as never), "site badge");
     assert.equal(registry.components.badge?.directive, "badge");
 
@@ -54,18 +55,20 @@ test("an override naming no unit, naming no file, or leaving the site root is an
   try {
     tree(join(parent, "theme"), THEME);
     const site = join(parent, "site");
-    tree(site, { "outside.ts": 'export default () => "outside";\n' });
+    tree(parent, { "outside.ts": 'export default () => "outside";\n' });
+    mkdirSync(site, { recursive: true });
+    symlinkSync(join(parent, "outside.ts"), join(site, "linked.ts"));
     const registry = await loadRegistry(join(parent, "theme"), {
       siteRoot: site,
       overrides: {
         layouts: { nosuch: "outside.ts", doc: "missing.ts" },
-        components: { badge: "../outside.ts" },
+        components: { badge: "linked.ts" },
       },
     });
 
-    const ids = registry.diagnostics.map((d) => d.id).sort();
-    assert.deepEqual(ids, ["registry.override-missing", "registry.override-outside", "registry.override-unknown"]);
-    assert.match(registry.diagnostics.find((d) => d.id === "registry.override-outside")?.message ?? "", /leaves the site root/);
+    const outside = registry.diagnostics.filter((d) => d.id === "overrides.outside-site");
+    assert.deepEqual(registry.diagnostics.map((d) => d.id).sort(), ["overrides.missing-file", "overrides.outside-site", "overrides.unknown-unit"]);
+    assert.match(outside[0]?.message ?? "", /symbolic link/);
     assert.equal(registry.layouts.doc?.file, "layouts/doc.ts", "a missing override leaves the theme's unit in place");
     assert.equal(registry.components.badge?.file, "components/badge/index.ts");
   } finally {
@@ -82,6 +85,7 @@ test("the site config's overrides reach the build", async () => {
       "theme/doc.ts":
         'export default (p: any) => `<html><head><title>${p.page.title}</title></head><body><main>${p.page.html}</main></body></html>`;\n',
       "theme/badge.ts": 'export const directive = "badge";\nexport default ({ props }: any) => `<b class="site-badge">${props.label}</b>`;\n',
+      "theme/doc.css": ".site-shell { color: red; }\n",
       "index.md": "---\ntitle: Home\nlayout: doc\n---\n\n::badge{label=new}\n",
     });
     const out = join(parent, "out");
@@ -92,6 +96,9 @@ test("the site config's overrides reach the build", async () => {
     assert.match(html, /<main>/);
     assert.match(html, /<b class="site-badge"[^>]*>new<\/b>/);
     assert.doesNotMatch(html, /theme doc|theme badge/);
+    const css = /<link rel="stylesheet" href="\/docs\/(assets\/theme\/[^"]+\.css)">/.exec(html);
+    assert.ok(css, "the page CSS is linked");
+    assert.match(readFileSync(join(out, css[1] ?? ""), "utf8"), /\.site-shell\{color:red\}/, "the site override's CSS is bundled");
   } finally {
     rmSync(parent, { recursive: true, force: true });
   }

@@ -539,6 +539,7 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
 
   // The navigation file may live outside the source folder, so it is hashed on its own as well.
   inputs.push({ label: "navigation", path: resolve(options.root, options.config.navigation) });
+  inputs.push(...overrideInputs(options));
   inputs.push(...(await collectionInputs(options)));
 
   for (const file of await filesUnder(options.themeRoot)) {
@@ -658,6 +659,22 @@ export interface RenderSettingsOptions {
   readonly recordShape?: string | undefined;
 }
 
+/** The site modules and CSS sidecars an override names, so editing one misses the cache. */
+function overrideInputs(options: { readonly root: string; readonly config: SiteConfig }): readonly KeyInput[] {
+  const out: KeyInput[] = [];
+  const overrides = options.config.theme.overrides;
+  if (overrides === undefined) return out;
+  for (const folder of ["layouts", "chrome", "components"] as const) {
+    const map = overrides[folder];
+    if (map === undefined) continue;
+    for (const name of Object.keys(map).sort(byCodePoint)) {
+      const path = resolve(options.root, map[name] ?? "");
+      out.push({ label: `override/${folder}/${name}`, path }, { label: `override/${folder}/${name}/css`, path: path.replace(/\.ts$/, ".css") });
+    }
+  }
+  return out;
+}
+
 /** The absolute paths of the local files that collections read, which a record-keyed render cache keys per record. */
 function localCollectionSources(options: { readonly root: string; readonly config: SiteConfig }): Set<string> {
   const paths = new Set<string>();
@@ -696,6 +713,7 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   }
 
   inputs.push({ label: "navigation", path: resolve(options.root, options.config.navigation) });
+  inputs.push(...overrideInputs(options));
   inputs.push(...(await collectionInputs(options, options.recordShape === undefined)));
 
   for (const file of await filesUnder(options.themeRoot)) {

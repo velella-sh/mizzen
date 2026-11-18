@@ -500,6 +500,7 @@ const themeHooks: AcceptanceCase = {
     });
     tree(site, {
       "theme-own/doc.ts": 'export default (p: any) => `<html><body class="site"><main>${p.page.html}</main></body></html>`;\n',
+      "theme-own/doc.css": ".site-shell { color: red; }\n",
       "index.md": "---\ntitle: Home\nlayout: doc\n---\n\nA :term[widget]{id=w1} here.\n",
       "mizzen.yml": "title: Hooks\n",
     });
@@ -515,6 +516,9 @@ const themeHooks: AcceptanceCase = {
     check(html.includes('class="site"') && html.includes("<main>"), "the site layout did not replace the theme's");
     check(!html.includes('class="theme"'), "the theme layout still drew the page");
     check(html.includes('<a class="term" href="#w1"'), "an unselected component no longer comes from the theme");
+    const css = filesUnder(overridden).find((file) => file.startsWith("assets/theme/") && file.endsWith(".css"));
+    check(css !== undefined, "the build wrote no CSS");
+    check(read(overridden, css).includes(".site-shell{color:red}"), "the override's CSS sidecar is not bundled");
 
     tree(site, { "mizzen.yml": "title: Hooks\ntheme:\n  overrides:\n    components:\n      nosuch: theme-own/doc.ts\n" });
     const bad = ctx.mizzen(["build", site, "--out", join(ctx.dir, "out-bad"), "--theme", join(site, "theme")], ctx.dir);
