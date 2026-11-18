@@ -46,6 +46,11 @@ export interface DependencyNode {
   readonly derived?: boolean;
   /** True when a dependency names this file but it does not exist. Such a node has an error diagnostic. */
   readonly missing?: boolean;
+  /**
+   * What an output node is, beyond being an output: a paginated or expanded list page, a feed file, or an API file.
+   * A page output leaves this unset. Only outputs carry it.
+   */
+  readonly role?: "list" | "feed" | "api";
   /** SHA-256 of a record's id and fields, so a change to one record is seen without comparing the file. Record nodes only. */
   readonly hash?: string;
 }
@@ -712,7 +717,7 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
   for (const [path, pages] of pagesByPath) {
     for (const page of pages) {
       const outputId = outputNodeId(page.url);
-      addNode({ id: outputId, kind: "output", path: page.url });
+      addNode({ id: outputId, kind: "output", path: page.url, ...(page.list === undefined ? {} : { role: "list" }) });
       addEdge(outputId, fileNodeId(path));
       addEdge(outputId, navigationId);
       for (const dataId of blanketDataIds) addEdge(outputId, dataId);
@@ -720,12 +725,17 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
   }
 
   // A record page reads its record and its template. A list page reads its collection as a whole, because a record
-  // that was edited to match its filter joins a page it was not on before.
+  // that was edited to match its filter joins a page it was not on before, and each record it shows, so the outputs
+  // that consume one record are known without building a list again.
   const templateNodes = new Set<string>();
+  const addRecordEdge = (from: string, collection: string, id: string): void => {
+    const node = recordNodeId(collection, id);
+    if (recordNodes.has(node)) addEdge(from, node);
+  };
   for (const page of options.site.pages) {
     if (page.record === undefined && page.list === undefined) continue;
     const outputId = outputNodeId(page.url);
-    addNode({ id: outputId, kind: "output", path: page.url });
+    addNode({ id: outputId, kind: "output", path: page.url, ...(page.list === undefined ? {} : { role: "list" }) });
     if (page.record !== undefined) {
       const recordId = recordNodeId(page.record.collection, page.record.id);
       if (recordNodes.has(recordId)) addEdge(outputId, recordId);
@@ -740,6 +750,9 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
     }
     if (page.list !== undefined && collectionPaths.has(page.list.collection)) {
       addEdge(outputId, collectionNodeId(page.list.collection));
+      // Every page of a paginated or expanded list is its own output, so the records each one shows link to it.
+      for (const record of page.list.records) addRecordEdge(outputId, page.list.collection, record.id);
+      for (const group of page.list.groups) for (const record of group.records) addRecordEdge(outputId, page.list.collection, record.id);
     }
   }
 
@@ -846,6 +859,7 @@ export function serializeDependencyGraph(graph: DependencyGraph): string {
     path: node.path,
     ...(node.derived === true ? { derived: true } : {}),
     ...(node.missing === true ? { missing: true } : {}),
+    ...(node.role === undefined ? {} : { role: node.role }),
     ...(node.hash === undefined ? {} : { hash: node.hash }),
   }));
   const edges = sortedEdges(graph.edges).map((edge) => ({
