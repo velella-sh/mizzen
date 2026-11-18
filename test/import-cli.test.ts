@@ -87,7 +87,7 @@ test("import with an unknown importer exits 2", async () => {
   assert.equal(status, 2);
   assert.deepEqual(logs, []);
   assert.equal(errors.length, 1);
-  assert.match(errors[0]!, /unknown importer: hugo; choose plain, mkdocs, starlight, docusaurus/);
+  assert.match(errors[0]!, /unknown importer: hugo; choose plain, mkdocs, starlight, docusaurus, vitepress/);
 });
 
 test("import usage errors exit 2 and print the help", async () => {
