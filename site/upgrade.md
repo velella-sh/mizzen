@@ -1,24 +1,24 @@
 ---
-title: Upgrade to 0.2.3
-description: Upgrade a 0.2.2 site without changing its Markdown, config, existing URLs, or published output, and try the new authoring features.
+title: Upgrade to 0.2.4
+description: Upgrade a 0.2.3 site without changing its Markdown, config, existing URLs, or published output, and try migrations, change review, and the new data features.
 layout: doc
 permalink: /upgrade/
 ---
 
-# Upgrade to 0.2.3
+# Upgrade to 0.2.4
 
-An existing `0.2.2` docs or data site needs no content migration. The new features are optional: keeping your
+An existing `0.2.3` docs or data site needs no content migration. The new features are optional: keeping your
 Markdown, `mizzen.yml`, navigation, and theme as they are builds the same pages at the same URLs.
 
-If you are coming from `0.2.0` or `0.2.1`, collections and stable record URLs first shipped in `0.2.1`; the
-[0.2.2 upgrade guide](https://github.com/velella-sh/mizzen/blob/v0.2.2/site/upgrade.md) still applies first.
+If you are coming from `0.2.2` or earlier, the
+[0.2.3 upgrade guide](https://github.com/velella-sh/mizzen/blob/v0.2.3/site/upgrade.md) still applies first.
 
 ## Update and check
 
-After `0.2.3` is published, update the engine in the site's project:
+After `0.2.4` is published, update the engine in the site's project:
 
 ```sh
-npm install --save-dev @velella/mizzen@0.2.3
+npm install --save-dev @velella/mizzen@0.2.4
 npx mizzen check .
 npx mizzen build . --out dist
 npx mizzen verify dist
@@ -27,20 +27,21 @@ npx mizzen verify dist
 Commit `package.json` and `package-lock.json`. Keep your existing theme; Lateen `0.2.2` is the published theme the
 release was checked against. Node 24 or later is still required.
 
-The new `versions snapshot` command is a safe way to see a 0.2.3 feature without writing anything:
+The new `import` command previews a migration without writing anything:
 
 ```sh
-npx mizzen versions snapshot v1 --dry-run
+npx mizzen import docusaurus ../legacy-docs
 ```
 
-It prints the pages and navigation it would copy into `v1/`. Drop `--dry-run` to write the snapshot, or read
-[Documentation versions](https://github.com/velella-sh/mizzen/blob/main/docs/docs-versions.md) first.
+It inventories the source, reports what it can and cannot convert, and prints the generated project. Add
+`--out <dir>` to write it, then review the accuracy report before switching the site over. See
+[Command line](/cli/).
 
 ## What stays the same
 
 - Existing CLI commands and flags remain available. You do not need a new flag for an ordinary build.
 - Markdown pages, front matter, navigation, and their URLs keep working. The release compatibility test builds the
-  `0.2.2` fixture with the published `0.2.2` engine and the release tarball in separate empty projects: all 197
+  compatibility site with the published `0.2.3` engine and the `0.2.4` tarball in separate empty projects: all 197
   public files match byte for byte, including HTML, JSON, and Markdown twins. Every canonical link, `_redirects`,
   and sitemap URL also matches. The only normalized value is the engine version stamp in `agent.json`.
 - The same fixture builds with the published `@velella/lateen@0.2.2` theme. Canonical links, theme assets, the
@@ -50,16 +51,27 @@ It prints the pages and navigation it would copy into `v1/`. Drop `--dry-run` to
 - Existing JSON Schema files and their fields are retained. New features add optional fields and schemas; use the
   schemas bundled with the installed engine rather than an older copy.
 - Generated JSON identifies the engine version. Consumers should read `version` from `@velella/mizzen`, not
-  require the literal string `0.2.2`. The engine version is not the document's schema version.
+  require the literal string `0.2.3`. The engine version is not the document's schema version.
 - A build still opens no network connection. `mizzen published-site check` and the network commands are explicit.
 
-## Optional additions since 0.2.2
+## Optional additions
 
 None of these changes an ordinary docs site. The reference column points at the published documentation where one
 exists, else at the design note in the repository.
 
 | Feature | Keys, front matter, or files | Commands and reference |
 | --- | --- | --- |
+| Site migrations | `mizzen import <docusaurus\|mkdocs\|starlight\|vitepress> <dir>` | [Command line](/cli/) |
+| Stable block ids | A declared `{#id}` or a content-derived id; `blocks.lock.json` | `mizzen build --update-blocks`; [Site diff](/site-diff/) |
+| Semantic change review | Two built folders or `--base <ref>` | `mizzen diff`; [Site diff](/site-diff/) |
+| Stored references | `{ version, page, block }` JSON | `mizzen references check <file>`; [Command line](/cli/) |
+| Collection schema versions | Collection `schema`, `schemaRenames` | `mizzen data schema`, `data migrate`; [Data validation](/data/validation/) |
+| Data quality rules | `quality.rules` and dated exceptions | `mizzen data quality`; [Data validation](/data/validation/) |
+| Record lifecycle | Collection `lifecycle` | [Collections](/data/collections/) |
+| Data change impact | A changed record and its outputs | `mizzen diff --format json`; [Site diff](/site-diff/) |
+| Pull request previews | `--preview-canonical`, `--baseline` | `mizzen build`; [Preview and rollback](https://github.com/velella-sh/mizzen/blob/main/docs/recipes/preview-rollback.md) |
+| Build performance | `--report`, `--workers` | [Performance](/performance/) |
+| First project samples | `mizzen init --starter` | [First project](/first-project/) |
 | Published-site checks | None; a published sitemap URL | `mizzen published-site check --sitemap <url>`; [Command line](/cli/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/published-site-check.md) |
 | Network sitemap and record links | `network.lock.json`; `[[project:collection/id]]` | `mizzen network sitemap`; [Several projects](/network/) |
 | Record relations | Collection `references`; related records in templates and lists | [Collections](/data/collections/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/record-relations.md) |

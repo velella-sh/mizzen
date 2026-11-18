@@ -2,13 +2,13 @@
  * Proves a release keeps the published site contract of the previous version.
  *
  * It installs the baseline and the candidate packages into separate empty projects, builds the
- * 0.2.2 fixture site with the fixed test theme, and compares every public output byte, the
+ * site fixture with the fixed test theme, and compares every public output byte, the
  * canonical links, the `_redirects` file, and the sitemap URLs. Then it builds the same site with
  * the published theme package and checks the base path, its assets, the canonical links, and a
  * rendered Mermaid diagram.
  *
  * Usage:
- *   node scripts/release-compat.ts --candidate <tarball> [--baseline @velella/mizzen@0.2.2]
+ *   node scripts/release-compat.ts --candidate <tarball> [--baseline @velella/mizzen@0.2.3]
  *     [--theme @velella/lateen@0.2.2] [--report compat-report.json] [--skip-theme]
  *   node scripts/release-compat.ts --write-baseline fixtures/compat-0.2.2/baseline.json
  *
@@ -164,7 +164,7 @@ function parseArgs(argv: readonly string[]): {
   fixture: string;
 } {
   const options: { baseline: string; candidate?: string; theme: string; report?: string; writeBaseline?: string; skipTheme: boolean; fixture: string } = {
-    baseline: "@velella/mizzen@0.2.2",
+    baseline: "@velella/mizzen@0.2.3",
     theme: "@velella/lateen@0.2.2",
     skipTheme: false,
     fixture: DEFAULT_FIXTURE,
