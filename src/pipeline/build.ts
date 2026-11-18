@@ -8,7 +8,10 @@ import { discover } from "../content/discover.ts";
 import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, PreviewPolicy, Site } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
 import { writeUrlsLock } from "../data/urls-lock.ts";
-import { MANIFEST_PATH, recordBuildHash } from "../outputs/build-hash.ts";
+import { diffReadBuilds, type SiteDiff } from "../diff/index.ts";
+import { readBuild, type Build } from "../diff/builds.ts";
+import { MANIFEST_PATH, PREVIEW_DIFF_PATH, recordBuildHash } from "../outputs/build-hash.ts";
+import { underBase } from "../outputs/manifest.ts";
 import { driftPagesOf, driftRoot } from "../outputs/drift-report.ts";
 import { trustAsOf, trustPagesOf, trustRoot } from "../outputs/trust.ts";
 import { CODE_CONFIG_FILE, loadCodeConfig, runModelHooks, runOutputsHooks } from "../plugins/hooks.ts";
@@ -73,6 +76,12 @@ export interface BuildOptions {
    * still wins over both. It also carries the commit `--commit` or `GITHUB_SHA` names, for the manifest.
    */
   readonly preview?: PreviewPolicy;
+  /**
+   * The latest public build to compare this preview with: a built folder with its manifest, from `--baseline`. Only a
+   * preview build uses it. The difference is written to `.mizzen/preview-diff.json` beside the preview, naming the
+   * baseline's build hash; a preview without a baseline writes no such file.
+   */
+  readonly baseline?: string;
 }
 
 /** What {@link build} wrote and found. */
@@ -129,9 +138,15 @@ const PREVIEW_REPORT_PATH = ".mizzen/doctor.json";
 /**
  * The result of one preview build: the version 1 diagnostics report `mizzen doctor --format json` prints, plus the
  * counts and the base and canonical that name the preview. The build owns this path, so a preview always describes
- * itself; a normal build writes no report at all.
+ * itself; a normal build writes no report at all. A preview compared with the public build also names the baseline
+ * and the diff report beside this one.
  */
-function previewReport(site: Site, preview: PreviewPolicy, findings: readonly Diagnostic[]): string {
+function previewReport(
+  site: Site,
+  preview: PreviewPolicy,
+  findings: readonly Diagnostic[],
+  baseline: string | undefined,
+): string {
   const { version, diagnostics } = diagnosticsReport(findings);
   const counts = { error: 0, warning: 0, info: 0 };
   for (const finding of findings) counts[finding.severity] += 1;
@@ -142,6 +157,7 @@ function previewReport(site: Site, preview: PreviewPolicy, findings: readonly Di
         base: site.config.base,
         canonicalBase: preview.canonicalBase,
         ...(preview.commit === undefined ? {} : { commit: preview.commit }),
+        ...(baseline === undefined ? {} : { baseline, diff: PREVIEW_DIFF_PATH }),
       },
       counts,
       diagnostics,
@@ -149,6 +165,22 @@ function previewReport(site: Site, preview: PreviewPolicy, findings: readonly Di
     null,
     2,
   )}\n`;
+}
+
+/**
+ * The difference between the public baseline and this preview: the report `mizzen diff` prints, plus the build hash
+ * that names the baseline it compared.
+ */
+function previewDiffReport(baseline: Build, diff: SiteDiff): string {
+  return `${JSON.stringify({ version: 1, baseline: { hash: baseline.hash }, diff }, null, 2)}\n`;
+}
+
+/**
+ * The preview's pages read at the public base, so a page is compared with the page it replaces rather than reported as
+ * moved by the preview's own base path. Every other file is already relative to the folder that deploys under the base.
+ */
+function atPublicBase(head: Build, base: string): Build {
+  return base === "" ? head : { ...head, pages: head.pages.map((page) => ({ ...page, url: underBase(page.url, base) })) };
 }
 
 /**
@@ -278,6 +310,13 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // The config is read before the cache so the source folder is known without building the model.
   const basePath = options.basePath === undefined ? undefined : normalizeBase(options.basePath);
   const preview = options.preview;
+  // A preview may be compared with the public build it replaces. The baseline is read before the cache key because the
+  // diff report it produces is part of the output: another public build must not be answered by the old entry. A
+  // folder without a manifest is a usage error that says how to fix it, never a report of nothing.
+  const baseline =
+    preview === undefined || options.baseline === undefined
+      ? undefined
+      : await readBuild(resolve(options.baseline), options.baseline);
   const loadedConfig = loadConfig(root);
   const loaded = {
     ...loadedConfig,
@@ -321,6 +360,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       stale: JSON.stringify([...staleBySource]),
       ...(pluginKey === undefined ? {} : { pluginKey }),
       ...(preview === undefined ? {} : { preview }),
+      ...(baseline === undefined ? {} : { baseline: baseline.hash }),
     }).catch(() => undefined);
     if (key !== undefined) {
       const hit = await restoreCache(cacheRoot, key, out).catch(() => undefined);
@@ -722,16 +762,32 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
 
     // The build's one hash goes into the manifest last, so every other file is in place (#1252). The manifest that
     // records the hash is left out of it, and a site file that replaced the generated manifest is left alone.
+    const recordsHash = claimed.get(MANIFEST_PATH) === "manifest" && !assetPaths.has(MANIFEST_PATH);
+    if (baseline !== undefined && !recordsHash) {
+      diagnostics.warn("preview.baseline-unrecorded", "The preview has no manifest, so it cannot be compared with the public baseline.", {
+        help: "Turn the manifest output on, and remove any site file at .mizzen/manifest.json.",
+      });
+    }
     const findings = sortDiagnostics(diagnostics.all);
     if (preview !== undefined) {
       const abs = join(staging, PREVIEW_REPORT_PATH);
       await mkdir(dirname(abs), { recursive: true });
-      await writeFile(abs, previewReport(site, preview, findings));
+      await writeFile(abs, previewReport(site, preview, findings, recordsHash ? baseline?.hash : undefined));
       written.push(PREVIEW_REPORT_PATH);
     }
     const usesAsOf = site.pages.some((page) => page.dates === true);
-    if (claimed.get(MANIFEST_PATH) === "manifest" && !assetPaths.has(MANIFEST_PATH)) {
+    if (recordsHash) {
       await recordBuildHash(staging, usesAsOf ? site.config.asOf : undefined);
+      // The report names the build it compared, so it is written after the hash and left out of it (#843): the
+      // preview's diff then names the build its own manifest records.
+      if (baseline !== undefined) {
+        const head = await readBuild(staging, staging);
+        const diff = await diffReadBuilds(baseline, atPublicBase(head, site.config.base));
+        const abs = join(staging, PREVIEW_DIFF_PATH);
+        await mkdir(dirname(abs), { recursive: true });
+        await writeFile(abs, previewDiffReport(baseline, diff));
+        written.push(PREVIEW_DIFF_PATH);
+      }
     }
 
     const fileList = [...written].sort(byCodePoint);

@@ -127,6 +127,7 @@ Options:
   --commit <sha>       For build: record this commit in a preview's manifest (default: GITHUB_SHA)
   --preview-canonical <url>
                        For build: mark every page noindex and point its canonical at this URL plus the page's URL
+  --baseline <dir>     For build: the latest public build to compare this preview with, written to .mizzen/preview-diff.json; needs --preview-canonical
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base
@@ -163,6 +164,7 @@ type BuildOpts = {
   readonly asOf?: string;
   readonly basePath?: string;
   readonly previewCanonical?: string;
+  readonly baseline?: string;
   readonly commit?: string;
 };
 
@@ -793,6 +795,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let asOf: string | undefined;
   let basePath: string | undefined;
   let previewCanonical: string | undefined;
+  let baseline: string | undefined;
   let commit: string | undefined;
 
   for (let i = 0; i < rest.length; i++) {
@@ -880,6 +883,11 @@ export function parseArgs(args: readonly string[]): Parsed {
           return { error: `--preview-canonical must be an absolute http(s) URL, not ${raw}` };
         }
         previewCanonical = raw;
+      } else if (arg === "--baseline") {
+        if (command !== "build") return { error: "--baseline is only valid for build" };
+        const raw = value().trim();
+        if (raw === "") return { error: "--baseline needs a folder" };
+        baseline = raw;
       } else if (arg === "--commit") {
         if (command !== "build") return { error: "--commit is only valid for build" };
         const raw = value().trim();
@@ -917,6 +925,9 @@ export function parseArgs(args: readonly string[]): Parsed {
   }
 
   const dir = root ?? ".";
+  if (baseline !== undefined && previewCanonical === undefined) {
+    return { error: "--baseline is only valid with --preview-canonical" };
+  }
   if (command === "build") {
     return {
       options: {
@@ -929,6 +940,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(asOf === undefined ? {} : { asOf }),
         ...(basePath === undefined ? {} : { basePath }),
         ...(previewCanonical === undefined ? {} : { previewCanonical }),
+        ...(baseline === undefined ? {} : { baseline }),
         ...(commit === undefined ? {} : { commit }),
       },
     };
@@ -1441,6 +1453,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
         ...(options.basePath === undefined ? {} : { basePath: options.basePath }),
+        ...(options.baseline === undefined ? {} : { baseline: resolve(options.baseline) }),
         ...(options.previewCanonical === undefined
           ? {}
           : { preview: { canonicalBase: options.previewCanonical, ...(commit === undefined ? {} : { commit }) } }),

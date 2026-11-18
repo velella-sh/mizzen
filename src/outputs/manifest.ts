@@ -21,9 +21,9 @@ function hashOf(text: string): string {
 /**
  * Strips the site `base` from a page URL, along whole path segments only. Mirrors the HTML output: every URL the
  * model carries includes `base`, while the output folder is what deploys under `base` (GitHub Pages project sites),
- * so the file path must not repeat it.
+ * so the file path must not repeat it. A preview's diff reads its pages at the public base the same way.
  */
-function underBase(url: string, base: string): string {
+export function underBase(url: string, base: string): string {
   if (base === "") return url;
   if (url === base || url.startsWith(`${base}/`)) return url.slice(base.length) || "/";
   return url;

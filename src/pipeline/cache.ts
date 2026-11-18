@@ -110,6 +110,8 @@ export interface CacheKeyOptions {
   readonly pluginKey?: string;
   /** The preview policy; a preview build writes different head tags, so it never shares a normal build's entry. */
   readonly preview?: PreviewPolicy;
+  /** The public build a preview is compared with, by its build hash; the diff report is part of the entry. */
+  readonly baseline?: string;
 }
 
 /** The file list and diagnostics of a cache hit. */
@@ -576,6 +578,8 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   // A preview changes every page's robots and canonical, so its pages are never the ones a normal build rendered. The
   // commit names the report the entry holds, so a preview of another commit is never answered by this one.
   hash.update(`preview\0${options.preview?.canonicalBase ?? ""}\0${options.preview?.commit ?? ""}\0`);
+  // The diff report an entry holds names the public build it compared, so another baseline must not reuse it.
+  hash.update(`baseline\0${options.baseline ?? ""}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);
   // A plugin's version, settings, declared inputs, and code file shape its output; its digest covers them all.
   hash.update(`plugins\0${options.pluginKey ?? ""}\0`);
