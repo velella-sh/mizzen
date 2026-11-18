@@ -8,7 +8,7 @@ import type { Diagnostic } from "../contracts/index.ts";
 import type { ImportedAsset, ImportedConfig, ImportedPage, ImportFile, Importer } from "./contract.ts";
 
 /** Files copied without changing a byte. */
-const ASSET_EXTENSIONS = new Set([
+export const ASSET_EXTENSIONS = new Set([
   ".css",
   ".gif",
   ".ico",
