@@ -1,0 +1,12 @@
+# A periodic report: each snapshot is one data file, and each has its own page.
+title: Sample report
+description: A current report and the previous one, each built from its own snapshot.
+lang: en
+url: https://example.com
+collections:
+  current:
+    source: _data/report-2026-06.yml
+    id: metric
+  previous:
+    source: _data/report-2026-05.yml
+    id: metric
