@@ -19,6 +19,7 @@ Commands:
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   data schema [dir]          Report the fields each schema added or removed since its recorded baseline
+  data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -89,6 +90,7 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen data fetch [dir] --check` | Fetches every `https:` collection source, stores its bytes under `.mizzen/data/`, and writes `mizzen.lock.json`; `--check` compares without writing. A source that is new, changed, or over its limit is a failure. |
 | `mizzen data snapshot <name> [dir] --allow-dirty` | Records the last commit that touched a file collection, and its commit date, under `snapshots` in `mizzen.lock.json`; refuses a file with uncommitted changes unless `--allow-dirty`. See [Recorded snapshots](/data/snapshots/). |
 | `mizzen data schema [dir] --format text\|json` | Compares each collection's schema with the one its snapshot recorded in `mizzen.lock.json` and names the top-level fields it added or removed, with both versions and the schema file; a collection with no recorded schema is skipped. Read-only; exits `1` on a config, lock, or schema error. See [Recorded snapshots](/data/snapshots/). |
+| `mizzen data migrate [name] [dir]` | Previews moving each record to the current schema: it applies the collection's `schemaRenames`, validates every record, and prints a sample of the migrated records and each rejected one with its source line. Writes nothing; exits `1` on a config, schema, or source error. See [Recorded snapshots](/data/snapshots/). |
 | `mizzen data verify [dir]` | Compares each collection with the lock and prints the first differing record with its source position; exits `1` on a difference and never writes. |
 | `mizzen dev [dir] --port <number> --host <host> --theme <dir>` | Builds `dir`, serves the output with pretty URLs, watches the source and theme, rebuilds on change, and reloads the browser over Server-Sent Events. The reload script is added to HTML responses only; the files on disk stay as `build` wrote them. Ctrl-C stops the server. |
 | `mizzen doctor [dir] --format text\|json\|sarif --theme <dir>` | Checks the runtime, the config, the content, the output paths, and the toolchain without writing to the site, and prints the findings in the chosen format. Exits `1` on an error. |
