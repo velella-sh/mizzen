@@ -6,7 +6,7 @@
 import type { Nodes, Root } from "mdast";
 import type { Block, Diagnostic, SourcePos } from "../contracts/index.ts";
 import { sliceSpan, spanFromPosition } from "../source/spans.ts";
-import { autoBlockId, isBlockId } from "./id.ts";
+import { autoBlockId, blockFingerprint, isBlockId } from "./id.ts";
 
 /** A trailing `{#id}` on a heading line, mirroring the slug plugin's syntax. */
 const HEADING_ID = /\{#([^\s{}]+)\}\s*#*\s*$/;
@@ -116,7 +116,13 @@ export function blocksOf(options: BlocksOfOptions): BlockAssignment {
     const id = declared !== undefined && isBlockId(declared) ? declared : pending?.id;
     if (declared !== undefined && pending !== undefined) reportUnused(pending);
     pending = undefined;
-    blocks.push({ id: id ?? autoBlockId(file, sourceOf(markdown, node, bodyLine) ?? ""), pos });
+    const source = sourceOf(markdown, node, bodyLine) ?? "";
+    blocks.push({
+      id: id ?? autoBlockId(file, source),
+      fingerprint: blockFingerprint(source),
+      ...(id === undefined ? {} : { declared: true }),
+      pos,
+    });
   }
   if (pending !== undefined) reportUnused(pending);
 

@@ -4,6 +4,7 @@ import type { Heading as MdHeading, Root } from "mdast";
 import { loadConfig } from "../config/load.ts";
 import { blocksOf } from "../blocks/parse.ts";
 import { blocksLockOf, readBlocksLock, type BlocksLock } from "../blocks/lock.ts";
+import { matchBlockIds } from "../blocks/match.ts";
 import { loadData } from "../content/data.ts";
 import { checkSeo } from "../data/checks/seo.ts";
 import { loadCollections } from "../data/collections.ts";
@@ -211,6 +212,13 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   /** Every block id the model holds, and where it first appeared; ids are unique site-wide. */
   const blockIds = new Map<string, SourcePos>();
   const appRoots = new Set<string>();
+  /** Pages built from the source files, waiting for the site-wide block match before they join the model. */
+  const staged: {
+    readonly page: Page;
+    readonly path: string;
+    readonly order: unknown;
+    readonly list?: { readonly text: string; readonly file: string };
+  }[] = [];
   /** Pages whose front matter declares a list, and the source text the `list` key sits in; built once records exist. */
   const listDeclarations: { readonly page: Page; readonly text: string; readonly file: string }[] = [];
 
@@ -256,8 +264,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       appRoots.add(folder);
       const indexFile = fileOf(`${folder}/index.html`);
       const lang = pageLang(`${folder}/index.html`, { config });
-      add(
-        await hookPage({
+      staged.push({
+        page: await hookPage({
           url: appUrl(folder, config.base),
           source: posOf(indexFile, 1),
           frontMatter: {},
@@ -269,9 +277,9 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
           markdown: "",
           kind: "app",
         }),
-        `${folder}/index.html`,
-        undefined,
-      );
+        path: `${folder}/index.html`,
+        order: undefined,
+      });
       continue;
     }
     if (file.kind !== "doc") continue;
@@ -370,10 +378,29 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     // exactly one `content` hook and the declaring page is never hooked twice.
     const declaresList = draft.frontMatter.list !== undefined;
     const page = declaresList ? draft : await hookPage(draft);
-    add(page, file.path, page.frontMatter.order);
+    staged.push({
+      page,
+      path: file.path,
+      order: page.frontMatter.order,
+      ...(declaresList ? { list: { text, file: rel } } : {}),
+    });
+  }
+
+  // A block can move to another page, so ids are matched across every staged page before any of them joins the model;
+  // duplicate detection and the output then see the ids the build carries.
+  const matchedBlocks = blocksLock.found
+    ? matchBlockIds(
+      blocksLock.lock,
+      staged.map((entry) => ({ file: entry.page.source.file, blocks: entry.page.blocks ?? [] })),
+    )
+    : undefined;
+  for (const entry of staged) {
+    const blocks = matchedBlocks?.get(entry.page.source.file);
+    const page = blocks === undefined ? entry.page : { ...entry.page, blocks };
+    add(page, entry.path, entry.order);
     // A page a duplicate URL kept out of the model declares no list either.
-    if (declaresList && pages.at(-1) === page) {
-      listDeclarations.push({ page, text, file: rel });
+    if (entry.list !== undefined && pages.at(-1) === page) {
+      listDeclarations.push({ page, text: entry.list.text, file: entry.list.file });
     }
   }
 

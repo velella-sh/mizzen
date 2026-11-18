@@ -95,6 +95,10 @@ export interface Block {
   readonly id: string;
   /** Where the block sits in the source. */
   readonly pos: SourcePos;
+  /** A hash of the block's normalized source, so a recorded id can be matched after the page moves around. */
+  readonly fingerprint?: string;
+  /** True when the source declares the id, so matching never replaces it. */
+  readonly declared?: boolean;
 }
 
 /** One page of the site model. */

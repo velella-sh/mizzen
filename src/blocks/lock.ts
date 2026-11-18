@@ -21,12 +21,20 @@ import { canonicalJson } from "../data/lock.ts";
 /** The block lock's file name at a site root. */
 export const BLOCKS_LOCK_FILE = "blocks.lock.json";
 
+/** One recorded block: the page it was on and a hash of its normalized source. */
+export interface RecordedBlock {
+  readonly file: string;
+  readonly fingerprint: string;
+}
+
 /** The whole lock file. */
 export interface BlocksLock {
   /** The format version; only 1 exists. */
   readonly version: 1;
   /** Block ids by page path, then by id, with the source line the block was on. */
   readonly pages: Readonly<Record<string, Readonly<Record<string, number>>>>;
+  /** Block ids mapped to the page and fingerprint they were recorded with; absent in locks written before matching. */
+  readonly blocks?: Readonly<Record<string, RecordedBlock>>;
 }
 
 /** An empty lock. */
@@ -97,14 +105,18 @@ export async function writeBlocksLock(root: string, lock: BlocksLock): Promise<v
   await writeFile(join(root, BLOCKS_LOCK_FILE), blocksLockText(lock));
 }
 
-/** The lock a clean build would write: every page's ids and the line each block starts on. */
+/** The lock a clean build would write: every page's ids and lines, and each block's fingerprint. */
 export function blocksLockOf(pages: readonly Page[]): BlocksLock {
   const locked: Record<string, Record<string, number>> = {};
+  const blocks: Record<string, RecordedBlock> = {};
   for (const page of pages) {
     if (page.blocks === undefined || page.blocks.length === 0) continue;
     const ids: Record<string, number> = {};
-    for (const block of page.blocks) ids[block.id] = block.pos.line;
+    for (const block of page.blocks) {
+      ids[block.id] = block.pos.line;
+      if (block.fingerprint !== undefined) blocks[block.id] = { file: page.source.file, fingerprint: block.fingerprint };
+    }
     locked[page.source.file] = ids;
   }
-  return { version: 1, pages: locked };
+  return { version: 1, pages: locked, blocks };
 }

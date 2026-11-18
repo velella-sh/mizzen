@@ -130,5 +130,6 @@ test("the lock of a build holds each page's ids and lines, and omits pages witho
       "guide/b.md": { note: 9 },
       "guide/a.md": { intro: 5, "b-0123456789": 12 },
     },
+    blocks: {},
   });
 });

@@ -16,3 +16,8 @@ export function isBlockId(value: string): boolean {
 export function autoBlockId(page: string, markdown: string): string {
   return `b-${sha256(`${page}\u0000${markdown}`).slice(0, 10)}`;
 }
+
+/** A block's normalized source: LF line endings and no surrounding whitespace. */
+export function blockFingerprint(source: string): string {
+  return sha256(source.replace(/\r\n?/g, "\n").trim());
+}
