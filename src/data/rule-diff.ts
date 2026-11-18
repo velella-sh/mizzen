@@ -267,7 +267,7 @@ function alignedIds(baseline: Map<string, unknown>, proposed: Map<string, unknow
 function stageOf(id: string): RuleFailure["stage"] | undefined {
   if (id.startsWith("data.record-invalid-input")) return "validation-input";
   if (id.startsWith("data.record-invalid-output")) return "validation-output";
-  if (id.startsWith("data.transform")) return "transform";
+  if (/^data\.transform-/u.test(id)) return "transform";
   return undefined;
 }
 
