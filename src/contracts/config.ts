@@ -336,6 +336,158 @@ export interface CollectionLifecycleConfig {
   readonly machine?: boolean;
 }
 
+/** The target type of a `cast` step. */
+export type TransformCastTarget = "string" | "number" | "integer" | "boolean";
+
+/** When a `default` step fills a field: an absent field, a null value, or either. */
+export type TransformDefaultWhen = "missing" | "null" | "missing-or-null";
+
+/** What a `map` step does with a value its mapping does not name. */
+export type TransformUnknownPolicy = "keep" | "error" | "default";
+
+/** The keys every transformation step shares. */
+export interface TransformStepBase {
+  /** The rule's id, used by diagnostics and events. Default: `step-<position>`, counting from 1. */
+  readonly id?: string;
+}
+
+/** Keep only the named field paths; every other field is left out. */
+export interface TransformSelectStep extends TransformStepBase {
+  readonly op: "select";
+  /** Field paths to keep, as dot paths such as `author.name`. */
+  readonly fields: readonly string[];
+}
+
+/** Remove the named field paths; every other field is left as it is. */
+export interface TransformRemoveStep extends TransformStepBase {
+  readonly op: "remove";
+  /** Field paths to remove, as dot paths such as `author.name`. */
+  readonly fields: readonly string[];
+}
+
+/** Move a value from one path to another. */
+export interface TransformRenameStep extends TransformStepBase {
+  readonly op: "rename";
+  /** The path the value is read from. */
+  readonly from: string;
+  /** The path the value is written to. */
+  readonly to: string;
+  /** What a value already at `to` does: `error` reports it and leaves the record, `overwrite` replaces it. Default `error`. */
+  readonly onConflict?: "error" | "overwrite";
+}
+
+/** Fill a field that is absent or null. */
+export interface TransformDefaultStep extends TransformStepBase {
+  readonly op: "default";
+  /** The field path to fill. */
+  readonly field: string;
+  /** The value written when the field matches `when`. */
+  readonly value: unknown;
+  /** Which values the default replaces: `missing`, `null`, or `missing-or-null`. Default `missing`; zero is never missing. */
+  readonly when?: TransformDefaultWhen;
+}
+
+/** Convert a value to a primitive type. */
+export interface TransformCastStep extends TransformStepBase {
+  readonly op: "cast";
+  /** The field path to convert. */
+  readonly field: string;
+  /** The type the value must reach: `string`, `number`, `integer`, or `boolean`. */
+  readonly to: TransformCastTarget;
+}
+
+/** Trim and change the case of a string value. */
+export interface TransformNormalizeStep extends TransformStepBase {
+  readonly op: "normalize";
+  /** The field path to normalize. */
+  readonly field: string;
+  /** Trim whitespace from both ends. Default `true`. */
+  readonly trim?: boolean;
+  /** The case to write: `lower`, `upper`, or `none`. Default `none`. */
+  readonly case?: "lower" | "upper" | "none";
+}
+
+/** Replace categorical values through a mapping. */
+export interface TransformMapStep extends TransformStepBase {
+  readonly op: "map";
+  /** The field path to read. */
+  readonly field: string;
+  /** The value a recognized input becomes, keyed by the input written as text. */
+  readonly values: Readonly<Record<string, unknown>>;
+  /** What an unrecognized value does: `keep`, `error`, or `default`. Default `keep`. */
+  readonly unknown?: TransformUnknownPolicy;
+  /** The value written for an unrecognized input when `unknown` is `default`. */
+  readonly default?: unknown;
+}
+
+/** Read a date in a fixed format and time zone, and write it as an instant or a day. */
+export interface TransformDateStep extends TransformStepBase {
+  readonly op: "date";
+  /** The field path to read. */
+  readonly field: string;
+  /** The input format: `YYYY`, `MM`, `DD`, `HH`, `mm`, and `ss`, with literal separators, such as `DD/MM/YYYY HH:mm`. */
+  readonly format: string;
+  /** The IANA time zone the input is written in, such as `Asia/Tehran` or `UTC`. */
+  readonly timezone: string;
+  /** What the value becomes: a UTC ISO 8601 instant (`iso`, the default) or a `YYYY-MM-DD` day (`date`). */
+  readonly output?: "iso" | "date";
+}
+
+/** Multiply a numeric value by a factor and round it. */
+export interface TransformUnitStep extends TransformStepBase {
+  readonly op: "unit";
+  /** The field path to convert. */
+  readonly field: string;
+  /** The number the value is multiplied by, such as `1000` from grams to milligrams. */
+  readonly factor: number;
+  /** Decimal places to round to. Default: no rounding. */
+  readonly round?: number;
+}
+
+/** Keep only the records that match every condition. */
+export interface TransformFilterStep extends TransformStepBase {
+  readonly op: "filter";
+  /**
+   * The conditions a record must match, keyed by field path; every condition must hold. A list value matches any of
+   * its items. A field path that is absent does not match.
+   */
+  readonly where: Readonly<Record<string, unknown>>;
+}
+
+/** Keep one record per composite key. */
+export interface TransformDedupeStep extends TransformStepBase {
+  readonly op: "dedupe";
+  /** The field paths that make up the key, as dot paths. */
+  readonly by: readonly string[];
+  /** Which record survives: the first or the last of its key in source order. Default `first`. */
+  readonly keep?: "first" | "last";
+}
+
+/** One transformation step: `op` names the operator and decides which other keys it reads. */
+export type TransformStepConfig =
+  | TransformSelectStep
+  | TransformRemoveStep
+  | TransformRenameStep
+  | TransformDefaultStep
+  | TransformCastStep
+  | TransformNormalizeStep
+  | TransformMapStep
+  | TransformDateStep
+  | TransformUnitStep
+  | TransformFilterStep
+  | TransformDedupeStep;
+
+/** Rules that rewrite a collection's records before they are validated and published. */
+export interface CollectionTransformConfig {
+  /**
+   * When each record is checked against the collection's schema: `after` validates the transformed record once,
+   * `before-and-after` also reports a raw record that does not match, then still transforms it. Default `after`.
+   */
+  readonly validate?: "after" | "before-and-after";
+  /** The steps, applied in this order; each step reads the record the previous step wrote. */
+  readonly steps: readonly TransformStepConfig[];
+}
+
 /** One data collection: where its records come from, and how its pages are built. */
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root. */
@@ -414,6 +566,11 @@ export interface CollectionConfig {
   readonly raw?: false | CollectionRawConfig;
   /** The change history of the collection's data, written by `mizzen data changes`. Default: none. */
   readonly changelog?: CollectionChangelogConfig;
+  /**
+   * Rules that rewrite each record before it is validated and published, applied in order. A collection without
+   * `transform` publishes its records exactly as the source writes them. Default: none.
+   */
+  readonly transform?: CollectionTransformConfig;
 }
 
 /** A cookieless analytics tool the site attaches with one script tag. */

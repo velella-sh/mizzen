@@ -197,6 +197,20 @@ its help names the two accepted formats.
 | `data.quality-max-drop` | A coverage or count rule has no `maxDrop`. | Write `maxDrop`: percentage points for coverage, records for count. |
 | `data.quality-exception` | A dated exception has expired, or it held back no finding. | Remove the exception, move its `until` date, or fix the rule/record/field it names. |
 
+## Transformation
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.transform-step` | A rule names an unsupported date format or time zone, or an operator this engine does not know. | Fix the step under `collections.<name>.transform.steps`. |
+| `data.transform-cast` | A value cannot reach the type a `cast` step asks for. | Write a value of that type, or change the step's `to`. |
+| `data.transform-normalize` | A `normalize` step reads a field that is not text. | Point the step at a text field, or convert it first with `cast`. |
+| `data.transform-map` | A `map` step meets a value its `values` does not name, while `unknown` is `error`. | Add the value to the mapping, or set `unknown` to `keep` or `default`. |
+| `data.transform-date` | A value does not match a `date` step's format, names no real day, or is not text. | Write the date in the rule's format, or change the format. |
+| `data.transform-unit` | A `unit` step reads a value that is not a finite number. | Write a number, or convert the field first with `cast`. |
+| `data.transform-rename-conflict` | A `rename` step's destination already holds a value, and `onConflict` is `error`. | Remove the destination field, or set `onConflict: overwrite`. |
+| `data.record-invalid-input` | With `validate: before-and-after`, the raw record does not match the collection's schema. The record is still transformed. | Fix the source value, or make the schema match the raw data. |
+| `data.record-invalid-output` | The transformed record does not match the collection's schema; the finding names the step that last touched the field. | Fix the rule, or change the schema to the shape the rules produce. |
+
 ## Page directives
 
 | ID | Meaning | Fix |

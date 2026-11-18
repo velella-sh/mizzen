@@ -618,6 +618,51 @@
     }
   },
   "$defs": {
+    "transformStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "description": "One transformation step. `op` names the operator; the other keys are the ones that operator reads.",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "The rule's id, used by diagnostics and events. Default: step-<position>, counting from 1." },
+        "op": { "enum": ["select", "remove", "rename", "default", "cast", "normalize", "map", "date", "unit", "filter", "dedupe"], "description": "The operator: keep or remove fields, move a field, fill a default, convert a type, unit, or date, normalize text, map categories, filter records, or deduplicate them." },
+        "fields": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "Field paths the `select` and `remove` operators read, as dot paths such as author.name." },
+        "field": { "type": "string", "minLength": 1, "description": "The field path a single-field operator reads." },
+        "from": { "type": "string", "minLength": 1, "description": "The path a `rename` step reads the value from." },
+        "to": { "type": "string", "minLength": 1, "description": "The path a `rename` step writes the value to, or the type a `cast` step converts to." },
+        "onConflict": { "enum": ["error", "overwrite"], "default": "error", "description": "What a `rename` does when a value already sits at `to`: report it and leave the record, or replace it. Default error." },
+        "value": { "description": "The value a `default` step writes when the field matches `when`." },
+        "when": { "enum": ["missing", "null", "missing-or-null", null], "default": "missing", "description": "Which values a `default` step replaces: an absent field, null, or either; write `\"null\"` or `null`. Zero is never missing. Default missing." },
+        "trim": { "type": "boolean", "default": true, "description": "Trim whitespace from both ends of a `normalize` value. Default true." },
+        "case": { "enum": ["lower", "upper", "none"], "default": "none", "description": "The case a `normalize` step writes. Default none." },
+        "values": { "type": "object", "description": "The value a recognized input becomes, keyed by the input written as text, for a `map` step." },
+        "unknown": { "enum": ["keep", "error", "default"], "default": "keep", "description": "What a `map` step does with a value its mapping does not name: keep it, report it, or write `default`. Default keep." },
+        "default": { "description": "The value a `map` step writes for an unrecognized input when unknown is default." },
+        "format": { "type": "string", "minLength": 1, "description": "The input format of a `date` step: YYYY, MM, DD, HH, mm, and ss, with literal separators, such as DD/MM/YYYY HH:mm." },
+        "timezone": { "type": "string", "minLength": 1, "description": "The IANA time zone a `date` step's input is written in, such as Asia/Tehran or UTC." },
+        "output": { "enum": ["iso", "date"], "default": "iso", "description": "What a `date` step writes: a UTC ISO 8601 instant (iso) or a YYYY-MM-DD day (date). Default iso." },
+        "factor": { "type": "number", "description": "The number a `unit` step multiplies the value by." },
+        "round": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Decimal places a `unit` step rounds to. Default: no rounding." },
+        "where": { "type": "object", "minProperties": 1, "description": "The conditions a record must match for a `filter` step, keyed by field path; every condition must hold. A list value matches any of its items." },
+        "by": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 }, "description": "The field paths that make up a `dedupe` step's key, as dot paths." },
+        "keep": { "enum": ["first", "last"], "default": "first", "description": "Which record of a `dedupe` key survives: the first or the last in source order. Default first." }
+      },
+      "allOf": [
+        { "if": { "properties": { "op": { "const": "select", "description": "True when op is select." } }, "required": ["op"] }, "then": { "required": ["fields"], "properties": { "fields": { "description": "Required when op is select." } } } },
+        { "if": { "properties": { "op": { "const": "remove", "description": "True when op is remove." } }, "required": ["op"] }, "then": { "required": ["fields"], "properties": { "fields": { "description": "Required when op is remove." } } } },
+        { "if": { "properties": { "op": { "const": "rename", "description": "True when op is rename." } }, "required": ["op"] }, "then": { "required": ["from", "to"], "properties": { "from": { "description": "Required when op is rename." }, "to": { "description": "Required when op is rename." } } } },
+        { "if": { "properties": { "op": { "const": "default", "description": "True when op is default." } }, "required": ["op"] }, "then": { "required": ["field", "value"], "properties": { "field": { "description": "Required when op is default." }, "value": { "description": "Required when op is default." } } } },
+        { "if": { "properties": { "op": { "const": "cast", "description": "True when op is cast." } }, "required": ["op"] }, "then": { "required": ["field", "to"], "properties": { "field": { "description": "Required when op is cast." }, "to": { "enum": ["string", "number", "integer", "boolean"], "description": "Required when op is cast." } } } },
+        { "if": { "properties": { "op": { "const": "normalize", "description": "True when op is normalize." } }, "required": ["op"] }, "then": { "required": ["field"], "properties": { "field": { "description": "Required when op is normalize." } } } },
+        { "if": { "properties": { "op": { "const": "map", "description": "True when op is map." } }, "required": ["op"] }, "then": { "required": ["field", "values"], "properties": { "field": { "description": "Required when op is map." }, "values": { "description": "Required when op is map." } } } },
+        { "if": { "properties": { "op": { "const": "date", "description": "True when op is date." } }, "required": ["op"] }, "then": { "required": ["field", "format", "timezone"], "properties": { "field": { "description": "Required when op is date." }, "format": { "description": "Required when op is date." }, "timezone": { "description": "Required when op is date." } } } },
+        { "if": { "properties": { "op": { "const": "unit", "description": "True when op is unit." } }, "required": ["op"] }, "then": { "required": ["field", "factor"], "properties": { "field": { "description": "Required when op is unit." }, "factor": { "description": "Required when op is unit." } } } },
+        { "if": { "properties": { "op": { "const": "filter", "description": "True when op is filter." } }, "required": ["op"] }, "then": { "required": ["where"], "properties": { "where": { "description": "Required when op is filter." } } } },
+        { "if": { "properties": { "op": { "const": "dedupe", "description": "True when op is dedupe." } }, "required": ["op"] }, "then": { "required": ["by"], "properties": { "by": { "description": "Required when op is dedupe." } } } }
+      ]
+    },
     "themeModules": {
       "type": "object",
       "propertyNames": {
@@ -1149,6 +1194,32 @@
             },
             "importThreshold": { "type": "integer", "minimum": 1, "description": "A run that finds more events than this is written as one `imported` event. A first load is always one. Default: no limit." },
             "pages": { "type": "boolean", "description": "Build one list page per snapshot date and a newest-events page, and write the Atom feed. Default false." }
+          }
+        },
+        "transform": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "steps"
+          ],
+          "description": "Rules that rewrite each record before it is validated and published, applied in order. Without it a collection publishes its records exactly as the source writes them.",
+          "properties": {
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/transformStep"
+              },
+              "description": "The transformation steps, applied in this order; each step reads the record the previous step wrote."
+            },
+            "validate": {
+              "enum": [
+                "after",
+                "before-and-after"
+              ],
+              "default": "after",
+              "description": "When records are checked against the collection's schema: `after` validates the transformed record, `before-and-after` also reports a raw record that does not match and still transforms it. Default `after`."
+            }
           }
         },
         "raw": {
