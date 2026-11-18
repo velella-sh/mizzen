@@ -124,7 +124,7 @@ function idOf(fields: Readonly<Record<string, unknown>>, idField: string): strin
 }
 
 /** The format a source's fix suggestions are written in; a source that loaded has one of the three kinds. */
-function formatOf(source: string): SourceFormat {
+export function formatOf(source: string): SourceFormat {
   return kindOf(source) ?? "yaml";
 }
 
@@ -373,7 +373,7 @@ export function readText(
  * Reads a field an earlier record still holds under an old name as its new name, moving its value and spans.
  * A record that holds both keeps the new value, loses the old one, and earns a warning at the old key.
  */
-function applySchemaRenames(
+export function applySchemaRenames(
   collection: string,
   records: readonly DataRecord[],
   renames: Readonly<Record<string, string>>,

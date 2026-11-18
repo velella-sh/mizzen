@@ -13,6 +13,7 @@ import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
 import { dataSchema } from "../data/schema-evolution.ts";
+import { dataMigrate } from "../data/schema-migrate.ts";
 import { verifyData } from "../data/verify.ts";
 import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
@@ -83,6 +84,7 @@ Commands:
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   data schema [dir]          Report the fields each schema added or removed since its recorded baseline
+  data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -252,6 +254,12 @@ type DataSchemaOpts = {
   readonly format: "text" | "json";
 };
 
+type DataMigrateOpts = {
+  readonly command: "data-migrate";
+  readonly root: string;
+  readonly name?: string;
+};
+
 type InitOpts = {
   readonly command: "init";
   readonly root: string;
@@ -343,6 +351,7 @@ type Parsed =
         | DataSnapshotOpts
         | DataVerifyOpts
         | DataSchemaOpts
+        | DataMigrateOpts
         | DataChangesOpts
         | UrlsCheckOpts
         | InitOpts
@@ -555,12 +564,26 @@ function parseDataSchema(rest: readonly string[]): Parsed {
   return { options: { command: "data-schema", root: root ?? ".", format } };
 }
 
+/** Parses `data migrate [collection] [dir]`. */
+function parseDataMigrate(rest: readonly string[]): Parsed {
+  const positional: string[] = [];
+  for (const arg of rest) {
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    positional.push(arg);
+  }
+  if (positional.length > 2) return { error: `unexpected argument: ${positional[2]}` };
+  const [name, root] = positional;
+  return { options: { command: "data-migrate", root: root ?? ".", ...(name === undefined ? {} : { name }) } };
+}
+
 /** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
-  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify, schema" };
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify, schema, migrate" };
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
   if (subcommand === "schema") return parseDataSchema(rest);
+  if (subcommand === "migrate") return parseDataMigrate(rest);
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
   if (subcommand === "changes") return parseDataChanges(rest);
   if (subcommand === "verify") {
@@ -1335,6 +1358,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "data-schema") {
     try {
       const result = await dataSchema({ root, format: options.format });
+      write(result.output);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-migrate") {
+    try {
+      const result = await dataMigrate({ root, ...(options.name === undefined ? {} : { name: options.name }) });
       write(result.output);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;

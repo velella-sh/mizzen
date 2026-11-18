@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -59,6 +59,16 @@ async function run(root: string, ...args: string[]): Promise<{ readonly code: nu
   const code = await main(["data", "schema", root, ...args], {
     log: () => {},
     error: (message: string) => void lines.push(message),
+    write: (text: string) => void lines.push(text),
+  });
+  return { code, output: lines.join("") };
+}
+
+async function migrate(root: string, ...args: string[]): Promise<{ readonly code: number; readonly output: string }> {
+  const lines: string[] = [];
+  const code = await main(["data", "migrate", ...args, root], {
+    log: () => {},
+    error: (message: string) => void lines.push(`${message}\n`),
     write: (text: string) => void lines.push(text),
   });
   return { code, output: lines.join("") };
@@ -239,6 +249,32 @@ test("data schema reports the fields a schema added and removed, in text and JSO
   });
 });
 
+test("data migrate previews a renamed record and a rejected one by line without writing the file", async () => {
+  const root = mkdtempSync(join(tmpdir(), "data-migrate-"));
+  try {
+    for (const [path, text] of Object.entries({
+      "mizzen.yml":
+        "collections:\n  items:\n    source: _data/items.yml\n    schema: _data/items.schema.json\n    schemaRenames:\n      slug: legacy\n",
+      "_data/items.schema.json": schema({ id: { type: "string" }, slug: { type: "string" }, title: { type: "string" } }, ["title", "slug"]),
+      "_data/items.yml": "- id: a\n  title: A\n  legacy: old-a\n- id: b\n  title: 2\n  slug: b\n",
+    })) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+    const before = readFileSync(join(root, "_data/items.yml"));
+
+    const result = await migrate(root, "items");
+    assert.equal(result.code, 0, result.output);
+    assert.match(result.output, /items: _data\/items\.yml, schema _data\/items\.schema\.json/);
+    assert.match(result.output, / {2}2 records, 1 renamed, 1 rejected/);
+    assert.match(result.output, / {2}sample \{"id":"a","title":"A","slug":"old-a"\}/);
+    assert.match(result.output, / {2}error _data\/items\.yml:5: Field "title" of record "b" in "items" must be a string\./);
+    assert.deepEqual(readFileSync(join(root, "_data/items.yml")), before);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a schema equal to its baseline is reported as matching, and the parser refuses an unknown format", async () => {
   const root = tree();
   assert.equal((await dataSnapshot({ root, name: "items" })).code, 0);
@@ -250,4 +286,11 @@ test("a schema equal to its baseline is reported as matching, and the parser ref
   assert.ok("options" in parsed && parsed.options.command === "data-schema" && parsed.options.format === "json" && parsed.options.root === root);
   const refused = parseArgs(["data", "schema", "--format", "sarif"]);
   assert.ok("error" in refused && /must be text or json/.test(refused.error));
+  const migrateParsed = parseArgs(["data", "migrate", "items", root]);
+  assert.ok(
+    "options" in migrateParsed &&
+      migrateParsed.options.command === "data-migrate" &&
+      migrateParsed.options.name === "items" &&
+      migrateParsed.options.root === root,
+  );
 });
