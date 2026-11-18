@@ -34,6 +34,7 @@ import { readRemoteSource } from "./remote-source.ts";
 import { compileSchemas, validateRecords } from "./schema.ts";
 import { compareSchemas } from "./schema-evolution.ts";
 import type { SourceFormat } from "./schema-fix.ts";
+import { transformRecords, type TransformEvent } from "./transform.ts";
 
 /** What {@link loadCollections} read. */
 export interface CollectionsResult {
@@ -51,6 +52,8 @@ export interface LoadCollectionsOptions {
   readonly root: string;
   /** The loaded config. */
   readonly config: SiteConfig;
+  /** Called once per field change a collection's transformation rules made. */
+  readonly onTransformEvent?: (event: TransformEvent) => void;
 }
 
 /** True when a source is a URL or a package address rather than a path in the site. */
@@ -571,8 +574,34 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     read += records.length;
     let kept: readonly DataRecord[] = records;
     const schema = schemas.schemas[name];
+    const transform = entry.transform;
+    const transforming = transform !== undefined && transform.steps.length > 0;
+    if (transforming && schema !== undefined && transform?.validate === "before-and-after") {
+      validateRecords(name, kept, schema, entry, formatOf(source), diagnostics, { stage: "input", keepInvalid: true });
+    }
+    let lastRuleByField: Readonly<Record<string, string>> = {};
+    if (transforming) {
+      const transformed = transformRecords(kept, transform, {
+        collection: name,
+        pos: configPos,
+        ...(options.onTransformEvent === undefined ? {} : { onEvent: options.onTransformEvent }),
+      });
+      kept = transformed.records;
+      lastRuleByField = transformed.lastRuleByField;
+      diagnostics.push(...transformed.diagnostics);
+    }
     if (schema !== undefined) {
-      const validated = validateRecords(name, kept, schema, entry, formatOf(source), diagnostics);
+      const validated = validateRecords(
+        name,
+        kept,
+        schema,
+        entry,
+        formatOf(source),
+        diagnostics,
+        transforming
+          ? { stage: "output", stepOf: (field) => (field === undefined ? undefined : lastRuleByField[field]) }
+          : undefined,
+      );
       kept = validated.records;
       skipped += validated.skipped;
     }

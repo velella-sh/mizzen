@@ -6,6 +6,13 @@ permalink: /config/
 date: 2026-10-26
 author: Velella
 ---
+
+A collection also accepts a `transform` key: ordered steps that rewrite its records before validation, covering field
+selection and removal, renames, defaults, type, date, and unit conversion, string normalization, categorical mapping,
+filtering, and deduplication. It is documented in the repository's
+[transformation guide](https://github.com/velella-sh/mizzen/blob/main/docs/transform.md) and previewed with
+`mizzen data transform`.
+
 <!-- Generated from packages/engine/schema/config.schema.json by tools/config-ref/run.ts. Do not edit below this line. -->
 
 The site config file. Every key is optional; an unknown key is an error.

@@ -69,6 +69,7 @@ Commands:
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   data schema [dir]          Report the fields each schema added or removed since its recorded baseline
   data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
+  data transform [name] [dir]  Preview the records a collection's transform rules produce (--limit, --json)
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -115,6 +116,7 @@ Options:
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --json               For data quality: print the findings and scopes as JSON; for inputs inspect: print the report as JSON
+  --limit <n>          For data transform: records to show per collection (default: 5)
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --report             For build: print why each page was rebuilt after a warm build
@@ -162,6 +164,7 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen data snapshot <name> [dir] --allow-dirty` | Records the last commit that touched a file collection, and its commit date, under `snapshots` in `mizzen.lock.json`; refuses a file with uncommitted changes unless `--allow-dirty`. |
 | `mizzen data schema [dir] --format text\|json` | Compares each collection's schema with the one its snapshot recorded in `mizzen.lock.json` and names the top-level fields it added or removed, with both versions and the schema file; a collection with no recorded schema is skipped. Read-only; exits `1` on a config, lock, or schema error. |
 | `mizzen data migrate [name] [dir]` | Previews moving each record to the current schema: it applies the collection's `schemaRenames`, validates every record, and prints a sample of the migrated records and each rejected one with its source line. Writes nothing; exits `1` on a config, schema, or source error. |
+| `mizzen data transform [name] [dir] --limit <n> --json` | Previews the records each collection's `transform` rules produce: a sample per collection, every finding with its source line, and with `--json` the field-change events. It loads the site as a build does and writes nothing. Without a name it previews every collection that declares rules; `--limit` defaults to 5. Exits `1` on an error. |
 | `mizzen data verify [dir]` | Compares each collection with the lock and prints the first differing record with its source position; exits `1` on a difference and never writes. |
 | `mizzen dev [dir] --port <number> --host <host> --theme <dir>` | Builds `dir`, serves the output with pretty URLs, watches the source and theme, rebuilds on change, and reloads the browser over Server-Sent Events. The reload script is added to HTML responses only; the files on disk stay as `build` wrote them. Ctrl-C stops the server. |
 | `mizzen doctor [dir] --format text\|json\|sarif --theme <dir>` | Checks the runtime, the config, the content, the output paths, and the toolchain without writing to the site, and prints the findings in the chosen format. Exits `1` on an error. |

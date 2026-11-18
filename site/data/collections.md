@@ -51,6 +51,7 @@ collections:
 | `search` | object | | How record pages take part in search. See [Search](/data/search/). |
 | `seo` | object | | How record and list pages are described to search engines. See [SEO](/data/seo/). |
 | `changelog` | object | | How a record's changes are recorded: `changelog.track` and `changelog.ignore` name the fields, `changelog.labels` writes each event's summary, and `changelog.pages` builds the history pages and feed. See [Change history](/data/changelog/). |
+| `transform` | object | | Ordered rules that rewrite each record before validation: `select`, `remove`, `rename`, `default`, `cast`, `normalize`, `map`, `date`, `unit`, `filter`, and `dedupe`, with each step's `id`. `validate: before-and-after` also reports the raw record. See [Transforming data](https://github.com/velella-sh/mizzen/blob/main/docs/transform.md). |
 | `raw` | `false` or object | `{}` | The raw data written as `data/<name>.raw.json`, `.csv`, and `.sha256`; `raw.private` lists fields left out; `false` writes none. |
 | `index` | object | | A compact JSON index for the theme: `index.fields` and `index.bytes`. See [Feeds and machine output](/data/feeds/). |
 
