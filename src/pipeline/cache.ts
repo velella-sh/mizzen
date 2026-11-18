@@ -23,12 +23,13 @@
  * being overlapped by a competitor. A waiter gives up after {@link LOCK_WAIT_MS} and builds cold, which costs one cold
  * build rather than a hung one, and an operation that lost ownership publishes and prunes nothing. After a write, at
  * most {@link CACHE_RETENTION} entries are kept: the newest,
- * including the entry just written. An entry is copied into a temporary folder, checked file by file, published with
- * one rename, and only then does pruning run; an interrupted staging or backup folder is removed by the next operation.
+ * including the entry just written. An entry is copied into a temporary folder, each file hashed as it is copied,
+ * published with one rename, and only then does pruning run; an interrupted staging or backup folder is removed by the
+ * next operation.
  *
  */
 import { createHash, randomUUID } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { CONFIG_FILE } from "../config/load.ts";
@@ -820,21 +821,6 @@ async function readEntry(cacheRoot: string, key: string): Promise<EntryRead> {
   return readEntryAt(join(cacheRoot, key), key);
 }
 
-/** True when every file in `dir` still matches the manifest, so only a complete entry is ever published. */
-async function isCompleteEntry(dir: string, key: string): Promise<boolean> {
-  const read = await readEntryAt(dir, key);
-  if ("reason" in read) return false;
-  try {
-    await inBatches(read.entry.manifest.files, 32, async (file) => {
-      const bytes = await readFile(join(dir, "out", file));
-      if (hashOf(bytes) !== read.entry.manifest.hashes[file]) throw new Error(`cache: "${file}" does not match its hash`);
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Copies the entry for `key` into a fresh staging folder beside `out`, checking every file against its hash as it
  * reads it, so a corrupt or half-written entry is a miss rather than bad output. Returns `undefined` when there is no
@@ -896,22 +882,35 @@ export async function restoreCache(
 }
 
 /**
- * Writes an entry whole: a staged folder beside the target, checked file by file, then one rename. An existing entry
- * is moved aside first and put back if the rename fails, so a failed write never loses the entry it replaced. The
- * caller holds the cache lock, so no reader observes the target between the two renames.
+ * Writes an entry whole: a staged folder beside the target, each file hashed while it is copied, then one rename. The
+ * manifest describes exactly the bytes written to the staged folder, so a published entry never needs a second read.
+ * An existing entry is moved aside first and put back if the rename fails, so a failed write never loses the entry it
+ * replaced. The caller holds the cache lock, so no reader observes the target between the two renames.
  */
 async function writeEntry(
   cacheRoot: string,
   key: string,
-  manifest: CacheManifest,
   source: string,
+  files: readonly string[],
+  diagnostics: readonly Diagnostic[],
   owns: () => Promise<boolean>,
 ): Promise<boolean> {
   const temp = await mkdtemp(join(cacheRoot, TEMP_PREFIX));
   try {
-    await cp(source, join(temp, "out"), { recursive: true });
+    const out = join(temp, "out");
+    const directories = new Set(files.map((file) => dirname(join(out, file))));
+    await Promise.all([...directories].map((dir) => mkdir(dir, { recursive: true })));
+    const digests: string[] = new Array(files.length);
+    await inBatches(files, 32, async (file, index) => {
+      const bytes = await readFile(join(source, file));
+      digests[index] = hashOf(bytes);
+      await writeFile(join(out, file), bytes);
+    });
+    const hashes: Record<string, string> = {};
+    for (let index = 0; index < files.length; index++) hashes[files[index]!] = digests[index]!;
+    const payload: CachePayload = { version: CACHE_FORMAT, key, engine: version, files, hashes, diagnostics };
+    const manifest: CacheManifest = { ...payload, checksum: checksumOf(payload) };
     await writeFile(join(temp, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
-    if (!(await isCompleteEntry(temp, key))) return false;
 
     // Another operation may have broken and retaken a lock that outlived its lease; never publish then.
     if (!(await owns())) return false;
@@ -983,19 +982,10 @@ export async function writeCache(
   try {
     if (!KEY.test(key)) return;
     const sorted = [...files].filter(isInside).sort(byCodePoint);
-    const hashes: Record<string, string> = {};
+    // A list that does not describe the finished output is stale: write nothing, and do not even take the lock.
     await inBatches(sorted, 32, async (file) => {
-      hashes[file] = hashOf(await readFile(join(source, file)));
+      await stat(join(source, file));
     });
-    const payload: CachePayload = {
-      version: CACHE_FORMAT,
-      key,
-      engine: version,
-      files: sorted,
-      hashes,
-      diagnostics,
-    };
-    const manifest: CacheManifest = { ...payload, checksum: checksumOf(payload) };
 
     await mkdir(cacheRoot, { recursive: true });
     const held = await lockCache(cacheRoot);
@@ -1004,7 +994,7 @@ export async function writeCache(
       await cleanAbandoned(cacheRoot);
       const owns = () => ownsLock(cacheRoot, held.token);
       if (!(await owns())) return;
-      if (await writeEntry(cacheRoot, key, manifest, source, owns)) {
+      if (await writeEntry(cacheRoot, key, source, sorted, diagnostics, owns)) {
         if (await owns()) await prune(cacheRoot, key);
       }
     } finally {

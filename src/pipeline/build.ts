@@ -26,7 +26,7 @@ import { createDiagnostics, diagnosticsReport, sortDiagnostics, type Diagnostics
 import { stalePageStates } from "../stale/diagnostics.ts";
 import { applyVersionRouting } from "../versions/apply.ts";
 import { buildDependencyGraph } from "./dependency-graph.ts";
-import { planInvalidation, type InvalidationPlan } from "./invalidation.ts";
+import { planInvalidation, formatInvalidationReport, type InvalidationPlan } from "./invalidation.ts";
 import { pruneRenderCache, pruneRenderEntries, readRenderInputs, recordKeyOf, recordShapeOf, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
 import { moduleName } from "../runtime/modules.ts";
 import { createRenderPool, renderOnePage, type RenderPool } from "./parallel.ts";
@@ -73,6 +73,12 @@ export interface BuildOptions {
    */
   readonly asOf?: string;
   /**
+  /**
+   * Explain each page rebuilt after a warm build in {@link BuildResult.report}: the changed input and the shortest
+   * dependency chain to the page. `mizzen build --report` prints it; a build that rebuilt nothing reports nothing.
+   */
+  readonly report?: boolean;
+  /**
    * The site `base` this build is written under, from `--base`: `/preview/pr-1` builds the same pages and assets under
    * that path, so each preview gets its own. Wins over the config's `base`.
    */
@@ -91,6 +97,18 @@ export interface BuildOptions {
   readonly baseline?: string;
 }
 
+/** Where a build spent its wall time, in milliseconds. */
+export interface BuildTimings {
+  /** Reading the site and building its model: config, discovery, front matter, Markdown, HTML, collections, evidence, and the cache reads that decide what to render. */
+  readonly dataMs: number;
+  /** Rendering pages through the theme, summed over every page the build rendered. */
+  readonly renderMs: number;
+  /** Running the outputs and checking their files, not counting the page renders they asked for. */
+  readonly outputsMs: number;
+  /** Writing the site, the manifest, and the cache entry. */
+  readonly writeMs: number;
+}
+
 /** What {@link build} wrote and found. */
 export interface BuildResult {
   /** Absolute path of the output folder. */
@@ -104,10 +122,17 @@ export interface BuildResult {
   /** Doc pages served from the per-page render cache in this build. */
   readonly cachedPages: number;
   /**
+   * Where this build spent its wall time. Absent on a whole-build cache hit, where no stage ran: the output was
+   * restored from the cache.
+   */
+  readonly timings?: BuildTimings | undefined;
+  /**
    * What a warm build had to rebuild, from the dependency graph and the pages whose render key changed. Absent on a
    * cold build or when the settings changed, where every output is rebuilt and there is nothing to narrow.
    */
   readonly invalidation?: InvalidationPlan | undefined;
+  /** Why each page was rebuilt, from `invalidation`, when `report` is on and a warm build narrowed the work. */
+  readonly report?: string | undefined;
 }
 
 /** The default folder of outputs: `src/outputs/` beside this file's folder. */
@@ -304,6 +329,7 @@ function assertOutOutsideSource(sourceDir: string, out: string): void {
  * starts with `_` or `.`, which discovery skips.
  */
 export async function build(options: BuildOptions): Promise<BuildResult> {
+  const startedAt = performance.now();
   const diagnostics = createDiagnostics();
   const root = resolve(options.root);
   const out = resolve(options.out);
@@ -591,6 +617,9 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     }
   }
 
+  // Reading the site and preparing the build is over; what is left is rendering pages, running the outputs, and writing.
+  const dataMs = performance.now() - startedAt;
+
   // With one worker, pages render in this process exactly as before. With more, the pool starts rendering the doc
   // pages the html output will ask for while the outputs are still being loaded, then serves them from its results.
   // A pool that renders a page nobody asks for reports nothing: reporting happens when an output asks for the page.
@@ -612,6 +641,8 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const renderedHtml = new Map<string, Promise<string>>();
   let renderedPages = 0;
   let cachedPages = 0;
+  /** Wall time spent rendering pages, and so not attributable to the outputs that asked for them. */
+  let renderMs = 0;
   const reportedLayouts = new Set<string>();
   /** Reports a page's rendering findings, once per missing layout for record pages only. */
   const reportRendered = (
@@ -648,20 +679,25 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           ...(cached.skipFontPreloads === undefined ? {} : { skipFontPreloads: cached.skipFontPreloads }),
         });
       }
-      const rendered =
-        pool === undefined ? renderOnePage(registry, renderSite, page, options.defaultLayout) : await pool.render(page);
-      renderedPages += 1;
-      reportRendered(rendered, page);
-      if (renderStore !== undefined && settingsKey !== undefined) {
-        await renderStore.set(pageKeyOf(page), {
-          html: rendered.html,
-          css: rendered.css,
-          ...(rendered.islands === undefined ? {} : { islands: rendered.islands }),
-          ...(rendered.skipFontPreloads === undefined ? {} : { skipFontPreloads: rendered.skipFontPreloads }),
-          diagnostics: rendered.diagnostics,
-        });
+      const renderStartedAt = performance.now();
+      try {
+        const rendered =
+          pool === undefined ? renderOnePage(registry, renderSite, page, options.defaultLayout) : await pool.render(page);
+        renderedPages += 1;
+        reportRendered(rendered, page);
+        if (renderStore !== undefined && settingsKey !== undefined) {
+          await renderStore.set(pageKeyOf(page), {
+            html: rendered.html,
+            css: rendered.css,
+            ...(rendered.islands === undefined ? {} : { islands: rendered.islands }),
+            ...(rendered.skipFontPreloads === undefined ? {} : { skipFontPreloads: rendered.skipFontPreloads }),
+            diagnostics: rendered.diagnostics,
+          });
+        }
+        return await withCss(rendered);
+      } finally {
+        renderMs += performance.now() - renderStartedAt;
       }
-      return withCss(rendered);
     })();
     renderedHtml.set(page.url, pending);
     return pending;
@@ -677,6 +713,9 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // anything is written.
   const produced: OutputFile[] = [];
   const owner = new Map<OutputFile, string>();
+  const outputsStartedAt = performance.now();
+  /** Renders happen inside an output that asks for a page; that time belongs to rendering, not to the output. */
+  const rendersBeforeOutputs = renderMs;
   try {
     for (const output of await loadOutputs(outputsDir, diagnostics)) {
       if (site.config.outputs[output.name] === false) continue;
@@ -726,7 +765,9 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   hookedOutputs = undefined;
   owner.clear();
   produced.length = 0;
+  const outputsMs = performance.now() - outputsStartedAt - (renderMs - rendersBeforeOutputs);
 
+  const writeStartedAt = performance.now();
   const parent = dirname(out);
   await mkdir(parent, { recursive: true });
   const staging = await mkdtemp(join(parent, `.${basename(out)}-build-`));
@@ -823,13 +864,17 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
         new Set(site.pages.filter((page) => page.kind === "doc").map((page) => pageKeyOf(page))),
       );
     }
+    const report =
+      options.report === true && invalidation !== undefined ? formatInvalidationReport(invalidation) : "";
     return {
       out,
       files: fileList,
       diagnostics: findings,
       renderedPages,
       cachedPages,
+      timings: { dataMs, renderMs, outputsMs, writeMs: performance.now() - writeStartedAt },
       ...(invalidation === undefined ? {} : { invalidation }),
+      ...(report === "" ? {} : { report }),
     };
   } finally {
     await rm(staging, { recursive: true, force: true });

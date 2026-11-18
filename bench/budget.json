@@ -1,5 +1,6 @@
 {
   "note": "Time budgets were first set from an Apple M-series laptop (node 22, theme ../lateen, 3 runs, median) with a margin of 2x, then raised on 2026-11-17 to what the ubuntu-latest CI runner measures, so a healthy build on a slower runner passes. Memory keeps its 2x margin. A budget goes down when a change makes the build faster; raising one needs a note in the pull request.",
+  "method": "`node scripts/bench-data.ts --check bench/budget.json` builds each case `--runs` times (default 3), each run in its own process: time is that process's wall time and peak memory is its maxRSS. The median run is compared with the budget; a measurement equal to its budget passes, and any measurement over it makes the job exit 1. `--report <saved.json>` checks saved measurements the same way.",
   "margin": {
     "ms": 2,
     "peakMb": 2
