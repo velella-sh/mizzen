@@ -65,7 +65,7 @@ Commands:
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
-  data quality [dir]        Report records that fail the config's quality rules (--json, --write)
+  data quality [dir]        Report records that fail the config's quality rules (--json, --write, --as-of)
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
@@ -100,7 +100,7 @@ Options:
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
-  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch); today reads the system date once. Wins over the config's asOf
+  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
@@ -161,7 +161,7 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 
 `--out` is resolved from the current working directory, not from the site root, for `build`, `dev`, `pack`, and `watch`; `dev`'s default is `<site>/.mizzen/dev` and `watch`'s is `<site>/.mizzen/watch`. `check` is the command to use in CI: it never touches `dist`. `pack` reads the site model and never the theme, so it needs no theme root.
 
-`--as-of <YYYY-MM-DD|today>` (for `build`, `check`, and `watch`) sets the day the build pretends it is, and wins over the config's `asOf` key. `today` reads the system date once, at the command's edge, and prints it; the build itself never reads a clock, so the same data and the same as-of date give the same bytes.
+`--as-of <YYYY-MM-DD|today>` (for `build`, `check`, `watch`, and `data quality`) sets the day the build pretends it is, and wins over the config's `asOf` key. `today` reads the system date once, at the command's edge, and prints it; the build itself never reads a clock, so the same data and the same as-of date give the same bytes.
 
 `--workers <n|auto>` (for `build` and `check`) renders pages in `n` worker threads, each one loading the theme; `auto` is the CPU count minus one. The site written is byte for byte the one `--workers 1` writes, diagnostics included. The default is `1`: a small site would pay for threads it cannot use, so a large one opts in with `--workers auto`. A worker that fails renders its pages in the main thread and adds a `render.worker-failed` warning. There is no config key, because how many cores a machine has is a machine setting, not a property of the site.
 

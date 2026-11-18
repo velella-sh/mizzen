@@ -129,6 +129,8 @@ export interface PageRecord {
   readonly views?: Readonly<Record<string, string>>;
   /** Earlier URLs of this record page, each of which redirects to it; present when `urls.lock.json` holds one or the record names an alias. */
   readonly previousUrls?: readonly string[];
+  /** URL of the record that replaces this one, when the collection's lifecycle retires it and names a replacement. */
+  readonly replacementUrl?: string;
   /** The record's history events, newest first; present only when the template shows them with `:::changes`. */
   readonly changes?: readonly ChangeEvent[];
 }

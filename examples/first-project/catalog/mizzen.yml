@@ -1,0 +1,14 @@
+# A small technical catalogue: one data file, one template, one list page.
+title: Sample catalogue
+description: A catalogue of sensors built from one data file.
+lang: en
+url: https://example.com
+collections:
+  sensors:
+    source: _data/sensors.yml
+    id: slug
+    template: _templates/sensors.md
+    permalink: /sensors/{slug}/
+    markdown: [summary]
+    dates: [released]
+    unique: [name]
