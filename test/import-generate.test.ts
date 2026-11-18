@@ -57,12 +57,28 @@ test("import plain --out writes the mapped project into an empty folder and leav
   assert.deepEqual(errors, []);
   assert.equal(status, 0);
   assert.deepEqual(snapshot(root), before);
-  assert.deepEqual(readdirSync(out, { recursive: true, encoding: "utf8" }).sort(), ["guide", "guide/intro.md", "index.md", "logo.png", "mizzen.yml"]);
+  assert.deepEqual(readdirSync(out, { recursive: true, encoding: "utf8" }).sort(), [
+    ".mizzen-import.json",
+    "guide",
+    "guide/intro.md",
+    "index.md",
+    "logo.png",
+    "mizzen.yml",
+  ]);
   assert.equal(readFileSync(join(out, "index.md"), "utf8"), "# Home\n");
   assert.equal(readFileSync(join(out, "guide/intro.md"), "utf8"), "# Intro\n");
   assert.equal(readFileSync(join(out, "mizzen.yml"), "utf8"), "title: Source\n");
   assert.deepEqual(readFileSync(join(out, "logo.png")), readFileSync(join(root, "logo.png")));
-  assert.match(logs.join("\n"), /wrote 4 files|4 files written/);
+  assert.deepEqual(JSON.parse(readFileSync(join(out, ".mizzen-import.json"), "utf8")), {
+    version: 1,
+    files: [
+      { source: "guide/intro.mdx", kind: "content", destination: "guide/intro.md", url: "/guide/intro/" },
+      { source: "index.md", kind: "content", destination: "index.md", url: "/" },
+      { source: "logo.png", kind: "asset", destination: "logo.png", url: "/logo.png" },
+      { source: "mizzen.yml", kind: "config", destination: "mizzen.yml" },
+    ],
+  });
+  assert.match(logs.join("\n"), /wrote 5 files|5 files written/);
 });
 
 test("import plain --out refuses a non-empty destination and writes nothing", async () => {

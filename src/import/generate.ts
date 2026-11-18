@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readdirSync, realpathSync, statSync, writeFileSy
 import { dirname, join, resolve, sep } from "node:path";
 import type { Diagnostic } from "../contracts/index.ts";
 import type { ImportedAsset, ImportedConfig, ImportedPage, ImportSource } from "./contract.ts";
-import { CONFIG_DESTINATION, safeDestination, type ImportMapping } from "./mapping.ts";
+import { CONFIG_DESTINATION, MAPPING_DESTINATION, mappingRecord, safeDestination, type ImportMapping } from "./mapping.ts";
 
 /** Everything the generator may write, in the destinations the mapping chose. */
 export interface GenerateRequest {
@@ -58,6 +58,7 @@ function targetsOf(request: GenerateRequest): Target[] {
       contents: request.config.contents,
       ...(request.config.source === undefined ? {} : { source: request.config.source }),
     },
+    { kind: "text", destination: MAPPING_DESTINATION, contents: mappingRecord(request.mappings) },
   ];
   for (const mapping of request.mappings) {
     const { destination } = mapping;
@@ -123,8 +124,8 @@ export function generateProject(request: GenerateRequest): GenerateResult {
       continue;
     }
     if (seen.has(safe)) {
-      const owner = seen.get(safe) ?? "the generated config";
-      const source = target.source ?? "the generated config";
+      const owner = seen.get(safe) ?? "the generated project";
+      const source = target.source ?? "the generated project";
       diagnostics.push(
         finding("import.duplicate-destination", `${source} and ${owner} would both be written to \`${safe}\`; one of them has no destination.`, target.source),
       );

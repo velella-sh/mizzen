@@ -21,6 +21,20 @@ export interface ImportMapping {
 /** The generated config's destination. */
 export const CONFIG_DESTINATION = "mizzen.yml";
 
+/** Where the generated project records every input file's destination and URL. */
+export const MAPPING_DESTINATION = ".mizzen-import.json";
+
+/** The record's format version; a reader that does not know it must not guess. */
+export const MAPPING_VERSION = 1;
+
+/** The mapping record as the generated file's exact text: every input path, sorted by source. */
+export function mappingRecord(mappings: readonly ImportMapping[]): string {
+  const files = [...mappings]
+    .sort((a, b) => (a.source < b.source ? -1 : a.source > b.source ? 1 : 0))
+    .map(({ source, kind, destination, url, reason }) => ({ source, kind, destination, url, reason }));
+  return `${JSON.stringify({ version: MAPPING_VERSION, files }, null, 2)}\n`;
+}
+
 /** What {@link buildMappings} found. */
 export interface MappingResult {
   readonly mappings: readonly ImportMapping[];
