@@ -44,9 +44,14 @@ Commands:
   versions snapshot <vN> [dir]
                             Copy the current pages and navigation into a new version folder
   watch [dir]               Rebuild the site whenever a source or theme file changes
+  inputs export [dir]       Write selected collection sources to one transferable package (--collections, --out)
+  inputs inspect <file>     Print a package's format, inputs, sizes, and hashes (--json); changes nothing
+  inputs verify <file>      Check every content hash and that no undeclared bytes follow; changes nothing
+  inputs import <file> [dir]
+                            Install a package's inputs and lock entries (--accept on a conflict)
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
   --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
@@ -61,7 +66,7 @@ Options:
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
-  --json               For data quality: print the findings and scopes as JSON
+  --json               For data quality: print the findings and scopes as JSON; for inputs inspect: print the report as JSON
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --report             For build: print why each page was rebuilt after a warm build
@@ -79,6 +84,8 @@ Options:
   --change-type <type> For diff: list only one change type, such as heading, table, link, or record
   --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
   --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
+  --collections <a,b>  For inputs export: collections to carry; their references targets are added (default: every collection)
+  --accept <ids|all>   For inputs import: inputs whose differing destination files or lock entries may be replaced
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
