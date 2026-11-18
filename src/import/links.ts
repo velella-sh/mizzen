@@ -50,9 +50,17 @@ function splitTail(url: string): { readonly path: string; readonly tail: string 
   return at === -1 ? { path: url, tail: "" } : { path: url.slice(0, at), tail: url.slice(at) };
 }
 
-/** The source path a link names: from the site root, or from the page's own folder. */
-function sourceOf(page: string, path: string): string {
-  return path.startsWith("/") ? path.slice(1) : posix.normalize(posix.join(posix.dirname(page), path));
+/** Options of {@link rewriteLinks}: the source base, and the folder a site-root link resolves from. */
+export interface LinkRewriteOptions {
+  /** The source site's base path, so a link written with it still names a page. */
+  readonly base?: string;
+  /** The source path of the content root, with a trailing `/`, so `/guide` names `docs/guide` when `srcDir` is `docs`. */
+  readonly contentRoot?: string;
+}
+
+/** The source path a link names: from the content root, or from the page's own folder. */
+function sourceOf(page: string, path: string, contentRoot: string): string {
+  return path.startsWith("/") ? `${contentRoot}${path.slice(1)}` : posix.normalize(posix.join(posix.dirname(page), path));
 }
 
 /** Visits every node in the tree. */
@@ -81,7 +89,13 @@ function urlOffset(body: string, node: PageLink): number | undefined {
 }
 
 /** Rewrites every page link in every page, and reports each one the mapping cannot resolve. */
-export function rewriteLinks(pages: readonly ImportedPage[], mappings: readonly ImportMapping[]): LinkRewriteResult {
+export function rewriteLinks(
+  pages: readonly ImportedPage[],
+  mappings: readonly ImportMapping[],
+  options: LinkRewriteOptions = {},
+): LinkRewriteResult {
+  const base = options.base ?? "";
+  const contentRoot = options.contentRoot ?? "";
   const destinations = new Map<string, string>();
   for (const mapping of mappings) {
     if (mapping.kind === "content" && mapping.url !== undefined) destinations.set(mapping.source, mapping.url);
@@ -100,10 +114,26 @@ export function rewriteLinks(pages: readonly ImportedPage[], mappings: readonly 
       if (node.type !== "link" && node.type !== "definition") return;
       if (EXTERNAL.test(node.url)) return;
       const { path, tail } = splitTail(node.url);
-      if (path === "" || !PAGE_LINK.test(path)) return;
-      links++;
-      const destination = destinations.get(sourceOf(page.source, path));
+      if (path === "") return;
+      const absolute = path.startsWith("/");
+      const written = base !== "" && (path === base || path.startsWith(`${base}/`)) ? path.slice(base.length) : path;
+      const pageLink = PAGE_LINK.test(written);
+      const candidates = pageLink
+        ? [written]
+        : absolute
+          ? written.endsWith("/")
+            ? [`${written}index.md`]
+            : [`${written}.md`, `${written}/index.md`]
+          : [];
+      if (candidates.length === 0) return;
+      if (pageLink) links++;
+      let destination: string | undefined;
+      for (const candidate of candidates) {
+        destination = destinations.get(sourceOf(page.source, candidate, contentRoot));
+        if (destination !== undefined) break;
+      }
       if (destination === undefined) {
+        if (!pageLink) return; // an extensionless URL that names no page may be a real non-page URL
         const start = node.position?.start;
         diagnostics.push({
           id: "import.unresolved-link",
