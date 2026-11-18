@@ -1,0 +1,11 @@
+title: Page-number example
+collections:
+  items:
+    source: http://127.0.0.1:0/page/items
+    records: data.items
+    pagination:
+      mode: page
+      param: page
+      start: 1
+      pageSize: 2
+      stop: short

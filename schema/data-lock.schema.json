@@ -142,6 +142,36 @@
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
           "description": "When a URL source was fetched, from the response's date header and never the build clock."
+        },
+        "pages": {
+          "type": "array",
+          "description": "Pages of a paginated API source, in fetch order.",
+          "items": {
+            "$ref": "#/$defs/page"
+          }
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "description": "One page of a paginated API source.",
+      "required": ["url", "bytes", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The page's final URL."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Byte size of the page's body."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the page's body."
         }
       }
     }

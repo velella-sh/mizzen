@@ -59,7 +59,7 @@ import type {
   SourcePos,
   ThemeConfig,
 } from "../contracts/index.ts";
-import type { CollectionTransformConfig, TransformCastTarget, TransformStepConfig } from "../contracts/config.ts";
+import type { ApiAuthConfig, CollectionTransformConfig, PaginationConfig, PaginationMode, PaginationStop, TransformCastTarget, TransformStepConfig } from "../contracts/config.ts";
 
 /** The site config file name. */
 export const CONFIG_FILE = "mizzen.yml";
@@ -210,6 +210,7 @@ export function loadConfigText(source: string, file: string, folderTitle: string
 
   diagnostics.push(...calendarDiagnostics(raw, collections, file, doc, lineCounter));
   diagnostics.push(...derivedDiagnostics(raw, collections, file, doc, lineCounter));
+  diagnostics.push(...apiFetchDiagnostics(raw, collections, file, doc, lineCounter));
 
   return { config: applyDefaults(raw, folderTitle), diagnostics };
 }
@@ -328,6 +329,92 @@ function derivedDiagnostics(
           });
         }
         previous = below;
+      });
+    }
+  }
+  return found;
+}
+
+/** Findings about a paginated API the schema cannot see: a mode that lacks what it needs, or a source it cannot read. */
+function apiFetchDiagnostics(
+  raw: Record<string, unknown>,
+  collections: Readonly<Record<string, CollectionConfig>>,
+  file: string,
+  doc: Document.Parsed,
+  lineCounter: LineCounter,
+): Diagnostic[] {
+  const found: Diagnostic[] = [];
+  const at = (path: (string | number)[]) => {
+    const pair = getMapPair(doc, path);
+    return posFromNode(file, lineCounter, isNode(pair?.value) ? pair.value : doc.contents);
+  };
+  for (const [name, entry] of Object.entries(raw.collections ?? {})) {
+    if (!isPlainObject(entry)) continue;
+    const collection = collections[name];
+    const pagination = collection?.pagination;
+    const isUrl = typeof entry.source === "string" && /^https?:\/\//i.test(entry.source);
+    if (typeof entry.records === "string" && entry.records !== "" && !isUrl) {
+      found.push({
+        id: "config.api-source",
+        severity: "error",
+        message: `Collection "${name}" names a record array, so its source must be an http or https URL.`,
+        pos: at(["collections", name, "source"]),
+        help: "Point `source` at the API, or remove `records`.",
+      });
+    }
+    if (pagination === undefined) continue;
+    if (!isUrl) {
+      found.push({
+        id: "config.api-source",
+        severity: "error",
+        message: `Collection "${name}" sets pagination, so its source must be an https URL.`,
+        pos: at(["collections", name, "source"]),
+        help: "Point `source` at the API, or remove `pagination`.",
+      });
+    }
+    if (collection?.records === undefined) {
+      found.push({
+        id: "config.api-records",
+        severity: "error",
+        message: `Collection "${name}" sets pagination, which needs \`records\`: the dot path of the record array in each response.`,
+        pos: at(["collections", name, "pagination"]),
+        help: "Add `records: data.items`, or remove `pagination` for a single request.",
+      });
+    }
+    if ((pagination.mode === "page" || pagination.mode === "offset") && pagination.stop === undefined) {
+      found.push({
+        id: "config.api-stop",
+        severity: "error",
+        message: `Collection "${name}" uses ${pagination.mode} pagination without a \`stop\` condition.`,
+        pos: at(["collections", name, "pagination"]),
+        help: "Set `stop: empty` to end on an empty page, or `stop: short` with `pageSize`.",
+      });
+    }
+    if (pagination.stop === "short" && pagination.pageSize === undefined) {
+      found.push({
+        id: "config.api-page-size",
+        severity: "error",
+        message: `Collection "${name}" stops on a short page without a \`pageSize\` to compare against.`,
+        pos: at(["collections", name, "pagination"]),
+        help: "Set `pageSize` to the number of records the service returns per page.",
+      });
+    }
+    if (pagination.mode === "cursor" && pagination.cursor === undefined) {
+      found.push({
+        id: "config.api-cursor",
+        severity: "error",
+        message: `Collection "${name}" uses cursor pagination without a \`cursor\` path.`,
+        pos: at(["collections", name, "pagination"]),
+        help: "Set `cursor` to the dot path that holds the next cursor, such as `meta.next`.",
+      });
+    }
+    if (pagination.mode === "next" && pagination.next === undefined) {
+      found.push({
+        id: "config.api-next",
+        severity: "error",
+        message: `Collection "${name}" follows next-page URLs without a \`next\` path.`,
+        pos: at(["collections", name, "pagination"]),
+        help: "Set `next` to the dot path that holds the next page URL, such as `links.next`.",
       });
     }
   }
@@ -650,8 +737,11 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const changelog = collectionChangelogFrom(entry.changelog);
     const transform = collectionTransformFrom(entry.transform);
     const derived = derivedFrom(entry.derived);
+    const pagination = paginationFrom(entry.pagination);
     collections[name] = {
       source: entry.source,
+      ...(typeof entry.records === "string" && entry.records !== "" ? { records: entry.records } : {}),
+      ...(pagination === undefined ? {} : { pagination }),
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
       ...(typeof entry.template === "string" ? { template: entry.template } : {}),
       ...(typeof entry.permalink === "string" ? { permalink: entry.permalink } : {}),
@@ -1055,6 +1145,46 @@ function stringMapFrom(value: unknown): Readonly<Record<string, string>> | undef
     if (typeof collection === "string") references[field] = collection;
   }
   return references;
+}
+
+/** A collection's `pagination` block as the contract holds it; `undefined` when it declares none. */
+function paginationFrom(value: unknown): PaginationConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const mode = value.mode;
+  if (mode !== "page" && mode !== "offset" && mode !== "cursor" && mode !== "next") return undefined;
+  const auth = authFrom(value.auth);
+  const origins = Array.isArray(value.origins)
+    ? value.origins.filter((origin): origin is string => typeof origin === "string" && origin !== "")
+    : undefined;
+  return {
+    mode: mode as PaginationMode,
+    ...(typeof value.param === "string" && value.param !== "" ? { param: value.param } : {}),
+    ...(countFrom(value.start) === undefined ? {} : { start: countFrom(value.start)! }),
+    ...(countFrom(value.pageSize) === undefined ? {} : { pageSize: countFrom(value.pageSize)! }),
+    ...(value.stop === "empty" || value.stop === "short" ? { stop: value.stop as PaginationStop } : {}),
+    ...(typeof value.cursor === "string" && value.cursor !== "" ? { cursor: value.cursor } : {}),
+    ...(typeof value.next === "string" && value.next !== "" ? { next: value.next } : {}),
+    ...(origins === undefined || origins.length === 0 ? {} : { origins }),
+    ...(auth === undefined ? {} : { auth }),
+    ...(countFrom(value.maxPages) === undefined ? {} : { maxPages: countFrom(value.maxPages)! }),
+    ...(countFrom(value.maxBytes) === undefined ? {} : { maxBytes: countFrom(value.maxBytes)! }),
+    ...(countFrom(value.retries) === undefined ? {} : { retries: countFrom(value.retries)! }),
+  };
+}
+
+/** A non-negative whole number a pagination key may hold; `undefined` for anything else. */
+function countFrom(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+/** The auth block, read from the schema-checked value; `undefined` when it names no environment variable. */
+function authFrom(value: unknown): ApiAuthConfig | undefined {
+  if (!isPlainObject(value) || typeof value.env !== "string" || value.env === "") return undefined;
+  return {
+    env: value.env,
+    ...(typeof value.header === "string" && value.header !== "" ? { header: value.header } : {}),
+    ...(typeof value.prefix === "string" ? { prefix: value.prefix } : {}),
+  };
 }
 
 /** Reads the three numeric limits a collection may set; a bad value falls back to the default. */

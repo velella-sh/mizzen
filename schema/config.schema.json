@@ -850,6 +850,15 @@
           "minLength": 1,
           "description": "Data file the records are read from, relative to the site root."
         },
+        "records": {
+          "type": "string",
+          "pattern": "^[^\\s.]+(?:\\.[^\\s.]+)*$",
+          "description": "Dot path to the record array inside a JSON API response, such as data.items. Setting it marks the source as a JSON API; mizzen data fetch stores the records as one list and a build reads that list."
+        },
+        "pagination": {
+          "$ref": "#/$defs/pagination",
+          "description": "How mizzen data fetch walks a paginated API. Unset: one request."
+        },
         "id": {
           "type": "string",
           "minLength": 1,
@@ -1532,6 +1541,105 @@
           "type": "integer",
           "minimum": 1,
           "description": "Largest value of one field, in characters. Default 100000."
+        }
+      }
+    },
+    "pagination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "description": "How mizzen data fetch walks a paginated API: the query parameter, the end condition, and the bounds of one fetch.",
+      "properties": {
+        "mode": {
+          "enum": [
+            "page",
+            "offset",
+            "cursor",
+            "next"
+          ],
+          "description": "page sends a page number, offset counts records, cursor passes a token, next follows a URL."
+        },
+        "param": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Query parameter for the page number, offset, or cursor. Default page, offset, or cursor."
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "page mode: the first page number. offset mode: the first offset. Default 1 for a page, 0 for an offset."
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Records the service returns per page; stop: short compares against it."
+        },
+        "stop": {
+          "enum": [
+            "empty",
+            "short"
+          ],
+          "description": "When a page or offset walk stops: empty on a page with no records, short below pageSize. Required for page and offset."
+        },
+        "cursor": {
+          "type": "string",
+          "pattern": "^[^\\s.]+(?:\\.[^\\s.]+)*$",
+          "description": "cursor mode: dot path in the response that holds the next cursor. Absent ends the walk."
+        },
+        "next": {
+          "type": "string",
+          "pattern": "^[^\\s.]+(?:\\.[^\\s.]+)*$",
+          "description": "next mode: dot path in the response that holds the next page URL. Absent ends the walk."
+        },
+        "origins": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^https?://[^/?#\\s]+/?$"
+          },
+          "description": "Origins a next-page URL may name. Default: the source URL's own origin."
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "env"
+          ],
+          "properties": {
+            "env": {
+              "type": "string",
+              "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+              "description": "Environment variable that holds the credential. Never written to the config, the lock, or an output."
+            },
+            "header": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9-]+$",
+              "description": "Header the credential is sent in. Default Authorization."
+            },
+            "prefix": {
+              "type": "string",
+              "description": "Text written before the credential, such as Bearer followed by a space. Default empty."
+            }
+          },
+          "description": "Where a fetched API's credential comes from, and how it is sent."
+        },
+        "maxPages": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Most pages one fetch may read. Default 50."
+        },
+        "maxBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Most bytes one fetch may read across every page. Default: the collection's limits.bytes."
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Most times one request is retried after a transient failure. Default 2."
         }
       }
     },
