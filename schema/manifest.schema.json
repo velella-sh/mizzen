@@ -13,6 +13,10 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "description": "The day the build pretended it was, when a derived value reads the as-of date. It is folded into `build.hash`; a site that uses no as-of date leaves it out and keeps its hash."
     },
+    "base": {
+      "type": "string",
+      "description": "The site base path this build was written for, `\"\"` at a domain root."
+    },
     "build": {
       "$ref": "#/$defs/build"
     },

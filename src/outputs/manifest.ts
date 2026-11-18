@@ -152,7 +152,7 @@ export const manifest: Output = {
             ...(site.preview.commit === undefined ? {} : { commit: site.preview.commit }),
             dataHash: dataHash(site),
           };
-    const json = `${JSON.stringify({ version: 1, ...(asOf === undefined ? {} : { asOf }), ...(site.config.analytics === undefined ? {} : { origins: siteOrigins(site) }), ...(preview === undefined ? {} : { preview }), pages }, null, 2)}\n`;
+    const json = `${JSON.stringify({ version: 1, base, ...(asOf === undefined ? {} : { asOf }), ...(site.config.analytics === undefined ? {} : { origins: siteOrigins(site) }), ...(preview === undefined ? {} : { preview }), pages }, null, 2)}\n`;
     return [{ path: FILE, contents: json }];
   },
 };
