@@ -15,8 +15,10 @@ node scripts/release-compat.ts --write-baseline fixtures/compat-0.2.2/baseline.j
 ```
 
 `test/compat-0.2.2.test.ts` builds the same site with the current source and compares it with the
-baseline. The only normalization is the engine version stamp in `agent.json`; every documented
-public output is compared byte for byte. A page that is added, removed, or changed fails the test.
+baseline. The only normalizations are the engine version stamp in `agent.json` and the two
+`pagefind/wasm.*.pagefind` binaries, which Pagefind builds per platform and are compared by
+presence only. Every other documented public output is compared byte for byte. A page that is
+added, removed, or changed fails the test.
 Do not regenerate the baseline to make it pass. A reviewed difference gets a reason in this file
 and in the 0.2.3 upgrade guide first.
 

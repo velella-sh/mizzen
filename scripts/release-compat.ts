@@ -27,6 +27,8 @@ const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const DEFAULT_FIXTURE = join(ROOT, "fixtures/compat-0.2.2");
 const TEST_THEME = join(ROOT, "fixtures/compat-0.2/theme");
 const TEXT = new Set([".html", ".json", ".md", ".txt", ".xml", ".csv", ".ndjson", ".yml", ".js", ".css"]);
+/** Pagefind's wasm is built per platform, so the same source produces different bytes on macOS and Linux. */
+const PLATFORM_BINARY = /^pagefind\/wasm\.[^.]+\.pagefind$/;
 
 /** What one build publishes, with the engine version normalized out of version-stamped JSON. */
 export interface ReleaseSnapshot {
@@ -88,7 +90,10 @@ export function snapshotOutput(out: string, engine: string): ReleaseSnapshot {
       } else {
         const key = relative(out, path).split(sep).join("/");
         const bytes = readFileSync(path);
-        if (TEXT.has(key.slice(key.lastIndexOf(".")))) {
+        if (PLATFORM_BINARY.test(key)) {
+          // Pagefind ships its wasm per platform; those bytes are not part of the engine's output contract.
+          files[key] = "platform";
+        } else if (TEXT.has(key.slice(key.lastIndexOf(".")))) {
           const text = bytes.toString("utf8");
           files[key] = sha256(text.replace(/"engine":\s*"[^"]*"/g, '"engine": "<version>"'));
           if (key.endsWith(".html")) {
