@@ -92,6 +92,63 @@ test("a build with an error does not write the lock", async () => {
   }
 });
 
+/** The sorted ids a build recorded, from the lock and from `blocks.json`. */
+function recordedIds(root: string, out: string): { lock: Record<string, string[]>; output: string[] } {
+  const lock = JSON.parse(readFileSync(join(root, BLOCKS_LOCK_FILE), "utf8")) as {
+    pages: Record<string, Record<string, number>>;
+  };
+  const blocks = JSON.parse(readFileSync(join(out, "blocks.json"), "utf8")) as {
+    blocks: Record<string, { file: string }>;
+  };
+  return {
+    lock: Object.fromEntries(Object.entries(lock.pages).map(([file, ids]) => [file, Object.keys(ids).sort()])),
+    output: Object.keys(blocks.blocks).sort(),
+  };
+}
+
+test("a paragraph and a heading edit keep their ids, and a lock without blocks still builds", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "model-blocks-keep-"));
+  const root = join(parent, "site");
+  const folder = join(parent, "out");
+  cpSync(FIXTURE, root, { recursive: true });
+  const file = join(root, "guide/blocks.md");
+  try {
+    const first = await build({ root, out: folder, themeRoot: THEME, defaultLayout: "doc", updateBlocks: true });
+    assert.deepEqual(first.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+    const before = recordedIds(root, folder);
+    assert.ok(before.lock["guide/blocks.md"]!.includes("intro"));
+    assert.ok(before.lock["guide/blocks.md"]!.includes("note"));
+
+    const source = readFileSync(file, "utf8");
+    writeFileSync(
+      file,
+      source
+        .replace("The heading above declares its own id.", "A changed sentence.")
+        .replace("## Automatic", "## Still automatic"),
+    );
+    const second = await build({ root, out: folder, themeRoot: THEME, defaultLayout: "doc", updateBlocks: true });
+    assert.deepEqual(second.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+    assert.deepEqual(recordedIds(root, folder), before, "every id survived the two edits");
+
+    const old = tree({
+      "mizzen.yml": "title: Old lock\n",
+      "a.md": "---\ntitle: A\n---\n# Title {#intro}\n\nBody.\n",
+      [BLOCKS_LOCK_FILE]: '{"version":1,"pages":{"a.md":{"intro":5}}}\n',
+    });
+    const oldOut = out();
+    try {
+      const result = await build({ root: old, out: oldOut, themeRoot: THEME, defaultLayout: "doc" });
+      assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+      assert.ok(recordedIds(old, oldOut).output.includes("intro"), "the build read the old lock");
+    } finally {
+      rmSync(old, { recursive: true, force: true });
+      rmSync(oldOut, { recursive: true, force: true });
+    }
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
 test("a list page two has no blocks, and no id repeats across the site", async () => {
   const root = tree({
     "mizzen.yml":
