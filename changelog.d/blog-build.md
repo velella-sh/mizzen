@@ -1,0 +1,1 @@
+- The build publishes the blog Atom feed beside the archive, skipping drafts.

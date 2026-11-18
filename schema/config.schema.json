@@ -104,6 +104,70 @@
       "additionalProperties": { "$ref": "#/$defs/calendar" },
       "description": "Calendars of collections' dated records by name, written as .ics files under calendars/. Default {}."
     },
+    "blog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "posts"
+      ],
+      "properties": {
+        "posts": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Folder that holds the posts, relative to the site root. A post is a Markdown file with `date` and `author` in its front matter; setting this key turns the blog on."
+        },
+        "route": {
+          "type": "string",
+          "pattern": "^[^/]+$",
+          "default": "blog",
+          "description": "Public prefix of every blog URL: one URL segment, without a slash. Default blog."
+        },
+        "archive": {
+          "type": "string",
+          "pattern": "^[^/]+$",
+          "default": "archive",
+          "description": "Archive route under the prefix: one URL segment, without a slash. Default archive."
+        },
+        "authors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Write one page per author under the prefix. Default true."
+        },
+        "feed": {
+          "type": "boolean",
+          "default": true,
+          "description": "Write the blog's Atom feed. Default true."
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "description": "Posts per index page, a whole number of at least 1. Default 10."
+        }
+      },
+      "description": "The blog: a folder of dated posts, with an archive, one page per author, and a feed."
+    },
+    "apiReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "One pinned OpenAPI 3.1 or 3.0 document, YAML or JSON, relative to the site root. A build reads this file and nothing over the network."
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^/(?:[^./][^/]*/)*$",
+          "default": "/reference/",
+          "description": "URL path the reference lives under, starting and ending with `/`. Default /reference/."
+        }
+      },
+      "description": "A static, searchable reference built from one OpenAPI document."
+    },
     "defaults": {
       "type": "array",
       "default": [],

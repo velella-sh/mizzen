@@ -120,6 +120,11 @@ export interface Page {
    * files are current. Read from the review lock and the files as they are, never from git.
    */
   readonly stale?: PageStale;
+  /**
+   * URL of the page this copy repeats, when version routing wrote one source at two URLs; unset on the copy that owns the
+   * canonical URL and on every page of a site without version settings.
+   */
+  readonly aliasOf?: string;
 }
 
 /** A record the URL lock published that its collection no longer holds. */
