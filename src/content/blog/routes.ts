@@ -7,23 +7,13 @@
  * same order on every build. A draft is validated and never gets a route, a place in the archive, or an author page.
  */
 import { basename, extname } from "node:path";
-import type { Diagnostic, SourcePos } from "../../contracts/index.ts";
+import type { BlogConfig, Diagnostic, SourcePos } from "../../contracts/index.ts";
 import { keyPositionOf } from "../../data/lists.ts";
 import { slugOf } from "../../data/slug.ts";
 import { sortDiagnostics } from "../../pipeline/diagnostics.ts";
 import { parseFrontMatter } from "../frontmatter.ts";
 
-/** The `blog` block of the site config, as `docs/blog.md` writes it. */
-export interface BlogConfig {
-  /** Folder that holds the posts, relative to the site root. */
-  readonly posts: string;
-  /** Public prefix of every blog URL. Default `blog`. */
-  readonly route?: string;
-  /** Archive route under the prefix. Default `archive`. */
-  readonly archive?: string;
-  /** Write one page per author. Default `true`. */
-  readonly authors?: boolean;
-}
+export type { BlogConfig } from "../../contracts/index.ts";
 
 /** One post source to plan. */
 export interface BlogPostSource {

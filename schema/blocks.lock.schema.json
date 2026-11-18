@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/blocks.lock.schema.json",
+  "title": "Mizzen block lock",
+  "description": "Every page block's stable identifier. mizzen build --update-blocks writes it; its presence turns block identifiers on.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "pages"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The format version; only 1 exists."
+    },
+    "pages": {
+      "type": "object",
+      "description": "Each page's block ids, mapped to the 1-based line the block started at when the lock was written.",
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+        "additionalProperties": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "blocks": {
+      "type": "object",
+      "description": "Each block id with the page and normalized-source hash it was recorded with, so an edit or move can keep it.",
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "fingerprint"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "The page the block was on, as pages names it."
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "A hash of the block's normalized source."
+          },
+          "anchor": {
+            "type": "string",
+            "description": "The heading's rendered anchor at the last build."
+          },
+          "aliases": {
+            "type": "array",
+            "description": "Anchors the heading had before an edit, kept so an old link still lands on it.",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "moves": {
+      "type": "object",
+      "description": "Each block's last move between pages, by id.",
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "The page the block was recorded on."
+          },
+          "to": {
+            "type": "string",
+            "description": "The page the block is on now."
+          }
+        }
+      }
+    }
+  }
+}

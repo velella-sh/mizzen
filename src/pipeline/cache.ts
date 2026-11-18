@@ -41,6 +41,7 @@ import { expandIncludes } from "../content/includes.ts";
 import { version } from "../index.ts";
 import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
 import { URLS_LOCK_FILE } from "../data/urls-lock.ts";
+import { BLOCKS_LOCK_FILE } from "../blocks/lock.ts";
 import { NETWORK_LOCK_FILE } from "../network/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
 import { historyPath } from "../data/changes/format.ts";
@@ -512,6 +513,8 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   const runtime = options.runtimeVersion ?? `${process.versions.node}/${process.versions.icu ?? ""}`;
   const themeFiles = [...new Set(options.themeFiles ?? [])].sort(byCodePoint);
   const inputs: KeyInput[] = [{ label: "config", path: join(options.root, CONFIG_FILE) }];
+  // The block lock turns block ids on and decides each page's `blocks`, so its bytes shape the output; its absence too.
+  inputs.push({ label: "blocks-lock", path: join(options.root, BLOCKS_LOCK_FILE) });
   // The locked network decides the base, the project links, and what themes see, so its bytes are part of the key.
   if (options.config.network !== undefined) inputs.push({ label: "network-lock", path: join(options.root, NETWORK_LOCK_FILE) });
 
