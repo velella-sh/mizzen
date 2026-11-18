@@ -211,8 +211,8 @@ test("a record count dropping by exactly maxDrop is clean", async () => {
   assert.deepEqual(report.diagnostics, []);
 });
 
-/** A site with one threshold rule on `price`, with `bounds` as the rule's remaining YAML lines. */
-function thresholdSite(records: string, bounds = "      min: 0\n      max: 10"): Record<string, string> {
+/** A site with one `kind` rule on `price`, with `bounds` as the rule's remaining YAML lines. */
+function rangeSite(kind: "threshold" | "outlier", records: string, bounds = "      min: 0\n      max: 10"): Record<string, string> {
   return {
     "mizzen.yml": [
       "collections:",
@@ -220,7 +220,7 @@ function thresholdSite(records: string, bounds = "      min: 0\n      max: 10"):
       "    source: _data/items.yml",
       "quality:",
       "  rules:",
-      "    - kind: threshold",
+      `    - kind: ${kind}`,
       "      collection: items",
       "      fields: [price]",
       bounds,
@@ -231,13 +231,13 @@ function thresholdSite(records: string, bounds = "      min: 0\n      max: 10"):
 }
 
 test("a value inside the threshold is clean", async () => {
-  const { diagnostics, report } = await check(thresholdSite("- id: a\n  price: 5\n- id: b\n  price: 10\n- id: c\n  price: 0\n"));
+  const { diagnostics, report } = await check(rangeSite("threshold", "- id: a\n  price: 5\n- id: b\n  price: 10\n- id: c\n  price: 0\n"));
   assert.deepEqual(diagnostics, []);
   assert.deepEqual(report.findings, []);
 });
 
 test("a value outside the threshold reports the value and its bounds", async () => {
-  const { config, report } = await check(thresholdSite("- id: a\n  price: -1\n- id: b\n  price: 12\n- id: c\n  price: high\n"));
+  const { config, report } = await check(rangeSite("threshold", "- id: a\n  price: -1\n- id: b\n  price: 12\n- id: c\n  price: high\n"));
   assert.deepEqual(config.quality?.rules, [{ kind: "threshold", collection: "items", fields: ["price"], min: 0, max: 10 }]);
   assert.deepEqual(report.findings, [
     {
@@ -268,11 +268,36 @@ test("a value outside the threshold reports the value and its bounds", async () 
 });
 
 test("a threshold rule without bounds is a diagnostic, not a crash", async () => {
-  const { config, report } = await check(thresholdSite("- id: a\n  price: 5\n", ""));
+  const { config, report } = await check(rangeSite("threshold", "- id: a\n  price: 5\n", ""));
   assert.deepEqual(config.quality?.rules, [{ kind: "threshold", collection: "items", fields: ["price"] }]);
   assert.deepEqual(report.findings, []);
   assert.deepEqual(report.diagnostics.map((diagnostic) => diagnostic.id), ["data.quality-bounds"]);
   assert.match(report.diagnostics[0]!.message, /needs min, max, or both/);
+});
+
+test("a value inside the outlier range is clean", async () => {
+  const { diagnostics, report } = await check(rangeSite("outlier", "- id: a\n  price: 5\n- id: b\n  price: 10\n"));
+  assert.deepEqual(diagnostics, []);
+  assert.deepEqual(report.findings, []);
+});
+
+test("an outlier reports the value and the range rule", async () => {
+  const { config, report } = await check(rangeSite("outlier", "- id: a\n  price: 12\n- id: b\n  price: high\n"));
+  assert.deepEqual(config.quality?.rules, [{ kind: "outlier", collection: "items", fields: ["price"], min: 0, max: 10 }]);
+  assert.deepEqual(report.findings, [
+    {
+      id: "data.quality.outlier.items.a.price",
+      kind: "outlier",
+      severity: "warning",
+      collection: "items",
+      record: "a",
+      field: "price",
+      value: 12,
+      min: 0,
+      max: 10,
+      message: 'Record "a" of collection "items" has field "price" = 12, outside the range rule (min 0, max 10).',
+    },
+  ], "the non-numeric value of b is skipped");
 });
 
 test("a coverage rule without a baseline is a diagnostic", async () => {

@@ -434,7 +434,7 @@ function snapshotFrom(value: unknown): SnapshotConfig | undefined {
   return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
 }
 
-const QUALITY_KINDS: readonly QualityRuleKind[] = ["completeness", "coverage", "count", "threshold"];
+const QUALITY_KINDS: readonly QualityRuleKind[] = ["completeness", "coverage", "count", "threshold", "outlier"];
 
 function qualityKind(value: unknown): QualityRuleKind | undefined {
   return QUALITY_KINDS.find((kind) => kind === value);

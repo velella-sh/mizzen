@@ -52,11 +52,11 @@ export interface QualityFinding {
   readonly drop?: number;
   /** For coverage and count: the rule's limit. */
   readonly maxDrop?: number;
-  /** For threshold: the value the record holds. */
+  /** For threshold and outlier: the value the record holds. */
   readonly value?: number;
-  /** For threshold: the lowest value the rule allows. */
+  /** For threshold and outlier: the lowest value the rule allows. */
   readonly min?: number;
-  /** For threshold: the highest value the rule allows. */
+  /** For threshold and outlier: the highest value the rule allows. */
   readonly max?: number;
   /** One line a reader can act on. */
   readonly message: string;
@@ -348,16 +348,17 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
       continue;
     }
 
-    if (rule.kind === "threshold") {
+    if (rule.kind === "threshold" || rule.kind === "outlier") {
       if (rule.min === undefined && rule.max === undefined) {
         diagnostics.push({
           id: "data.quality-bounds",
           severity: "error",
-          message: `The threshold rule for collection "${rule.collection}" needs min, max, or both.`,
+          message: `The ${rule.kind} rule for collection "${rule.collection}" needs min, max, or both.`,
           help: "Write min and max in mizzen.yml: the inclusive numbers the field must stay between.",
         });
         continue;
       }
+      const noun = rule.kind === "threshold" ? "threshold" : "range rule";
       for (const record of checked) {
         for (const field of rule.fields ?? fieldsOf(checked)) {
           const value = numberAt(record.fields, field);
@@ -367,7 +368,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
           const above = rule.max !== undefined && value > rule.max;
           if (!below && !above) continue;
           findings.push({
-            id: `data.quality.threshold.${rule.collection}.${record.id}.${field}`,
+            id: `data.quality.${rule.kind}.${rule.collection}.${record.id}.${field}`,
             kind: rule.kind,
             severity,
             collection: rule.collection,
@@ -376,7 +377,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
             value,
             ...(rule.min === undefined ? {} : { min: rule.min }),
             ...(rule.max === undefined ? {} : { max: rule.max }),
-            message: `Record "${record.id}" of collection "${rule.collection}" has field "${field}" = ${value}, outside the threshold (${boundsText(rule.min, rule.max)}).`,
+            message: `Record "${record.id}" of collection "${rule.collection}" has field "${field}" = ${value}, outside the ${noun} (${boundsText(rule.min, rule.max)}).`,
           });
         }
       }
