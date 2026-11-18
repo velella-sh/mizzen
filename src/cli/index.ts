@@ -12,6 +12,7 @@ import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts"
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
+import { dataSchema } from "../data/schema-evolution.ts";
 import { verifyData } from "../data/verify.ts";
 import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
@@ -81,6 +82,7 @@ Commands:
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
+  data schema [dir]          Report the fields each schema added or removed since its recorded baseline
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -105,7 +107,7 @@ Commands:
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for edit apply, edit verify, urls check, and published-site check; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
   --domain <host>      The one host published-site check may request (default: the sitemap's host)
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
@@ -244,6 +246,12 @@ type DataVerifyOpts = {
   readonly root: string;
 };
 
+type DataSchemaOpts = {
+  readonly command: "data-schema";
+  readonly root: string;
+  readonly format: "text" | "json";
+};
+
 type InitOpts = {
   readonly command: "init";
   readonly root: string;
@@ -334,6 +342,7 @@ type Parsed =
         | DataFetchOpts
         | DataSnapshotOpts
         | DataVerifyOpts
+        | DataSchemaOpts
         | DataChangesOpts
         | UrlsCheckOpts
         | InitOpts
@@ -528,11 +537,30 @@ function parseDataChanges(rest: readonly string[]): Parsed {
   return { options: { command: "data-changes", root: root ?? ".", ...(name === undefined ? {} : { name }), write, check, ...(from === undefined ? {} : { from }) } };
 }
 
+/** Parses `data schema [dir] [--format text|json]`. */
+function parseDataSchema(rest: readonly string[]): Parsed {
+  let root: string | undefined;
+  let format: "text" | "json" = "text";
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--format") {
+      const raw = rest[++i];
+      if (raw !== "text" && raw !== "json") return { error: `--format for data schema must be text or json, not ${raw ?? ""}` };
+      format = raw;
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  return { options: { command: "data-schema", root: root ?? ".", format } };
+}
+
 /** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
-  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify" };
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify, schema" };
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
+  if (subcommand === "schema") return parseDataSchema(rest);
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
   if (subcommand === "changes") return parseDataChanges(rest);
   if (subcommand === "verify") {
@@ -1296,6 +1324,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     try {
       const result = await dataSnapshot({ root, name: options.name, ...(options.allowDirty ? { allowDirty: true } : {}) });
       for (const message of result.messages) log(message);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-schema") {
+    try {
+      const result = await dataSchema({ root, format: options.format });
+      write(result.output);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
     } catch (err) {

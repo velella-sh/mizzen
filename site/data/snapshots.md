@@ -44,8 +44,8 @@ The lock keeps one entry per collection under `snapshots`. A lock without snapsh
 
 ## Compare a schema with the baseline
 
-`mizzen data schema` compares each collection's current schema with the one its snapshot recorded: the fields it added,
-required or optional, the fields it removed or renamed, type changes, and enum values it no longer accepts.
+`mizzen data schema` compares each collection's current schema with the one its snapshot recorded and names the fields
+the schema added or removed, with the baseline version and the current schema's version and file.
 
 ```bash
 mizzen data schema              # every collection, as text
