@@ -80,7 +80,7 @@ export const starlightImporter: Importer = {
     const root = `${srcDir.replace(/^\.\//, "").replace(/\/+$/, "")}/${DOCS}`;
     const under = (path: string): boolean => path.startsWith(`${root}/`);
 
-    if (!source.files.some(under)) {
+    if (configPath !== undefined && !source.files.some(under)) {
       diagnostics.push(error("import.content-root", `no ${root} folder`, configPath));
     }
 
