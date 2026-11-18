@@ -6,8 +6,10 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { mkdocsImporter } from "../../src/import/mkdocs/index.ts";
 import { readImportSource } from "../../src/import/source.ts";
+import { parse } from "yaml";
 
 const FIXTURE = fileURLToPath(new URL("../../fixtures/import-mkdocs/basic", import.meta.url));
+const FILES = fileURLToPath(new URL("../../fixtures/import-mkdocs/files", import.meta.url));
 
 test("mkdocs reads the pages and assets under docs_dir", async () => {
   const outcome = await mkdocsImporter.import(readImportSource(FIXTURE));
@@ -36,4 +38,29 @@ test("mkdocs reports a docs_dir that names no folder", async () => {
     [["import.docs-dir", "error", "mkdocs.yml", 2]],
   );
   assert.deepEqual(outcome.pages, []);
+});
+
+test("mkdocs keeps the nav order, nested groups, and external links", async () => {
+  const outcome = await mkdocsImporter.import(readImportSource(FIXTURE));
+  assert.ok(outcome.navigation);
+  assert.equal(outcome.navigation.source, "mkdocs.yml");
+  assert.deepEqual(parse(outcome.navigation.contents), {
+    main: [
+      { title: "Home", url: "/" },
+      { title: "Guide", children: [{ title: "Guide", url: "/guide/page/" }] },
+      { title: "External", url: "https://example.com/" },
+    ],
+  });
+});
+
+test("use_directory_urls false maps pages and nav links to .html URLs", async () => {
+  const outcome = await mkdocsImporter.import(readImportSource(FILES));
+  assert.equal(outcome.urls, "files");
+  assert.ok(outcome.navigation);
+  assert.deepEqual(parse(outcome.navigation.contents), {
+    main: [
+      { title: "Home", url: "/index.html" },
+      { title: "Other", url: "/guide/page.html" },
+    ],
+  });
 });

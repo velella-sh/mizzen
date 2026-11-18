@@ -182,7 +182,7 @@ export async function runImport(
   const source = readImportSource(resolve(root));
   const outcome = await importer.import(source);
   const { files } = inventoryOf(source.files, outcome.files);
-  const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config);
+  const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.urls);
   const links = rewriteLinks(outcome.pages, mappings);
   const found = [...outcome.diagnostics, ...diagnostics, ...links.diagnostics];
   const accuracy = accuracyReport(links.pages, mappings, found);

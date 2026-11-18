@@ -5,3 +5,4 @@ nav:
   - Home: index.md
   - Guide:
       - guide/page.md
+  - External: https://example.com/
