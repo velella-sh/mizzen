@@ -20,6 +20,7 @@ import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
+import { referencesUsage, runReferences } from "./references.ts";
 import { runDocsVersion } from "./docs-version.ts";
 import { runImport } from "./import.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
@@ -40,7 +41,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "references", "stale", "urls", "verify", "versions", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -102,6 +103,8 @@ Commands:
   network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
   published-site check      Check a published site from --sitemap <url>: status, canonical URL, redirects
+  references check <file|-> [dir]
+                            Resolve a JSON array of stored block references: resolved, removed, or unknown
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   urls check [dir]          Compare record page URLs with urls.lock.json
@@ -316,6 +319,11 @@ type StaleOpts = {
   readonly args: readonly string[];
 };
 
+type ReferencesOpts = {
+  readonly command: "references";
+  readonly args: readonly string[];
+};
+
 type VersionsOpts = {
   readonly command: "versions";
   readonly args: readonly string[];
@@ -395,6 +403,7 @@ type Parsed =
         | McpOpts
         | NetworkOpts
         | PublishedSiteOpts
+        | ReferencesOpts
         | StaleOpts
         | VersionsOpts;
     };
@@ -901,6 +910,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "stale", args: rest } };
   }
+  if (command === "references") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "references", args: rest } };
+  }
   if (command === "versions") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "versions", args: rest } };
@@ -1235,6 +1248,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "stale") {
     try {
       return await runStale(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "references") {
+    try {
+      return await runReferences(options.args, { write, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
