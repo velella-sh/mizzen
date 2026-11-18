@@ -91,7 +91,7 @@ test("parseArgs: edit verify takes a proof, a site root, --doctor, and --format"
   assert.equal("error" in parseArgs(["edit", "verify", "a", "b"]), true);
   assert.match(usage, /edit verify <proof\.json>/);
   assert.match(usage, /--doctor/);
-  assert.match(usage, /text or json for edit apply, edit verify, urls check, and published-site check/);
+  assert.match(usage, /text or json for data schema, edit apply, edit verify, urls check, and published-site check/);
 });
 
 test("an untouched edit exits 0 and names no file", async () => {

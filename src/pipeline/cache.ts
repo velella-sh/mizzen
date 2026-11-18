@@ -32,7 +32,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, stat, writ
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { CONFIG_FILE } from "../config/load.ts";
-import type { Diagnostic, SiteConfig } from "../contracts/index.ts";
+import type { Diagnostic, PreviewPolicy, SiteConfig } from "../contracts/index.ts";
 import { snippetSources } from "../content/code-snippets/dependencies.ts";
 import { discover } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
@@ -108,6 +108,10 @@ export interface CacheKeyOptions {
   readonly stale?: string;
   /** The digest of the site's plugin declarations and declared inputs; empty or absent for a site without plugins. */
   readonly pluginKey?: string;
+  /** The preview policy; a preview build writes different head tags, so it never shares a normal build's entry. */
+  readonly preview?: PreviewPolicy;
+  /** The public build a preview is compared with, by its build hash; the diff report is part of the entry. */
+  readonly baseline?: string;
 }
 
 /** The file list and diagnostics of a cache hit. */
@@ -571,6 +575,11 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   // The config values matter as well as the file: a missing config takes its title from the folder name.
   hash.update(`config\0${canonicalJson(options.config)}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
+  // A preview changes every page's robots and canonical, so its pages are never the ones a normal build rendered. The
+  // commit names the report the entry holds, so a preview of another commit is never answered by this one.
+  hash.update(`preview\0${options.preview?.canonicalBase ?? ""}\0${options.preview?.commit ?? ""}\0`);
+  // The diff report an entry holds names the public build it compared, so another baseline must not reuse it.
+  hash.update(`baseline\0${options.baseline ?? ""}\0`);
   hash.update(`themeFiles\0${themeFiles.join("\0")}\0`);
   // A plugin's version, settings, declared inputs, and code file shape its output; its digest covers them all.
   hash.update(`plugins\0${options.pluginKey ?? ""}\0`);
@@ -634,6 +643,8 @@ export interface RenderSettingsOptions {
   readonly runtimeVersion?: string | undefined;
   /** The digest of the site's plugin declarations and declared inputs; a plugin change always retires every render. */
   readonly pluginKey?: string | undefined;
+  /** The preview policy; a preview changes every page's head, so its pages cannot come from a normal build's cache. */
+  readonly preview?: PreviewPolicy | undefined;
   /**
    * The site's shape without its records' fields: every page's URL and title, the navigation, and each collection's
    * record ids. When it is given, the source bytes of a collection are not part of the key, because a record page is
@@ -724,6 +735,7 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   // and no other.
   hash.update(`config\0${canonicalJson({ ...options.config, asOf: undefined })}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
+  hash.update(`preview\0${options.preview?.canonicalBase ?? ""}\0`);
   if (options.recordShape !== undefined) hash.update(`recordShape\0${options.recordShape}\0`);
   // A model hook can change site data every page reads, so a plugin change retires every render.
   hash.update(`plugins\0${options.pluginKey ?? ""}\0`);
