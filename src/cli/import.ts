@@ -14,11 +14,12 @@ import { CONFIG_DESTINATION, buildMappings, type ImportMapping } from "../import
 import { generateProject } from "../import/generate.ts";
 import { rewriteLinks } from "../import/links.ts";
 import { plainImporter } from "../import/plain.ts";
+import { starlightImporter } from "../import/starlight/importer.ts";
 import { inventoryOf } from "../import/inventory.ts";
 import { readImportSource } from "../import/source.ts";
 
 /** The importers `mizzen import <name>` can select. */
-export const IMPORTERS: readonly Importer[] = [plainImporter];
+export const IMPORTERS: readonly Importer[] = [plainImporter, starlightImporter];
 
 /** What the command prints to. */
 export interface ImportIo {
