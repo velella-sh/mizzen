@@ -3,6 +3,7 @@ import { access, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/load.ts";
+import { normalizeBase } from "../content/permalink.ts";
 import { discover } from "../content/discover.ts";
 import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, Site } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
@@ -61,6 +62,11 @@ export interface BuildOptions {
    * `--as-of today` is resolved by the CLI before it gets here.
    */
   readonly asOf?: string;
+  /**
+   * The site `base` this build is written under, from `--base`: `/preview/pr-1` builds the same pages and assets under
+   * that path, so each preview gets its own. Wins over the config's `base`.
+   */
+  readonly basePath?: string;
 }
 
 /** What {@link build} wrote and found. */
@@ -233,10 +239,15 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   }
 
   // The config is read before the cache so the source folder is known without building the model.
+  const basePath = options.basePath === undefined ? undefined : normalizeBase(options.basePath);
   const loadedConfig = loadConfig(root);
   const loaded = {
     ...loadedConfig,
-    config: options.asOf === undefined ? loadedConfig.config : { ...loadedConfig.config, asOf: options.asOf },
+    config: {
+      ...loadedConfig.config,
+      ...(options.asOf === undefined ? {} : { asOf: options.asOf }),
+      ...(basePath === undefined ? {} : { base: basePath }),
+    },
   };
   const sourceDir = resolve(root, loaded.config.source);
   assertOutOutsideSource(sourceDir, out);
@@ -298,6 +309,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     plugins: code.plugins,
     ...(options.updateUrls === true ? { updateUrls: true } : {}),
     ...(options.asOf === undefined ? {} : { asOf: options.asOf }),
+    ...(basePath === undefined ? {} : { base: basePath }),
   });
   for (const d of model.diagnostics) diagnostics.report(d);
 

@@ -123,7 +123,7 @@ Options:
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
-  --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
+  --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base
@@ -158,6 +158,7 @@ type BuildOpts = {
   readonly workers?: number;
   readonly updateUrls?: boolean;
   readonly asOf?: string;
+  readonly basePath?: string;
 };
 
 type CheckOpts = {
@@ -785,6 +786,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let packFormat: PackFormat | undefined;
   let updateUrls = false;
   let asOf: string | undefined;
+  let basePath: string | undefined;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -861,6 +863,9 @@ export function parseArgs(args: readonly string[]): Parsed {
       } else if (arg === "--update-urls") {
         if (command !== "build") return { error: "--update-urls is only valid for build" };
         updateUrls = true;
+      } else if (arg === "--base") {
+        if (command !== "build") return { error: "--base is only valid for build" };
+        basePath = value();
       } else if (arg === "--topic") {
         if (command !== "pack") return { error: "--topic is only valid for pack" };
         const raw = value().trim();
@@ -903,6 +908,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(workers === undefined ? {} : { workers }),
         ...(updateUrls ? { updateUrls: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
+        ...(basePath === undefined ? {} : { basePath }),
       },
     };
   }
@@ -1410,6 +1416,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.workers === undefined ? {} : { workers: options.workers }),
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
+        ...(options.basePath === undefined ? {} : { basePath: options.basePath }),
       });
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);
       return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;

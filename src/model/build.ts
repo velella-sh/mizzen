@@ -18,7 +18,7 @@ import { parseFrontMatter } from "../content/frontmatter.ts";
 import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
-import { permalink } from "../content/permalink.ts";
+import { normalizeBase, permalink } from "../content/permalink.ts";
 import { resolveTitle } from "../content/title.ts";
 import type { Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
@@ -59,6 +59,8 @@ export interface BuildModelOptions {
   readonly updateUrls?: boolean;
   /** The as-of date from `--as-of`, `YYYY-MM-DD`; it wins over the config's `asOf`. */
   readonly asOf?: string;
+  /** The site `base` from `--base`; it wins over the config's `base`, so one source builds under a preview path. */
+  readonly base?: string;
   /** The clock the stale-lock warning reads; a test sets it. Default: `Date.now`. */
   readonly now?: () => number;
 }
@@ -172,6 +174,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       config = { ...config, base };
     }
   }
+  // A preview build puts the same pages under its own path, so the flag wins over both the config and the network.
+  if (options.base !== undefined) config = { ...config, base: normalizeBase(options.base) };
   const sourceDir = resolve(siteRoot, config.source);
   // Positions are relative to the repository root, so a site in `docs/` names `docs/…` paths. Without a repository
   // folder they stay relative to the site root, which is always stable wherever the site is checked out.
