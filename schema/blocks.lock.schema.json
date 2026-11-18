@@ -36,6 +36,15 @@
           "fingerprint": {
             "type": "string",
             "description": "A hash of the block's normalized source."
+          },
+          "anchor": {
+            "type": "string",
+            "description": "The heading's rendered anchor at the last build."
+          },
+          "aliases": {
+            "type": "array",
+            "description": "Anchors the heading had before an edit, kept so an old link still lands on it.",
+            "items": { "type": "string" }
           }
         }
       }

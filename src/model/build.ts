@@ -23,7 +23,7 @@ import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
 import { permalink } from "../content/permalink.ts";
 import { resolveTitle } from "../content/title.ts";
-import type { Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
+import type { Block, Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { applyRecordLinks } from "../markdown/plugins/links.ts";
@@ -31,6 +31,7 @@ import { navFromFolders, type FolderPage } from "../nav/from-folders.ts";
 import { loadNavigation } from "../nav/from-yaml.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
 import { pageCache, parseMarkdownWithCache, type PageCache } from "../pipeline/page-cache.ts";
+import { formatSpan } from "../source/spans.ts";
 import { runContentHooks } from "../plugins/hooks.ts";
 import { runMarkdownHooks, runValidateHooks } from "../plugins/content-extension.ts";
 import { applyProjectLinks } from "../links/project-link.ts";
@@ -98,6 +99,31 @@ function repositoryFolder(dir: string | undefined): string {
 /** The file position, relative to the repository root, a path under `source` has. */
 function posOf(file: string, line: number, endLine = line): SourcePos {
   return { file, line, column: 1, endLine, endColumn: 1 };
+}
+
+/** The attribute value an alias anchor needs: a slug is safe, a declared heading id may not be. */
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Puts each earlier anchor back into a page's HTML: an empty `<span id>` just inside the opening tag of the block that
+ * carries the alias, found by the block's exact `data-src` span. A block whose element the HTML does not hold is left
+ * alone; the alias is then only a lock entry.
+ */
+function withAliasAnchors(html: string, blocks: readonly Block[]): string {
+  let result = html;
+  for (const block of blocks) {
+    const aliases = (block.aliases ?? []).filter((alias) => alias !== block.anchor);
+    if (aliases.length === 0) continue;
+    const src = `data-src="${formatSpan(block.pos)}"`;
+    const at = result.indexOf(src);
+    const close = at < 0 ? -1 : result.indexOf(">", at + src.length);
+    if (at < 0 || close < 0) continue;
+    const spans = aliases.map((alias) => `<span id="${escapeAttr(alias)}"></span>`).join("");
+    result = `${result.slice(0, close + 1)}${spans}${result.slice(close + 1)}`;
+  }
+  return result;
 }
 
 /** Headings with their positions, from the top-level `h` nodes and the expanded body's source spans. */
@@ -244,6 +270,23 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
         continue;
       }
       blockIds.set(block.id, block.pos);
+    }
+    const anchors = new Map<string, Block>();
+    for (const block of page.blocks ?? []) if (block.anchor !== undefined) anchors.set(block.anchor, block);
+    const aliasOwners = new Map<string, Block>();
+    for (const block of page.blocks ?? []) {
+      for (const alias of block.aliases ?? []) {
+        const earlier = aliasOwners.get(alias) ?? anchors.get(alias);
+        if (earlier !== undefined && earlier !== block) {
+          diagnostics.error(
+            "blocks.alias-conflict",
+            `The anchor ${JSON.stringify(alias)} is already taken on ${page.source.file}: ${earlier.pos.file}:${earlier.pos.line} and ${block.pos.file}:${block.pos.line}.`,
+            { pos: block.pos, help: "Rename one of the two headings so an old link still lands on the right one." },
+          );
+          continue;
+        }
+        aliasOwners.set(alias, block);
+      }
     }
     pages.push(page);
     if (page.kind === "doc" && page.record === undefined) {
@@ -396,7 +439,9 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     : undefined;
   for (const entry of staged) {
     const blocks = matchedBlocks?.get(entry.page.source.file);
-    const page = blocks === undefined ? entry.page : { ...entry.page, blocks };
+    const page = blocks === undefined
+      ? entry.page
+      : { ...entry.page, blocks, html: withAliasAnchors(entry.page.html, blocks) };
     add(page, entry.path, entry.order);
     // A page a duplicate URL kept out of the model declares no list either.
     if (entry.list !== undefined && pages.at(-1) === page) {

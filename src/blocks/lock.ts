@@ -21,10 +21,14 @@ import { canonicalJson } from "../data/lock.ts";
 /** The block lock's file name at a site root. */
 export const BLOCKS_LOCK_FILE = "blocks.lock.json";
 
-/** One recorded block: the page it was on and a hash of its normalized source. */
+/** One recorded block: the page it was on and a hash of its normalized source, plus a heading's anchors. */
 export interface RecordedBlock {
   readonly file: string;
   readonly fingerprint: string;
+  /** The heading's rendered anchor at the last build. */
+  readonly anchor?: string;
+  /** Anchors the heading had before an edit, sorted. */
+  readonly aliases?: readonly string[];
 }
 
 /** The whole lock file. */
@@ -110,7 +114,24 @@ export async function writeBlocksLock(root: string, lock: BlocksLock): Promise<v
   await writeFile(join(root, BLOCKS_LOCK_FILE), blocksLockText(lock));
 }
 
-/** The lock a clean build would write: every page's ids and lines, each block's fingerprint, and every move. */
+/**
+ * A block's recorded anchor after a build: the anchor it has now, and every earlier one it kept, sorted. A heading
+ * whose anchor changed since the last build keeps the old one as an alias, so an old link still lands on it.
+ */
+export function recordedAnchors(
+  previous: RecordedBlock | undefined,
+  anchor: string | undefined,
+): { readonly anchor?: string; readonly aliases?: readonly string[] } {
+  const aliases = new Set(previous?.aliases);
+  if (previous?.anchor !== undefined && anchor !== undefined && previous.anchor !== anchor) aliases.add(previous.anchor);
+  const sorted = [...aliases].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  return {
+    ...(anchor === undefined ? {} : { anchor }),
+    ...(sorted.length === 0 ? {} : { aliases: sorted }),
+  };
+}
+
+/** The lock a clean build would write: every page's ids and lines, each block's fingerprint and anchors, and every move. */
 export function blocksLockOf(pages: readonly Page[], previous?: BlocksLock): BlocksLock {
   const locked: Record<string, Record<string, number>> = {};
   const blocks: Record<string, RecordedBlock> = {};
@@ -120,7 +141,13 @@ export function blocksLockOf(pages: readonly Page[], previous?: BlocksLock): Blo
     const ids: Record<string, number> = {};
     for (const block of page.blocks) {
       ids[block.id] = block.pos.line;
-      if (block.fingerprint !== undefined) blocks[block.id] = { file: page.source.file, fingerprint: block.fingerprint };
+      if (block.fingerprint !== undefined) {
+        blocks[block.id] = {
+          file: page.source.file,
+          fingerprint: block.fingerprint,
+          ...recordedAnchors(previous?.blocks?.[block.id], block.anchor),
+        };
+      }
       const from = previous?.blocks?.[block.id]?.file;
       if (from !== undefined && from !== page.source.file) moves[block.id] = { from, to: page.source.file };
     }

@@ -99,6 +99,10 @@ export interface Block {
   readonly fingerprint?: string;
   /** True when the source declares the id, so matching never replaces it. */
   readonly declared?: boolean;
+  /** The heading's rendered anchor, which an edit can change while the id stays. */
+  readonly anchor?: string;
+  /** Anchors this block had before a heading edit, so an old link still lands here. */
+  readonly aliases?: readonly string[];
 }
 
 /** One page of the site model. */

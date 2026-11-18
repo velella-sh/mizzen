@@ -117,10 +117,12 @@ export function blocksOf(options: BlocksOfOptions): BlockAssignment {
     if (declared !== undefined && pending !== undefined) reportUnused(pending);
     pending = undefined;
     const source = sourceOf(markdown, node, bodyLine) ?? "";
+    const anchor = node.type === "heading" ? (node.data as { readonly id?: string } | undefined)?.id : undefined;
     blocks.push({
       id: id ?? autoBlockId(file, source),
       fingerprint: blockFingerprint(source),
       ...(id === undefined ? {} : { declared: true }),
+      ...(anchor === undefined ? {} : { anchor }),
       pos,
     });
   }

@@ -7,7 +7,7 @@
  * order, so a block edited between two unchanged anchors keeps its id.
  */
 import type { Block } from "../contracts/index.ts";
-import type { BlocksLock, RecordedBlock } from "./lock.ts";
+import { recordedAnchors, type BlocksLock, type RecordedBlock } from "./lock.ts";
 
 /** One page's blocks as {@link blocksOf} found them, keyed by the page's file. */
 export interface MatchPage {
@@ -83,7 +83,11 @@ export function matchBlockIds(
     const ids = matched[index]!;
     result.set(
       page.file,
-      page.blocks.map((block, i) => (ids[i] === undefined || ids[i] === block.id ? block : { ...block, id: ids[i]! })),
+      page.blocks.map((block, i) => {
+        const id = ids[i] ?? block.id;
+        const renumbered = id === block.id ? block : { ...block, id };
+        return { ...renumbered, ...recordedAnchors(recorded[id], block.anchor) };
+      }),
     );
   }
   return result;

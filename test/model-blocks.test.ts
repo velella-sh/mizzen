@@ -215,3 +215,71 @@ test("a list page two has no blocks, and no id repeats across the site", async (
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("an edited heading keeps its earlier anchor as an alias and in the HTML", async () => {
+  const root = tree({
+    "mizzen.yml": "title: Aliases\n",
+    "a.md": "---\ntitle: A\n---\n# First title\n\nBody.\n",
+  });
+  const folder = out();
+  const lockOf = () =>
+    JSON.parse(readFileSync(join(root, BLOCKS_LOCK_FILE), "utf8")) as {
+      blocks: Record<string, { anchor?: string; aliases?: string[] }>;
+    };
+  try {
+    const first = await build({ root, out: folder, themeRoot: THEME, defaultLayout: "doc", updateBlocks: true });
+    assert.deepEqual(first.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+    const heading = Object.values(lockOf().blocks).find((entry) => entry.anchor === "first-title");
+    assert.ok(heading !== undefined, "the heading's anchor is recorded");
+    assert.equal(heading.aliases, undefined, "an unchanged heading has no alias");
+
+    writeFileSync(join(root, "a.md"), "---\ntitle: A\n---\n# Second title\n\nBody.\n");
+    const second = await build({ root, out: folder, themeRoot: THEME, defaultLayout: "doc", updateBlocks: true });
+    assert.deepEqual(second.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+    const edited = Object.values(lockOf().blocks).find((entry) => entry.anchor === "second-title");
+    assert.ok(edited !== undefined, "the heading keeps its id and takes the new anchor");
+    assert.deepEqual(edited.aliases, ["first-title"], "the earlier anchor is kept as an alias");
+    const html = readFileSync(join(folder, "a/index.html"), "utf8");
+    assert.ok(html.includes('id="first-title"'), "an old link still lands on the heading");
+    assert.ok(html.includes('id="second-title"'), "the new anchor is there too");
+
+    const old = lockOf();
+    for (const entry of Object.values(old.blocks)) {
+      delete entry.anchor;
+      delete entry.aliases;
+    }
+    writeFileSync(join(root, BLOCKS_LOCK_FILE), `${JSON.stringify(old)}\n`);
+    const stripped = await build({ root, out: folder, themeRoot: THEME, defaultLayout: "doc" });
+    assert.deepEqual(stripped.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), [], "an old lock without anchors stays valid");
+    assert.ok(recordedIds(root, folder).output.length > 0, "the ids still build");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("a new heading that takes an old alias reports blocks.alias-conflict", async () => {
+  const root = tree({
+    "mizzen.yml": "title: Alias conflict\n",
+    "a.md": "---\ntitle: A\n---\n# First title\n\nBody.\n",
+  });
+  const folder = out();
+  const buildWith = () => build({ root, out: folder, themeRoot: THEME, defaultLayout: "doc", updateBlocks: true });
+  const noErrors = (result: { diagnostics: readonly { severity: string }[] }) =>
+    assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+  try {
+    noErrors(await buildWith());
+    writeFileSync(join(root, "a.md"), "---\ntitle: A\n---\n# Second title\n\nBody.\n");
+    noErrors(await buildWith());
+    writeFileSync(join(root, "a.md"), "---\ntitle: A\n---\n# Second title\n\nBody.\n\n# First title\n");
+    const conflict = await buildWith();
+    const finding = conflict.diagnostics.find((diagnostic) => diagnostic.id === "blocks.alias-conflict");
+    assert.ok(finding !== undefined, "the old alias and the new heading collide");
+    assert.equal(finding.severity, "error");
+    assert.ok(finding.message.includes("a.md:4"), finding.message);
+    assert.ok(finding.message.includes("a.md:8"), finding.message);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
