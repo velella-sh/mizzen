@@ -5,6 +5,7 @@ import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { formatSpan, spanFromPosition } from "../source/spans.ts";
+import { codeMetaOf } from "./plugins/code.ts";
 
 /**
  * Turns a parsed page (mdast, from `parseMarkdown`) into HTML, and stamps every block element with
@@ -63,6 +64,13 @@ function stampSources(tree: Root, sourcePath: string, spans: readonly IncludeSpa
   visit(tree, (node) => {
     if (!SOURCED.has(node.type) || !node.position) return;
     const data = (node.data ??= {}) as { hProperties?: Record<string, unknown> };
+    // The theme reads highlight, line numbers, and annotations from one JSON value, so it never parses Markdown meta.
+    if (node.type === "code") {
+      const meta = codeMetaOf(node);
+      if (meta !== undefined && meta.raw.trim() !== "") {
+        data.hProperties = { ...data.hProperties, "data-code": JSON.stringify(meta) };
+      }
+    }
     // A block a data field placed already names the data file; the page's own source must not overwrite it.
     if (typeof data.hProperties?.["data-src"] === "string") return;
     const span = spans.length === 0 ? undefined : sourceSpanOf(spans, node.position.start, node.position.end);
@@ -83,10 +91,12 @@ function moveCodeSource(node: HastNodes): void {
     const code = node.children.find(
       (child): child is Element => child.type === "element" && child.tagName === "code",
     );
-    const src = code?.properties["data-src"];
-    if (code && src !== undefined) {
-      node.properties["data-src"] = src;
-      delete code.properties["data-src"];
+    for (const name of ["data-src", "data-code"]) {
+      const value = code?.properties[name];
+      if (code && value !== undefined) {
+        node.properties[name] = value;
+        delete code.properties[name];
+      }
     }
   }
   if ("children" in node) {

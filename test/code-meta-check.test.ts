@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import type { Root } from "mdast";
 import type { Diagnostic, Page, Site, SiteConfig } from "../src/contracts/index.ts";
 import type { OutputContext } from "../src/contracts/output.ts";
+import { annotationDiagnostics } from "../src/markdown/plugins/code-annotations.ts";
 import { codeMetaCheck, invalidCodeMeta } from "../src/outputs/code-meta-check.ts";
 
 /** A site config with the defaults a build fills in, plus the given overrides. */
@@ -119,6 +121,32 @@ test("findings come in document order, and the same Markdown always gives the sa
       '5:"x" in the highlighted lines is not a line or a range.',
     ],
   );
+});
+
+test("an annotation outside the fence is reported at the fence, shifted by the front matter", async () => {
+  const { ctx, reported } = collecting();
+  const files = await codeMetaCheck.run(
+    site([page("guide/page.md", "intro\n\n```ts annotations={9: gone}\none\n```\n", 5)]),
+    ctx,
+  );
+
+  assert.deepEqual(files, []);
+  assert.deepEqual(
+    reported.map((d) => [d.id, d.severity, d.pos?.file, d.pos?.line]),
+    [["code.annotation-range", "warning", "guide/page.md", 7]],
+  );
+});
+
+test("a malformed annotation and an overlap each report once per fence", () => {
+  const root = (meta: string): Root => ({
+    type: "root",
+    children: [{ type: "code", value: "one\ntwo", meta }],
+  });
+  const malformed = annotationDiagnostics(root("annotations={x}"), "a.md");
+  const overlap = annotationDiagnostics(root("annotations={1: a | 2: b | 2: c}"), "a.md");
+  assert.deepEqual(malformed.map((d) => d.id), ["code.annotation-syntax"]);
+  assert.deepEqual(overlap.map((d) => d.id), ["code.annotation-overlap"]);
+  assert.deepEqual(annotationDiagnostics({ type: "root", children: [] }, "a.md"), []);
 });
 
 test("the output writes no files and reports pages in model order", async () => {

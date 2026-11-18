@@ -5,6 +5,7 @@ import type { Site } from "../contracts/content.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import type { SourcePos } from "../contracts/source.ts";
+import { annotationDiagnostics } from "../markdown/plugins/code-annotations.ts";
 import { invalidMetaParts, type InvalidCodeMeta } from "../markdown/plugins/code.ts";
 import { spanFromPosition } from "../source/spans.ts";
 
@@ -102,6 +103,9 @@ export const codeMetaCheck: Output = {
   async run(site: Site, ctx: OutputContext): Promise<readonly OutputFile[]> {
     for (const page of site.pages) {
       for (const diagnostic of invalidCodeMeta(page.markdown, page.source.file, page.source.line)) {
+        ctx.report(diagnostic);
+      }
+      for (const diagnostic of annotationDiagnostics(parser.parse(page.markdown), page.source.file, page.source.line)) {
         ctx.report(diagnostic);
       }
     }

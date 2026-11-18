@@ -1,6 +1,7 @@
 import type { Nodes, Root } from "mdast";
 import type { Plugin } from "unified";
 import type { Diagnostic } from "../../contracts/diagnostic.ts";
+import type { SourcePos } from "../../contracts/source.ts";
 import { spanFromPosition } from "../../source/spans.ts";
 
 /** One note attached to an inclusive run of 1-based lines in a code block. */
@@ -133,12 +134,23 @@ function visit(node: Nodes, visitFn: (node: Nodes) => void): void {
   }
 }
 
+/** The fence's span in the source file, shifted by the line its Markdown body starts on. */
+function posOf(node: Nodes, file: string, bodyLine: number): SourcePos {
+  const position = node.position;
+  if (position === undefined) return { file, line: bodyLine, column: 1, endLine: bodyLine, endColumn: 1 };
+  const delta = bodyLine - 1;
+  return spanFromPosition(file, {
+    start: { line: position.start.line + delta, column: position.start.column },
+    end: { line: position.end.line + delta, column: position.end.column },
+  });
+}
+
 /**
  * Reports the first bad entry of each fenced code block's `annotations={…}`, in document order, at
  * the fence's source span. `file` is the page's source path, as `Page.source.file` gives it. A block
  * without annotations, or with only valid ones, reports nothing.
  */
-export function annotationDiagnostics(tree: Root, file: string): readonly Diagnostic[] {
+export function annotationDiagnostics(tree: Root, file: string, bodyLine = 1): readonly Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   visit(tree, (node) => {
     if (node.type !== "code" || !node.meta) return;
@@ -149,7 +161,7 @@ export function annotationDiagnostics(tree: Root, file: string): readonly Diagno
       id: IDS[issue.problem],
       severity: "warning",
       message: messageOf(issue, lines),
-      ...(node.position ? { pos: spanFromPosition(file, node.position) } : {}),
+      pos: posOf(node, file, bodyLine),
       help: HELP,
     });
   });

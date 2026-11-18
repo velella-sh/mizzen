@@ -1,5 +1,6 @@
 import type { Code, Data, Parent, Root, RootContent } from "mdast";
 import type { Plugin } from "unified";
+import { parseAnnotations, type CodeAnnotation } from "./code-annotations.ts";
 
 /** Inclusive run of 1-based line numbers inside a code block: `3-5` is `{ from: 3, to: 5 }`. */
 export interface LineRange {
@@ -23,6 +24,8 @@ export interface CodeMeta {
   readonly diff: boolean;
   /** `showLineNumbers` turns numbering on; `showLineNumbers=false` turns it off. */
   readonly showLineNumbers: boolean;
+  /** `annotations={…}`: notes on 1-based lines, in line order. */
+  readonly annotations: readonly CodeAnnotation[];
 }
 
 /** Why one part of a line list is not a usable range. */
@@ -162,7 +165,7 @@ export function parseCodeMeta(raw: string): CodeMeta {
     }
   }
 
-  return { raw, title, highlight, ins, del, diff, showLineNumbers };
+  return { raw, title, highlight, ins, del, diff, showLineNumbers, annotations: [] };
 }
 
 /** The meta a code node carries after this plugin ran, or `undefined` for any other node. */
@@ -170,10 +173,20 @@ export function codeMetaOf(node: Code): CodeMeta | undefined {
   return (node.data as CodeData | undefined)?.code;
 }
 
+/** How many lines a fence's value occupies; an empty fence has none. */
+function lineCount(value: string): number {
+  return value === "" ? 0 : value.split(/\r?\n/).length;
+}
+
 /** Puts `data.code` on every code node, in every container. */
 function attachMeta(node: RootContent | Root): void {
   if (node.type === "code") {
-    const data: CodeData = { ...node.data, code: parseCodeMeta(node.meta ?? "") };
+    const meta = node.meta ?? "";
+    const code: CodeMeta = {
+      ...parseCodeMeta(meta),
+      annotations: parseAnnotations(meta, lineCount(node.value)).annotations,
+    };
+    const data: CodeData = { ...node.data, code };
     node.data = data;
   }
   if ("children" in node) {
