@@ -83,6 +83,53 @@ export interface ExamplesConfig {
   readonly failOnFailure?: boolean;
 }
 
+/** How a paginated API hands out its next page. */
+export type PaginationMode = "page" | "offset" | "cursor" | "next";
+
+/** What ends a page-number or offset walk. */
+export type PaginationStop = "empty" | "short";
+
+/** Where a fetched API's credential comes from, and how it is sent. The value lives only in the environment. */
+export interface ApiAuthConfig {
+  /** Environment variable that holds the credential. Never written to the config, the lock, or an output. */
+  readonly env: string;
+  /** Header the credential is sent in. Default `Authorization`. */
+  readonly header?: string;
+  /** Text written before the credential, such as `Bearer `. Default empty. */
+  readonly prefix?: string;
+}
+
+/**
+ * One paginated API source: the record array, how the next page is asked for, and the bounds a fetch may not pass.
+ * `docs/api-fetch.md` states every default and the diagnostic of each limit.
+ */
+export interface PaginationConfig {
+  /** `page` sends a page number, `offset` counts records, `cursor` passes a token, `next` follows a URL. */
+  readonly mode: PaginationMode;
+  /** Query parameter for the page number, offset, or cursor. Default `page`, `offset`, or `cursor`. */
+  readonly param?: string;
+  /** `page` mode: the first page number. `offset` mode: the first offset. Default 1 for a page, 0 for an offset. */
+  readonly start?: number;
+  /** Records the service returns per page; `stop: short` compares against it. */
+  readonly pageSize?: number;
+  /** When a `page` or `offset` walk stops: `empty` on a page with no records, `short` below `pageSize`. */
+  readonly stop?: PaginationStop;
+  /** `cursor` mode: dot path in the response that holds the next cursor. Absent ends the walk. */
+  readonly cursor?: string;
+  /** `next` mode: dot path in the response that holds the next page URL. Absent ends the walk. */
+  readonly next?: string;
+  /** Origins a next-page URL may name. Default: the source URL's own origin. */
+  readonly origins?: readonly string[];
+  /** Where the credential is read, and how it is sent. Unset: the request carries none. */
+  readonly auth?: ApiAuthConfig;
+  /** Most pages one fetch may read. Default 50. */
+  readonly maxPages?: number;
+  /** Most bytes one fetch may read across every page. Default: the collection's `limits.bytes`. */
+  readonly maxBytes?: number;
+  /** Most times one request is retried after a transient failure. Default 2. */
+  readonly retries?: number;
+}
+
 /** Limits on one collection's source. Each key falls back to the default stated in `docs/data-sites.md`. */
 export interface DataLimitsConfig {
   /** Largest source file, in bytes. Default 2097152 (2 MiB). */
@@ -293,6 +340,14 @@ export interface CollectionLifecycleConfig {
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root. */
   readonly source: string;
+  /**
+   * Dot path to the record array inside a JSON API response, such as `data.items`. Setting it marks the source as a
+   * JSON API: `mizzen data fetch` stores the records as one list, and a build reads that list. Default: the source is
+   * already a list or a mapping of id to record.
+   */
+  readonly records?: string;
+  /** How `mizzen data fetch` walks a paginated API. Unset: one request. See `docs/api-fetch.md`. */
+  readonly pagination?: PaginationConfig;
   /** Field that holds a record's id; the mapping key when absent. */
   readonly id?: string;
   /** Markdown template under `_templates/`, relative to the source folder. */
