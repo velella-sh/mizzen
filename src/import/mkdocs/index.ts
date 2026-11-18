@@ -7,6 +7,7 @@ import { isMap, isScalar, isSeq, LineCounter, parseDocument, stringify } from "y
 import type { Diagnostic, SourcePos } from "../../contracts/index.ts";
 import type { ImportedAsset, ImportedConfig, ImportedPage, ImportFile, ImportUrls, Importer } from "../contract.ts";
 import { pageUrl } from "../mapping.ts";
+import { convertPage } from "./content.ts";
 
 const CONFIG = "mkdocs.yml";
 const FALLBACK: ImportedConfig = { source: CONFIG, contents: "title: MkDocs site\n" };
@@ -133,6 +134,18 @@ export const mkdocsImporter: Importer = {
       };
     }
 
+    const findings: Diagnostic[] = [];
+    for (const plugin of pluginsOf(doc.get("plugins", true))) {
+      findings.push(
+        review("import.plugin", `plugin \`${plugin.name}\` has no destination equivalent; review whether the site needs it.`, lineCounter.linePos(plugin.line).line),
+      );
+    }
+    for (const feature of featuresOf(doc.get("theme", true))) {
+      findings.push(
+        review("import.theme-feature", `theme feature \`${feature.name}\` has no destination equivalent; review the migrated theme.`, lineCounter.linePos(feature.line).line),
+      );
+    }
+
     const siteNode = doc.get("site_dir", true);
     const siteDir = folder(isScalar(siteNode) ? siteNode.value : undefined, "site");
     const pages: ImportedPage[] = [];
@@ -146,7 +159,10 @@ export const mkdocsImporter: Importer = {
         files.push({ path, kind: "unsupported", reason: "outside docs_dir" });
       } else if (/\.md$/i.test(path)) {
         files.push({ path, kind: "content" });
-        pages.push({ source: path, destination: path.slice(docsDir.length + 1), contents: source.read(path) });
+        const destination = path.slice(docsDir.length + 1);
+        const page = convertPage(source.read(path), path, destination, { docsDir, files: source.files });
+        pages.push({ source: page.source, destination: page.destination, contents: page.contents, blocks: page.blocks });
+        findings.push(...page.diagnostics);
       } else {
         files.push({ path, kind: "asset" });
         assets.push({ source: path, destination: path.slice(docsDir.length + 1) });
@@ -164,13 +180,43 @@ export const mkdocsImporter: Importer = {
       config: { source: CONFIG, contents: titleLine(doc.get("site_name")) },
       ...(navigation === undefined ? {} : { navigation }),
       ...(urls === "files" ? { urls } : {}),
-      diagnostics: [],
+      diagnostics: findings,
     };
   },
 };
 
 function docsDirError(message: string, line: number): Diagnostic {
   return { id: "import.docs-dir", severity: "error", message, pos: at(line) };
+}
+
+/** A warning at one line of `mkdocs.yml`; a plugin or theme feature needs a person, but no page fails to read. */
+function review(id: string, message: string, line: number): Diagnostic {
+  return { id, severity: "warning", message, pos: at(line) };
+}
+
+/** The `plugins` entries as written, each with the line that names it. */
+function pluginsOf(node: unknown): { name: string; line: number }[] {
+  if (!isSeq(node)) return [];
+  const found: { name: string; line: number }[] = [];
+  for (const item of node.items) {
+    if (isScalar(item) && typeof item.value === "string") found.push({ name: item.value, line: (item as { range?: readonly number[] }).range?.[0] ?? 0 });
+    if (isMap(item)) {
+      const key = item.items[0]?.key;
+      if (isScalar(key) && typeof key.value === "string") found.push({ name: key.value, line: (key as { range?: readonly number[] }).range?.[0] ?? 0 });
+    }
+  }
+  return found;
+}
+
+/** The `theme.features` entries as written, each with the line that names it. */
+function featuresOf(node: unknown): { name: string; line: number }[] {
+  const features = isMap(node) ? node.get("features", true) : undefined;
+  if (!isSeq(features)) return [];
+  const found: { name: string; line: number }[] = [];
+  for (const item of features.items) {
+    if (isScalar(item) && typeof item.value === "string") found.push({ name: item.value, line: (item as { range?: readonly number[] }).range?.[0] ?? 0 });
+  }
+  return found;
 }
 
 function titleLine(value: unknown): string {
