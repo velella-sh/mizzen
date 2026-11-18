@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import type { Site } from "../src/contracts/content.ts";
 import type { Diagnostic } from "../src/contracts/diagnostic.ts";
 import type { OutputContext } from "../src/contracts/output.ts";
 import { URLS_LOCK_FILE } from "../src/data/urls-lock.ts";
+import { build } from "../src/pipeline/build.ts";
 import { redirects } from "../src/outputs/redirects.ts";
 import { SITEMAP_LIMITS, writeSitemap } from "../src/outputs/sitemap.ts";
-import { ids, pageAt, withSite } from "./data-record-site.ts";
+import { ids, pageAt, site, withSite } from "./data-record-site.ts";
 import { urlsOf, withIndexedSite } from "./search-runtime.ts";
 
 /** A site whose records are addressed by a slug, which may change without changing the record's id. */
@@ -152,5 +157,67 @@ test("a retained retired record leaves the sitemap and the search index together
       assert.equal(pageAt(result, "/items/old/")?.frontMatter.search, machine ? undefined : false);
       assert.equal(pageAt(result, "/items/old/")?.frontMatter.sitemap, machine ? undefined : false);
     });
+  }
+});
+
+/** The presence fixture with one declared feed and an API over the same collection. */
+function machineFiles(machine: boolean): Record<string, string> {
+  return {
+    ...presenceFiles(machine),
+    "mizzen.yml": [
+      "title: Example",
+      "url: https://example.com",
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      "    template: _templates/item.md",
+      "    permalink: /items/{id}/",
+      "    dates: [published]",
+      "    lifecycle:",
+      "      states: [current, retired]",
+      "      retired: [retired]",
+      ...(machine ? ["      machine: true"] : []),
+      "feeds:",
+      "  items:",
+      "    collection: items",
+      "    date: published",
+      "api:",
+      "  collections:",
+      "    items:",
+      "      fields: [summary]",
+      "",
+    ].join("\n"),
+    "_data/items.yml":
+      "- id: old\n  state: retired\n  summary: alpha\n  published: 2026-01-01\n- id: new\n  state: current\n  summary: beta\n  published: 2026-01-02\n",
+    "_templates/item.md": '---\ntitle: "{id}"\nlayout: doc\n---\n# :field[id]\n\n:field[summary]\n',
+  };
+}
+
+test("a retired record leaves the feed and the API record files together unless the collection marks it for machines", async () => {
+  const theme = fileURLToPath(new URL("../../lateen", import.meta.url));
+  for (const machine of [false, true]) {
+    const root = site(machineFiles(machine));
+    const out = mkdtempSync(join(tmpdir(), "lifecycle-out-"));
+    try {
+      const result = await build({ root, out, themeRoot: theme, defaultLayout: "doc" });
+      assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+
+      const feed = readFileSync(join(out, "feeds/items.xml"), "utf8");
+      assert.equal(feed.includes("https://example.com/items/old/"), machine);
+      assert.match(feed, /https:\/\/example\.com\/items\/new\//);
+
+      assert.equal(existsSync(join(out, "api/v1/items/old.json")), machine);
+      assert.ok(existsSync(join(out, "api/v1/items/new.json")));
+      const collection = JSON.parse(readFileSync(join(out, "api/v1/items.json"), "utf8")) as {
+        records: readonly { id: string }[];
+      };
+      assert.deepEqual(
+        collection.records.map((record) => record.id),
+        machine ? ["new", "old"] : ["new"],
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+      rmSync(out, { recursive: true, force: true });
+    }
   }
 });
