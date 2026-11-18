@@ -44,6 +44,8 @@ import type {
   ExamplesConfig,
   FeedConfig,
   FeedFormat,
+  JoinConfig,
+  JoinSourceConfig,
   LanguageConfig,
   NetworkConfig,
   QualityConfig,
@@ -211,6 +213,7 @@ export function loadConfigText(source: string, file: string, folderTitle: string
   diagnostics.push(...calendarDiagnostics(raw, collections, file, doc, lineCounter));
   diagnostics.push(...derivedDiagnostics(raw, collections, file, doc, lineCounter));
   diagnostics.push(...apiFetchDiagnostics(raw, collections, file, doc, lineCounter));
+  diagnostics.push(...joinDiagnostics(collections, file, doc, lineCounter));
 
   return { config: applyDefaults(raw, folderTitle), diagnostics };
 }
@@ -261,6 +264,90 @@ function calendarDiagnostics(
 function eventPos(doc: Document.Parsed, file: string, lineCounter: LineCounter, name: string, index: number, key: string) {
   const node = doc.getIn(["calendars", name, "events", index, key], true);
   return posFromNode(file, lineCounter, isNode(node) ? node : doc.contents);
+}
+
+/** The fields of a join key, as a list. */
+function joinKeyFields(key: string | readonly string[]): readonly string[] {
+  return typeof key === "string" ? [key] : key;
+}
+
+/**
+ * Findings about joins the schema cannot see: a source the site does not declare, a source key of another length, and
+ * a cycle of collections that join each other. A cycle is rejected here because no order of join steps can satisfy it.
+ */
+function joinDiagnostics(
+  collections: Readonly<Record<string, CollectionConfig>>,
+  file: string,
+  doc: Document.Parsed,
+  lineCounter: LineCounter,
+): Diagnostic[] {
+  const found: Diagnostic[] = [];
+  const at = (path: (string | number)[]) => {
+    const pair = getMapPair(doc, path);
+    return posFromNode(file, lineCounter, isNode(pair?.value) ? pair.value : doc.contents);
+  };
+  const edges = new Map<string, string[]>();
+  for (const [name, entry] of Object.entries(collections)) {
+    const join = entry.join;
+    if (join === undefined) continue;
+    const primary = joinKeyFields(join.key);
+    join.sources.forEach((source, index) => {
+      const target = collections[source.collection];
+      if (target === undefined) {
+        found.push({
+          id: "config.join-source",
+          severity: "error",
+          message: `The join of "${name}" reads the collection "${source.collection}", which the site does not have.`,
+          pos: at(["collections", name, "join", "sources", index, "collection"]),
+          help: "Name a collection the config declares.",
+        });
+        return;
+      }
+      const key = joinKeyFields(source.key ?? join.key);
+      if (key.length !== primary.length) {
+        found.push({
+          id: "config.join-key",
+          severity: "error",
+          message: `The join of "${name}" matches ${primary.length} key field(s) against ${key.length} on "${source.collection}".`,
+          pos: at(["collections", name, "join", "sources", index, "key"]),
+          help: "Give the source one key field for each field of the join's `key`, in the same order.",
+        });
+      }
+      if (target.join !== undefined) {
+        const targets = edges.get(name) ?? [];
+        targets.push(source.collection);
+        edges.set(name, targets);
+      }
+    });
+  }
+
+  const state = new Map<string, 1 | 2>();
+  const stack: string[] = [];
+  const reported = new Set<string>();
+  const walk = (name: string): void => {
+    if (state.get(name) === 1) {
+      const cycle = [...stack.slice(stack.indexOf(name)), name];
+      const key = [...new Set(cycle)].sort().join("\u0000");
+      if (reported.has(key)) return;
+      reported.add(key);
+      found.push({
+        id: "config.join-cycle",
+        severity: "error",
+        message: `The joins form a cycle: ${cycle.join(" → ")}.`,
+        pos: at(["collections", name, "join"]),
+        help: "Remove one of the joins so the chain of sources ends.",
+      });
+      return;
+    }
+    if (state.get(name) === 2) return;
+    state.set(name, 1);
+    stack.push(name);
+    for (const target of edges.get(name) ?? []) walk(target);
+    stack.pop();
+    state.set(name, 2);
+  };
+  for (const name of edges.keys()) walk(name);
+  return found;
 }
 
 /**
@@ -736,6 +823,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const raw = collectionRawFrom(entry.raw);
     const changelog = collectionChangelogFrom(entry.changelog);
     const transform = collectionTransformFrom(entry.transform);
+    const join = joinFrom(entry.join);
     const derived = derivedFrom(entry.derived);
     const pagination = paginationFrom(entry.pagination);
     collections[name] = {
@@ -772,6 +860,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(raw === undefined ? {} : { raw }),
       ...(changelog === undefined ? {} : { changelog }),
       ...(transform === undefined ? {} : { transform }),
+      ...(join === undefined ? {} : { join }),
     };
   }
   return collections;
@@ -1073,6 +1162,54 @@ function transformStepFrom(value: unknown): TransformStepConfig | undefined {
     default:
       return undefined;
   }
+}
+
+/** A join's key: one field, or a non-empty list of distinct fields; `undefined` when the schema would reject it. */
+function joinKeyFrom(value: unknown): string | readonly string[] | undefined {
+  if (typeof value === "string") return value.length > 0 ? value : undefined;
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const fields = value.filter((field): field is string => typeof field === "string" && field.length > 0);
+  return fields.length === value.length && new Set(fields).size === fields.length ? fields : undefined;
+}
+
+/** One secondary source of a join; `undefined` when the entry names no collection. */
+function joinSourceFrom(value: unknown): JoinSourceConfig | undefined {
+  if (!isPlainObject(value) || typeof value.collection !== "string" || value.collection.length === 0) return undefined;
+  const key = joinKeyFrom(value.key);
+  const fields = stringMapFrom(value.fields);
+  const many = value.many === "first" || value.many === "last" || value.many === "list" || value.many === "error" ? value.many : undefined;
+  return {
+    collection: value.collection,
+    ...(key === undefined ? {} : { key }),
+    ...(fields === undefined ? {} : { fields }),
+    ...(many === undefined ? {} : { many }),
+    ...(typeof value.manyField === "string" && value.manyField.length > 0 ? { manyField: value.manyField } : {}),
+  };
+}
+
+/** A collection's join, keeping only the sources the schema accepts; `undefined` when it declares no usable join. */
+function joinFrom(value: unknown): JoinConfig | undefined {
+  if (!isPlainObject(value) || !Array.isArray(value.sources)) return undefined;
+  const key = joinKeyFrom(value.key);
+  if (key === undefined) return undefined;
+  const sources: JoinSourceConfig[] = [];
+  for (const raw of value.sources) {
+    const source = joinSourceFrom(raw);
+    if (source !== undefined) sources.push(source);
+  }
+  if (sources.length !== value.sources.length || sources.length === 0) return undefined;
+  const fields = stringMapFrom(value.fields);
+  const many = value.many === "first" || value.many === "last" || value.many === "list" || value.many === "error" ? value.many : undefined;
+  return {
+    key,
+    sources,
+    ...(value.type === "inner" || value.type === "left" ? { type: value.type } : {}),
+    ...(fields === undefined ? {} : { fields }),
+    ...(value.onMissingKey === "error" || value.onMissingKey === "skip" ? { onMissingKey: value.onMissingKey } : {}),
+    ...(value.onConflict === "precedence" || value.onConflict === "error" ? { onConflict: value.onConflict } : {}),
+    ...(value.onNull === "keep" || value.onNull === "fallthrough" ? { onNull: value.onNull } : {}),
+    ...(many === undefined ? {} : { many }),
+  };
 }
 
 /** A collection's transformation rules, keeping only steps the schema accepts; `undefined` when it declares none. */
