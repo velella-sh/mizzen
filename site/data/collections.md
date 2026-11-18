@@ -26,6 +26,7 @@ collections:
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `source` | string | required | Where the records come from: a file in the site, an `https://` URL, or an `npm:` address. |
+| `sqlite` | object | | How a `.sqlite`, `.sqlite3`, or `.db` source is queried: `query` (one SELECT statement), `id` (the query id the lock records), `params`, `key`, `order`, and `binary`. See [`docs/db-input.md`](https://github.com/velella-sh/mizzen/blob/main/docs/db-input.md). |
 | `records` | string | | Dot path to the record array in a JSON API response, such as `data.items`. Setting it makes `mizzen data fetch` store the records as one list. See `docs/api-fetch.md`. |
 | `pagination` | object | | How `mizzen data fetch` walks a paginated API: `mode` (`page`, `offset`, `cursor`, or `next`), `param`, `start`, `pageSize`, `stop`, `cursor`, `next`, `origins`, `auth` (`env`, `header`, `prefix`), `maxPages`, `maxBytes`, and `retries`. See `docs/api-fetch.md`. |
 | `id` | string | the mapping key | Field that holds a record's id. A source that is a mapping of id to record needs none. |
@@ -75,6 +76,10 @@ A source is read, never written, by a build. The extension decides the format:
   `mizzen data fetch`, which stores the bytes under `.mizzen/data/` and pins their hash in `mizzen.lock.json`.
 - **JSON API** (`records` set): an `https://` response whose record array sits at `records`, optionally walked by
   `pagination`. The fetch stores the records as one list; see `docs/api-fetch.md`.
+- **SQLite** (`.sqlite`, `.sqlite3`, `.db`): the rows of one configured read query, opened read-only. Run
+  `mizzen data extract` to lock the result; a build reads the locked result.
+- **NDJSON** (`.ndjson`, `.jsonl`): one JSON record per line, streamed with a line number for every error. The same
+  command locks the result.
 - **`npm:<package>/<path>`**: a file inside an installed dependency, read from `node_modules`. Nothing is installed or
   fetched, and the file must stay inside the package folder.
 
