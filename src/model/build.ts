@@ -14,6 +14,8 @@ import { localizeFields, prefixOfLang } from "../data/record-context.ts";
 import { planUrls, readUrlsLock, urlKey, type PublishedUrl, type UrlsPlan } from "../data/urls-lock.ts";
 import { loadTemplates } from "../data/template.ts";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
+import { buildBlogPages } from "../content/blog/pages.ts";
+import { buildBlogRoutes, type BlogPostSource, type BlogRoute } from "../content/blog/routes.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { expandIncludes } from "../content/includes.ts";
@@ -184,6 +186,38 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   const data = await loadData(sourceDir, files);
   for (const d of data.diagnostics) diagnostics.report(d);
+
+  // The blog plans its routes from the posts' own front matter before any page is built, so each page knows its URL and
+  // a draft or rejected post gets none. The post texts are read here; the planner never touches the filesystem.
+  const blog = config.blog;
+  let blogRoutes: readonly BlogRoute[] = [];
+  const postUrl = new Map<string, string>();
+  const postFiles = new Set<string>();
+  if (blog !== undefined) {
+    const prefix = `${blog.posts.replace(/\/+$/g, "")}/`;
+    const posts: BlogPostSource[] = [];
+    for (const file of files) {
+      if (file.kind !== "doc" || !file.path.startsWith(prefix) || !/\.(md|markdown)$/i.test(file.path)) continue;
+      postFiles.add(file.path);
+      posts.push({ file: file.path, text: await readFile(join(sourceDir, file.path), "utf8") });
+    }
+    const authors = data.data["authors"];
+    const planned = buildBlogRoutes({
+      config: blog,
+      base: config.base,
+      posts,
+      authors:
+        authors !== null && typeof authors === "object" && !Array.isArray(authors)
+          ? (authors as Record<string, unknown>)
+          : {},
+    });
+    for (const d of planned.diagnostics) diagnostics.report(d);
+    blogRoutes = planned.routes;
+    for (const route of planned.routes) {
+      if (route.kind === "post") postUrl.set(route.post.file, route.url);
+    }
+  }
+
   const collected = await loadCollections({ root: siteRoot, config });
   for (const d of collected.diagnostics) diagnostics.report(d);
   const history = await loadChangeCollections({ root: siteRoot, config });
@@ -201,7 +235,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   /** Pages whose front matter declares a list, and the source text the `list` key sits in; built once records exist. */
   const listDeclarations: { readonly page: Page; readonly text: string; readonly file: string }[] = [];
 
-  const add = (page: Page, path: string, order: unknown): void => {
+  const add = (page: Page, path: string, order: unknown, nav = true): void => {
     const first = seen.get(page.url);
     if (first !== undefined) {
       diagnostics.error(
@@ -213,7 +247,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     }
     seen.set(page.url, page.source);
     pages.push(page);
-    if (page.kind === "doc" && page.record === undefined) {
+    if (nav && page.kind === "doc" && page.record === undefined) {
       folderPages.push({
         path,
         url: page.url,
@@ -250,13 +284,15 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       continue;
     }
     if (file.kind !== "doc") continue;
+    // A post the blog planner refused (a draft, or a bad date, author, or slug) gets no page; the planner said why.
+    if (postFiles.has(file.path) && !postUrl.has(file.path)) continue;
 
     const text = await readFile(join(sourceDir, file.path), "utf8");
     const rel = fileOf(file.path);
     const fm = parseFrontMatter(text, rel);
     for (const d of fm.diagnostics) diagnostics.report(d);
 
-    const frontMatter = withDefaults(fm.data, file.path, config.defaults);
+    let frontMatter = withDefaults(fm.data, file.path, config.defaults);
     if (frontMatter.published === false) continue;
 
     const isMarkdown = /\.(md|markdown)$/i.test(file.path);
@@ -311,10 +347,15 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     }
 
     const { title } = resolveTitle({ frontMatter, tree, file: file.path });
-    const url = permalink(file.path, {
+    const blogUrl = postUrl.get(file.path);
+    const url = blogUrl ?? permalink(file.path, {
       base: config.base,
       ...(typeof frontMatter.permalink === "string" ? { permalink: frontMatter.permalink } : {}),
     });
+    // The post is its own layout: the theme renders the blog data the planner put on the route.
+    if (blogUrl !== undefined) {
+      frontMatter = { ...frontMatter, layout: frontMatter.layout ?? "post", blog: { kind: "post" } };
+    }
 
     let html = body;
     let headings: Heading[] = [];
@@ -340,11 +381,26 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     // exactly one `content` hook and the declaring page is never hooked twice.
     const declaresList = draft.frontMatter.list !== undefined;
     const page = declaresList ? draft : await hookPage(draft);
-    add(page, file.path, page.frontMatter.order);
+    add(page, file.path, page.frontMatter.order, !postUrl.has(file.path));
     // A page a duplicate URL kept out of the model declares no list either.
     if (declaresList && pages.at(-1) === page) {
       listDeclarations.push({ page, text, file: rel });
     }
+  }
+
+  // The blog's archive and author pages list the plans the routes carry; they are not folder navigation entries.
+  for (const generated of buildBlogPages({ routes: blogRoutes, config })) {
+    const known = seen.get(generated.url);
+    if (known !== undefined) {
+      diagnostics.error(
+        "page.duplicate-url",
+        `Two pages have the URL ${generated.url}: ${known.file} and ${generated.source.file}.`,
+        { pos: generated.source, help: `Change \`blog.route\` or \`blog.archive\`, or the \`permalink\` of the other page.` },
+      );
+      continue;
+    }
+    const hooked = await hookPage(generated);
+    add(hooked, hooked.source.file, hooked.frontMatter.order, false);
   }
 
   const records = await buildRecordPages({
