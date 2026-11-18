@@ -81,6 +81,15 @@ export function apiCollections(site: Site, report: (diagnostic: Diagnostic) => v
           help: `Check \`api.collections.${name}.fields\` in mizzen.yml.`,
         });
       }
+      for (const field of entry.fields) {
+        if (isPublicReference(site.config.collections[name]?.public, field)) continue;
+        report({
+          id: "api.private-field",
+          severity: "error",
+          message: `The API publishes the field "${field}" of "${name}", which its \`public\` policy does not allow.`,
+          help: `Add "${field}" to \`collections.${name}.public\`, or remove it from \`api.collections.${name}.fields\`.`,
+        });
+      }
     }
     const lifecycle = site.config.collections[name]?.lifecycle;
     const policy = site.config.collections[name]?.public;

@@ -2,6 +2,7 @@ import { gzipSync } from "node:zlib";
 import type { DataRecord, Site } from "../contracts/index.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { localizeFields } from "../data/record-context.ts";
+import { isPublicReference, publicFields } from "../data/public.ts";
 import { byCodePoint, indexRecords } from "./search-shared.ts";
 
 /** The largest chunk, in bytes, when a collection does not set `index.bytes`. */
@@ -86,11 +87,13 @@ export const collectionIndex: Output = {
     for (const name of Object.keys(site.config.collections)) {
       const entry = site.config.collections[name]?.index;
       if (entry === undefined) continue;
-      const columns = [...entry.fields.filter((field) => field !== "url"), "url"];
+      const policy = site.config.collections[name]?.public;
+      const published = entry.fields.filter((field) => field !== "url" && isPublicReference(policy, field));
+      const columns = [...published, "url"];
       const rows = indexRecords(site, name).map(({ record, page }) => {
-        const fields = localizeFields(record.fields, page.lang, site.config.lang).fields;
+        const fields = publicFields(localizeFields(record.fields, page.lang, site.config.lang).fields, policy);
         return [
-          ...entry.fields.filter((field) => field !== "url").map((field) => cellOf(record, fields, field)),
+          ...published.map((field) => cellOf(record, fields, field)),
           page.url,
         ];
       });

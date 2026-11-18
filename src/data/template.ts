@@ -15,6 +15,7 @@ import { MARKDOWN } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import type { Diagnostic, SiteConfig, SourcePos } from "../contracts/index.ts";
 import { lineIndex, nodePos, sourcePosOf } from "./positions.ts";
+import { publicReferenceDiagnostics, publicReferencesIn } from "./public.ts";
 
 /** One collection's template, read once and ready to instantiate. */
 export interface Template {
@@ -109,6 +110,38 @@ interface ReadTemplateOptions {
 }
 
 /** Reads one template and its localized variants; a problem is a finding and the template is absent. */
+/** Every string in a front-matter value, so a placeholder in a nested mapping is read too. */
+function textsOf(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(textsOf);
+  if (typeof value === "object" && value !== null) return Object.values(value).flatMap(textsOf);
+  return [];
+}
+
+/** Findings for a template that names a field the collection's `public` policy does not publish. */
+function templatePublicDiagnostics(
+  collection: string,
+  config: SiteConfig,
+  frontMatter: Readonly<Record<string, unknown>>,
+  body: string,
+  file: string,
+  bodyLine: number,
+): Diagnostic[] {
+  const policy = config.collections[collection]?.public;
+  if (policy === undefined) return [];
+  const references = new Set([
+    ...textsOf(frontMatter).flatMap(publicReferencesIn),
+    ...publicReferencesIn(body),
+  ]);
+  return publicReferenceDiagnostics(collection, policy, references, `the template ${file}`, {
+    file,
+    line: bodyLine,
+    column: 1,
+    endLine: bodyLine,
+    endColumn: 1,
+  });
+}
+
 async function readTemplate(options: ReadTemplateOptions): Promise<Template | undefined> {
   const { root, sourceDir, collection, template, pos, key, config, diagnostics } = options;
   const value = normalize(template);
@@ -168,6 +201,7 @@ async function readTemplate(options: ReadTemplateOptions): Promise<Template | un
 
   const parsed = parseFrontMatter(text, display);
   diagnostics.push(...parsed.diagnostics);
+  diagnostics.push(...templatePublicDiagnostics(collection, config, parsed.data, parsed.body, display, parsed.bodyLine));
   const localized: Record<string, Template> = {};
   // A language gets its own template when `<name>.<lang>.md` exists beside the declared one. A missing localized
   // file falls back to the declared template, which is the ordinary case for a one-language site.
@@ -201,6 +235,9 @@ async function readTemplate(options: ReadTemplateOptions): Promise<Template | un
     }
     const localizedParsed = parseFrontMatter(localizedText, localizedDisplay);
     diagnostics.push(...localizedParsed.diagnostics);
+    diagnostics.push(
+      ...templatePublicDiagnostics(collection, config, localizedParsed.data, localizedParsed.body, localizedDisplay, localizedParsed.bodyLine),
+    );
     localized[language.code] = {
       collection,
       path: localizedDisplay,

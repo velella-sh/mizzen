@@ -172,6 +172,10 @@ export function publicChangeEvent(event: ChangeEvent, policy: PublicPolicy): Cha
     const path = (match[1] ?? "").trim();
     if (path !== "") paths.push(path);
   }
+  for (const match of text.matchAll(/:::(?:if|each)\{[^}]*\bfield=("[^"]*"|'[^']*'|[^\s}]+)/g)) {
+    const path = (match[1] ?? "").replace(/^["']|["']$/g, "").trim();
+    if (path !== "") paths.push(path);
+  }
   return [...new Set(paths)];
 }
 
