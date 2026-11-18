@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -12,7 +12,7 @@ import { build } from "../src/pipeline/build.ts";
 import { redirects } from "../src/outputs/redirects.ts";
 import { SITEMAP_LIMITS, writeSitemap } from "../src/outputs/sitemap.ts";
 import { ids, pageAt, site, withSite } from "./data-record-site.ts";
-import { urlsOf, withIndexedSite } from "./search-runtime.ts";
+import { loadRuntime, urlsOf, withIndexedSite } from "./search-runtime.ts";
 
 /** A site whose records are addressed by a slug, which may change without changing the record's id. */
 function files(items: string, url: "retain" | "redirect" = "retain"): Record<string, string> {
@@ -215,6 +215,81 @@ test("a retained retired record leaves the sitemap and the search index together
       assert.equal(pageAt(result, "/items/old/")?.frontMatter.search, machine ? undefined : false);
       assert.equal(pageAt(result, "/items/old/")?.frontMatter.sitemap, machine ? undefined : false);
     });
+  }
+});
+
+/** The restore fixture: one record retired behind a redirect, and the same record published again. */
+function restoreFiles(restored: boolean): Record<string, string> {
+  return {
+    "mizzen.yml": [
+      "title: Example",
+      "url: https://example.com",
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      "    template: _templates/item.md",
+      "    permalink: /items/{slug}/",
+      "    dates: [published]",
+      "    lifecycle:",
+      "      states: [current, retired]",
+      "      retired: [retired]",
+      "      replacement: replacedBy",
+      "      url: redirect",
+      "feeds:",
+      "  items:",
+      "    collection: items",
+      "    date: published",
+      "api:",
+      "  collections:",
+      "    items:",
+      "      fields: [summary]",
+      "",
+    ].join("\n"),
+    "_data/items.yml":
+      `- id: old\n  slug: before\n  state: ${restored ? "current" : "retired"}\n` +
+      (restored ? "" : "  replacedBy: new\n") +
+      "  summary: alpha\n  published: 2026-01-01\n" +
+      "- id: new\n  slug: after\n  state: current\n  summary: beta\n  published: 2026-01-02\n",
+    "_templates/item.md": '---\ntitle: "{id}"\nlayout: doc\n---\n# :field[id]\n\n:field[summary]\n',
+  };
+}
+
+test("a restored record comes back at its locked URL and in every output", async () => {
+  const theme = fileURLToPath(new URL("../../lateen", import.meta.url));
+  const root = site(restoreFiles(false));
+  const out = mkdtempSync(join(tmpdir(), "lifecycle-restore-"));
+  try {
+    const retired = await build({ root, out, themeRoot: theme, updateUrls: true });
+    assert.deepEqual(retired.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+    const lock = readFileSync(join(root, URLS_LOCK_FILE), "utf8");
+    assert.equal(JSON.parse(lock).collections.items.old.url, "/items/before/");
+    assert.match(readFileSync(join(out, "items/before/index.html"), "utf8"), /url=https:\/\/example\.com\/items\/after\//);
+
+    writeFileSync(join(root, "_data/items.yml"), restoreFiles(true)["_data/items.yml"]!);
+    const restored = await build({ root, out, themeRoot: theme, updateUrls: true });
+    assert.deepEqual(restored.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+    assert.equal(readFileSync(join(root, URLS_LOCK_FILE), "utf8"), lock);
+
+    const page = readFileSync(join(out, "items/before/index.html"), "utf8");
+    assert.doesNotMatch(page, /url=\/items\/after\//);
+    assert.match(page, /alpha/);
+    assert.match(readFileSync(join(out, "sitemap.xml"), "utf8"), /https:\/\/example\.com\/items\/before\//);
+    assert.match(readFileSync(join(out, "feeds/items.xml"), "utf8"), /https:\/\/example\.com\/items\/before\//);
+    assert.ok(existsSync(join(out, "api/v1/items/old.json")));
+    const api = JSON.parse(readFileSync(join(out, "api/v1/items.json"), "utf8")) as {
+      records: readonly { id: string }[];
+    };
+    assert.deepEqual(api.records.map((record) => record.id), ["new", "old"]);
+
+    const { runtime, restore } = await loadRuntime(out);
+    try {
+      assert.deepEqual(await urlsOf(await runtime.search("alpha")), ["/items/before/"]);
+    } finally {
+      restore();
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(out, { recursive: true, force: true });
   }
 });
 
