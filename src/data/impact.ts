@@ -1,12 +1,12 @@
 /**
  * The check a data-impact prediction is for: the outputs an invalidation plan named against the outputs a build
- * really changed (#828).
+ * really changed (#828), and the Markdown summary a pull request shows for one changed record (#830).
  *
  * A real change the plan did not name is a publication outside the recorded scope, and it keeps the change that
  * produced it, so a report can say which record or file reached past its plan. A planned output the build did not
  * change is reported apart from that: an over-broad plan and an out-of-scope publication are different findings.
  */
-import type { AffectedOutputs } from "../pipeline/dependency-graph.ts";
+import type { AffectedOutputs, ExplainedOutput } from "../pipeline/dependency-graph.ts";
 
 /** What published an output: the record or source file whose change reached it, and what that change was. */
 export interface OutputOrigin {
@@ -64,4 +64,27 @@ export function compareScope(predicted: AffectedOutputs, changed: readonly Publi
   const outside = [...real.values()].filter((output) => !planned.has(output.path));
   const unconfirmed = [...planned].filter((path) => !real.has(path)).sort(byCodePoint);
   return { outside, unconfirmed };
+}
+
+/** The output kinds in the order a summary lists them, so two summaries of one change read alike. */
+const ROLES = ["page", "list", "feed", "api"] as const;
+
+/**
+ * The Markdown a pull request shows for one changed record: the record, how many outputs of each kind it reaches, and a
+ * link to the full report. Kinds with no output are left out, so the table is only the work the change causes.
+ */
+export function impactSummary(record: string, outputs: readonly ExplainedOutput[], report: string): string {
+  const lines = ["<!-- mizzen-data-impact -->", `### Data change: \`${record}\``, ""];
+  const rows = ROLES.map((role) => ({ role, count: outputs.filter((output) => output.role === role).length })).filter(
+    (row) => row.count > 0,
+  );
+  if (rows.length === 0) {
+    lines.push("No published output is affected.", "");
+  } else {
+    lines.push("| Output | Count |", "| --- | ---: |");
+    for (const row of rows) lines.push(`| ${row.role} | ${row.count} |`);
+    lines.push("");
+  }
+  lines.push(`[Full report](${report})`);
+  return `${lines.join("\n")}\n`;
 }
