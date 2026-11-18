@@ -149,6 +149,44 @@ test("a paragraph and a heading edit keep their ids, and a lock without blocks s
   }
 });
 
+test("a block moved to another page keeps its id, and the lock records the move", async () => {
+  const folder = out();
+  const root = tree({
+    "mizzen.yml": "title: Move\n",
+    "a.md": "---\ntitle: A\n---\n# A\n\nStays on A.\n\n<!-- {#mover} -->\nMoves to B.\n",
+    "b.md": "---\ntitle: B\n---\n# B\n\nWas already on B.\n",
+  });
+  const buildWith = () => build({ root, out: folder, themeRoot: THEME, defaultLayout: "doc", updateBlocks: true });
+  const lockOf = () =>
+    JSON.parse(readFileSync(join(root, BLOCKS_LOCK_FILE), "utf8")) as {
+      pages: Record<string, Record<string, number>>;
+      moves?: Record<string, { from: string; to: string }>;
+    };
+  const noErrors = (result: { diagnostics: readonly { severity: string }[] }) =>
+    assert.deepEqual(result.diagnostics.filter((diagnostic) => diagnostic.severity === "error"), []);
+  try {
+    noErrors(await buildWith());
+    assert.ok(lockOf().pages["a.md"]!.mover !== undefined);
+    assert.equal(lockOf().moves, undefined, "a site with no move has no moves");
+
+    writeFileSync(join(root, "a.md"), "---\ntitle: A\n---\n# A\n\nStays on A.\n");
+    writeFileSync(join(root, "b.md"), "---\ntitle: B\n---\n# B\n\nWas already on B.\n\n<!-- {#mover} -->\nMoves to B.\n");
+    noErrors(await buildWith());
+    assert.ok(lockOf().pages["b.md"]!.mover !== undefined, "the id is unchanged on its new page");
+    assert.deepEqual(lockOf().moves, { mover: { from: "a.md", to: "b.md" } });
+    const blocks = JSON.parse(readFileSync(join(folder, "blocks.json"), "utf8")) as {
+      blocks: Record<string, { file: string }>;
+    };
+    assert.equal(blocks.blocks.mover!.file, "b.md");
+
+    noErrors(await buildWith());
+    assert.deepEqual(lockOf().moves, { mover: { from: "a.md", to: "b.md" } }, "a rebuild without a move keeps it");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test("a list page two has no blocks, and no id repeats across the site", async () => {
   const root = tree({
     "mizzen.yml":

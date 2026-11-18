@@ -133,3 +133,31 @@ test("the lock of a build holds each page's ids and lines, and omits pages witho
     blocks: {},
   });
 });
+
+test("a block that moved to another page is recorded once, and a later build keeps the move", () => {
+  const at = (file: string, line: number) => ({ file, line, column: 1, endLine: line, endColumn: 2 });
+  const first = blocksLockOf([
+    page("a.md", [
+      { id: "keep", pos: at("a.md", 5), fingerprint: "h1" },
+      { id: "mover", pos: at("a.md", 9), fingerprint: "h2" },
+    ]),
+    page("b.md", [{ id: "host", pos: at("b.md", 5), fingerprint: "h3" }]),
+  ]);
+  assert.deepEqual(first.moves, undefined, "a lock with no move has no moves");
+
+  const moved = blocksLockOf([
+    page("a.md", [{ id: "keep", pos: at("a.md", 5), fingerprint: "h1" }]),
+    page("b.md", [
+      { id: "host", pos: at("b.md", 5), fingerprint: "h3" },
+      { id: "mover", pos: at("b.md", 9), fingerprint: "h2" },
+    ]),
+  ], first);
+  assert.deepEqual(moved.moves, { mover: { from: "a.md", to: "b.md" } });
+
+  const again = blocksLockOf([
+    page("a.md", [{ id: "keep", pos: at("a.md", 5), fingerprint: "h1" }]),
+    page("b.md", [{ id: "host", pos: at("b.md", 5), fingerprint: "h3" }, { id: "mover", pos: at("b.md", 9), fingerprint: "h2" }]),
+  ], moved);
+  assert.deepEqual(again.moves, { mover: { from: "a.md", to: "b.md" } }, "a build without a move keeps the last one");
+  assert.equal(blocksLockText(moved), blocksLockText(again), "the move is written canonically and once");
+});

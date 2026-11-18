@@ -35,6 +35,11 @@ export interface BlocksLock {
   readonly pages: Readonly<Record<string, Readonly<Record<string, number>>>>;
   /** Block ids mapped to the page and fingerprint they were recorded with; absent in locks written before matching. */
   readonly blocks?: Readonly<Record<string, RecordedBlock>>;
+  /**
+   * Each block's last move, by id: the page it was recorded on and the page it is on now. Absent when nothing moved,
+   * and kept across later builds until the block moves again.
+   */
+  readonly moves?: Readonly<Record<string, { readonly from: string; readonly to: string }>>;
 }
 
 /** An empty lock. */
@@ -105,18 +110,21 @@ export async function writeBlocksLock(root: string, lock: BlocksLock): Promise<v
   await writeFile(join(root, BLOCKS_LOCK_FILE), blocksLockText(lock));
 }
 
-/** The lock a clean build would write: every page's ids and lines, and each block's fingerprint. */
-export function blocksLockOf(pages: readonly Page[]): BlocksLock {
+/** The lock a clean build would write: every page's ids and lines, each block's fingerprint, and every move. */
+export function blocksLockOf(pages: readonly Page[], previous?: BlocksLock): BlocksLock {
   const locked: Record<string, Record<string, number>> = {};
   const blocks: Record<string, RecordedBlock> = {};
+  const moves: Record<string, { readonly from: string; readonly to: string }> = { ...previous?.moves };
   for (const page of pages) {
     if (page.blocks === undefined || page.blocks.length === 0) continue;
     const ids: Record<string, number> = {};
     for (const block of page.blocks) {
       ids[block.id] = block.pos.line;
       if (block.fingerprint !== undefined) blocks[block.id] = { file: page.source.file, fingerprint: block.fingerprint };
+      const from = previous?.blocks?.[block.id]?.file;
+      if (from !== undefined && from !== page.source.file) moves[block.id] = { from, to: page.source.file };
     }
     locked[page.source.file] = ids;
   }
-  return { version: 1, pages: locked, blocks };
+  return { version: 1, pages: locked, blocks, ...(Object.keys(moves).length === 0 ? {} : { moves }) };
 }

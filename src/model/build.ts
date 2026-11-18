@@ -605,6 +605,6 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     diagnostics: sortDiagnostics(diagnostics.all),
     parsedPages,
     urls,
-    blocksLock: blocksLockOf(pages),
+    blocksLock: blocksLockOf(pages, blocksLock.lock),
   };
 }
