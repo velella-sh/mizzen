@@ -218,6 +218,63 @@ test("a config with quality parses without errors", async () => {
   });
 });
 
+/** A completeness rule on `author` for `b`, with a rule `severity` and a policy entry each when given. */
+function severitySite(ruleSeverity?: string, policy?: string): Record<string, string> {
+  return {
+    "mizzen.yml": [
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      "quality:",
+      "  rules:",
+      "    - kind: completeness",
+      "      collection: items",
+      "      fields: [author]",
+      ...(ruleSeverity === undefined ? [] : [`      severity: ${ruleSeverity}`]),
+      ...(policy === undefined ? [] : ["  policy:", `    completeness: ${policy}`]),
+      "",
+    ].join("\n"),
+    "_data/items.yml": "- id: a\n  author: Ada\n- id: b\n",
+  };
+}
+
+test("a rule severity of error fails the build, and outranks the policy", async () => {
+  const errorRoot = tree(severitySite("error", "warning"));
+  try {
+    const { code, printed } = await qualityJson(errorRoot);
+    assert.equal(code, 1);
+    assert.deepEqual(printed.diagnostics, []);
+    assert.deepEqual(printed.findings.map((finding) => (finding as { severity: string }).severity), ["error"]);
+    assert.deepEqual(printed.totals, { findings: 1, warnings: 0, errors: 1 });
+    assert.deepEqual(printed.groups, {
+      items: { completeness: { kind: "completeness", count: 1, warnings: 0, errors: 1 } },
+    });
+  } finally {
+    rmSync(errorRoot, { recursive: true, force: true });
+  }
+
+  const warningRoot = tree(severitySite("warning", "error"));
+  try {
+    const { code, printed } = await qualityJson(warningRoot);
+    assert.equal(code, 0, "a warning rule keeps the build green under an error policy");
+    assert.deepEqual(printed.findings.map((finding) => (finding as { severity: string }).severity), ["warning"]);
+  } finally {
+    rmSync(warningRoot, { recursive: true, force: true });
+  }
+});
+
+test("an unknown rule severity is a config diagnostic, not a finding", async () => {
+  const root = tree(severitySite("warn"));
+  try {
+    const { config, diagnostics } = loadConfig(root);
+    assert.deepEqual(config.quality?.rules, [{ kind: "completeness", collection: "items", fields: ["author"] }]);
+    assert.deepEqual(diagnostics.map((diagnostic) => diagnostic.id), ["config.invalid"]);
+    assert.match(diagnostics[0]!.message, /severity/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("data quality exits 1 only when the policy makes a finding an error", async () => {
   const strict = tree({ ...SITE, "mizzen.yml": `${SITE["mizzen.yml"]!}  policy:\n    completeness: error\n` });
   try {

@@ -454,12 +454,14 @@ function qualityRuleFrom(value: unknown): QualityRule | undefined {
     typeof entry === "number" && Number.isFinite(entry) ? entry : undefined;
   const min = bound(value.min);
   const max = bound(value.max);
+  const severity = value.severity === "warning" || value.severity === "error" ? value.severity : undefined;
   return {
     kind,
     collection: value.collection,
     ...(fields === undefined || fields.length === 0 ? {} : { fields }),
     ...(typeof value.field === "string" && value.field !== "" ? { field: value.field } : {}),
     ...(isPlainObject(value.where) ? { where: value.where } : {}),
+    ...(severity === undefined ? {} : { severity }),
     ...(typeof maxDrop === "number" && Number.isSafeInteger(maxDrop) && maxDrop >= 0 ? { maxDrop } : {}),
     ...(typeof maxAgeDays === "number" && Number.isSafeInteger(maxAgeDays) && maxAgeDays > 0 ? { maxAgeDays } : {}),
     ...(min === undefined ? {} : { min }),

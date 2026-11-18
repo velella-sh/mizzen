@@ -367,6 +367,8 @@ export interface QualityRule {
   readonly field?: string;
   /** A record must match to be in scope, written like a list page's `where`. Default: every record. */
   readonly where?: Readonly<Record<string, unknown>>;
+  /** How this rule's findings are reported. Default: the policy for its kind, then `warning`. */
+  readonly severity?: "warning" | "error";
   /** For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds. */
   readonly maxDrop?: number;
   /** For `freshness`: how many days before the as-of date a record's date may be. Required for that kind. */

@@ -470,7 +470,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
       continue;
     }
 
-    const severity = config.quality?.policy[rule.kind] ?? "warning";
+    const severity = rule.severity ?? config.quality?.policy[rule.kind] ?? "warning";
     if (rule.kind === "completeness") {
       const fields = rule.fields ?? fieldsOf(checked);
       for (const record of checked) {

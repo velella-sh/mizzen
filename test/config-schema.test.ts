@@ -38,6 +38,7 @@ test("every key of SiteConfig is in the schema and vice versa, at every level", 
   assert.deepEqual(sorted(Object.keys(schema.properties!.theme!.properties!)), sorted(contractKeys("ThemeConfig")));
   assert.deepEqual(sorted(Object.keys(schema.properties!.api!.properties!)), sorted(contractKeys("ApiConfig")));
   assert.deepEqual(sorted(Object.keys(defs.apiCollection!.properties!)), sorted(contractKeys("ApiCollectionConfig")));
+  assert.deepEqual(sorted(Object.keys(defs.qualityRule!.properties!)), sorted(contractKeys("QualityRule")));
   const search = (schema.properties!.search as { oneOf: Schema[] }).oneOf.find((s) => s.properties)!;
   assert.deepEqual(sorted(Object.keys(search.properties!)), sorted(contractKeys("SearchConfig")));
 });
@@ -101,7 +102,7 @@ test("valid configs pass", () => {
     { api: { version: "v2", collections: { packages: { fields: ["name"], id: "key" } } } },
     {
       quality: {
-        rules: [{ kind: "completeness", collection: "items", fields: ["author"], where: { status: "stable" } }],
+        rules: [{ kind: "completeness", collection: "items", fields: ["author"], where: { status: "stable" }, severity: "error" }],
         exceptions: [{ rule: "completeness", record: "b", field: "author", reason: "Not written yet", until: "2026-12-31" }],
         policy: { completeness: "error", coverage: "warning", count: "warning" },
       },
@@ -207,6 +208,7 @@ test("invalid configs fail", () => {
     ["outputs with a non-boolean", { outputs: { twins: "off" } }],
     ["a freshness rule with a zero maxAgeDays", { quality: { rules: [{ kind: "freshness", collection: "items", field: "updated", maxAgeDays: 0 }] } }],
     ["a freshness rule with an empty field", { quality: { rules: [{ kind: "freshness", collection: "items", field: "", maxAgeDays: 30 }] } }],
+    ["a rule severity other than warning or error", { quality: { rules: [{ kind: "completeness", collection: "items", severity: "warn" }] } }],
     ["the whole config a list", []],
   ];
   for (const [name, config] of invalid) assert.equal(validate(config), false, name);
