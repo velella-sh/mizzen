@@ -239,6 +239,22 @@ export type OnRemovedConfig =
       readonly redirect: string;
     };
 
+/** A record's state in a collection's lifecycle, and what a retired record's URL does. */
+export interface CollectionLifecycleConfig {
+  /** Field that holds a record's state. Default `state`. */
+  readonly field?: string;
+  /** States a record may have; a value outside the list is reported. Default `[]`: every state is accepted. */
+  readonly states?: readonly string[];
+  /** States that mean a record is retired. Default `[]`: no state retires a record. */
+  readonly retired?: readonly string[];
+  /** Field that holds the id of the record that replaces a retired one. */
+  readonly replacement?: string;
+  /** What a retired record's URL does: `retain` keeps its page, `redirect` sends readers to the replacement. Default `retain`. */
+  readonly url?: "retain" | "redirect";
+  /** `true` marks a retired record for machine readers, such as the page JSON. Default `false`. */
+  readonly machine?: boolean;
+}
+
 /** One data collection: where its records come from, and how its pages are built. */
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root. */
@@ -293,6 +309,8 @@ export interface CollectionConfig {
   readonly onInvalid?: "error" | "skip";
   /** What a record that was published and is no longer in the collection does. Default `error` once `urls.lock.json` exists. */
   readonly onRemoved?: OnRemovedConfig;
+  /** A record's state in the collection's lifecycle, and what a retired record's URL does. Unset: every record is published. */
+  readonly lifecycle?: CollectionLifecycleConfig;
   /** Limits on this collection's source. */
   readonly limits?: DataLimitsConfig;
   /** Extra named pages built from every record, each with its own template, URL pattern, and layout. Default `{}`. */

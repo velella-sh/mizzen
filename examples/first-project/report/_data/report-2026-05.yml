@@ -1,0 +1,16 @@
+- metric: requests
+  value: 123200
+  unit: requests/day
+  change: 1.8
+- metric: errors
+  value: 1.1
+  unit: percent
+  change: 0.2
+- metric: latency-p95
+  value: 300
+  unit: milliseconds
+  change: -8
+- metric: uptime
+  value: 99.94
+  unit: percent
+  change: 0

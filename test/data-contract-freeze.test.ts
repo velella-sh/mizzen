@@ -108,6 +108,7 @@ const FROZEN: Shape = {
     "view": "?string",
     "views": "?Readonly<Record<string, string>>",
     "previousUrls": "?readonly string[]",
+    "replacementUrl": "?string",
     "changes": "?readonly ChangeEvent[]",
   },
   RecordProps: {

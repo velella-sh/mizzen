@@ -24,6 +24,7 @@ import type {
   CollectionConfig,
   CollectionIndexConfig,
   CollectionChangelogConfig,
+  CollectionLifecycleConfig,
   CollectionRawConfig,
   CollectionJsonConfig,
   CollectionSearchConfig,
@@ -538,6 +539,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const seo = collectionSeoFrom(entry.seo);
     const index = collectionIndexFrom(entry.index);
     const onRemoved = onRemovedFrom(entry.onRemoved);
+    const lifecycle = lifecycleFrom(entry.lifecycle);
     const json = collectionJsonFrom(entry.json);
     const raw = collectionRawFrom(entry.raw);
     const changelog = collectionChangelogFrom(entry.changelog);
@@ -565,6 +567,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(typeof entry.evidence === "string" ? { evidence: entry.evidence } : {}),
       ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
       ...(onRemoved === undefined ? {} : { onRemoved }),
+      ...(lifecycle === undefined ? {} : { lifecycle }),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
       ...(views === undefined ? {} : { views }),
       ...(search === undefined ? {} : { search }),
@@ -754,6 +757,25 @@ function collectionChangelogFrom(value: unknown): CollectionChangelogConfig | un
     ...(Object.keys(labels).length === 0 ? {} : { labels }),
     ...(typeof threshold === "number" && Number.isSafeInteger(threshold) && threshold >= 1 ? { importThreshold: threshold } : {}),
     ...(typeof value.pages === "boolean" ? { pages: value.pages } : {}),
+  };
+}
+
+/** A collection's `lifecycle` block as the contract holds it; absent when it declares none. */
+function lifecycleFrom(value: unknown): CollectionLifecycleConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const strings = (raw: unknown): readonly string[] | undefined =>
+    Array.isArray(raw) && raw.every((entry): entry is string => typeof entry === "string") ? raw : undefined;
+  const states = strings(value.states);
+  const retired = strings(value.retired);
+  return {
+    ...(typeof value.field === "string" && value.field !== "" ? { field: value.field } : {}),
+    ...(states === undefined ? {} : { states }),
+    ...(retired === undefined ? {} : { retired }),
+    ...(typeof value.replacement === "string" && value.replacement !== ""
+      ? { replacement: value.replacement }
+      : {}),
+    ...(value.url === "retain" || value.url === "redirect" ? { url: value.url } : {}),
+    ...(typeof value.machine === "boolean" ? { machine: value.machine } : {}),
   };
 }
 

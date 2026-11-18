@@ -7,6 +7,7 @@ import { manifest } from "../src/outputs/manifest.ts";
 import { sourcemap } from "../src/outputs/sourcemap.ts";
 import { twins } from "../src/outputs/twins.ts";
 import type { OutputContext } from "../src/contracts/index.ts";
+import { recordsWithoutOutput } from "../src/data/pages.ts";
 import { ids, pageAt, site, withSite } from "./data-record-site.ts";
 
 const FILES = {
@@ -74,6 +75,44 @@ test("a record page and a file page with one URL collide with one error naming b
       assert.match(finding.message, /components\/button\.md/);
       assert.match(finding.message, /_data\/components\.yml/);
       assert.equal(result.site.pages.filter((page) => page.url === "/components/button/").length, 1);
+    },
+  );
+});
+
+test("a record a publishable collection gives no page is reported with its id and why", async () => {
+  await withSite(
+    {
+      "mizzen.yml":
+        "collections:\n" +
+        "  components:\n" +
+        "    source: _data/components.yml\n" +
+        "    template: _templates/components.md\n" +
+        "    permalink: /components/{slug}/\n" +
+        "  parts:\n" +
+        "    source: _data/parts.yml\n" +
+        "    template: _templates/components.md\n" +
+        "    permalink: /parts/\n" +
+        "  tags:\n" +
+        "    source: _data/tags.yml\n",
+      "_data/components.yml": "- id: button\n  slug: button\n- id: orphan\n  name: Orphan\n",
+      "_data/parts.yml": "- id: nut\n- id: bolt\n",
+      "_data/tags.yml": "- id: css\n",
+      "_templates/components.md": "---\ntitle: \"{id}\"\nlayout: record\n---\n# :field[id]\n",
+    },
+    (_root, result) => {
+      assert.deepEqual(
+        recordsWithoutOutput(result.site),
+        [
+          {
+            collection: "components",
+            id: "orphan",
+            reason: 'The URL pattern of components.orphan names "slug", which the record does not hold as a scalar.',
+          },
+          { collection: "parts", id: "bolt", reason: "No page was built for the record." },
+          { collection: "parts", id: "nut", reason: "No page was built for the record." },
+        ],
+        "the record with a page and collections without a template or permalink are left out",
+      );
     },
   );
 });

@@ -724,6 +724,57 @@
           ],
           "description": "What a record that was published and is no longer in the collection does: error fails the build, gone writes a removed notice, or redirect sends readers to a page. Default error once urls.lock.json exists."
         },
+        "lifecycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "field": {
+              "type": "string",
+              "minLength": 1,
+              "default": "state",
+              "description": "Field that holds a record's state. Default `state`."
+            },
+            "states": {
+              "type": "array",
+              "default": [],
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "States a record may have; a value outside the list is reported. Default []: every state is accepted."
+            },
+            "retired": {
+              "type": "array",
+              "default": [],
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "States that mean a record is retired. Default []: no state retires a record."
+            },
+            "replacement": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Field that holds the id of the record that replaces a retired one."
+            },
+            "url": {
+              "enum": [
+                "retain",
+                "redirect"
+              ],
+              "default": "retain",
+              "description": "What a retired record's URL does: retain keeps its page, redirect sends readers to the replacement. Default retain."
+            },
+            "machine": {
+              "type": "boolean",
+              "default": false,
+              "description": "true marks a retired record for machine readers, such as the page JSON. Default false."
+            }
+          },
+          "description": "A record's state in the collection's lifecycle, and what a retired record's URL does. Unset: every record is published."
+        },
         "limits": {
           "$ref": "#/$defs/dataLimits",
           "description": "Limits on this collection's source."
