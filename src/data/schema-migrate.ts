@@ -66,8 +66,9 @@ export async function dataMigrate(options: { readonly root: string; readonly nam
       continue;
     }
     const file = resolve(options.root, entry.source);
-    const display = relative(options.root, file).split(sep).join("/");
-    if (display === ".." || display.startsWith(`..${sep}`) || isAbsolute(display)) {
+    const sourcePath = relative(options.root, file);
+    const display = sourcePath.split(sep).join("/");
+    if (sourcePath === ".." || sourcePath.startsWith(`..${sep}`) || isAbsolute(sourcePath)) {
       errors.push(`${name}: "${entry.source}" is outside the site root.`);
       code = 1;
       continue;

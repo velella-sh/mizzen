@@ -1571,7 +1571,8 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     try {
       const { config: loaded, diagnostics: configDiagnostics } = loadConfig(root);
       const config = asOf === undefined ? loaded : { ...loaded, asOf };
-      const report = await checkQuality({ root, config, write: options.write });
+      const configFailed = configDiagnostics.some((finding) => finding.severity === "error");
+      const report = await checkQuality({ root, config, write: options.write === true && !configFailed });
       const diagnostics = [...configDiagnostics, ...report.diagnostics];
       if (options.json) {
         log(JSON.stringify({ findings: report.findings, exceptions: report.exceptions, scopes: report.scopes, groups: report.groups, totals: report.totals, diagnostics, ...(report.wrote === undefined ? {} : { wrote: report.wrote }) }, null, 2));

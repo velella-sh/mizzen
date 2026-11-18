@@ -281,6 +281,26 @@ test("data migrate previews a renamed record and a rejected one by line without 
   }
 });
 
+test("data migrate refuses a source outside the site root", async () => {
+  const parent = mkdtempSync(join(tmpdir(), "data-migrate-outside-"));
+  const root = join(parent, "site");
+  try {
+    mkdirSync(join(root, "_data"), { recursive: true });
+    writeFileSync(
+      join(root, "mizzen.yml"),
+      "collections:\n  items:\n    source: ../outside.yml\n    schema: _data/items.schema.json\n",
+    );
+    writeFileSync(join(root, "_data", "items.schema.json"), schema({ id: { type: "string" } }, ["id"]));
+    writeFileSync(join(parent, "outside.yml"), "- id: outside\n");
+
+    const result = await migrate(root, "items");
+    assert.equal(result.code, 1);
+    assert.match(result.output, /items: "\.\.\/outside\.yml" is outside the site root\./);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
 test("a schema equal to its baseline is reported as matching, and the parser refuses an unknown format", async () => {
   const root = tree();
   assert.equal((await dataSnapshot({ root, name: "items" })).code, 0);

@@ -556,6 +556,33 @@ test("a malformed baseline is a diagnostic", async () => {
   }
 });
 
+test("--write leaves the baseline untouched when a collection cannot load", async () => {
+  const baseline = baselineOf({ id: 100, author: 100 });
+  const root = tree({ ...coverageSite(10, baseline), "_data/items.yml": "- id: [\n" });
+  try {
+    const written = await qualityJson(root, "--write");
+    assert.equal(written.code, 1);
+    assert.equal(written.printed.wrote, undefined);
+    assert.equal(readFileSync(join(root, "data-quality.json"), "utf8"), baseline);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--write leaves the baseline untouched when the config is invalid", async () => {
+  const baseline = baselineOf({ id: 100, author: 100 });
+  const site = coverageSite(10, baseline);
+  const root = tree({ ...site, "mizzen.yml": `${site["mizzen.yml"]}unknown: true\n` });
+  try {
+    const written = await qualityJson(root, "--write");
+    assert.equal(written.code, 1);
+    assert.equal(written.printed.wrote, undefined);
+    assert.equal(readFileSync(join(root, "data-quality.json"), "utf8"), baseline);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("--write records a baseline that a second run passes", async () => {
   const root = tree(coverageSite(10));
   try {
