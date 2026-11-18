@@ -344,7 +344,12 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, now.bytes);
   }
-  const lock: DataLock = { version: 1, sources: sortedSources(next), ...(Object.keys(snapshots).length > 0 ? { snapshots } : {}) };
+  const lock: DataLock = {
+    version: 1,
+    sources: sortedSources(next),
+    ...(Object.keys(snapshots).length > 0 ? { snapshots } : {}),
+    ...(pinned.lock.extractions === undefined ? {} : { extractions: pinned.lock.extractions }),
+  };
   await writeLock(root, lock);
   messages.push(`wrote ${LOCK_FILE}`);
   return { code: 0, messages, errors };
