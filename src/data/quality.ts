@@ -8,6 +8,9 @@
  * `coverage` and `count` compare the current data with `data-quality.json` in the site root, which `--write` records. A
  * missing or malformed baseline is a diagnostic, never a throw, and nothing reads the clock, so two runs over the same
  * files print the same lines.
+ *
+ * A configured exception, with a reason and an optional last day, holds back the findings it covers. An exception whose
+ * day has passed, or that covers no finding, is a warning diagnostic; it is not a failed build.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -15,6 +18,7 @@ import type {
   Collection,
   DataRecord,
   Diagnostic,
+  QualityException,
   QualityRule,
   QualityRuleKind,
   SiteConfig,
@@ -82,10 +86,18 @@ export interface QualityScope {
   readonly outOfScope: readonly string[];
 }
 
+/** One configured exception that held findings back, with their ids. */
+export interface ActiveQualityException extends QualityException {
+  /** The findings it held back, by id, in finding order. */
+  readonly suppressed: readonly string[];
+}
+
 /** What {@link checkQuality} found, ready for the CLI to print. */
 export interface QualityReport {
-  /** Findings in config order, then source order, then field order. */
+  /** Findings in config order, then source order, then field order, without the ones an exception holds back. */
   readonly findings: readonly QualityFinding[];
+  /** The exceptions that held a finding back, in config order. */
+  readonly exceptions: readonly ActiveQualityException[];
   /** One entry per rule that reads a loaded collection. */
   readonly scopes: readonly QualityScope[];
   /** Problems reading the config, the collections, the baseline, or a rule. */
@@ -283,6 +295,64 @@ async function writeBaseline(root: string, baseline: Baseline): Promise<void> {
   await writeFile(join(root, BASELINE_FILE), `${canonicalJson(baseline)}\n`);
 }
 
+/** True when an exception covers a finding: the rule kind, and the record and field it names when it names them. */
+function coversException(exception: QualityException, finding: QualityFinding): boolean {
+  return exception.rule === finding.kind &&
+    (exception.record === undefined || exception.record === finding.record) &&
+    (exception.field === undefined || exception.field === finding.field);
+}
+
+/** What an exception covers, for a diagnostic. */
+function exceptionScopeText(exception: QualityException): string {
+  const parts = [
+    exception.record === undefined ? undefined : `record "${exception.record}"`,
+    exception.field === undefined ? undefined : `field "${exception.field}"`,
+  ].filter((part): part is string => part !== undefined);
+  return parts.length === 0 ? "every record" : parts.join(" and ");
+}
+
+/** Holds back the findings an exception covers, in config order, and reports the exceptions that cover nothing. */
+function applyExceptions(
+  findings: readonly QualityFinding[],
+  exceptions: readonly QualityException[],
+  asOf: string | undefined,
+  diagnostics: Diagnostic[],
+): { readonly findings: readonly QualityFinding[]; readonly exceptions: readonly ActiveQualityException[] } {
+  const suppressed = exceptions.map(() => [] as string[]);
+  // A deadline is judged only against the site's as-of date: without one, the build has no clock.
+  const expired = exceptions.map((exception) =>
+    exception.until !== undefined && asOf !== undefined && exception.until < asOf);
+  const kept: QualityFinding[] = [];
+  for (const finding of findings) {
+    const at = exceptions.findIndex((exception, index) => !expired[index] && coversException(exception, finding));
+    if (at === -1) kept.push(finding);
+    else suppressed[at]!.push(finding.id);
+  }
+  for (const [at, exception] of exceptions.entries()) {
+    const held = suppressed[at]!;
+    if (expired[at]) {
+      diagnostics.push({
+        id: "data.quality-exception",
+        severity: "warning",
+        message: `The ${exception.rule} exception for ${exceptionScopeText(exception)} expired on ${exception.until}, so it no longer holds.`,
+        help: "Remove the exception, or move its until date.",
+      });
+    } else if (held.length === 0) {
+      diagnostics.push({
+        id: "data.quality-exception",
+        severity: "warning",
+        message: `The ${exception.rule} exception for ${exceptionScopeText(exception)} held back no finding.`,
+        help: "Remove the exception, or fix the rule, record, or field it names.",
+      });
+    }
+  }
+  return {
+    findings: kept,
+    exceptions: exceptions.flatMap((exception, at) =>
+      suppressed[at]!.length === 0 ? [] : [{ ...exception, suppressed: suppressed[at]! }]),
+  };
+}
+
 /**
  * Applies every rule to the collections it names. A collection that did not load, a missing `maxDrop`, and a missing
  * baseline entry are diagnostics, never a throw: the other rules still run.
@@ -294,7 +364,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
   const findings: QualityFinding[] = [];
   const scopes: QualityScope[] = [];
   const rules = config.quality?.rules ?? [];
-  if (rules.length === 0 && !write) return { findings, scopes, diagnostics };
+  if (rules.length === 0 && !write) return { findings, exceptions: [], scopes, diagnostics };
 
   const loaded = await loadCollections({ root, config });
   diagnostics.push(...loaded.diagnostics);
@@ -538,8 +608,9 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
       if (collectionScopes[NO_SCOPE] === undefined) collectionScopes[NO_SCOPE] = snapshotOf(loaded.collections[name]!.records);
     }
     await writeBaseline(root, draft);
-    return { findings, scopes, diagnostics, wrote: BASELINE_FILE };
+    return { findings, exceptions: [], scopes, diagnostics, wrote: BASELINE_FILE };
   }
 
-  return { findings, scopes, diagnostics };
+  const applied = applyExceptions(findings, config.quality?.exceptions ?? [], config.asOf, diagnostics);
+  return { findings: applied.findings, exceptions: applied.exceptions, scopes, diagnostics };
 }

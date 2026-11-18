@@ -35,6 +35,32 @@ async function check(files: Record<string, string> = SITE) {
   }
 }
 
+/** {@link SITE}'s rule, with one exception for `record` (every record when omitted) that holds until `until`. */
+function exceptionSite(asOf: string | undefined, record: string | undefined, until: string): Record<string, string> {
+  return {
+    "mizzen.yml": [
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      ...(asOf === undefined ? [] : [`asOf: ${asOf}`]),
+      "quality:",
+      "  rules:",
+      "    - kind: completeness",
+      "      collection: items",
+      "      fields: [author]",
+      "      where: { status: stable }",
+      "  exceptions:",
+      "    - rule: completeness",
+      ...(record === undefined ? [] : [`      record: ${record}`]),
+      "      field: author",
+      "      reason: Waiting for the author",
+      `      until: ${until}`,
+      "",
+    ].join("\n"),
+    "_data/items.yml": SITE["_data/items.yml"]!,
+  };
+}
+
 /** A site with one coverage rule for `author`: `a` holds it and `b` does not, so coverage is 50%. */
 function coverageSite(maxDrop: number, baseline?: string): Record<string, string> {
   return {
@@ -90,6 +116,7 @@ async function qualityJson(root: string, ...extra: readonly string[]): Promise<{
   readonly code: number;
   readonly printed: {
     readonly findings: readonly unknown[];
+    readonly exceptions: readonly unknown[];
     readonly scopes: readonly unknown[];
     readonly diagnostics: readonly unknown[];
     readonly wrote?: string;
@@ -127,6 +154,56 @@ test("a record outside the rule's where is out of scope, not a finding", async (
     ["b"],
     "the out-of-scope record never becomes a finding",
   );
+});
+
+test("an exception with a reason holds its finding back through its until day", async () => {
+  const { report } = await check(exceptionSite("2026-06-01", "b", "2026-06-01"));
+  assert.deepEqual(report.diagnostics, []);
+  assert.deepEqual(report.findings, []);
+  assert.deepEqual(report.exceptions, [{
+    rule: "completeness",
+    record: "b",
+    field: "author",
+    reason: "Waiting for the author",
+    until: "2026-06-01",
+    suppressed: ["data.quality.completeness.items.b.author"],
+  }]);
+});
+
+test("an exception past its until day reports as expired and no longer holds", async () => {
+  const { report } = await check(exceptionSite("2026-06-02", "b", "2026-06-01"));
+  assert.deepEqual(report.findings.map((finding) => finding.id), ["data.quality.completeness.items.b.author"]);
+  assert.deepEqual(report.exceptions, []);
+  assert.deepEqual(report.diagnostics.map((diagnostic) => diagnostic.id), ["data.quality-exception"]);
+  assert.equal(report.diagnostics[0]!.severity, "warning");
+  assert.match(report.diagnostics[0]!.message, /expired on 2026-06-01/);
+});
+
+test("an exception that holds back no finding reports as unused", async () => {
+  const { report } = await check(exceptionSite("2026-06-01", "a", "2026-12-31"));
+  assert.deepEqual(report.findings.map((finding) => finding.id), ["data.quality.completeness.items.b.author"]);
+  assert.deepEqual(report.exceptions, []);
+  assert.deepEqual(report.diagnostics.map((diagnostic) => diagnostic.id), ["data.quality-exception"]);
+  assert.match(report.diagnostics[0]!.message, /held back no finding/);
+});
+
+test("without an as-of date a dated exception still holds, and the JSON report lists it", async () => {
+  const root = tree(exceptionSite(undefined, undefined, "2020-01-01"));
+  try {
+    const { code, printed } = await qualityJson(root);
+    assert.equal(code, 0);
+    assert.deepEqual(printed.diagnostics, []);
+    assert.deepEqual(printed.findings, []);
+    assert.deepEqual(printed.exceptions, [{
+      rule: "completeness",
+      field: "author",
+      reason: "Waiting for the author",
+      until: "2020-01-01",
+      suppressed: ["data.quality.completeness.items.b.author"],
+    }]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("a config with quality parses without errors", async () => {
