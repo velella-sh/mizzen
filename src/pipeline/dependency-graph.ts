@@ -24,11 +24,16 @@ import { unified } from "unified";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { expandIncludes } from "../content/includes.ts";
+import { unsafeIdReason } from "../api/ids.ts";
+import { apiCollections, apiDir } from "../api/model.ts";
+import { apiVersions } from "../api/versions.ts";
 import type { Diagnostic, Page, Site, SourcePos } from "../contracts/index.ts";
 import type { DataLock } from "../data/lock.ts";
 import { LOCK_FILE, readLock, storedPath } from "../data/lock.ts";
 import { URLS_LOCK_FILE } from "../data/urls-lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
+import { feedIsWritten } from "../feeds/entries.ts";
+import { feedFile } from "../feeds/files.ts";
 import { sortDiagnostics } from "./diagnostics.ts";
 
 /** What a node stands for. A file has one kind: its role in the build, with discovery's role winning. */
@@ -753,6 +758,60 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
       // Every page of a paginated or expanded list is its own output, so the records each one shows link to it.
       for (const record of page.list.records) addRecordEdge(outputId, page.list.collection, record.id);
       for (const group of page.list.groups) for (const record of group.records) addRecordEdge(outputId, page.list.collection, record.id);
+    }
+  }
+
+  // A feed lists its collection's records through the filter a list page uses, so it depends on the collection as a
+  // whole: a record edited to match the filter joins the feed even though no output page names it yet.
+  if (config.outputs.feeds !== false) {
+    for (const name of Object.keys(config.feeds).sort(byCodePoint)) {
+      const feed = config.feeds[name]!;
+      if (!feedIsWritten(options.site, name)) continue;
+      for (const format of feed.formats ?? ["atom"]) {
+        const path = `/${feedFile(name, format)}`;
+        const id = outputNodeId(path);
+        addNode({ id, kind: "output", path, role: "feed" });
+        if (collectionPaths.has(feed.collection)) addEdge(id, collectionNodeId(feed.collection));
+      }
+    }
+  }
+
+  // The API writes one file per published record and one aggregate per version and collection. A record file depends on
+  // its record; an aggregate holds every record of its collection, so it depends on the collection as a whole.
+  if (config.api !== undefined && config.outputs.api !== false) {
+    for (const version of apiVersions(options.site, () => {})) {
+      const scoped: Site = {
+        ...options.site,
+        config: { ...config, api: { version: version.version, collections: version.collections } },
+      };
+      const dir = apiDir(scoped);
+      const collections = apiCollections(scoped);
+      const aggregate = (file: string, dependencies: readonly string[]): void => {
+        const path = `/${file}`;
+        const id = outputNodeId(path);
+        addNode({ id, kind: "output", path, role: "api" });
+        for (const dependency of dependencies) addEdge(id, dependency);
+      };
+      const published = collections.filter((collection) => collectionPaths.has(collection.name));
+      const all = published.map((collection) => collectionNodeId(collection.name));
+      aggregate(`${dir}/index.json`, all);
+      aggregate(`${dir}/openapi.json`, all);
+      for (const collection of collections) {
+        const collectionId = collectionNodeId(collection.name);
+        const depends = collectionPaths.has(collection.name) ? [collectionId] : [];
+        aggregate(`${dir}/${collection.name}.json`, depends);
+        aggregate(`${dir}/${collection.name}.ndjson`, depends);
+        if (collection.hasSchema) aggregate(`${dir}/schemas/${collection.name}.json`, depends);
+        for (const record of collection.records) {
+          if (unsafeIdReason(record.id) !== undefined) continue;
+          const recordId = recordNodeId(collection.name, record.id);
+          if (!recordNodes.has(recordId)) continue;
+          const path = `/${dir}/${collection.name}/${record.id}.json`;
+          const id = outputNodeId(path);
+          addNode({ id, kind: "output", path, role: "api" });
+          addEdge(id, recordId);
+        }
+      }
     }
   }
 
