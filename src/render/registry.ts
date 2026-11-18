@@ -63,6 +63,8 @@ export interface ThemeRegistry {
 const UNIT_FOLDERS = new Set(["layouts", "chrome", "components"]);
 
 type UnitFolder = "layouts" | "chrome" | "components";
+/** The folders a site module may replace; chrome and shared styles keep the theme's. */
+type OverrideFolder = "layouts" | "components";
 
 /** What a site may replace, and the root its module paths are relative to. */
 export interface RegistryOptions {
@@ -77,7 +79,7 @@ export interface RegistryOptions {
  * root, or names no file is an error and leaves the theme's unit in place, so the build still publishes something.
  */
 async function overrideModule(
-  folder: UnitFolder,
+  folder: OverrideFolder,
   name: string,
   options: RegistryOptions,
   diagnostics: Diagnostic[],
@@ -329,7 +331,8 @@ export async function loadRegistry(themeRoot: string, options: RegistryOptions =
         continue;
       }
 
-      const override = await overrideModule(folder as UnitFolder, unitName, options, diagnostics);
+      const override =
+        folder === "components" ? await overrideModule("components", unitName, options, diagnostics) : undefined;
       const file = override?.file ?? rel;
       const imported = await importUnit(override?.abs ?? abs, file);
       if ("diagnostic" in imported) {
@@ -390,15 +393,15 @@ export async function loadRegistry(themeRoot: string, options: RegistryOptions =
     }
   }
 
-  for (const folder of UNIT_FOLDERS) {
-    const map = options.overrides?.[folder as UnitFolder];
+  for (const folder of ["layouts", "components"] as const) {
+    const map = options.overrides?.[folder];
     if (map === undefined) continue;
     for (const name of Object.keys(map).sort(byCodePoint)) {
-      if (known[folder as UnitFolder].has(name)) continue;
+      if (known[folder].has(name)) continue;
       diagnostics.push(
         diagnostic(
           "overrides.unknown-unit",
-          `"theme.overrides.${folder}.${name}" names no ${folder === "layouts" ? "layout" : folder === "chrome" ? "chrome part" : "component"} "${name}" in theme "${theme.name}".`,
+          `"theme.overrides.${folder}.${name}" names no ${folder === "layouts" ? "layout" : "component"} "${name}" in theme "${theme.name}".`,
           "Use the name of a unit the theme has, or remove the override.",
         ),
       );

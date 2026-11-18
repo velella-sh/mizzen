@@ -664,7 +664,7 @@ function overrideInputs(options: { readonly root: string; readonly config: SiteC
   const out: KeyInput[] = [];
   const overrides = options.config.theme.overrides;
   if (overrides === undefined) return out;
-  for (const folder of ["layouts", "chrome", "components"] as const) {
+  for (const folder of ["layouts", "components"] as const) {
     const map = overrides[folder];
     if (map === undefined) continue;
     for (const name of Object.keys(map).sort(byCodePoint)) {

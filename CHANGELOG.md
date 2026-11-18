@@ -53,7 +53,7 @@ docs and data sites need no content migration; the new features are opt-in. The
 - **Text directives.** An inline `:name[label]{key=value}` becomes the theme component of that name, with the label
   as its children, so a term link or symbol reference sits inside a paragraph the way a block directive sits between
   them. A name the theme does not draw still reaches it, and the render step reports an unknown one as before.
-- **Theme overrides.** `theme.overrides.layouts`, `.chrome`, and `.components` name site modules relative to the site
+- **Theme overrides.** `theme.overrides.layouts` and `.components` name site modules relative to the site
   root; each replaces one theme unit while every other unit keeps the theme's. A replacement may add a `<file>.css`
   sidecar beside it. A missing file, a path that leaves the site, or a name the theme does not have is an error rather
   than a silent fallback.

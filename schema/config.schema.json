@@ -223,10 +223,6 @@
               "$ref": "#/$defs/themeModules",
               "description": "Layout name → the site module that replaces it."
             },
-            "chrome": {
-              "$ref": "#/$defs/themeModules",
-              "description": "Chrome part name → the site module that replaces it."
-            },
             "components": {
               "$ref": "#/$defs/themeModules",
               "description": "Component name → the site module that replaces it."

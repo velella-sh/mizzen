@@ -34,8 +34,6 @@ export interface RepositoryConfig {
 export interface ThemeOverridesConfig {
   /** Layout name → the site module that replaces it. */
   readonly layouts?: Readonly<Record<string, string>>;
-  /** Chrome part name → the site module that replaces it. */
-  readonly chrome?: Readonly<Record<string, string>>;
   /** Component name → the site module that replaces it. */
   readonly components?: Readonly<Record<string, string>>;
 }
