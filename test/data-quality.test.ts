@@ -60,6 +60,31 @@ function baselineOf(fields: Record<string, number>): string {
   return `${JSON.stringify({ version: 1, collections: { items: { "*": { count: 2, fields } } } })}\n`;
 }
 
+/** A site with one count rule over `status: stable`: the baseline saw three, the data holds two. */
+function countSite(maxDrop: number, baseline?: string): Record<string, string> {
+  return {
+    "mizzen.yml": [
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      "quality:",
+      "  rules:",
+      "    - kind: count",
+      "      collection: items",
+      "      where: { status: stable }",
+      `      maxDrop: ${maxDrop}`,
+      "",
+    ].join("\n"),
+    "_data/items.yml": "- id: a\n  status: stable\n- id: b\n  status: stable\n- id: c\n  status: draft\n",
+    ...(baseline === undefined ? {} : { "data-quality.json": baseline }),
+  };
+}
+
+/** A baseline of {@link countSite}'s scope, holding `count` records. */
+function countBaselineOf(count: number): string {
+  return `${JSON.stringify({ version: 1, collections: { items: { '{"status":"stable"}': { count, fields: {} } } } })}\n`;
+}
+
 /** Runs `mizzen data quality --json` over `root`: the exit code, and the report it printed. */
 async function qualityJson(root: string, ...extra: readonly string[]): Promise<{
   readonly code: number;
@@ -160,6 +185,32 @@ test("coverage dropping by exactly maxDrop is clean", async () => {
   assert.deepEqual(report.diagnostics, []);
 });
 
+test("a record count dropping above maxDrop reports before and after", async () => {
+  const { report } = await check(countSite(0, countBaselineOf(3)));
+  assert.deepEqual(report.diagnostics, []);
+  assert.deepEqual(report.findings, [
+    {
+      id: "data.quality.count.items",
+      kind: "count",
+      severity: "warning",
+      collection: "items",
+      record: "",
+      field: "",
+      before: 3,
+      after: 2,
+      drop: 1,
+      maxDrop: 0,
+      message: 'Collection "items" dropped from 3 to 2 records (drop 1, maxDrop 0).',
+    },
+  ]);
+});
+
+test("a record count dropping by exactly maxDrop is clean", async () => {
+  const { report } = await check(countSite(1, countBaselineOf(3)));
+  assert.deepEqual(report.findings, []);
+  assert.deepEqual(report.diagnostics, []);
+});
+
 test("a coverage rule without a baseline is a diagnostic", async () => {
   const { report } = await check(coverageSite(10));
   assert.deepEqual(report.findings, []);
@@ -190,6 +241,32 @@ test("--write records a baseline that a second run passes", async () => {
     assert.deepEqual(JSON.parse(readFileSync(join(root, "data-quality.json"), "utf8")), {
       version: 1,
       collections: { items: { "*": { count: 2, fields: { author: 50, id: 100 } } } },
+    });
+
+    const rerun = await qualityJson(root);
+    assert.equal(rerun.code, 0);
+    assert.deepEqual(rerun.printed.findings, []);
+    assert.deepEqual(rerun.printed.diagnostics, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("--write records a count baseline that a second run passes", async () => {
+  const root = tree(countSite(0));
+  try {
+    const written = await qualityJson(root, "--write");
+    assert.equal(written.code, 0);
+    assert.equal(written.printed.wrote, "data-quality.json");
+    assert.deepEqual(written.printed.diagnostics, []);
+    assert.deepEqual(JSON.parse(readFileSync(join(root, "data-quality.json"), "utf8")), {
+      version: 1,
+      collections: {
+        items: {
+          "*": { count: 3, fields: { id: 100, status: 100 } },
+          '{"status":"stable"}': { count: 2, fields: { id: 100, status: 100 } },
+        },
+      },
     });
 
     const rerun = await qualityJson(root);

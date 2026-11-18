@@ -8,8 +8,6 @@
  * `coverage` and `count` compare the current data with `data-quality.json` in the site root, which `--write` records. A
  * missing or malformed baseline is a diagnostic, never a throw, and nothing reads the clock, so two runs over the same
  * files print the same lines.
- *
- * shortcut: only completeness and coverage run here; count lands with the rest of the epic.
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -266,7 +264,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
   const loaded = await loadCollections({ root, config });
   diagnostics.push(...loaded.diagnostics);
 
-  const compares = !write && rules.some((rule) => rule.kind === "coverage");
+  const compares = !write && rules.some((rule) => rule.kind !== "completeness");
   const read: { readonly baseline?: Baseline; readonly diagnostics: readonly Diagnostic[] } = compares
     ? await readBaseline(root)
     : { diagnostics: [] };
@@ -276,7 +274,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
     diagnostics.push({
       id: "data.quality-baseline",
       severity: "error",
-      message: `The config has coverage rules, but ${BASELINE_FILE} is missing.`,
+      message: `The config has coverage or count rules, but ${BASELINE_FILE} is missing.`,
       help: `Run \`mizzen data quality --write\` and commit ${BASELINE_FILE}.`,
     });
   }
@@ -303,7 +301,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
     });
 
     if (write) {
-      if (rule.kind === "coverage") {
+      if (rule.kind !== "completeness") {
         const collectionScopes = (draft.collections[rule.collection] ??= {});
         collectionScopes[scopeKeyOf(rule.where)] = snapshotOf(checked);
       }
@@ -353,7 +351,26 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
       }
       continue;
     }
-    if (rule.kind !== "coverage") continue;
+    if (rule.kind === "count") {
+      const before = entry.count;
+      const after = checked.length;
+      const drop = before - after;
+      if (drop <= rule.maxDrop) continue;
+      findings.push({
+        id: `data.quality.count.${rule.collection}`,
+        kind: rule.kind,
+        severity,
+        collection: rule.collection,
+        record: "",
+        field: "",
+        before,
+        after,
+        drop,
+        maxDrop: rule.maxDrop,
+        message: `Collection "${rule.collection}" dropped from ${before} to ${after} records (drop ${drop}, maxDrop ${rule.maxDrop}).`,
+      });
+      continue;
+    }
 
     const current = coverageOf(checked, fieldsOf(checked));
     const fields = rule.fields ?? [...new Set([...Object.keys(entry.fields), ...Object.keys(current)])].sort(compareCodePoint);
