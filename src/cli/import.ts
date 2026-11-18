@@ -13,13 +13,14 @@ import { COVERAGE_MEASURES, coverageReport, type CoverageReport, type FileCovera
 import { CONFIG_DESTINATION, buildMappings, type ImportMapping } from "../import/mapping.ts";
 import { generateProject } from "../import/generate.ts";
 import { rewriteLinks } from "../import/links.ts";
+import { mkdocsImporter } from "../import/mkdocs/index.ts";
 import { plainImporter } from "../import/plain.ts";
 import { starlightImporter } from "../import/starlight/importer.ts";
 import { inventoryOf } from "../import/inventory.ts";
 import { readImportSource } from "../import/source.ts";
 
 /** The importers `mizzen import <name>` can select. */
-export const IMPORTERS: readonly Importer[] = [plainImporter, starlightImporter];
+export const IMPORTERS: readonly Importer[] = [plainImporter, mkdocsImporter, starlightImporter];
 
 /** What the command prints to. */
 export interface ImportIo {
@@ -182,7 +183,7 @@ export async function runImport(
   const source = readImportSource(resolve(root));
   const outcome = await importer.import(source);
   const { files } = inventoryOf(source.files, outcome.files);
-  const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.base);
+  const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.urls, outcome.base);
   const links = rewriteLinks(outcome.pages, mappings, {
     ...(outcome.base === undefined ? {} : { base: outcome.base }),
     ...(outcome.contentRoot === undefined ? {} : { contentRoot: outcome.contentRoot }),

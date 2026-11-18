@@ -11,6 +11,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | --- | --- |
 | `agents-md` | `AGENTS.md`, a guide to the built site for agents. |
 | `api` | `api/<version>/`, the data API: `index.json`, each collection's records as `<collection>.json` and `.ndjson`, one file per record, its JSON Schema, and `openapi.json`. |
+| `blog-feed` | `<route>/feed.xml`, an Atom feed of the public blog posts, newest first. |
 | `changelog-feed` | `changelog.xml`, an Atom feed of the changelog page's dated release headings. |
 | `code-meta-check` | No files: reports fence meta that names lines the fence does not have. |
 | `collection-index` | `data/<collection>.index.json` for each collection with `index`: a column layout of its records and page URLs, split into numbered chunks over the byte budget. |
@@ -28,6 +29,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
 | `link-check` | No files: reports internal links and heading anchors that do not resolve. |
 | `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
+| `blocks` | `blocks.json`, every recorded block's id, page URL, source file, and line, for a stable deep link. |
 | `llms` | `llms.txt`, following llmstxt.org. |
 | `llms-full` | `llms-full.txt`, every page's Markdown in one file. |
 | `calendars` | `calendars/<name>.ics` and one file per `groupBy` value, from the `calendars` config. |

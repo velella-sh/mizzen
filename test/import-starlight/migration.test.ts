@@ -105,7 +105,7 @@ test("a bilingual site under a base imports and builds with reachable links and 
     assert.deepEqual(outcome.diagnostics, []);
 
     const { files } = inventoryOf(source.files, outcome.files);
-    const { mappings } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.base);
+    const { mappings } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.urls, outcome.base);
     const links = rewriteLinks(outcome.pages, mappings, {
       ...(outcome.base === undefined ? {} : { base: outcome.base }),
       ...(outcome.contentRoot === undefined ? {} : { contentRoot: outcome.contentRoot }),

@@ -6,6 +6,9 @@ export type ImportFileKind = "content" | "config" | "asset" | "unsupported";
 /** How faithfully a block of an input file was migrated. */
 export type ImportAccuracy = "full" | "approximate" | "manual";
 
+/** The URLs the generated pages answer at: pretty (`/a/`) or files (`/a.html`). */
+export type ImportUrls = "pretty" | "files";
+
 /** One input file and the importer's decision about it. */
 export interface ImportFile {
   /** Path relative to the source root, using `/` on every platform. */
@@ -74,6 +77,8 @@ export interface ImportOutcome {
   readonly contentRoot?: string;
   /** The generated navigation, when the source declared one. */
   readonly navigation?: ImportedConfig;
+  /** The URLs the generated pages answer at; `pretty` when the source has no other mode. */
+  readonly urls?: ImportUrls;
   readonly diagnostics: readonly Diagnostic[];
 }
 
