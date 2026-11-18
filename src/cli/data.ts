@@ -316,7 +316,7 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
   if (!changed) return { code: 0, messages, errors };
 
   for (const [address, now] of current) {
-    if (!/^https:\/\//.test(address)) continue;
+    if (!isFetchedAddress(address)) continue;
     const path = storedPath(root, sha256(now.bytes));
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, now.bytes);

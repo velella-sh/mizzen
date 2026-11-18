@@ -1,0 +1,9 @@
+title: Cursor example
+collections:
+  items:
+    source: http://127.0.0.1:0/cursor/items
+    records: data.items
+    pagination:
+      mode: cursor
+      param: cursor
+      cursor: next

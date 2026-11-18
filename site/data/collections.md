@@ -26,6 +26,8 @@ collections:
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `source` | string | required | Where the records come from: a file in the site, an `https://` URL, or an `npm:` address. |
+| `records` | string | | Dot path to the record array in a JSON API response, such as `data.items`. Setting it makes `mizzen data fetch` store the records as one list. See `docs/api-fetch.md`. |
+| `pagination` | object | | How `mizzen data fetch` walks a paginated API: `mode` (`page`, `offset`, `cursor`, or `next`), `param`, `start`, `pageSize`, `stop`, `cursor`, `next`, `origins`, `auth` (`env`, `header`, `prefix`), `maxPages`, `maxBytes`, and `retries`. See `docs/api-fetch.md`. |
 | `id` | string | the mapping key | Field that holds a record's id. A source that is a mapping of id to record needs none. |
 | `template` | string | | Markdown template under `_templates/`. Example: `_templates/components.md`. |
 | `permalink` | string | | URL pattern of a record page, such as `/components/{slug}/`. See [Templates](/data/templates/). |
@@ -67,6 +69,8 @@ A source is read, never written, by a build. The extension decides the format:
 - **CSV** (`.csv`): a header row, then one record per row. The first column is the id unless `id` names another.
 - **`https://` address**: a remote file of one of those formats. A build never opens a network connection. You run
   `mizzen data fetch`, which stores the bytes under `.mizzen/data/` and pins their hash in `mizzen.lock.json`.
+- **JSON API** (`records` set): an `https://` response whose record array sits at `records`, optionally walked by
+  `pagination`. The fetch stores the records as one list; see `docs/api-fetch.md`.
 - **`npm:<package>/<path>`**: a file inside an installed dependency, read from `node_modules`. Nothing is installed or
   fetched, and the file must stay inside the package folder.
 
