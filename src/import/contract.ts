@@ -71,6 +71,10 @@ export interface ImportOutcome {
   readonly pages: readonly ImportedPage[];
   readonly assets: readonly ImportedAsset[];
   readonly config: ImportedConfig;
+  /** The source site's base path, when it has one, so mapped URLs carry it. */
+  readonly base?: string;
+  /** The source path that site-root (`/…`) links resolve from, with a trailing `/`; absent at the source root. */
+  readonly contentRoot?: string;
   /** The generated navigation, when the source declared one. */
   readonly navigation?: ImportedConfig;
   /** The URLs the generated pages answer at; `pretty` when the source has no other mode. */

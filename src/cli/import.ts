@@ -182,8 +182,11 @@ export async function runImport(
   const source = readImportSource(resolve(root));
   const outcome = await importer.import(source);
   const { files } = inventoryOf(source.files, outcome.files);
-  const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.urls);
-  const links = rewriteLinks(outcome.pages, mappings);
+  const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.urls, outcome.base);
+  const links = rewriteLinks(outcome.pages, mappings, {
+    ...(outcome.base === undefined ? {} : { base: outcome.base }),
+    ...(outcome.contentRoot === undefined ? {} : { contentRoot: outcome.contentRoot }),
+  });
   const found = [...outcome.diagnostics, ...diagnostics, ...links.diagnostics];
   const accuracy = accuracyReport(links.pages, mappings, found);
   const coverage = coverageReport(links.pages, mappings, links.counts);

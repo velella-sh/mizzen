@@ -24,9 +24,9 @@ export const CONFIG_DESTINATION = "mizzen.yml";
 /** The generated navigation's destination, the default `navigation` path. */
 export const NAVIGATION_DESTINATION = "_data/navigation.yml";
 
-/** The URL a page destination answers at in the generated project. */
-export function pageUrl(destination: string, urls: ImportUrls = "pretty"): string {
-  return urls === "files" ? `/${destination.replace(/\.md$/i, ".html")}` : permalink(destination);
+/** The URL a page destination answers at in the generated project, under the source site's base. */
+export function pageUrl(destination: string, urls: ImportUrls = "pretty", base = ""): string {
+  return urls === "files" ? `${base}/${destination.replace(/\.md$/i, ".html")}` : permalink(destination, { base });
 }
 
 /** Where the generated project records every input file's destination and URL. */
@@ -94,6 +94,7 @@ export function buildMappings(
   assets: readonly ImportedAsset[],
   config: ImportedConfig,
   urls: ImportUrls = "pretty",
+  base = "",
 ): MappingResult {
   const pageBySource = new Map(pages.map((page) => [page.source, page]));
   const assetBySource = new Map(assets.map((asset) => [asset.source, asset]));
@@ -126,7 +127,7 @@ export function buildMappings(
     if (page !== undefined) {
       const destination = claim(file.path, page.destination);
       if (destination === undefined) mappings.push({ source: file.path, kind: file.kind, reason: file.reason ?? "the destination is invalid" });
-      else mappings.push({ source: file.path, kind: file.kind, destination, url: pageUrl(destination, urls) });
+      else mappings.push({ source: file.path, kind: file.kind, destination, url: pageUrl(destination, urls, base) });
       continue;
     }
     if (file.kind === "content") {
@@ -148,7 +149,7 @@ export function buildMappings(
     if (asset !== undefined) {
       const destination = claim(file.path, asset.destination);
       if (destination === undefined) mappings.push({ source: file.path, kind: file.kind, reason: file.reason ?? "the destination is invalid" });
-      else mappings.push({ source: file.path, kind: file.kind, destination, url: `/${destination}` });
+      else mappings.push({ source: file.path, kind: file.kind, destination, url: `${base}/${destination}` });
       continue;
     }
     if (file.kind === "asset") {
