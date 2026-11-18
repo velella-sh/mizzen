@@ -527,7 +527,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       ? []
       : (await readdir(renderRoot).catch((): string[] => [])).filter((name) => name !== settingsKey);
 
-  const registry = await loadRegistry(themeRoot);
+  const registry = await loadRegistry(themeRoot, { siteRoot: root, overrides: loaded.config.theme.overrides });
   for (const d of registry.diagnostics) diagnostics.report(d);
 
   // Shared CSS, in cascade order: the theme's `styles/`, then every chrome part's `style.css`. A page adds its layout's
@@ -627,6 +627,8 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     workers > 1
       ? createRenderPool({
           themeRoot,
+          siteRoot: root,
+          overrides: loaded.config.theme.overrides,
           site: renderSite,
           registry,
           ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),

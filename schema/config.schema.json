@@ -214,6 +214,21 @@
         "options": {
           "type": "object",
           "description": "Handed to the theme unread; the theme validates it against its own schema."
+        },
+        "overrides": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "layouts": {
+              "$ref": "#/$defs/themeModules",
+              "description": "Layout name → the site module that replaces it."
+            },
+            "components": {
+              "$ref": "#/$defs/themeModules",
+              "description": "Component name → the site module that replaces it."
+            }
+          },
+          "description": "Site modules that replace selected theme units. The path is relative to the site root; a missing file, a path outside the root, or a name the theme does not have is an error. A replacement may add a `<file>.css` sidecar beside it; it brings no client island. Every unit not named here stays the theme's."
         }
       },
       "description": "The theme that builds the site and the options handed to it."
@@ -603,6 +618,17 @@
     }
   },
   "$defs": {
+    "themeModules": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[^/]+$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "A unit name and the site module that replaces it, relative to the site root."
+    },
     "qualityRule": {
       "type": "object",
       "additionalProperties": false,

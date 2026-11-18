@@ -72,6 +72,7 @@ exists, else at the design note in the repository.
 | Pull request previews | `--preview-canonical`, `--baseline` | `mizzen build`; [Preview and rollback](https://github.com/velella-sh/mizzen/blob/main/docs/recipes/preview-rollback.md) |
 | Build performance | `--report`, `--workers` | [Performance](/performance/) |
 | First project samples | `mizzen init --starter` | [First project](/first-project/) |
+| Inline directives and theme overrides | `:term[…]`; `theme.overrides` | [Configuration](/config/) |
 | Published-site checks | None; a published sitemap URL | `mizzen published-site check --sitemap <url>`; [Command line](/cli/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/published-site-check.md) |
 | Network sitemap and record links | `network.lock.json`; `[[project:collection/id]]` | `mizzen network sitemap`; [Several projects](/network/) |
 | Record relations | Collection `references`; related records in templates and lists | [Collections](/data/collections/), [design](https://github.com/velella-sh/mizzen/blob/main/docs/record-relations.md) |

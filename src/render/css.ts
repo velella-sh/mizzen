@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { posix as path, join } from "node:path";
+import { isAbsolute, posix as path, join } from "node:path";
 import { themeAssetPath } from "../pipeline/assets.ts";
 import { transform } from "lightningcss";
 import type { Targets } from "lightningcss";
@@ -104,9 +104,18 @@ export function createCssBundler(options: CssBundlerOptions): CssBundler {
   const cache = new Map<string, CssBundle>();
   const referenced = new Set<string>();
 
-  /** Points a relative `url()` at the theme file's hashed copy; anything else is left as written. */
+  /** Reads a theme stylesheet by its theme-relative path, or a site override by its absolute path. */
+  function readCss(rel: string): Promise<string> {
+    return readFile(isAbsolute(rel) ? rel : join(themeRoot, rel), "utf8");
+  }
+
+  /**
+   * Points a relative `url()` at the theme file's hashed copy; anything else is left as written.
+   * shortcut: a site override's `url()` stays as written because its bytes are not theme assets; upgrade
+   * when site assets join the theme bundle.
+   */
   function rewrite(from: string, ref: string): string {
-    if (/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(ref)) return ref;
+    if (isAbsolute(from) || /^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(ref)) return ref;
     const target = path.normalize(path.join(path.dirname(from), ref.split(/[?#]/)[0] ?? ""));
     if (target.startsWith("..")) return ref;
     let bytes: Buffer;
@@ -120,7 +129,7 @@ export function createCssBundler(options: CssBundlerOptions): CssBundler {
   }
 
   async function cached(kind: string, paths: readonly string[]): Promise<CssBundle> {
-    const sources = await Promise.all(paths.map((rel) => readFile(join(themeRoot, rel), "utf8")));
+    const sources = await Promise.all(paths.map((rel) => readCss(rel)));
     const key = createHash("sha256").update(JSON.stringify([kind, paths, sources])).digest("hex");
     const hit = cache.get(key);
     if (hit !== undefined) return hit;

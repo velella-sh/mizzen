@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Blockquote, Nodes, Root } from "mdast";
 import { loadMarkdownPlugins, parseMarkdown } from "../src/markdown/parse.ts";
+import { markdownToHtml } from "../src/markdown/to-html.ts";
 
 /** A parsed `sl-component` the render step will read: its name, JSON props, and data-src. */
 interface Component {
@@ -121,6 +122,23 @@ test("an alert whose marker stands alone keeps its later paragraphs and drops th
     paragraphs.map((p) => textOf(p)),
     ["one", "two"],
   );
+});
+
+test("a text directive becomes an inline sl-component with its label as children", async () => {
+  const tree = await parseMarkdown("A :term[widget]{id=w1} here.\n");
+  const component = onlyComponent(componentsOf(tree));
+  assert.equal(component.name, "term");
+  assert.deepEqual(component.props, { id: "w1" });
+  assert.equal(textOf(component.node), "widget");
+});
+
+test("a colon-number in prose stays text instead of becoming a component", async () => {
+  const tree = await parseMarkdown("Text reaches 4.5:1 here, and video keeps 16:9.\n");
+  assert.equal(componentsOf(tree).length, 0);
+  assert.equal(textOf(tree), "Text reaches 4.5:1 here, and video keeps 16:9.");
+  const html = await markdownToHtml(tree, "page.md");
+  assert.match(html.html, /4\.5<span>:1<\/span> here, and video keeps 16<span>:9<\/span>\./);
+  assert.doesNotMatch(html.html, /sl-component/);
 });
 
 test("an alert with only its marker has no children", async () => {
