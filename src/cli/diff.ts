@@ -10,7 +10,26 @@ import { DiffUsageError, diffBuilds } from "../diff/index.ts";
 import { DEFAULT_MAX_ENTRIES, formatDiff, type DiffFormat } from "../diff/format.ts";
 import { pendingChanges } from "../diff/changes.ts";
 import { diffAgainstRef } from "../diff/ref.ts";
-import type { SiteDiff } from "../diff/types.ts";
+import type { BlockKind, SiteDiff } from "../diff/types.ts";
+
+/** The change types `--change-type` can name, one per kind the report emits. */
+export const CHANGE_TYPES = [
+  "added",
+  "removed",
+  "edited",
+  "moved",
+  "moved-edited",
+  "heading",
+  "code",
+  "code-language",
+  "table",
+  "link",
+  "image",
+  "record",
+  "uncertain",
+] as const satisfies readonly BlockKind[];
+
+export type ChangeType = (typeof CHANGE_TYPES)[number];
 
 /**
  * What `--fail-on` can name, each a finding of the report:
@@ -27,6 +46,7 @@ export interface DiffCommand {
   readonly base?: string;
   readonly format: DiffFormat;
   readonly failOn: readonly FailKind[];
+  readonly changeTypes?: readonly ChangeType[];
   readonly maxEntries?: number;
   readonly linkBase?: string;
   readonly themeRoot?: string;
@@ -61,6 +81,32 @@ export function parseFailOn(raw: string): FailKind[] | string {
   return kinds;
 }
 
+/** Parses `heading,link`; returns an error message for an unknown type. */
+export function parseChangeType(raw: string): ChangeType[] | string {
+  const types: ChangeType[] = [];
+  for (const part of raw.split(",")) {
+    const name = part.trim();
+    if (!(CHANGE_TYPES as readonly string[]).includes(name)) {
+      return `--change-type names ${CHANGE_TYPES.join(", ")}, not "${name}"`;
+    }
+    if (!types.includes(name as ChangeType)) types.push(name as ChangeType);
+  }
+  return types;
+}
+
+/** The report with only the asked change types under its changed pages; every other list is untouched. */
+export function filterChangeTypes(diff: SiteDiff, types: readonly ChangeType[]): SiteDiff {
+  if (types.length === 0) return diff;
+  const wanted = new Set<string>(types);
+  return {
+    ...diff,
+    pages: {
+      ...diff.pages,
+      changed: diff.pages.changed.map((page) => ({ ...page, blocks: page.blocks.filter((block) => wanted.has(block.kind)) })),
+    },
+  };
+}
+
 /** Runs the diff and returns the exit code. */
 export async function diffCommand(command: DiffCommand, io: DiffIo): Promise<number> {
   try {
@@ -84,6 +130,7 @@ export async function diffCommand(command: DiffCommand, io: DiffIo): Promise<num
       if (a === undefined || b === undefined) throw new DiffUsageError("diff needs two built folders: mizzen diff <a> <b>");
       diff = await diffBuilds(a, b);
     }
+    diff = filterChangeTypes(diff, command.changeTypes ?? []);
     io.write(
       formatDiff(diff, command.format, {
         maxEntries: command.maxEntries ?? DEFAULT_MAX_ENTRIES,

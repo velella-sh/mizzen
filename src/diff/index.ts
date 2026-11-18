@@ -24,6 +24,7 @@ function ref(page: { readonly url: string; readonly source: string; readonly tit
 /** An empty report for two builds with one hash. */
 function identical(hash: string): SiteDiff {
   return {
+    schemaVersion: 1,
     version: 1,
     base: { hash },
     head: { hash },
@@ -55,6 +56,7 @@ export async function diffReadBuilds(base: Build, head: Build, reader: Reader = 
 
   const sum = (pick: (collection: SiteDiff["records"][number]) => number): number => records.reduce((total, collection) => total + pick(collection), 0);
   return {
+    schemaVersion: 1,
     version: 1,
     base: { hash: base.hash },
     head: { hash: head.hash },

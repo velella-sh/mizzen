@@ -56,6 +56,7 @@ Exit `2` is a usage problem: a folder without a manifest, an unknown kind or for
 
 ```json
 {
+  "schemaVersion": 1,
   "version": 1,
   "base": { "hash": "1111111111111111111111111111111111111111111111111111111111111111" },
   "head": { "hash": "2222222222222222222222222222222222222222222222222222222222222222" },
@@ -99,7 +100,7 @@ Exit `2` is a usage problem: a folder without a manifest, an unknown kind or for
 }
 ```
 
-A changed page has its URL, its source file, and its changed blocks: for each section its heading, its anchor id, the kind of change (`added`, `removed`, `edited`, or `moved`), and its line range in the Markdown twin of the second build (of the first build for a removed section). A page whose rendered HTML changed while its Markdown twin did not is `renderOnly`.
+A changed page has its URL, its source file, and its changed blocks. A build that carries block ids is compared by those ids, so a block that kept its id is the same block after a heading edit or a reorder. Each block names its heading, its stable id, and the kind of change: `added`, `removed`, `edited`, `moved` (a pure move), `moved-edited`, `heading`, `code`, `code-language`, `table` (with the changed `cell`), `link` or `image` (with the `destination`), `record` (with the `field` and the `value` it produced), or `uncertain` when two blocks could match. `before` and `after` carry the source file and line range of each side. A page whose rendered HTML changed while its Markdown twin did not is `renderOnly`. `--change-type <type>` keeps only one kind in the printed report.
 
 The report holds no page content: it names pages, headings, and line ranges. It never contains an absolute local path.
 
