@@ -1375,7 +1375,8 @@
           "description": "Collections joined into this collection's records after its own source is read and transformed. The record keeps this collection's id, position, and order."
         },
         "aggregate": {
-          "$ref": "#/$defs/aggregate"
+          "$ref": "#/$defs/aggregate",
+          "description": "Build this collection by grouping another collection's records. `source` names the collection to read; the summary is published like any other collection."
         },
         "raw": {
           "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",

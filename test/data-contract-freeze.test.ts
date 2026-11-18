@@ -48,6 +48,7 @@ const FROZEN: Shape = {
     "fieldPositions": "Readonly<Record<string, RecordPos>>",
     "keyPositions": "?Readonly<Record<string, RecordPos>>",
     "normalizedDates": "?Readonly<Record<string, string>>",
+    "inputs": "?readonly string[]",
     "derived": "?Readonly<Record<string, unknown>>",
     "joined": "?JoinedOutput",
   },
