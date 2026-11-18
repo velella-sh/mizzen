@@ -45,7 +45,7 @@ async function writeFiles(files: readonly OutputFile[]): Promise<string> {
  * `file:` URLs and for a site path, so the test answers those requests from the temporary folder and restores the
  * real fetch afterwards. The base path is `/pagefind/`, as on a published site, so result URLs stay site-relative.
  */
-async function loadRuntime(dir: string): Promise<{ runtime: Runtime; restore: () => void }> {
+export async function loadRuntime(dir: string): Promise<{ runtime: Runtime; restore: () => void }> {
   const original = globalThis.fetch;
   const runtimeBase = "/pagefind/";
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {

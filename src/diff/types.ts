@@ -1,16 +1,57 @@
 /** The shape of a site diff report: `schema/site-diff.schema.json` is the contract, these are its types. */
 
-/** Which kind of change one section of a page had. */
-export type BlockKind = "added" | "removed" | "edited" | "moved";
+/** Which kind of change one block of a page had. */
+export type BlockKind =
+  | "added"
+  | "removed"
+  | "edited"
+  | "moved"
+  | "moved-edited"
+  | "heading"
+  | "code"
+  | "code-language"
+  | "table"
+  | "link"
+  | "image"
+  | "record"
+  | "uncertain";
 
-/** A changed section of a changed page. */
+/** A 1-based, inclusive range of lines in one file. */
+export interface LineRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+/** Where one side of a change sits: the source file and its line range. */
+export interface SourceSpan {
+  readonly path: string;
+  readonly range: LineRange;
+}
+
+/** A changed block of a changed page. */
 export interface Block {
-  /** The heading text, or `null` for the text before the first heading. */
+  /** The heading text, or `null` before the first heading. */
   readonly heading: string | null;
   readonly id: string | null;
   readonly kind: BlockKind;
-  /** Lines in the head twin, or in the base twin for a removed section. */
-  readonly range?: { readonly start: number; readonly end: number };
+  /** Lines in the head twin, or in the base twin for a removed section. Kept for readers of version 1. */
+  readonly range?: LineRange;
+  /** The block's source span in the base build, when it has one there. */
+  readonly before?: SourceSpan;
+  /** The block's source span in the head build, when it has one there. */
+  readonly after?: SourceSpan;
+  /** The first changed cell of a table change: 1-based row and column. */
+  readonly cell?: { readonly row: number; readonly column: number };
+  /** The destination of a link or image change, on each side. */
+  readonly destination?: { readonly before: string; readonly after: string };
+  /** The heading text on each side of a heading change. */
+  readonly text?: { readonly before: string; readonly after: string };
+  /** The fence language on each side of a code-language change. */
+  readonly language?: { readonly before: string; readonly after: string };
+  /** The record field a `record` change came from. */
+  readonly field?: string;
+  /** The value a record produced, before and after. */
+  readonly value?: { readonly before: string; readonly after: string };
 }
 
 export interface PageRef {
@@ -78,6 +119,8 @@ export interface CollectionDiff {
 
 /** The report `mizzen diff` prints as JSON. */
 export interface SiteDiff {
+  /** The report schema, for a tool that reads several versions. */
+  readonly schemaVersion: 1;
   readonly version: 1;
   readonly base: { readonly hash: string };
   readonly head: { readonly hash: string };

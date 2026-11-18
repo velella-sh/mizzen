@@ -12,9 +12,42 @@ import type { CollectionSnapshot } from "../contracts/data.ts";
 export type { CollectionSnapshot };
 
 /** The fields of a snapshot, in the order they are written. */
-export const SNAPSHOT_FIELDS = ["source", "ref", "capturedAt", "tool", "toolVersion"] as const;
+export const SNAPSHOT_FIELDS = ["source", "ref", "capturedAt", "tool", "toolVersion", "schema"] as const;
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}):(\d{2})Z)?$/;
+
+/** What is wrong with a recorded schema; empty when it is valid. */
+function schemaProblems(value: unknown): readonly string[] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return ["`schema` must be an object"];
+  const entry = value as Record<string, unknown>;
+  const problems: string[] = [];
+  for (const key of Object.keys(entry)) {
+    if (!["version", "file", "fields"].includes(key)) problems.push(`unknown schema field "${key}"`);
+  }
+  for (const key of ["version", "file"] as const) {
+    if (typeof entry[key] !== "string" || entry[key] === "") problems.push(`\`schema.${key}\` is required`);
+  }
+  const fields = entry["fields"];
+  if (typeof fields !== "object" || fields === null || Array.isArray(fields)) {
+    problems.push("`schema.fields` must be an object");
+    return problems;
+  }
+  for (const [name, field] of Object.entries(fields as Record<string, unknown>)) {
+    if (typeof field !== "object" || field === null || Array.isArray(field)) {
+      problems.push(`\`schema.fields.${name}\` must be an object`);
+      continue;
+    }
+    const entryField = field as Record<string, unknown>;
+    if (typeof entryField["required"] !== "boolean") problems.push(`\`schema.fields.${name}.required\` must be a boolean`);
+    if (entryField["type"] !== undefined && (typeof entryField["type"] !== "string" || entryField["type"] === "")) {
+      problems.push(`\`schema.fields.${name}.type\` must be a non-empty string`);
+    }
+    if (entryField["enum"] !== undefined && !Array.isArray(entryField["enum"])) {
+      problems.push(`\`schema.fields.${name}.enum\` must be an array`);
+    }
+  }
+  return problems;
+}
 
 /** True when `value` is a real calendar date or a UTC instant to the second, and so may be a `capturedAt`. */
 export function isCapturedAt(value: unknown): value is string {
@@ -43,6 +76,7 @@ export function snapshotProblems(value: unknown): readonly string[] {
   if (entry["capturedAt"] !== undefined && !isCapturedAt(entry["capturedAt"])) {
     problems.push("`capturedAt` must be a date or a UTC instant to the second, taken from the data and not the build clock");
   }
+  if (entry["schema"] !== undefined) problems.push(...schemaProblems(entry["schema"]));
   return problems;
 }
 
@@ -54,6 +88,7 @@ export function orderedSnapshot(snapshot: CollectionSnapshot): CollectionSnapsho
     ...(snapshot.capturedAt === undefined ? {} : { capturedAt: snapshot.capturedAt }),
     ...(snapshot.tool === undefined ? {} : { tool: snapshot.tool }),
     ...(snapshot.toolVersion === undefined ? {} : { toolVersion: snapshot.toolVersion }),
+    ...(snapshot.schema === undefined ? {} : { schema: snapshot.schema }),
   };
 }
 
@@ -148,8 +183,8 @@ export function instantOfHttpDate(value: string | null): string | undefined {
   return Number.isFinite(time) ? instantOfUnix(Math.floor(time / 1000)) : undefined;
 }
 
-/** The fields a template may show with `:snapshot[field]`. */
-export const SNAPSHOT_TEMPLATE_FIELDS = SNAPSHOT_FIELDS;
+/** The fields a template may show with `:snapshot[field]`: the text fields, not the recorded schema. */
+export const SNAPSHOT_TEMPLATE_FIELDS = ["source", "ref", "capturedAt", "tool", "toolVersion"] as const;
 
 /**
  * A snapshot field as a page shows it. `capturedAt` is a date in the page's language and that language's own calendar

@@ -17,9 +17,12 @@ import type {
   DataRecord,
   Diagnostic,
   RecordPos,
+  SchemaFieldSnapshot,
+  SchemaSnapshot,
   SiteConfig,
   SourcePos,
 } from "../contracts/index.ts";
+import { sha256 } from "./lock.ts";
 import { policyOf } from "./policy.ts";
 import { sourcePosOf } from "./positions.ts";
 import { suggestionFor, type SourceFormat, type Suggestion } from "./schema-fix.ts";
@@ -31,12 +34,16 @@ const Ajv2020 = createRequire(import.meta.url)("ajv/dist/2020.js") as typeof Ajv
 export interface CollectionSchema {
   /** The schema file, relative to the site root, with `/` separators. */
   readonly file: string;
+  /** SHA-256 of the file's bytes, recorded with the data so a later schema can be told apart. */
+  readonly version: string;
   /** Validates one record's fields; `false` leaves its findings in `errors`. */
   readonly validate: ValidateFunction;
   /** The root schema's declared field names, for an unknown-field suggestion. */
   readonly properties: readonly string[];
   /** Each top-level field's declared type, for a missing-field suggestion. */
   readonly fieldTypes: Readonly<Record<string, string>>;
+  /** Each top-level field as the lock records it: type, required, and accepted values. */
+  readonly fields: Readonly<Record<string, SchemaFieldSnapshot>>;
 }
 
 /** What {@link compileSchemas} found. */
@@ -82,6 +89,30 @@ function fieldTypesOf(document: unknown): Record<string, string> {
     }
   }
   return types;
+}
+
+/** Each top-level field as the lock records it: its type, whether the schema requires it, and its accepted values. */
+function fieldsOf(document: unknown, types: Readonly<Record<string, string>>): Record<string, SchemaFieldSnapshot> {
+  const fields: Record<string, SchemaFieldSnapshot> = {};
+  if (typeof document !== "object" || document === null) return fields;
+  const properties = (document as { readonly properties?: unknown }).properties;
+  if (typeof properties !== "object" || properties === null || Array.isArray(properties)) return fields;
+  const declared = (document as { readonly required?: unknown }).required;
+  const required = new Set((Array.isArray(declared) ? declared : []).filter((name): name is string => typeof name === "string"));
+  for (const [field, value] of Object.entries(properties as Record<string, unknown>)) {
+    const values = typeof value === "object" && value !== null ? (value as { readonly enum?: unknown }).enum : undefined;
+    fields[field] = {
+      ...(types[field] === undefined ? {} : { type: types[field] }),
+      required: required.has(field),
+      ...(Array.isArray(values) ? { enum: values } : {}),
+    };
+  }
+  return fields;
+}
+
+/** The part of a compiled schema a snapshot keeps, for comparing a later schema with it. */
+export function schemaSnapshotOf(schema: CollectionSchema): SchemaSnapshot {
+  return { version: schema.version, file: schema.file, fields: schema.fields };
 }
 
 /**
@@ -163,7 +194,15 @@ export function compileSchemas(
       continue;
     }
 
-    schemas[name] = { file, validate, properties: propertiesOf(document), fieldTypes: fieldTypesOf(document) };
+    const types = fieldTypesOf(document);
+    schemas[name] = {
+      file,
+      version: sha256(text),
+      validate,
+      properties: propertiesOf(document),
+      fieldTypes: types,
+      fields: fieldsOf(document, types),
+    };
   }
 
   return { schemas, unchecked };

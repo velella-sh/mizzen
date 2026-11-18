@@ -84,6 +84,27 @@ export interface PageStale {
   readonly files: readonly PageStaleFile[];
 }
 
+/**
+ * One block of a page that a stable identifier names. The identifier is unique across the site and matches
+ * `[a-z0-9][a-z0-9-]{0,63}`: a heading declares it as `{#id}` on the heading, and every other block declares it
+ * as `<!-- {#id} -->` on the line before. A block without a declaration gets an automatic `b-<10 hex>` id from its
+ * content and its page.
+ */
+export interface Block {
+  /** The stable identifier. */
+  readonly id: string;
+  /** Where the block sits in the source. */
+  readonly pos: SourcePos;
+  /** A hash of the block's normalized source, so a recorded id can be matched after the page moves around. */
+  readonly fingerprint?: string;
+  /** True when the source declares the id, so matching never replaces it. */
+  readonly declared?: boolean;
+  /** The heading's rendered anchor, which an edit can change while the id stays. */
+  readonly anchor?: string;
+  /** Anchors this block had before a heading edit, so an old link still lands here. */
+  readonly aliases?: readonly string[];
+}
+
 /** One page of the site model. */
 export interface Page {
   /** Output URL including `base`, such as `/evergreen/guide/install/`. */
@@ -100,6 +121,11 @@ export interface Page {
   readonly dir: Direction;
   /** Headings in document order. */
   readonly headings: readonly Heading[];
+  /**
+   * The page's blocks in document order, each with its site-wide identifier; unset when the site has no
+   * `blocks.lock.json`, so a site that does not use block ids keeps its model and output unchanged.
+   */
+  readonly blocks?: readonly Block[];
   /** The rendered body, with `data-source` on every block. */
   readonly html: string;
   /** The Markdown body without front matter, as the page's Markdown twin is written. */
@@ -120,6 +146,11 @@ export interface Page {
    * files are current. Read from the review lock and the files as they are, never from git.
    */
   readonly stale?: PageStale;
+  /**
+   * URL of the page this copy repeats, when version routing wrote one source at two URLs; unset on the copy that owns the
+   * canonical URL and on every page of a site without version settings.
+   */
+  readonly aliasOf?: string;
 }
 
 /** A record the URL lock published that its collection no longer holds. */
@@ -132,6 +163,29 @@ export interface RemovedRecord {
   readonly urls: readonly string[];
   /** Where readers go instead, from `onRemoved`; absent for the removed notice. */
   readonly target?: string;
+}
+
+/** A record its collection's lifecycle retires, whose page is replaced by a redirect to the record that replaced it. */
+export interface RetiredRecord {
+  /** The collection's name. */
+  readonly collection: string;
+  /** The record's id. */
+  readonly id: string;
+  /** Every URL the retired page published, its last one first; each redirects to `target`. */
+  readonly urls: readonly string[];
+  /** The current URL of the record that replaces it. */
+  readonly target: string;
+}
+
+/**
+ * How a preview build treats search engines: every page is `noindex`, and its canonical points at the preview's URL
+ * rather than the production site's. Front matter `canonical_url` still wins.
+ */
+export interface PreviewPolicy {
+  /** The absolute URL a page's canonical starts with: this base followed by the page's own URL. */
+  readonly canonicalBase: string;
+  /** The commit this preview was built from, from `--commit` or `GITHUB_SHA`; absent when unknown. */
+  readonly commit?: string;
 }
 
 /** The site model: everything a build knows, assembled once and read by rendering and outputs. */
@@ -148,6 +202,10 @@ export interface Site {
   readonly collections: Readonly<Record<string, Collection>>;
   /** Records the URL lock published that their collections no longer hold, in lock order. */
   readonly removed?: readonly RemovedRecord[];
+  /** Records the lifecycle retires whose URLs redirect to their replacement, in model order. */
+  readonly retired?: readonly RetiredRecord[];
   /** The shared network, from the locked file; unset for a site that has no `network` key. */
   readonly network?: SiteNetwork;
+  /** The preview policy, from `--preview-canonical` and `--commit`; unset for a normal build. */
+  readonly preview?: PreviewPolicy;
 }

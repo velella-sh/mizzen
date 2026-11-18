@@ -1,0 +1,1 @@
+- A site can publish an OpenAPI reference: an index page and one searchable page per operation, wired into navigation and the sitemap.

@@ -12,18 +12,22 @@ import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts"
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
+import { dataSchema } from "../data/schema-evolution.ts";
+import { dataMigrate } from "../data/schema-migrate.ts";
 import { verifyData } from "../data/verify.ts";
+import { checkQuality } from "../data/quality.ts";
 import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
 import { runDocsVersion } from "./docs-version.ts";
+import { runImport } from "./import.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
 import { apiCheck } from "./api.ts";
 import { init } from "./init.ts";
-import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
+import { diffCommand, parseChangeType, parseFailOn, type ChangeType, type FailKind } from "./diff.ts";
 import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
 import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-verify.ts";
@@ -36,7 +40,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -80,13 +84,17 @@ Commands:
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
+  data quality [dir]        Report records that fail the config's quality rules (--json, --write, --as-of)
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
+  data schema [dir]          Report the fields each schema added or removed since its recorded baseline
+  data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
@@ -103,9 +111,9 @@ Commands:
   watch [dir]               Rebuild the site whenever a source or theme file changes
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for edit apply, edit verify, urls check, and published-site check; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
   --domain <host>      The one host published-site check may request (default: the sitemap's host)
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
@@ -114,18 +122,28 @@ Options:
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
-  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch); today reads the system date once. Wins over the config's asOf
+  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
+  --json               For data quality: print the findings and scopes as JSON
+  --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --report             For build: print why each page was rebuilt after a warm build
+  --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
-  --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
+  --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
+  --commit <sha>       For build: record this commit in a preview's manifest (default: GITHUB_SHA)
+  --preview-canonical <url>
+                       For build: mark every page noindex and point its canonical at this URL plus the page's URL
+  --baseline <dir>     For build: the latest public build to compare this preview with, written to .mizzen/preview-diff.json; needs --preview-canonical
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
+  --change-type <type> For diff: list only one change type, such as heading, table, link, or record
+  --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
+  --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
@@ -158,8 +176,13 @@ type BuildOpts = {
   readonly theme?: string;
   readonly workers?: number;
   readonly updateUrls?: boolean;
+  readonly updateBlocks?: boolean;
   readonly asOf?: string;
   readonly report?: boolean;
+  readonly basePath?: string;
+  readonly previewCanonical?: string;
+  readonly baseline?: string;
+  readonly commit?: string;
 };
 
 type CheckOpts = {
@@ -246,6 +269,26 @@ type DataVerifyOpts = {
   readonly root: string;
 };
 
+type DataSchemaOpts = {
+  readonly command: "data-schema";
+  readonly root: string;
+  readonly format: "text" | "json";
+};
+
+type DataMigrateOpts = {
+  readonly command: "data-migrate";
+  readonly root: string;
+  readonly name?: string;
+};
+
+type DataQualityOpts = {
+  readonly command: "data-quality";
+  readonly root: string;
+  readonly json: boolean;
+  readonly write: boolean;
+  readonly asOf?: string;
+};
+
 type InitOpts = {
   readonly command: "init";
   readonly root: string;
@@ -297,6 +340,7 @@ type DiffOpts = {
   readonly base?: string;
   readonly format: DiffFormat;
   readonly failOn: readonly FailKind[];
+  readonly changeTypes?: readonly ChangeType[];
   readonly maxEntries?: number;
   readonly linkBase?: string;
   readonly theme?: string;
@@ -315,6 +359,15 @@ type McpOpts = {
   readonly theme?: string;
   readonly allowEdits: boolean;
   readonly printConfig?: string;
+};
+
+type ImportOpts = {
+  readonly command: "import";
+  readonly name: string;
+  readonly root: string;
+  readonly out?: string;
+  readonly failOnManual?: boolean;
+  readonly allow?: readonly string[];
 };
 
 type Parsed =
@@ -336,9 +389,13 @@ type Parsed =
         | DataFetchOpts
         | DataSnapshotOpts
         | DataVerifyOpts
+        | DataSchemaOpts
+        | DataMigrateOpts
+        | DataQualityOpts
         | DataChangesOpts
         | UrlsCheckOpts
         | InitOpts
+        | ImportOpts
         | McpOpts
         | NetworkOpts
         | PublishedSiteOpts
@@ -530,11 +587,44 @@ function parseDataChanges(rest: readonly string[]): Parsed {
   return { options: { command: "data-changes", root: root ?? ".", ...(name === undefined ? {} : { name }), write, check, ...(from === undefined ? {} : { from }) } };
 }
 
+/** Parses `data schema [dir] [--format text|json]`. */
+function parseDataSchema(rest: readonly string[]): Parsed {
+  let root: string | undefined;
+  let format: "text" | "json" = "text";
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--format") {
+      const raw = rest[++i];
+      if (raw !== "text" && raw !== "json") return { error: `--format for data schema must be text or json, not ${raw ?? ""}` };
+      format = raw;
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  return { options: { command: "data-schema", root: root ?? ".", format } };
+}
+
+/** Parses `data migrate [collection] [dir]`. */
+function parseDataMigrate(rest: readonly string[]): Parsed {
+  const positional: string[] = [];
+  for (const arg of rest) {
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    positional.push(arg);
+  }
+  if (positional.length > 2) return { error: `unexpected argument: ${positional[2]}` };
+  const [name, root] = positional;
+  return { options: { command: "data-migrate", root: root ?? ".", ...(name === undefined ? {} : { name }) } };
+}
+
 /** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
-  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify" };
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify, schema, migrate" };
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
+  if (subcommand === "schema") return parseDataSchema(rest);
+  if (subcommand === "migrate") return parseDataMigrate(rest);
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
   if (subcommand === "changes") return parseDataChanges(rest);
   if (subcommand === "verify") {
@@ -546,6 +636,29 @@ function parseData(args: readonly string[]): Parsed {
       else return { error: `unexpected argument: ${arg}` };
     }
     return { options: { command: "data-verify", root: root ?? "." } };
+  }
+  if (subcommand === "quality") {
+    let root: string | undefined;
+    let json = false;
+    let write = false;
+    let asOf: string | undefined;
+    for (let i = 0; i < rest.length; i++) {
+      const arg = rest[i]!;
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--json") json = true;
+      else if (arg === "--write") write = true;
+      else if (arg === "--as-of") {
+        const raw = rest[++i];
+        if (raw === undefined || raw.startsWith("-")) return { error: "--as-of needs a value" };
+        // `today` is resolved at the edge of main, where the clock may be read; here only the shape is checked.
+        const read = readAsOfFlag(raw, () => "0001-01-01");
+        if (!read.ok) return { error: `--as-of ${read.message}` };
+        asOf = raw;
+      } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      else if (root === undefined) root = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    }
+    return { options: { command: "data-quality", root: root ?? ".", json, write, ...(asOf === undefined ? {} : { asOf }) } };
   }
   if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
 
@@ -653,6 +766,7 @@ function parseDiff(args: readonly string[]): Parsed {
   let base: string | undefined;
   let format: DiffFormat = "text";
   let failOn: FailKind[] = [];
+  let changeTypes: ChangeType[] | undefined;
   let maxEntries: number | undefined;
   let linkBase: string | undefined;
   let theme: string | undefined;
@@ -674,6 +788,10 @@ function parseDiff(args: readonly string[]): Parsed {
         const kinds = parseFailOn(value());
         if (typeof kinds === "string") return { error: kinds };
         failOn = kinds;
+      } else if (arg === "--change-type") {
+        const types = parseChangeType(value());
+        if (typeof types === "string") return { error: types };
+        changeTypes = types;
       } else if (arg === "--max-entries") {
         const raw = value();
         const n = Number(raw);
@@ -695,6 +813,7 @@ function parseDiff(args: readonly string[]): Parsed {
       dirs: base === undefined ? dirs : [dirs[0] ?? "."],
       format,
       failOn,
+      ...(changeTypes === undefined ? {} : { changeTypes }),
       ...(base === undefined ? {} : { base }),
       ...(maxEntries === undefined ? {} : { maxEntries }),
       ...(linkBase === undefined ? {} : { linkBase }),
@@ -728,6 +847,47 @@ function parseMcp(args: readonly string[]): Parsed {
   return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
 }
 
+/** Parses `import <name> [dir] [--out <dir>] [--fail-on-manual] [--allow <ids>]`. */
+function parseImport(args: readonly string[]): Parsed {
+  let name: string | undefined;
+  let root: string | undefined;
+  let out: string | undefined;
+  let failOnManual = false;
+  const allow: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--out") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--out needs a value" };
+      out = next;
+    } else if (arg === "--fail-on-manual") {
+      failOnManual = true;
+    } else if (arg === "--allow") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-") || next.trim() === "") return { error: "--allow needs a value" };
+      for (const id of next.split(",")) {
+        const trimmed = id.trim();
+        if (trimmed !== "" && !allow.includes(trimmed)) allow.push(trimmed);
+      }
+    } else if (arg.startsWith("-")) return { error: `unknown option for import: ${arg}` };
+    else if (name === undefined) name = arg;
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  if (name === undefined) return { error: "import needs an importer name: mizzen import <name> [dir]" };
+  return {
+    options: {
+      command: "import",
+      name,
+      root: root ?? ".",
+      ...(out === undefined ? {} : { out }),
+      ...(failOnManual ? { failOnManual: true } : {}),
+      ...(allow.length === 0 ? {} : { allow }),
+    },
+  };
+}
+
 /** Parses `argv` after the process name. */
 export function parseArgs(args: readonly string[]): Parsed {
   const [command, ...rest] = args;
@@ -758,6 +918,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "init") return parseInit(rest);
+  if (command === "import") return parseImport(rest);
   if (command === "diff") return parseDiff(rest);
   if (command === "api") return parseApi(rest);
   if (command === "mcp") return parseMcp(rest);
@@ -786,8 +947,13 @@ export function parseArgs(args: readonly string[]): Parsed {
   let request: string | undefined;
   let packFormat: PackFormat | undefined;
   let updateUrls = false;
+  let updateBlocks = false;
   let asOf: string | undefined;
   let report = false;
+  let basePath: string | undefined;
+  let previewCanonical: string | undefined;
+  let baseline: string | undefined;
+  let commit: string | undefined;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -867,6 +1033,29 @@ export function parseArgs(args: readonly string[]): Parsed {
       } else if (arg === "--report") {
         if (command !== "build") return { error: "--report is only valid for build" };
         report = true;
+      } else if (arg === "--update-blocks") {
+        if (command !== "build") return { error: "--update-blocks is only valid for build" };
+        updateBlocks = true;
+      } else if (arg === "--base") {
+        if (command !== "build") return { error: "--base is only valid for build" };
+        basePath = value();
+      } else if (arg === "--preview-canonical") {
+        if (command !== "build") return { error: "--preview-canonical is only valid for build" };
+        const raw = value().trim();
+        if (!/^https?:\/\/\S+$/i.test(raw)) {
+          return { error: `--preview-canonical must be an absolute http(s) URL, not ${raw}` };
+        }
+        previewCanonical = raw;
+      } else if (arg === "--baseline") {
+        if (command !== "build") return { error: "--baseline is only valid for build" };
+        const raw = value().trim();
+        if (raw === "") return { error: "--baseline needs a folder" };
+        baseline = raw;
+      } else if (arg === "--commit") {
+        if (command !== "build") return { error: "--commit is only valid for build" };
+        const raw = value().trim();
+        if (raw === "") return { error: "--commit needs a value" };
+        commit = raw;
       } else if (arg === "--topic") {
         if (command !== "pack") return { error: "--topic is only valid for pack" };
         const raw = value().trim();
@@ -899,6 +1088,9 @@ export function parseArgs(args: readonly string[]): Parsed {
   }
 
   const dir = root ?? ".";
+  if (baseline !== undefined && previewCanonical === undefined) {
+    return { error: "--baseline is only valid with --preview-canonical" };
+  }
   if (command === "build") {
     return {
       options: {
@@ -909,7 +1101,12 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(workers === undefined ? {} : { workers }),
         ...(updateUrls ? { updateUrls: true } : {}),
         ...(report ? { report: true } : {}),
+        ...(updateBlocks ? { updateBlocks: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
+        ...(basePath === undefined ? {} : { basePath }),
+        ...(previewCanonical === undefined ? {} : { previewCanonical }),
+        ...(baseline === undefined ? {} : { baseline }),
+        ...(commit === undefined ? {} : { commit }),
       },
     };
   }
@@ -1021,7 +1218,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   // `--as-of today` is the only place the clock is read: once, here, printed, and passed on as a plain date.
   let asOf: string | undefined;
-  if ((options.command === "build" || options.command === "check" || options.command === "watch") && options.asOf !== undefined) {
+  if ((options.command === "build" || options.command === "check" || options.command === "watch" || options.command === "data-quality") && options.asOf !== undefined) {
     const read = readAsOfFlag(options.asOf, () => todayOf((io.now ?? (() => new Date()))()));
     if (!read.ok) {
       error(`${NAME}: --as-of ${read.message}`);
@@ -1106,6 +1303,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     }
   }
 
+  if (options.command === "import") {
+    try {
+      return await runImport(options.name, options.root, { log, error }, options.out, {
+        ...(options.failOnManual === undefined ? {} : { failOnManual: options.failOnManual }),
+        ...(options.allow === undefined ? {} : { allow: options.allow }),
+      });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   if (options.command === "urls") {
     try {
       const model = await buildModel(resolve(options.root));
@@ -1150,6 +1359,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         dirs: options.dirs,
         format: options.format,
         failOn: options.failOn,
+        ...(options.changeTypes === undefined ? {} : { changeTypes: options.changeTypes }),
         defaultLayout: DEFAULT_LAYOUT,
         ...(options.base === undefined ? {} : { base: options.base }),
         ...(options.maxEntries === undefined ? {} : { maxEntries: options.maxEntries }),
@@ -1311,6 +1521,52 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     }
   }
 
+  if (options.command === "data-schema") {
+    try {
+      const result = await dataSchema({ root, format: options.format });
+      write(result.output);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-migrate") {
+    try {
+      const result = await dataMigrate({ root, ...(options.name === undefined ? {} : { name: options.name }) });
+      write(result.output);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-quality") {
+    try {
+      const { config: loaded, diagnostics: configDiagnostics } = loadConfig(root);
+      const config = asOf === undefined ? loaded : { ...loaded, asOf };
+      const report = await checkQuality({ root, config, write: options.write });
+      const diagnostics = [...configDiagnostics, ...report.diagnostics];
+      if (options.json) {
+        log(JSON.stringify({ findings: report.findings, exceptions: report.exceptions, scopes: report.scopes, groups: report.groups, totals: report.totals, diagnostics, ...(report.wrote === undefined ? {} : { wrote: report.wrote }) }, null, 2));
+      } else {
+        if (report.wrote !== undefined) log(`wrote ${report.wrote}`);
+        for (const finding of report.findings) log(`${finding.severity} ${finding.id}: ${finding.message}`);
+        for (const diagnostic of diagnostics) error(`${NAME}: ${diagnostic.id}: ${diagnostic.message}`);
+      }
+      const failed = diagnostics.some((d) => d.severity === "error") ||
+        report.findings.some((finding) => finding.severity === "error");
+      return failed ? 1 : 0;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   if (options.command === "doctor") {
     try {
       const themeRoot = await resolveThemeRoot(root, options.theme);
@@ -1408,6 +1664,9 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     // --out is resolved from the current working directory, not the site root.
     const out = resolve(options.out);
     try {
+      // CI sets GITHUB_SHA; the flag wins over it. A preview with neither records no commit.
+      const envCommit = process.env.GITHUB_SHA?.trim();
+      const commit = options.commit ?? (envCommit === undefined || envCommit === "" ? undefined : envCommit);
       const result = await build({
         root,
         out,
@@ -1417,7 +1676,13 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.workers === undefined ? {} : { workers: options.workers }),
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
         ...(options.report === true ? { report: true } : {}),
+        ...(options.updateBlocks === true ? { updateBlocks: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
+        ...(options.basePath === undefined ? {} : { basePath: options.basePath }),
+        ...(options.baseline === undefined ? {} : { baseline: resolve(options.baseline) }),
+        ...(options.previewCanonical === undefined
+          ? {}
+          : { preview: { canonicalBase: options.previewCanonical, ...(commit === undefined ? {} : { commit }) } }),
       });
       if (result.report !== undefined) write(result.report);
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);

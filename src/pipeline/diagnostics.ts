@@ -125,9 +125,17 @@ export function formatText(diagnostics: readonly Diagnostic[], options: TextOpti
   return `${out.join("\n")}\n`;
 }
 
+/** The version 1 machine report as an object, sorted, so a caller can add its own fields to the same envelope. */
+export function diagnosticsReport(diagnostics: readonly Diagnostic[]): {
+  readonly version: 1;
+  readonly diagnostics: readonly Diagnostic[];
+} {
+  return { version: 1, diagnostics: sortDiagnostics(diagnostics) };
+}
+
 /** Prints for machines: `{ "version": 1, "diagnostics": [...] }`, sorted, two-space indent, trailing newline. */
 export function formatJson(diagnostics: readonly Diagnostic[]): string {
-  return `${JSON.stringify({ version: 1, diagnostics: sortDiagnostics(diagnostics) }, null, 2)}\n`;
+  return `${JSON.stringify(diagnosticsReport(diagnostics), null, 2)}\n`;
 }
 
 /** Options of {@link formatSarif}. */

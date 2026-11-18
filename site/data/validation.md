@@ -130,6 +130,13 @@ its help names the two accepted formats.
 | --- | --- | --- |
 | `data.schema-missing` | The schema file a collection names cannot be read. | Check `collections.<name>.schema` in `mizzen.yml`. |
 | `data.schema-invalid` | The schema is not JSON, is not an object, or cannot be compiled. | Fix the schema; write out a remote `$ref` in the file, since a build reads no network. |
+| `data.schema-required-field-added` | A required field the recorded baseline did not have; records recorded before it lack the field. | Fill the field in those records, make it optional, or record the collection again after updating its data. |
+| `data.schema-optional-field-added` | A field the recorded baseline did not have, added as optional; earlier records still validate. A warning. | Nothing, or record the collection again to make it the new baseline. |
+| `data.schema-field-removed` | A field the recorded baseline had is gone from the schema. A warning. | Keep the field, or update the data and record the collection again. |
+| `data.schema-field-renamed` | A `schemaRenames` entry maps a baseline field to its new name, so the change is read as a rename, not a removal and an addition. A warning. | Update the data to the new name and record the collection again. |
+| `data.schema-type-change` | A field's declared JSON type differs from the baseline's, so earlier records may no longer validate. | Migrate the records to the new type, or restore the field's type. |
+| `data.schema-enum-removed` | A schema `enum` no longer accepts a value the baseline accepted; a record may still hold it. | Keep the value, or update the records that use it and record the collection again. |
+| `data.schema-rename-conflict` | A record holds both the old and the new name of a `schemaRenames` pair; the new value is kept. A warning. | Remove the old field from the record, or drop the rename. |
 | `data.record-invalid` | A record fails its collection's schema. The message names the record and the field, and points at the field's value. | Fix the field the message names. |
 | `data.records-skipped` | Info: how many records the build left out because they failed validation. | Fix each record's finding, or set `collections.<name>.onInvalid: skip`. |
 | `data.duplicate-id` | Two records share an id. | Give each record its own id. |
@@ -156,6 +163,19 @@ its help names the two accepted formats.
 | `data.report-run-duplicate-id` | Two records publish the same run id. | Give each run its own id. |
 | `data.report-run-untracked-overwrite` | A run id is published with different pinned inputs than before. | Keep the run's inputs fixed, or publish it under a new id. |
 
+## Quality rules
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.quality-baseline` | `data-quality.json` is missing, is not JSON, is the wrong shape, or has no entry for a rule's scope. | Run `mizzen data quality --write` and commit `data-quality.json`. |
+| `data.quality-collection` | A quality rule names a collection the config does not declare or could not load. | Point the rule at a loaded collection. |
+| `data.quality-field` | A freshness rule has no `field`. | Write `field: <date field>` in `mizzen.yml`. |
+| `data.quality-max-age` | A freshness rule has no `maxAgeDays`. | Write `maxAgeDays: <days>` in `mizzen.yml`. |
+| `data.quality-date` | A record has no valid date in the freshness field. | Write `YYYY-MM-DD`, `YYYY-MM`, `YYYY`, or a full ISO 8601 instant. |
+| `data.quality-bounds` | A threshold or outlier rule has neither `min` nor `max`. | Write `min`, `max`, or both. |
+| `data.quality-max-drop` | A coverage or count rule has no `maxDrop`. | Write `maxDrop`: percentage points for coverage, records for count. |
+| `data.quality-exception` | A dated exception has expired, or it held back no finding. | Remove the exception, move its `until` date, or fix the rule/record/field it names. |
+
 ## Page directives
 
 | ID | Meaning | Fix |
@@ -166,3 +186,12 @@ its help names the two accepted formats.
 | `data.table-unknown-source` | A `::data-table` names a source that is no collection and holds no records. | Use a collection name or a path to a list in `_data`. |
 | `data.table-unknown-column` | A `::data-table` names a column the records do not have. | Use a field path the records hold. |
 | `data.table-where` | A `::data-table` filter is malformed. | Write one pair with its value quoted, such as `where="status=stable"`. |
+
+## Blocks
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.blocks-lock-invalid` | `blocks.lock.json` is not JSON or does not match its schema. | Fix the file, or run `mizzen build --update-blocks` to write it again. |
+| `blocks.invalid-id` | A declared block id is not a lower-case slug, so the block falls back to an automatic id. | Write the id as lower-case letters, digits, and hyphens. |
+| `blocks.marker-unused` | A `<!-- {#id} -->` marker has no block after it. | Move the marker directly above the block it names, or remove it. |
+| `blocks.duplicate-id` | Two blocks share an id. | Give each block its own id; the message names both files and lines. |

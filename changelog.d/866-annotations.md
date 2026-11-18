@@ -1,0 +1,1 @@
+- Code fences carry their highlight, line-number and annotation data to the theme in one `data-code` attribute, and `mizzen check` reports a bad annotation at its fence.

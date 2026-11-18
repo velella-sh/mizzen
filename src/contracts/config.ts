@@ -43,6 +43,30 @@ export interface SearchConfig {
   readonly text?: number;
 }
 
+/** The `blog` block: where the posts live and how their public routes are named. */
+export interface BlogConfig {
+  /** Folder that holds the posts, relative to the site root. Required to turn the blog on. */
+  readonly posts: string;
+  /** Public prefix of every blog URL. Default `blog`. */
+  readonly route?: string;
+  /** Archive route under the prefix. Default `archive`. */
+  readonly archive?: string;
+  /** Write one page per author. Default `true`. */
+  readonly authors?: boolean;
+  /** Write the Atom feed. Default `true`. */
+  readonly feed?: boolean;
+  /** Posts per index page. Default `10`. */
+  readonly pageSize?: number;
+}
+
+/** The `apiReference` block: the pinned OpenAPI document and the path its pages live under. */
+export interface ApiReferenceConfig {
+  /** One YAML or JSON OpenAPI 3.1 or 3.0 file, relative to the site root. */
+  readonly source: string;
+  /** Path the reference lives under, starting and ending with `/`. Default `/reference/`. */
+  readonly path?: string;
+}
+
 /** How the `examples-report` output treats a failing example. */
 export interface ExamplesConfig {
   /** Report a failed example as an error at its fence, so `mizzen check` exits `1`. Default `false`. */
@@ -239,6 +263,22 @@ export type OnRemovedConfig =
       readonly redirect: string;
     };
 
+/** A record's state in a collection's lifecycle, and what a retired record's URL does. */
+export interface CollectionLifecycleConfig {
+  /** Field that holds a record's state. Default `state`. */
+  readonly field?: string;
+  /** States a record may have; a value outside the list is reported. Default `[]`: every state is accepted. */
+  readonly states?: readonly string[];
+  /** States that mean a record is retired. Default `[]`: no state retires a record. */
+  readonly retired?: readonly string[];
+  /** Field that holds the id of the record that replaces a retired one. */
+  readonly replacement?: string;
+  /** What a retired record's URL does: `retain` keeps its page, `redirect` sends readers to the replacement. Default `retain`. */
+  readonly url?: "retain" | "redirect";
+  /** `true` marks a retired record for machine readers, such as the page JSON. Default `false`. */
+  readonly machine?: boolean;
+}
+
 /** One data collection: where its records come from, and how its pages are built. */
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root. */
@@ -255,6 +295,16 @@ export interface CollectionConfig {
   readonly aliases?: string;
   /** JSON Schema file that validates every record, relative to the site root. */
   readonly schema?: string;
+  /**
+   * Fields an earlier record may still hold under an old name, keyed by the new name: `{ slug: path }` reads `path`
+   * as `slug`. A record that holds both keeps the new one and earns a warning naming its line. Default `{}`.
+   */
+  readonly schemaRenames?: Readonly<Record<string, string>>;
+  /**
+   * What a schema change that earlier records may not satisfy does: `error` fails the build, `warn` reports a warning.
+   * Default `error`.
+   */
+  readonly onSchemaChange?: "error" | "warn";
   /** Fields whose values must be unique in the collection; a duplicate is an error naming both records. Default `[]`. */
   readonly unique?: readonly string[];
   /** Fields that hold a reference to another collection's record id, keyed by field name. Default `{}`. */
@@ -283,6 +333,8 @@ export interface CollectionConfig {
   readonly onInvalid?: "error" | "skip";
   /** What a record that was published and is no longer in the collection does. Default `error` once `urls.lock.json` exists. */
   readonly onRemoved?: OnRemovedConfig;
+  /** A record's state in the collection's lifecycle, and what a retired record's URL does. Unset: every record is published. */
+  readonly lifecycle?: CollectionLifecycleConfig;
   /** Limits on this collection's source. */
   readonly limits?: DataLimitsConfig;
   /** Extra named pages built from every record, each with its own template, URL pattern, and layout. Default `{}`. */
@@ -350,6 +402,55 @@ export interface DatesConfig {
 export interface SnapshotConfig {
   /** Report a collection whose snapshot `capturedAt` is more than this many days before the date doctor is given. Default: never. */
   readonly maxAgeDays?: number;
+}
+
+/** What a data-quality rule measures. */
+export type QualityRuleKind = "completeness" | "coverage" | "count" | "threshold" | "outlier" | "freshness";
+
+/** One data-quality rule: what it measures, on which collection, and when it reports. */
+export interface QualityRule {
+  /** What the rule measures: a missing field, a field's coverage drop, a record-count drop, a value outside a range, or a date older than a limit. */
+  readonly kind: QualityRuleKind;
+  /** The collection it reads. */
+  readonly collection: string;
+  /** The fields it checks. Default: every field the collection's records hold. */
+  readonly fields?: readonly string[];
+  /** For `freshness`: the date field whose age the rule measures. Required for that kind. */
+  readonly field?: string;
+  /** A record must match to be in scope, written like a list page's `where`. Default: every record. */
+  readonly where?: Readonly<Record<string, unknown>>;
+  /** How this rule's findings are reported. Default: the policy for its kind, then `warning`. */
+  readonly severity?: "warning" | "error";
+  /** For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds. */
+  readonly maxDrop?: number;
+  /** For `freshness`: how many days before the as-of date a record's date may be. Required for that kind. */
+  readonly maxAgeDays?: number;
+  /** For `threshold` and `outlier`: the lowest value the field may hold. At least one of `min` and `max` is required. */
+  readonly min?: number;
+  /** For `threshold` and `outlier`: the highest value the field may hold. At least one of `min` and `max` is required. */
+  readonly max?: number;
+}
+
+/** A dated exception: a finding the rules would make, held back until a day. */
+export interface QualityException {
+  /** The kind of finding it covers. */
+  readonly rule: QualityRuleKind;
+  /** The record it covers. Default: every record. */
+  readonly record?: string;
+  /** The field it covers. Default: every field. */
+  readonly field?: string;
+  /** Why the finding is allowed. */
+  readonly reason: string;
+  /** The last day it holds, `YYYY-MM-DD`. Default: no end. */
+  readonly until?: string;
+}
+
+/** The `quality` key: rules that report missing fields and falling coverage or counts, with dated exceptions. */
+export interface QualityConfig {
+  readonly rules: readonly QualityRule[];
+  readonly exceptions: readonly QualityException[];
+  /** How a finding of each kind is reported. Default `warning`. */
+  readonly policy: Readonly<Partial<Record<QualityRuleKind, "warning" | "error">>>;
 }
 
 /** One collection of the data API: which of its fields are published, and under which key its id is written. */
@@ -441,6 +542,10 @@ export interface SiteConfig {
   readonly feeds: Readonly<Record<string, FeedConfig>>;
   /** Calendars of collections' dated records by name, written as `.ics` files. Default `{}`. */
   readonly calendars?: Readonly<Record<string, CalendarConfig>>;
+  /** The blog: posts, archive, author pages, and feed. Default: none, and no `/blog/` route exists. */
+  readonly blog?: BlogConfig;
+  /** A static reference built from one pinned OpenAPI document. Default: none, and no reference pages exist. */
+  readonly apiReference?: ApiReferenceConfig;
   /** Front matter applied by folder; later entries win over earlier ones, and a page always wins. Default `[]`. */
   readonly defaults: readonly DefaultsEntry[];
   /** Where the source lives, for edit links. */
@@ -463,6 +568,8 @@ export interface SiteConfig {
   readonly dates?: DatesConfig;
   /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
   readonly snapshot?: SnapshotConfig;
+  /** Data-quality rules and dated exceptions. Default: none, and `mizzen data quality` reports nothing. */
+  readonly quality?: QualityConfig;
   /** The versioned static data API. Default: none, and nothing is written under `api/`. */
   readonly api?: ApiConfig;
   /** Stale page detection. Default: none, and `covers` paths are relative to the site root. */

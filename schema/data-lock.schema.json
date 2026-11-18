@@ -63,6 +63,52 @@
           "type": "string",
           "minLength": 1,
           "description": "That tool's version."
+        },
+        "schema": {
+          "type": "object",
+          "description": "The collection's schema when the data was recorded, for comparing a later schema with it.",
+          "required": ["version", "file", "fields"],
+          "additionalProperties": false,
+          "properties": {
+            "version": {
+              "type": "string",
+              "minLength": 1,
+              "description": "SHA-256 of the schema file's bytes."
+            },
+            "file": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The schema file, relative to the site root."
+            },
+            "fields": {
+              "type": "object",
+              "description": "Each top-level field the schema declares, keyed by name.",
+              "additionalProperties": {
+                "$ref": "#/$defs/field"
+              }
+            }
+          }
+        }
+      }
+    },
+    "field": {
+      "type": "object",
+      "description": "One top-level field of a recorded schema.",
+      "required": ["required"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The field's declared JSON type."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "True when the schema lists the field as required."
+        },
+        "enum": {
+          "type": "array",
+          "description": "The values the schema accepts."
         }
       }
     },

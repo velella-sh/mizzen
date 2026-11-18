@@ -2,6 +2,10 @@ import { readFile } from "node:fs/promises";
 import { join, posix, relative, resolve } from "node:path";
 import type { Heading as MdHeading, Root } from "mdast";
 import { loadConfig } from "../config/load.ts";
+import { blocksOf } from "../blocks/parse.ts";
+import { blocksLockOf, readBlocksLock, type BlocksLock } from "../blocks/lock.ts";
+import { matchBlockIds } from "../blocks/match.ts";
+import { anchorReferencesIn } from "../blocks/references.ts";
 import { loadData } from "../content/data.ts";
 import { checkSeo } from "../data/checks/seo.ts";
 import { loadCollections } from "../data/collections.ts";
@@ -14,13 +18,16 @@ import { localizeFields, prefixOfLang } from "../data/record-context.ts";
 import { planUrls, readUrlsLock, urlKey, type PublishedUrl, type UrlsPlan } from "../data/urls-lock.ts";
 import { loadTemplates } from "../data/template.ts";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
+import { buildApiReferencePagesFor } from "../content/api-reference.ts";
+import { buildBlogPages } from "../content/blog/pages.ts";
+import { buildBlogRoutes, type BlogPostSource, type BlogRoute } from "../content/blog/routes.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
-import { permalink } from "../content/permalink.ts";
+import { normalizeBase, permalink } from "../content/permalink.ts";
 import { resolveTitle } from "../content/title.ts";
-import type { Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
+import type { Block, Diagnostic, FrontMatter, Heading, NavItem, NavTree, Page, Plugin, PreviewPolicy, Site, SourcePos } from "../contracts/index.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { applyRecordLinks } from "../markdown/plugins/links.ts";
@@ -28,6 +35,7 @@ import { navFromFolders, type FolderPage } from "../nav/from-folders.ts";
 import { loadNavigation } from "../nav/from-yaml.ts";
 import { createDiagnostics, sortDiagnostics } from "../pipeline/diagnostics.ts";
 import { pageCache, parseMarkdownWithCache, type PageCache } from "../pipeline/page-cache.ts";
+import { formatSpan } from "../source/spans.ts";
 import { runContentHooks } from "../plugins/hooks.ts";
 import { runMarkdownHooks, runValidateHooks } from "../plugins/content-extension.ts";
 import { applyProjectLinks } from "../links/project-link.ts";
@@ -44,6 +52,8 @@ export interface ModelResult {
   readonly parsedPages: number;
   /** What the URL lock check made of this build; the model is what writes `urls.lock.json` with `--update-urls`. */
   readonly urls: UrlsPlan;
+  /** Every page block's id, as `blocks.lock.json` holds it; the build writes it with `--update-blocks`. */
+  readonly blocksLock: BlocksLock;
 }
 
 /** Options of {@link buildModel}. */
@@ -57,8 +67,14 @@ export interface BuildModelOptions {
   readonly plugins?: readonly Plugin[];
   /** Accept every current record URL, moving a changed one into `urls.lock.json`'s `previous`; `mizzen build --update-urls` sets this. */
   readonly updateUrls?: boolean;
+  /** Give every page its block ids and write `blocks.lock.json`; `mizzen build --update-blocks` sets this. */
+  readonly updateBlocks?: boolean;
   /** The as-of date from `--as-of`, `YYYY-MM-DD`; it wins over the config's `asOf`. */
   readonly asOf?: string;
+  /** The site `base` from `--base`; it wins over the config's `base`, so one source builds under a preview path. */
+  readonly base?: string;
+  /** The preview policy from `--preview-canonical` and `--commit`; the site keeps it, so every render and output marks the page. */
+  readonly preview?: PreviewPolicy;
   /** The clock the stale-lock warning reads; a test sets it. Default: `Date.now`. */
   readonly now?: () => number;
 }
@@ -91,6 +107,43 @@ function repositoryFolder(dir: string | undefined): string {
 /** The file position, relative to the repository root, a path under `source` has. */
 function posOf(file: string, line: number, endLine = line): SourcePos {
   return { file, line, column: 1, endLine, endColumn: 1 };
+}
+
+/** The attribute value an alias anchor needs: a slug is safe, a declared heading id may not be. */
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+}
+
+/**
+ * Puts each earlier anchor back into a page's HTML: an empty `<span id>` just inside the opening tag of the block that
+ * carries the alias, found by the block's exact `data-src` span. A block whose element the HTML does not hold is left
+ * alone; the alias is then only a lock entry.
+ */
+function withAliasAnchors(html: string, blocks: readonly Block[]): string {
+  let result = html;
+  for (const block of blocks) {
+    const aliases = (block.aliases ?? []).filter((alias) => alias !== block.anchor);
+    if (aliases.length === 0) continue;
+    const src = `data-src="${formatSpan(block.pos)}"`;
+    const at = result.indexOf(src);
+    const close = at < 0 ? -1 : result.indexOf(">", at + src.length);
+    if (at < 0 || close < 0) continue;
+    const spans = aliases.map((alias) => `<span id="${escapeAttr(alias)}"></span>`).join("");
+    result = `${result.slice(0, close + 1)}${spans}${result.slice(close + 1)}`;
+  }
+  return result;
+}
+
+/** Adds each block's stable id to the element its `data-src` names, so HTML, Markdown, and the source map agree. */
+function withBlockIds(html: string, blocks: readonly Block[]): string {
+  let result = html;
+  for (const block of blocks) {
+    const src = `data-src="${formatSpan(block.pos)}"`;
+    const at = result.indexOf(src);
+    if (at < 0) continue;
+    result = `${result.slice(0, at + src.length)} data-block="${block.id}"${result.slice(at + src.length)}`;
+  }
+  return result;
 }
 
 /** Headings with their positions, from the top-level `h` nodes and the expanded body's source spans. */
@@ -172,6 +225,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       config = { ...config, base };
     }
   }
+  // A preview build puts the same pages under its own path, so the flag wins over both the config and the network.
+  if (options.base !== undefined) config = { ...config, base: normalizeBase(options.base) };
   const sourceDir = resolve(siteRoot, config.source);
   // Positions are relative to the repository root, so a site in `docs/` names `docs/…` paths. Without a repository
   // folder they stay relative to the site root, which is always stable wherever the site is checked out.
@@ -184,6 +239,38 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   const data = await loadData(sourceDir, files);
   for (const d of data.diagnostics) diagnostics.report(d);
+
+  // The blog plans its routes from the posts' own front matter before any page is built, so each page knows its URL and
+  // a draft or rejected post gets none. The post texts are read here; the planner never touches the filesystem.
+  const blog = config.blog;
+  let blogRoutes: readonly BlogRoute[] = [];
+  const postUrl = new Map<string, string>();
+  const postFiles = new Set<string>();
+  if (blog !== undefined) {
+    const prefix = `${blog.posts.replace(/\/+$/g, "")}/`;
+    const posts: BlogPostSource[] = [];
+    for (const file of files) {
+      if (file.kind !== "doc" || !file.path.startsWith(prefix) || !/\.(md|markdown)$/i.test(file.path)) continue;
+      postFiles.add(file.path);
+      posts.push({ file: file.path, text: await readFile(join(sourceDir, file.path), "utf8") });
+    }
+    const authors = data.data["authors"];
+    const planned = buildBlogRoutes({
+      config: blog,
+      base: config.base,
+      posts,
+      authors:
+        authors !== null && typeof authors === "object" && !Array.isArray(authors)
+          ? (authors as Record<string, unknown>)
+          : {},
+    });
+    for (const d of planned.diagnostics) diagnostics.report(d);
+    blogRoutes = planned.routes;
+    for (const route of planned.routes) {
+      if (route.kind === "post") postUrl.set(route.post.file, route.url);
+    }
+  }
+
   const collected = await loadCollections({ root: siteRoot, config });
   for (const d of collected.diagnostics) diagnostics.report(d);
   const history = await loadChangeCollections({ root: siteRoot, config });
@@ -194,14 +281,28 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const loadedTemplates = await loadTemplates({ root: siteRoot, config });
   for (const d of loadedTemplates.diagnostics) diagnostics.report(d);
 
+  // Block ids are on only once the site has a lock or has just asked for one, so every other site keeps its model.
+  const blocksLock = await readBlocksLock(siteRoot);
+  for (const d of blocksLock.diagnostics) diagnostics.report(d);
+  const useBlocks = blocksLock.found || options.updateBlocks === true;
+
   const pages: Page[] = [];
   const folderPages: FolderPage[] = [];
   const seen = new Map<string, SourcePos>();
+  /** Every block id the model holds, and where it first appeared; ids are unique site-wide. */
+  const blockIds = new Map<string, SourcePos>();
   const appRoots = new Set<string>();
+  /** Pages built from the source files, waiting for the site-wide block match before they join the model. */
+  const staged: {
+    readonly page: Page;
+    readonly path: string;
+    readonly order: unknown;
+    readonly list?: { readonly text: string; readonly file: string };
+  }[] = [];
   /** Pages whose front matter declares a list, and the source text the `list` key sits in; built once records exist. */
   const listDeclarations: { readonly page: Page; readonly text: string; readonly file: string }[] = [];
 
-  const add = (page: Page, path: string, order: unknown): void => {
+  const add = (page: Page, path: string, order: unknown, nav = true): void => {
     const first = seen.get(page.url);
     if (first !== undefined) {
       diagnostics.error(
@@ -212,8 +313,37 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       return;
     }
     seen.set(page.url, page.source);
+    for (const block of page.blocks ?? []) {
+      const earlier = blockIds.get(block.id);
+      if (earlier !== undefined) {
+        diagnostics.error(
+          "blocks.duplicate-id",
+          `The block id ${JSON.stringify(block.id)} is used twice: ${earlier.file}:${earlier.line} and ${block.pos.file}:${block.pos.line}.`,
+          { pos: block.pos, help: "Give one of the two blocks a different id." },
+        );
+        continue;
+      }
+      blockIds.set(block.id, block.pos);
+    }
+    const anchors = new Map<string, Block>();
+    for (const block of page.blocks ?? []) if (block.anchor !== undefined) anchors.set(block.anchor, block);
+    const aliasOwners = new Map<string, Block>();
+    for (const block of page.blocks ?? []) {
+      for (const alias of block.aliases ?? []) {
+        const earlier = aliasOwners.get(alias) ?? anchors.get(alias);
+        if (earlier !== undefined && earlier !== block) {
+          diagnostics.error(
+            "blocks.alias-conflict",
+            `The anchor ${JSON.stringify(alias)} is already taken on ${page.source.file}: ${earlier.pos.file}:${earlier.pos.line} and ${block.pos.file}:${block.pos.line}.`,
+            { pos: block.pos, help: "Rename one of the two headings so an old link still lands on the right one." },
+          );
+          continue;
+        }
+        aliasOwners.set(alias, block);
+      }
+    }
     pages.push(page);
-    if (page.kind === "doc" && page.record === undefined) {
+    if (nav && page.kind === "doc" && page.record === undefined) {
       folderPages.push({
         path,
         url: page.url,
@@ -231,8 +361,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       appRoots.add(folder);
       const indexFile = fileOf(`${folder}/index.html`);
       const lang = pageLang(`${folder}/index.html`, { config });
-      add(
-        await hookPage({
+      staged.push({
+        page: await hookPage({
           url: appUrl(folder, config.base),
           source: posOf(indexFile, 1),
           frontMatter: {},
@@ -244,19 +374,21 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
           markdown: "",
           kind: "app",
         }),
-        `${folder}/index.html`,
-        undefined,
-      );
+        path: `${folder}/index.html`,
+        order: undefined,
+      });
       continue;
     }
     if (file.kind !== "doc") continue;
+    // A post the blog planner refused (a draft, or a bad date, author, or slug) gets no page; the planner said why.
+    if (postFiles.has(file.path) && !postUrl.has(file.path)) continue;
 
     const text = await readFile(join(sourceDir, file.path), "utf8");
     const rel = fileOf(file.path);
     const fm = parseFrontMatter(text, rel);
     for (const d of fm.diagnostics) diagnostics.report(d);
 
-    const frontMatter = withDefaults(fm.data, file.path, config.defaults);
+    let frontMatter = withDefaults(fm.data, file.path, config.defaults);
     if (frontMatter.published === false) continue;
 
     const isMarkdown = /\.(md|markdown)$/i.test(file.path);
@@ -290,6 +422,10 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       tree = await parseMarkdown(body, fm.bodyLine);
       parsedPages += 1;
     }
+    const pageBlocks = isMarkdown && useBlocks
+      ? blocksOf({ file: rel, tree, markdown: body, bodyLine: fm.bodyLine })
+      : undefined;
+    for (const d of pageBlocks?.diagnostics ?? []) diagnostics.report(d);
     const directives = isMarkdown
       ? applyDataDirectives(tree, body, { data: data.data, collections: allCollections, file: rel })
       : { markdown: body, diagnostics: [] };
@@ -311,10 +447,15 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     }
 
     const { title } = resolveTitle({ frontMatter, tree, file: file.path });
-    const url = permalink(file.path, {
+    const blogUrl = postUrl.get(file.path);
+    const url = blogUrl ?? permalink(file.path, {
       base: config.base,
       ...(typeof frontMatter.permalink === "string" ? { permalink: frontMatter.permalink } : {}),
     });
+    // The post is its own layout: the theme renders the blog data the planner put on the route.
+    if (blogUrl !== undefined) {
+      frontMatter = { ...frontMatter, layout: frontMatter.layout ?? "post", blog: { kind: "post" } };
+    }
 
     let html = body;
     let headings: Heading[] = [];
@@ -332,6 +473,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       lang: lang.lang,
       dir: lang.dir,
       headings,
+      ...(pageBlocks === undefined ? {} : { blocks: pageBlocks.blocks }),
       html,
       markdown: directives.markdown,
       kind: "doc",
@@ -340,11 +482,96 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     // exactly one `content` hook and the declaring page is never hooked twice.
     const declaresList = draft.frontMatter.list !== undefined;
     const page = declaresList ? draft : await hookPage(draft);
-    add(page, file.path, page.frontMatter.order);
+    staged.push({
+      page,
+      path: file.path,
+      order: page.frontMatter.order,
+      ...(declaresList ? { list: { text, file: rel } } : {}),
+    });
+  }
+
+  // A block can move to another page, so ids are matched across every staged page before any of them joins the model;
+  // duplicate detection and the output then see the ids the build carries.
+  const matchedBlocks = blocksLock.found
+    ? matchBlockIds(
+      blocksLock.lock,
+      staged.map((entry) => ({ file: entry.page.source.file, blocks: entry.page.blocks ?? [] })),
+    )
+    : undefined;
+  for (const entry of staged) {
+    const blocks = matchedBlocks?.get(entry.page.source.file) ?? entry.page.blocks;
+    const page = blocks === undefined
+      ? entry.page
+      : { ...entry.page, blocks, html: withBlockIds(withAliasAnchors(entry.page.html, blocks), blocks) };
+    add(page, entry.path, entry.order, !postUrl.has(entry.path));
     // A page a duplicate URL kept out of the model declares no list either.
-    if (declaresList && pages.at(-1) === page) {
-      listDeclarations.push({ page, text, file: rel });
+    if (entry.list !== undefined && pages.at(-1) === page) {
+      listDeclarations.push({ page, text: entry.list.text, file: entry.list.file });
     }
+  }
+
+  // A block the lock recorded but this build does not have was removed, so a link that still names its anchor lands
+  // on nothing. Each reference is named with its own location, for review before the lock is rewritten.
+  if (blocksLock.found) {
+    const present = new Set<string>();
+    for (const blocks of matchedBlocks?.values() ?? []) for (const block of blocks) present.add(block.id);
+    const references = new Map<string, SourcePos[]>();
+    for (const entry of staged) {
+      const found = await anchorReferencesIn(entry.page.markdown, entry.page.source.file, entry.page.source.line);
+      for (const [anchor, spans] of found) references.set(anchor, [...(references.get(anchor) ?? []), ...spans]);
+    }
+    for (const [id, recorded] of Object.entries(blocksLock.lock.blocks ?? {})) {
+      if (present.has(id)) continue;
+      for (const anchor of new Set([recorded.anchor, ...(recorded.aliases ?? [])])) {
+        if (anchor === undefined) continue;
+        for (const pos of references.get(anchor) ?? []) {
+          diagnostics.report({
+            id: "blocks.removed",
+            severity: "warning",
+            message: `The link to #${anchor} names block "${id}", which was removed from ${recorded.file}.`,
+            pos,
+            help: "Point the link at the block's new location, or remove it.",
+          });
+        }
+      }
+    }
+  }
+
+  // The blog's archive and author pages list the plans the routes carry; they are not folder navigation entries.
+  for (const generated of buildBlogPages({ routes: blogRoutes, config })) {
+    const known = seen.get(generated.url);
+    if (known !== undefined) {
+      diagnostics.error(
+        "page.duplicate-url",
+        `Two pages have the URL ${generated.url}: ${known.file} and ${generated.source.file}.`,
+        { pos: generated.source, help: `Change \`blog.route\` or \`blog.archive\`, or the \`permalink\` of the other page.` },
+      );
+      continue;
+    }
+    const hooked = await hookPage(generated);
+    add(hooked, hooked.source.file, hooked.frontMatter.order, false);
+  }
+
+  // The OpenAPI reference is ordinary doc pages: one index and one page per operation, both kept out of folder
+  // navigation and added as one group below.
+  let apiReferenceGroup: NavItem | undefined;
+  if (config.apiReference !== undefined) {
+    const built = await buildApiReferencePagesFor(siteRoot, config);
+    for (const d of built.diagnostics) diagnostics.report(d);
+    for (const generated of built.pages) {
+      const known = seen.get(generated.url);
+      if (known !== undefined) {
+        diagnostics.error(
+          "page.duplicate-url",
+          `Two pages have the URL ${generated.url}: ${known.file} and ${generated.source.file}.`,
+          { pos: generated.source, help: "Change `apiReference.path`, or the `permalink` of the other page." },
+        );
+        continue;
+      }
+      const hooked = await hookPage(generated);
+      add(hooked, hooked.source.file, hooked.frontMatter.order, false);
+    }
+    if (built.pages.length > 0) apiReferenceGroup = { title: built.title, children: built.navigation };
   }
 
   const records = await buildRecordPages({
@@ -465,6 +692,15 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     if (earlier.length > 0) aliases.set(key, earlier);
   }
   for (const d of aliasDiagnostics) diagnostics.report(d);
+  // A record retired behind a redirect still owns its URL: it stays in the lock, or leaving it out would read as a removal.
+  const publishedKeys = new Set(published.map((entry) => urlKey(entry.collection, entry.id)));
+  for (const entry of records.retired) {
+    if (entry.lang !== config.lang) continue;
+    const key = urlKey(entry.collection, entry.id);
+    if (publishedKeys.has(key)) continue;
+    publishedKeys.add(key);
+    published.push({ collection: entry.collection, id: entry.id, url: entry.url, position: entry.position });
+  }
   const urls = planUrls({
     lock: locked.lock,
     locked: locked.found,
@@ -516,8 +752,12 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     defaultLang: config.lang,
   });
   for (const d of navResult.diagnostics) diagnostics.report(d);
-  const nav: NavTree =
+  const loadedNav: NavTree =
     Object.keys(navResult.nav).length > 0 ? navResult.nav : { docs: navFromFolders(folderPages) };
+  const nav: NavTree =
+    apiReferenceGroup === undefined
+      ? loadedNav
+      : { ...loadedNav, docs: [...(loadedNav.docs ?? []), apiReferenceGroup] };
 
   // Derived facts run last, once the pages and `_data` are final, and land at `data[fact.name]`; `_data` wins.
   const gone = urls.removed
@@ -528,6 +768,18 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       urls: entry.urls,
       ...(entry.target === undefined ? {} : { target: entry.target }),
     }));
+  const retired = records.retired.map((entry) => ({
+    collection: entry.collection,
+    id: entry.id,
+    urls: [
+      ...new Set([
+        entry.url,
+        ...(entry.lang === config.lang ? (urls.previous[urlKey(entry.collection, entry.id)] ?? []) : []),
+        ...entry.aliases,
+      ]),
+    ],
+    target: entry.target,
+  }));
   const applied = await applyFacts({
     site: {
       config,
@@ -536,17 +788,20 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       data: data.data,
       collections: allCollections,
       ...(gone.length === 0 ? {} : { removed: gone }),
+      ...(retired.length === 0 ? {} : { retired }),
     },
     root: siteRoot,
     sourceDir,
   });
   for (const d of applied.diagnostics) diagnostics.report(d);
 
-  const site = network?.site === undefined ? applied.site : { ...applied.site, network: network.site };
+  const settled = network?.site === undefined ? applied.site : { ...applied.site, network: network.site };
+  const site = options.preview === undefined ? settled : { ...settled, preview: options.preview };
   return {
     site,
     diagnostics: sortDiagnostics(diagnostics.all),
     parsedPages,
     urls,
+    blocksLock: blocksLockOf(pages, blocksLock.lock),
   };
 }
