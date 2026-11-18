@@ -124,6 +124,7 @@ Options:
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
+  --commit <sha>       For build: record this commit in a preview's manifest (default: GITHUB_SHA)
   --preview-canonical <url>
                        For build: mark every page noindex and point its canonical at this URL plus the page's URL
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
@@ -162,6 +163,7 @@ type BuildOpts = {
   readonly asOf?: string;
   readonly basePath?: string;
   readonly previewCanonical?: string;
+  readonly commit?: string;
 };
 
 type CheckOpts = {
@@ -791,6 +793,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let asOf: string | undefined;
   let basePath: string | undefined;
   let previewCanonical: string | undefined;
+  let commit: string | undefined;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -877,6 +880,11 @@ export function parseArgs(args: readonly string[]): Parsed {
           return { error: `--preview-canonical must be an absolute http(s) URL, not ${raw}` };
         }
         previewCanonical = raw;
+      } else if (arg === "--commit") {
+        if (command !== "build") return { error: "--commit is only valid for build" };
+        const raw = value().trim();
+        if (raw === "") return { error: "--commit needs a value" };
+        commit = raw;
       } else if (arg === "--topic") {
         if (command !== "pack") return { error: "--topic is only valid for pack" };
         const raw = value().trim();
@@ -921,6 +929,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(asOf === undefined ? {} : { asOf }),
         ...(basePath === undefined ? {} : { basePath }),
         ...(previewCanonical === undefined ? {} : { previewCanonical }),
+        ...(commit === undefined ? {} : { commit }),
       },
     };
   }
@@ -1419,6 +1428,9 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     // --out is resolved from the current working directory, not the site root.
     const out = resolve(options.out);
     try {
+      // CI sets GITHUB_SHA; the flag wins over it. A preview with neither records no commit.
+      const envCommit = process.env.GITHUB_SHA?.trim();
+      const commit = options.commit ?? (envCommit === undefined || envCommit === "" ? undefined : envCommit);
       const result = await build({
         root,
         out,
@@ -1429,7 +1441,9 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
         ...(options.basePath === undefined ? {} : { basePath: options.basePath }),
-        ...(options.previewCanonical === undefined ? {} : { preview: { canonicalBase: options.previewCanonical } }),
+        ...(options.previewCanonical === undefined
+          ? {}
+          : { preview: { canonicalBase: options.previewCanonical, ...(commit === undefined ? {} : { commit }) } }),
       });
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);
       return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;

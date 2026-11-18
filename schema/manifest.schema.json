@@ -28,6 +28,25 @@
         "$ref": "#/$defs/page"
       }
     },
+    "preview": {
+      "type": "object",
+      "description": "What a preview build came from: its commit when known, and the hash of the data it read. Present only on a preview build; a normal build leaves it out.",
+      "required": [
+        "dataHash"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The commit the preview was built from, from `--commit` or `GITHUB_SHA`."
+        },
+        "dataHash": {
+          "$ref": "#/$defs/hash",
+          "description": "SHA-256 of every record id and field the build read: the hash `urls.json` carries as `data`."
+        }
+      },
+      "additionalProperties": false
+    },
     "version": {
       "const": 1,
       "description": "The format version. Only 1 exists."

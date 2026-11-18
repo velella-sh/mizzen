@@ -70,7 +70,7 @@ export interface BuildOptions {
   /**
    * The preview policy from `--preview-canonical`: every page is `noindex` and its canonical points at
    * `canonicalBase` and the page's own URL. Wins over `config.url` for the canonical; front matter `canonical_url`
-   * still wins over both.
+   * still wins over both. It also carries the commit `--commit` or `GITHUB_SHA` names, for the manifest.
    */
   readonly preview?: PreviewPolicy;
 }

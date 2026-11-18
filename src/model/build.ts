@@ -61,7 +61,7 @@ export interface BuildModelOptions {
   readonly asOf?: string;
   /** The site `base` from `--base`; it wins over the config's `base`, so one source builds under a preview path. */
   readonly base?: string;
-  /** The preview policy from `--preview-canonical`; the site keeps it, so every render and output marks the page. */
+  /** The preview policy from `--preview-canonical` and `--commit`; the site keeps it, so every render and output marks the page. */
   readonly preview?: PreviewPolicy;
   /** The clock the stale-lock warning reads; a test sets it. Default: `Date.now`. */
   readonly now?: () => number;

@@ -141,6 +141,8 @@ export interface RemovedRecord {
 export interface PreviewPolicy {
   /** The absolute URL a page's canonical starts with: this base followed by the page's own URL. */
   readonly canonicalBase: string;
+  /** The commit this preview was built from, from `--commit` or `GITHUB_SHA`; absent when unknown. */
+  readonly commit?: string;
 }
 
 /** The site model: everything a build knows, assembled once and read by rendering and outputs. */
@@ -159,6 +161,6 @@ export interface Site {
   readonly removed?: readonly RemovedRecord[];
   /** The shared network, from the locked file; unset for a site that has no `network` key. */
   readonly network?: SiteNetwork;
-  /** The preview policy, from `--preview-canonical`; unset for a normal build. */
+  /** The preview policy, from `--preview-canonical` and `--commit`; unset for a normal build. */
   readonly preview?: PreviewPolicy;
 }
