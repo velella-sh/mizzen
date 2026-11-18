@@ -1,0 +1,8 @@
+site_name: Basic
+docs_dir: content
+site_dir: site
+nav:
+  - Home: index.md
+  - Guide:
+      - guide/page.md
+  - External: https://example.com/

@@ -4,7 +4,7 @@
  */
 import type { Diagnostic } from "../contracts/index.ts";
 import { permalink } from "../content/permalink.ts";
-import type { ImportFile, ImportedAsset, ImportedConfig, ImportedPage } from "./contract.ts";
+import type { ImportFile, ImportUrls, ImportedAsset, ImportedConfig, ImportedPage } from "./contract.ts";
 
 /** One input path and what the generated project holds for it. */
 export interface ImportMapping {
@@ -23,6 +23,11 @@ export const CONFIG_DESTINATION = "mizzen.yml";
 
 /** The generated navigation's destination, the default `navigation` path. */
 export const NAVIGATION_DESTINATION = "_data/navigation.yml";
+
+/** The URL a page destination answers at in the generated project. */
+export function pageUrl(destination: string, urls: ImportUrls = "pretty"): string {
+  return urls === "files" ? `/${destination.replace(/\.md$/i, ".html")}` : permalink(destination);
+}
 
 /** Where the generated project records every input file's destination and URL. */
 export const MAPPING_DESTINATION = ".mizzen-import.json";
@@ -81,12 +86,14 @@ function badDestination(source: string, destination: string): Diagnostic {
 /**
  * Builds one mapping per input path. A page whose destination is missing or unsafe is reported as an error and gets
  * no destination; a page and an asset that name one destination are an error too, because writing both would lose one.
+ * `urls` is the mode the importer generated for, so a page URL matches the navigation the importer writes.
  */
 export function buildMappings(
   files: readonly ImportFile[],
   pages: readonly ImportedPage[],
   assets: readonly ImportedAsset[],
   config: ImportedConfig,
+  urls: ImportUrls = "pretty",
 ): MappingResult {
   const pageBySource = new Map(pages.map((page) => [page.source, page]));
   const assetBySource = new Map(assets.map((asset) => [asset.source, asset]));
@@ -119,7 +126,7 @@ export function buildMappings(
     if (page !== undefined) {
       const destination = claim(file.path, page.destination);
       if (destination === undefined) mappings.push({ source: file.path, kind: file.kind, reason: file.reason ?? "the destination is invalid" });
-      else mappings.push({ source: file.path, kind: file.kind, destination, url: permalink(destination) });
+      else mappings.push({ source: file.path, kind: file.kind, destination, url: pageUrl(destination, urls) });
       continue;
     }
     if (file.kind === "content") {
