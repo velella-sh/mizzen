@@ -662,6 +662,9 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
   }
 
   if (write) {
+    if (diagnostics.some((finding) => finding.severity === "error")) {
+      return { findings, ...groupFindings(findings), exceptions: [], scopes, diagnostics };
+    }
     // Every collection gets a whole-collection entry, even one no coverage rule names.
     for (const name of Object.keys(loaded.collections)) {
       const collectionScopes = (draft.collections[name] ??= {});
