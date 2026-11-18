@@ -3,6 +3,7 @@ import type { Page, Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { languageGroups, translationId } from "../content/lang-fallback.ts";
 import { isFallbackCopy, isNoindex, mainRecordOf, seoConfigOf } from "../data/seo.ts";
+import { isVersionAlias } from "../versions/apply.ts";
 import { isAppPage } from "./app-pages.ts";
 
 /** Compares by code point, never by locale. */
@@ -261,7 +262,14 @@ export async function writeSitemap(site: Site, ctx: OutputContext, limits: Sitem
 
   const appPages = { pages: site.pages.filter((page) => page.kind === "app") };
   const pages = site.pages
-    .filter((p) => p.kind === "doc" && p.frontMatter.sitemap !== false && !isNoindex(site, p) && !isAppPage(p.url, appPages))
+    .filter(
+      (p) =>
+        p.kind === "doc" &&
+        p.frontMatter.sitemap !== false &&
+        !isNoindex(site, p) &&
+        !isAppPage(p.url, appPages) &&
+        !isVersionAlias(p),
+    )
     .sort((a, b) => byCodePoint(a.url, b.url));
 
   const groups = languageGroups(site);

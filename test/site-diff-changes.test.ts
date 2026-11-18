@@ -18,6 +18,7 @@ function git(root: string, ...args: string[]): void {
 }
 
 const EMPTY: SiteDiff = {
+  schemaVersion: 1,
   version: 1,
   base: { hash: "a".repeat(64) },
   head: { hash: "b".repeat(64) },

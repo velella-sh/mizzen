@@ -27,7 +27,7 @@ import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
 import { apiCheck } from "./api.ts";
 import { init } from "./init.ts";
-import { diffCommand, parseFailOn, type FailKind } from "./diff.ts";
+import { diffCommand, parseChangeType, parseFailOn, type ChangeType, type FailKind } from "./diff.ts";
 import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
 import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-verify.ts";
@@ -129,6 +129,7 @@ Options:
   --json               For data quality: print the findings and scopes as JSON
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
+  --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
@@ -139,6 +140,7 @@ Options:
                        For build: mark every page noindex and point its canonical at this URL plus the page's URL
   --baseline <dir>     For build: the latest public build to compare this preview with, written to .mizzen/preview-diff.json; needs --preview-canonical
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
+  --change-type <type> For diff: list only one change type, such as heading, table, link, or record
   --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
   --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
@@ -173,6 +175,7 @@ type BuildOpts = {
   readonly theme?: string;
   readonly workers?: number;
   readonly updateUrls?: boolean;
+  readonly updateBlocks?: boolean;
   readonly asOf?: string;
   readonly basePath?: string;
   readonly previewCanonical?: string;
@@ -335,6 +338,7 @@ type DiffOpts = {
   readonly base?: string;
   readonly format: DiffFormat;
   readonly failOn: readonly FailKind[];
+  readonly changeTypes?: readonly ChangeType[];
   readonly maxEntries?: number;
   readonly linkBase?: string;
   readonly theme?: string;
@@ -760,6 +764,7 @@ function parseDiff(args: readonly string[]): Parsed {
   let base: string | undefined;
   let format: DiffFormat = "text";
   let failOn: FailKind[] = [];
+  let changeTypes: ChangeType[] | undefined;
   let maxEntries: number | undefined;
   let linkBase: string | undefined;
   let theme: string | undefined;
@@ -781,6 +786,10 @@ function parseDiff(args: readonly string[]): Parsed {
         const kinds = parseFailOn(value());
         if (typeof kinds === "string") return { error: kinds };
         failOn = kinds;
+      } else if (arg === "--change-type") {
+        const types = parseChangeType(value());
+        if (typeof types === "string") return { error: types };
+        changeTypes = types;
       } else if (arg === "--max-entries") {
         const raw = value();
         const n = Number(raw);
@@ -802,6 +811,7 @@ function parseDiff(args: readonly string[]): Parsed {
       dirs: base === undefined ? dirs : [dirs[0] ?? "."],
       format,
       failOn,
+      ...(changeTypes === undefined ? {} : { changeTypes }),
       ...(base === undefined ? {} : { base }),
       ...(maxEntries === undefined ? {} : { maxEntries }),
       ...(linkBase === undefined ? {} : { linkBase }),
@@ -935,6 +945,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let request: string | undefined;
   let packFormat: PackFormat | undefined;
   let updateUrls = false;
+  let updateBlocks = false;
   let asOf: string | undefined;
   let basePath: string | undefined;
   let previewCanonical: string | undefined;
@@ -1016,6 +1027,9 @@ export function parseArgs(args: readonly string[]): Parsed {
       } else if (arg === "--update-urls") {
         if (command !== "build") return { error: "--update-urls is only valid for build" };
         updateUrls = true;
+      } else if (arg === "--update-blocks") {
+        if (command !== "build") return { error: "--update-blocks is only valid for build" };
+        updateBlocks = true;
       } else if (arg === "--base") {
         if (command !== "build") return { error: "--base is only valid for build" };
         basePath = value();
@@ -1080,6 +1094,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(theme === undefined ? {} : { theme }),
         ...(workers === undefined ? {} : { workers }),
         ...(updateUrls ? { updateUrls: true } : {}),
+        ...(updateBlocks ? { updateBlocks: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
         ...(basePath === undefined ? {} : { basePath }),
         ...(previewCanonical === undefined ? {} : { previewCanonical }),
@@ -1337,6 +1352,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         dirs: options.dirs,
         format: options.format,
         failOn: options.failOn,
+        ...(options.changeTypes === undefined ? {} : { changeTypes: options.changeTypes }),
         defaultLayout: DEFAULT_LAYOUT,
         ...(options.base === undefined ? {} : { base: options.base }),
         ...(options.maxEntries === undefined ? {} : { maxEntries: options.maxEntries }),
@@ -1652,6 +1668,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         cache: true,
         ...(options.workers === undefined ? {} : { workers: options.workers }),
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
+        ...(options.updateBlocks === true ? { updateBlocks: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
         ...(options.basePath === undefined ? {} : { basePath: options.basePath }),
         ...(options.baseline === undefined ? {} : { baseline: resolve(options.baseline) }),

@@ -258,13 +258,16 @@ function twinOf(spec: ListSpec, props: ListProps): string {
 /** The page with `list` filled in, its layout defaulted to `list`, and its twin carrying the table. */
 function listPage(page: Page, url: string, title: string, props: ListProps, twin: string, dates: boolean): Page {
   const markdown = twin === "" ? page.markdown : `${page.markdown.replace(/\s+$/, "")}\n\n${twin}\n`;
+  // A generated page shares the declaring page's source, so its blocks belong only to the page at its own URL.
+  const { blocks, ...source } = page;
   return {
-    ...page,
+    ...source,
     url,
     title,
     frontMatter: { ...page.frontMatter, title, layout: page.frontMatter.layout ?? "list" },
     markdown,
     list: props,
+    ...(url === page.url && blocks !== undefined ? { blocks } : {}),
     ...(dates ? { dates: true } : {}),
   };
 }

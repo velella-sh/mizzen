@@ -110,6 +110,7 @@ Options:
   --json               For data quality: print the findings and scopes as JSON
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
+  --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
@@ -120,6 +121,7 @@ Options:
                        For build: mark every page noindex and point its canonical at this URL plus the page's URL
   --baseline <dir>     For build: the latest public build to compare this preview with, written to .mizzen/preview-diff.json; needs --preview-canonical
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
+  --change-type <type> For diff: list only one change type, such as heading, table, link, or record
   --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
   --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
@@ -293,6 +295,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | --- | --- |
 | `agents-md` | `AGENTS.md`, a guide to the built site for agents. |
 | `api` | `api/<version>/`, the data API: `index.json`, each collection's records as `<collection>.json` and `.ndjson`, one file per record, its JSON Schema, and `openapi.json`. |
+| `blog-feed` | `<route>/feed.xml`, an Atom feed of the public blog posts, newest first. |
 | `changelog-feed` | `changelog.xml`, an Atom feed of the changelog page's dated release headings. |
 | `code-meta-check` | No files: reports fence meta that names lines the fence does not have. |
 | `collection-index` | `data/<collection>.index.json` for each collection with `index`: a column layout of its records and page URLs, split into numbered chunks over the byte budget. |
@@ -324,6 +327,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `related` | `related.json`, the few pages each doc page is most related to. |
 | `review-coverage` | `review-coverage.json`, each doc page's review policy, reviewers, last review, and coverage state. |
 | `origin-report` | No files: lists every outside origin a site with `analytics` contacts and warns about unlisted ones. |
+| `blocks` | `blocks.json`, every recorded block's id, page URL, source file, and line, for a stable deep link. |
 | `verification` | `BingSiteAuth.xml` and Google's verification file, when `verify` asks for them. |
 | `social-images` | `assets/social/<page>.png`, a 1200 by 630 share image per page drawn from an SVG template, when the config sets `social`. The page head points at it. |
 | `robots` | `robots.txt`, with the sitemap address when the config has `url`. |

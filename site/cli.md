@@ -62,6 +62,7 @@ Options:
   --json               For data quality: print the findings and scopes as JSON
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
+  --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
@@ -72,6 +73,7 @@ Options:
                        For build: mark every page noindex and point its canonical at this URL plus the page's URL
   --baseline <dir>     For build: the latest public build to compare this preview with, written to .mizzen/preview-diff.json; needs --preview-canonical
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
+  --change-type <type> For diff: list only one change type, such as heading, table, link, or record
   --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
   --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
