@@ -26,6 +26,7 @@ import type {
   CollectionConfig,
   CollectionIndexConfig,
   CollectionChangelogConfig,
+  CollectionLifecycleConfig,
   CollectionRawConfig,
   CollectionJsonConfig,
   CollectionSearchConfig,
@@ -45,6 +46,10 @@ import type {
   FeedFormat,
   LanguageConfig,
   NetworkConfig,
+  QualityConfig,
+  QualityException,
+  QualityRule,
+  QualityRuleKind,
   SnapshotConfig,
   StaleConfig,
   RepositoryConfig,
@@ -340,6 +345,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const verify = verifyFrom(raw.verify);
   const network = networkFrom(raw.network);
   const snapshot = snapshotFrom(raw.snapshot);
+  const quality = qualityFrom(raw.quality);
   const api = apiFrom(raw.api);
   const apiReference = apiReferenceFrom(raw.apiReference);
   const blog = blogFrom(raw.blog);
@@ -377,6 +383,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(typeof raw.asOf === "string" && checkAsOf(raw.asOf) === undefined ? { asOf: raw.asOf } : {}),
     ...(dates === undefined ? {} : { dates }),
     ...(snapshot === undefined ? {} : { snapshot }),
+    ...(quality === undefined ? {} : { quality }),
     ...(api === undefined ? {} : { api }),
     ...(apiReference === undefined ? {} : { apiReference }),
     ...(blog === undefined ? {} : { blog }),
@@ -456,6 +463,74 @@ function snapshotFrom(value: unknown): SnapshotConfig | undefined {
   if (!isPlainObject(value)) return undefined;
   const days = value.maxAgeDays;
   return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
+}
+
+const QUALITY_KINDS: readonly QualityRuleKind[] = ["completeness", "coverage", "count", "threshold", "outlier", "freshness"];
+
+function qualityKind(value: unknown): QualityRuleKind | undefined {
+  return QUALITY_KINDS.find((kind) => kind === value);
+}
+
+/** One quality rule the schema accepts; `undefined` for an entry it rejects. */
+function qualityRuleFrom(value: unknown): QualityRule | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const kind = qualityKind(value.kind);
+  if (kind === undefined || typeof value.collection !== "string" || value.collection === "") return undefined;
+  const fields = Array.isArray(value.fields)
+    ? value.fields.filter((field): field is string => typeof field === "string" && field !== "")
+    : undefined;
+  const maxDrop = value.maxDrop;
+  const maxAgeDays = value.maxAgeDays;
+  const bound = (entry: unknown): number | undefined =>
+    typeof entry === "number" && Number.isFinite(entry) ? entry : undefined;
+  const min = bound(value.min);
+  const max = bound(value.max);
+  const severity = value.severity === "warning" || value.severity === "error" ? value.severity : undefined;
+  return {
+    kind,
+    collection: value.collection,
+    ...(fields === undefined || fields.length === 0 ? {} : { fields }),
+    ...(typeof value.field === "string" && value.field !== "" ? { field: value.field } : {}),
+    ...(isPlainObject(value.where) ? { where: value.where } : {}),
+    ...(severity === undefined ? {} : { severity }),
+    ...(typeof maxDrop === "number" && Number.isSafeInteger(maxDrop) && maxDrop >= 0 ? { maxDrop } : {}),
+    ...(typeof maxAgeDays === "number" && Number.isSafeInteger(maxAgeDays) && maxAgeDays > 0 ? { maxAgeDays } : {}),
+    ...(min === undefined ? {} : { min }),
+    ...(max === undefined ? {} : { max }),
+  };
+}
+
+/** One exception the schema accepts; `undefined` for an entry it rejects. */
+function qualityExceptionFrom(value: unknown): QualityException | undefined {
+  if (!isPlainObject(value) || typeof value.reason !== "string" || value.reason === "") return undefined;
+  const kind = qualityKind(value.rule);
+  if (kind === undefined) return undefined;
+  return {
+    rule: kind,
+    ...(typeof value.record === "string" && value.record !== "" ? { record: value.record } : {}),
+    ...(typeof value.field === "string" && value.field !== "" ? { field: value.field } : {}),
+    reason: value.reason,
+    ...(typeof value.until === "string" && checkAsOf(value.until) === undefined ? { until: value.until } : {}),
+  };
+}
+
+/** The quality key, keeping only the rules, exceptions, and policy the schema accepts. */
+function qualityFrom(value: unknown): QualityConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const rules = Array.isArray(value.rules)
+    ? value.rules.map(qualityRuleFrom).filter((rule): rule is QualityRule => rule !== undefined)
+    : [];
+  const exceptions = Array.isArray(value.exceptions)
+    ? value.exceptions.map(qualityExceptionFrom).filter((entry): entry is QualityException => entry !== undefined)
+    : [];
+  const policy: Partial<Record<QualityRuleKind, "warning" | "error">> = {};
+  if (isPlainObject(value.policy)) {
+    for (const kind of QUALITY_KINDS) {
+      const severity = value.policy[kind];
+      if (severity === "warning" || severity === "error") policy[kind] = severity;
+    }
+  }
+  return { rules, exceptions, policy };
 }
 
 /** The collections of an api block, keeping only the entries the schema accepts. */
@@ -567,6 +642,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const seo = collectionSeoFrom(entry.seo);
     const index = collectionIndexFrom(entry.index);
     const onRemoved = onRemovedFrom(entry.onRemoved);
+    const lifecycle = lifecycleFrom(entry.lifecycle);
     const json = collectionJsonFrom(entry.json);
     const raw = collectionRawFrom(entry.raw);
     const changelog = collectionChangelogFrom(entry.changelog);
@@ -592,6 +668,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(typeof entry.evidence === "string" ? { evidence: entry.evidence } : {}),
       ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
       ...(onRemoved === undefined ? {} : { onRemoved }),
+      ...(lifecycle === undefined ? {} : { lifecycle }),
       ...(isPlainObject(entry.limits) ? { limits: limitsFrom(entry.limits) } : {}),
       ...(views === undefined ? {} : { views }),
       ...(search === undefined ? {} : { search }),
@@ -781,6 +858,25 @@ function collectionChangelogFrom(value: unknown): CollectionChangelogConfig | un
     ...(Object.keys(labels).length === 0 ? {} : { labels }),
     ...(typeof threshold === "number" && Number.isSafeInteger(threshold) && threshold >= 1 ? { importThreshold: threshold } : {}),
     ...(typeof value.pages === "boolean" ? { pages: value.pages } : {}),
+  };
+}
+
+/** A collection's `lifecycle` block as the contract holds it; absent when it declares none. */
+function lifecycleFrom(value: unknown): CollectionLifecycleConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const strings = (raw: unknown): readonly string[] | undefined =>
+    Array.isArray(raw) && raw.every((entry): entry is string => typeof entry === "string") ? raw : undefined;
+  const states = strings(value.states);
+  const retired = strings(value.retired);
+  return {
+    ...(typeof value.field === "string" && value.field !== "" ? { field: value.field } : {}),
+    ...(states === undefined ? {} : { states }),
+    ...(retired === undefined ? {} : { retired }),
+    ...(typeof value.replacement === "string" && value.replacement !== ""
+      ? { replacement: value.replacement }
+      : {}),
+    ...(value.url === "retain" || value.url === "redirect" ? { url: value.url } : {}),
+    ...(typeof value.machine === "boolean" ? { machine: value.machine } : {}),
   };
 }
 

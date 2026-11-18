@@ -304,6 +304,60 @@
       },
       "description": "How old a collection's recorded snapshot may be. Default: none."
     },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rules": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/qualityRule"
+          },
+          "description": "Rules that report missing fields and falling coverage or counts. Default []: nothing is reported."
+        },
+        "exceptions": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/qualityException"
+          },
+          "description": "Dated exceptions: findings the rules would make that are held back until a day. Default []."
+        },
+        "policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "completeness": {
+              "enum": ["warning", "error"],
+              "description": "How a completeness finding is reported. Default warning."
+            },
+            "coverage": {
+              "enum": ["warning", "error"],
+              "description": "How a coverage finding is reported. Default warning."
+            },
+            "count": {
+              "enum": ["warning", "error"],
+              "description": "How a count finding is reported. Default warning."
+            },
+            "threshold": {
+              "enum": ["warning", "error"],
+              "description": "How a threshold finding is reported. Default warning."
+            },
+            "outlier": {
+              "enum": ["warning", "error"],
+              "description": "How an outlier finding is reported. Default warning."
+            },
+            "freshness": {
+              "enum": ["warning", "error"],
+              "description": "How a freshness finding is reported. Default warning."
+            }
+          },
+          "description": "How a finding of each kind is reported. Default warning."
+        }
+      },
+      "description": "Data-quality rules and dated exceptions. Default: none, and `mizzen data quality` reports nothing."
+    },
     "api": {
       "type": "object",
       "additionalProperties": false,
@@ -549,6 +603,101 @@
     }
   },
   "$defs": {
+    "qualityRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "collection"
+      ],
+      "properties": {
+        "kind": {
+          "enum": ["completeness", "coverage", "count", "threshold", "outlier", "freshness"],
+          "description": "What the rule measures: a missing field, a field's coverage drop, a record-count drop, a value outside a threshold or range, or a date older than a limit."
+        },
+        "collection": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The collection it reads."
+        },
+        "fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The fields it checks. Default: every field the collection's records hold."
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For `freshness`: the date field whose age the rule measures. Required for that kind."
+        },
+        "where": {
+          "type": "object",
+          "description": "A record must match to be in scope, written like a list page's `where`. Default: every record."
+        },
+        "severity": {
+          "enum": ["warning", "error"],
+          "description": "How this rule's findings are reported. Default: the `quality.policy` entry for its kind, then `warning`."
+        },
+        "maxDrop": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds."
+        },
+        "maxAgeDays": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "For `freshness`: how many days before the as-of date a record's date may be. Required for that kind."
+        },
+        "min": {
+          "type": "number",
+          "description": "For `threshold` and `outlier`: the lowest value the field may hold. At least one of `min` and `max` is required."
+        },
+        "max": {
+          "type": "number",
+          "description": "For `threshold` and `outlier`: the highest value the field may hold. At least one of `min` and `max` is required."
+        }
+      },
+      "description": "One data-quality rule: what it measures, on which collection, and when it reports."
+    },
+    "qualityException": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rule",
+        "reason"
+      ],
+      "properties": {
+        "rule": {
+          "enum": ["completeness", "coverage", "count", "threshold", "outlier", "freshness"],
+          "description": "The kind of finding it covers."
+        },
+        "record": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The record it covers. Default: every record."
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The field it covers. Default: every field."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the finding is allowed."
+        },
+        "until": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "The last day it holds, `YYYY-MM-DD`. Default: no end."
+        }
+      },
+      "description": "A dated exception: a finding the rules would make, held back until a day."
+    },
     "apiCollection": {
       "type": "object",
       "additionalProperties": false,
@@ -772,6 +921,57 @@
             }
           ],
           "description": "What a record that was published and is no longer in the collection does: error fails the build, gone writes a removed notice, or redirect sends readers to a page. Default error once urls.lock.json exists."
+        },
+        "lifecycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "field": {
+              "type": "string",
+              "minLength": 1,
+              "default": "state",
+              "description": "Field that holds a record's state. Default `state`."
+            },
+            "states": {
+              "type": "array",
+              "default": [],
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "States a record may have; a value outside the list is reported. Default []: every state is accepted."
+            },
+            "retired": {
+              "type": "array",
+              "default": [],
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "description": "States that mean a record is retired. Default []: no state retires a record."
+            },
+            "replacement": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Field that holds the id of the record that replaces a retired one."
+            },
+            "url": {
+              "enum": [
+                "retain",
+                "redirect"
+              ],
+              "default": "retain",
+              "description": "What a retired record's URL does: retain keeps its page, redirect sends readers to the replacement. Default retain."
+            },
+            "machine": {
+              "type": "boolean",
+              "default": false,
+              "description": "true marks a retired record for machine readers, such as the page JSON. Default false."
+            }
+          },
+          "description": "A record's state in the collection's lifecycle, and what a retired record's URL does. Unset: every record is published."
         },
         "limits": {
           "$ref": "#/$defs/dataLimits",

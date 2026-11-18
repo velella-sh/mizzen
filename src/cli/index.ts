@@ -13,11 +13,13 @@ import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
 import { verifyData } from "../data/verify.ts";
+import { checkQuality } from "../data/quality.ts";
 import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
 import { runDocsVersion } from "./docs-version.ts";
+import { runImport } from "./import.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
@@ -36,7 +38,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -80,6 +82,7 @@ Commands:
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
+  data quality [dir]        Report records that fail the config's quality rules (--json, --write, --as-of)
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
@@ -87,6 +90,7 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
@@ -103,7 +107,7 @@ Commands:
   watch [dir]               Rebuild the site whenever a source or theme file changes
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
   --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
@@ -114,10 +118,12 @@ Options:
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
-  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch); today reads the system date once. Wins over the config's asOf
+  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
+  --json               For data quality: print the findings and scopes as JSON
+  --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
@@ -125,6 +131,8 @@ Options:
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
+  --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
+  --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
@@ -244,6 +252,14 @@ type DataVerifyOpts = {
   readonly root: string;
 };
 
+type DataQualityOpts = {
+  readonly command: "data-quality";
+  readonly root: string;
+  readonly json: boolean;
+  readonly write: boolean;
+  readonly asOf?: string;
+};
+
 type InitOpts = {
   readonly command: "init";
   readonly root: string;
@@ -315,6 +331,15 @@ type McpOpts = {
   readonly printConfig?: string;
 };
 
+type ImportOpts = {
+  readonly command: "import";
+  readonly name: string;
+  readonly root: string;
+  readonly out?: string;
+  readonly failOnManual?: boolean;
+  readonly allow?: readonly string[];
+};
+
 type Parsed =
   | { readonly help: true }
   | { readonly error: string }
@@ -334,9 +359,11 @@ type Parsed =
         | DataFetchOpts
         | DataSnapshotOpts
         | DataVerifyOpts
+        | DataQualityOpts
         | DataChangesOpts
         | UrlsCheckOpts
         | InitOpts
+        | ImportOpts
         | McpOpts
         | NetworkOpts
         | PublishedSiteOpts
@@ -545,6 +572,29 @@ function parseData(args: readonly string[]): Parsed {
     }
     return { options: { command: "data-verify", root: root ?? "." } };
   }
+  if (subcommand === "quality") {
+    let root: string | undefined;
+    let json = false;
+    let write = false;
+    let asOf: string | undefined;
+    for (let i = 0; i < rest.length; i++) {
+      const arg = rest[i]!;
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--json") json = true;
+      else if (arg === "--write") write = true;
+      else if (arg === "--as-of") {
+        const raw = rest[++i];
+        if (raw === undefined || raw.startsWith("-")) return { error: "--as-of needs a value" };
+        // `today` is resolved at the edge of main, where the clock may be read; here only the shape is checked.
+        const read = readAsOfFlag(raw, () => "0001-01-01");
+        if (!read.ok) return { error: `--as-of ${read.message}` };
+        asOf = raw;
+      } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      else if (root === undefined) root = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    }
+    return { options: { command: "data-quality", root: root ?? ".", json, write, ...(asOf === undefined ? {} : { asOf }) } };
+  }
   if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
 
   let root: string | undefined;
@@ -726,6 +776,47 @@ function parseMcp(args: readonly string[]): Parsed {
   return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
 }
 
+/** Parses `import <name> [dir] [--out <dir>] [--fail-on-manual] [--allow <ids>]`. */
+function parseImport(args: readonly string[]): Parsed {
+  let name: string | undefined;
+  let root: string | undefined;
+  let out: string | undefined;
+  let failOnManual = false;
+  const allow: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--out") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--out needs a value" };
+      out = next;
+    } else if (arg === "--fail-on-manual") {
+      failOnManual = true;
+    } else if (arg === "--allow") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-") || next.trim() === "") return { error: "--allow needs a value" };
+      for (const id of next.split(",")) {
+        const trimmed = id.trim();
+        if (trimmed !== "" && !allow.includes(trimmed)) allow.push(trimmed);
+      }
+    } else if (arg.startsWith("-")) return { error: `unknown option for import: ${arg}` };
+    else if (name === undefined) name = arg;
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  if (name === undefined) return { error: "import needs an importer name: mizzen import <name> [dir]" };
+  return {
+    options: {
+      command: "import",
+      name,
+      root: root ?? ".",
+      ...(out === undefined ? {} : { out }),
+      ...(failOnManual ? { failOnManual: true } : {}),
+      ...(allow.length === 0 ? {} : { allow }),
+    },
+  };
+}
+
 /** Parses `argv` after the process name. */
 export function parseArgs(args: readonly string[]): Parsed {
   const [command, ...rest] = args;
@@ -756,6 +847,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "init") return parseInit(rest);
+  if (command === "import") return parseImport(rest);
   if (command === "diff") return parseDiff(rest);
   if (command === "api") return parseApi(rest);
   if (command === "mcp") return parseMcp(rest);
@@ -1014,7 +1106,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   // `--as-of today` is the only place the clock is read: once, here, printed, and passed on as a plain date.
   let asOf: string | undefined;
-  if ((options.command === "build" || options.command === "check" || options.command === "watch") && options.asOf !== undefined) {
+  if ((options.command === "build" || options.command === "check" || options.command === "watch" || options.command === "data-quality") && options.asOf !== undefined) {
     const read = readAsOfFlag(options.asOf, () => todayOf((io.now ?? (() => new Date()))()));
     if (!read.ok) {
       error(`${NAME}: --as-of ${read.message}`);
@@ -1093,6 +1185,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "import") {
+    try {
+      return await runImport(options.name, options.root, { log, error }, options.out, {
+        ...(options.failOnManual === undefined ? {} : { failOnManual: options.failOnManual }),
+        ...(options.allow === undefined ? {} : { allow: options.allow }),
+      });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
@@ -1298,6 +1402,28 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-quality") {
+    try {
+      const { config: loaded, diagnostics: configDiagnostics } = loadConfig(root);
+      const config = asOf === undefined ? loaded : { ...loaded, asOf };
+      const report = await checkQuality({ root, config, write: options.write });
+      const diagnostics = [...configDiagnostics, ...report.diagnostics];
+      if (options.json) {
+        log(JSON.stringify({ findings: report.findings, exceptions: report.exceptions, scopes: report.scopes, groups: report.groups, totals: report.totals, diagnostics, ...(report.wrote === undefined ? {} : { wrote: report.wrote }) }, null, 2));
+      } else {
+        if (report.wrote !== undefined) log(`wrote ${report.wrote}`);
+        for (const finding of report.findings) log(`${finding.severity} ${finding.id}: ${finding.message}`);
+        for (const diagnostic of diagnostics) error(`${NAME}: ${diagnostic.id}: ${diagnostic.message}`);
+      }
+      const failed = diagnostics.some((d) => d.severity === "error") ||
+        report.findings.some((finding) => finding.severity === "error");
+      return failed ? 1 : 0;
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
