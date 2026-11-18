@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/blocks.lock.schema.json",
+  "title": "Mizzen block lock",
+  "description": "Every page block's stable identifier. mizzen build --update-blocks writes it; its presence turns block identifiers on.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "pages"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The format version; only 1 exists."
+    },
+    "pages": {
+      "type": "object",
+      "description": "Each page's block ids, mapped to the 1-based line the block started at when the lock was written.",
+      "additionalProperties": {
+        "type": "object",
+        "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+        "additionalProperties": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import { join, posix, relative, resolve } from "node:path";
 import type { Heading as MdHeading, Root } from "mdast";
 import { loadConfig } from "../config/load.ts";
+import { blocksOf } from "../blocks/parse.ts";
+import { blocksLockOf, readBlocksLock, type BlocksLock } from "../blocks/lock.ts";
 import { loadData } from "../content/data.ts";
 import { checkSeo } from "../data/checks/seo.ts";
 import { loadCollections } from "../data/collections.ts";
@@ -44,6 +46,8 @@ export interface ModelResult {
   readonly parsedPages: number;
   /** What the URL lock check made of this build; the model is what writes `urls.lock.json` with `--update-urls`. */
   readonly urls: UrlsPlan;
+  /** Every page block's id, as `blocks.lock.json` holds it; the build writes it with `--update-blocks`. */
+  readonly blocksLock: BlocksLock;
 }
 
 /** Options of {@link buildModel}. */
@@ -57,6 +61,8 @@ export interface BuildModelOptions {
   readonly plugins?: readonly Plugin[];
   /** Accept every current record URL, moving a changed one into `urls.lock.json`'s `previous`; `mizzen build --update-urls` sets this. */
   readonly updateUrls?: boolean;
+  /** Give every page its block ids and write `blocks.lock.json`; `mizzen build --update-blocks` sets this. */
+  readonly updateBlocks?: boolean;
   /** The as-of date from `--as-of`, `YYYY-MM-DD`; it wins over the config's `asOf`. */
   readonly asOf?: string;
   /** The clock the stale-lock warning reads; a test sets it. Default: `Date.now`. */
@@ -194,6 +200,11 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   const loadedTemplates = await loadTemplates({ root: siteRoot, config });
   for (const d of loadedTemplates.diagnostics) diagnostics.report(d);
 
+  // Block ids are on only once the site has a lock or has just asked for one, so every other site keeps its model.
+  const blocksLock = await readBlocksLock(siteRoot);
+  for (const d of blocksLock.diagnostics) diagnostics.report(d);
+  const useBlocks = blocksLock.found || options.updateBlocks === true;
+
   const pages: Page[] = [];
   const folderPages: FolderPage[] = [];
   const seen = new Map<string, SourcePos>();
@@ -290,6 +301,10 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       tree = await parseMarkdown(body, fm.bodyLine);
       parsedPages += 1;
     }
+    const pageBlocks = isMarkdown && useBlocks
+      ? blocksOf({ file: rel, tree, markdown: body, bodyLine: fm.bodyLine })
+      : undefined;
+    for (const d of pageBlocks?.diagnostics ?? []) diagnostics.report(d);
     const directives = isMarkdown
       ? applyDataDirectives(tree, body, { data: data.data, collections: allCollections, file: rel })
       : { markdown: body, diagnostics: [] };
@@ -332,6 +347,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       lang: lang.lang,
       dir: lang.dir,
       headings,
+      ...(pageBlocks === undefined ? {} : { blocks: pageBlocks.blocks }),
       html,
       markdown: directives.markdown,
       kind: "doc",
@@ -548,5 +564,6 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     diagnostics: sortDiagnostics(diagnostics.all),
     parsedPages,
     urls,
+    blocksLock: blocksLockOf(pages),
   };
 }

@@ -84,6 +84,19 @@ export interface PageStale {
   readonly files: readonly PageStaleFile[];
 }
 
+/**
+ * One block of a page that a stable identifier names. The identifier is unique across the site and matches
+ * `[a-z0-9][a-z0-9-]{0,63}`: a heading declares it as `{#id}` on the heading, and every other block declares it
+ * as `<!-- {#id} -->` on the line before. A block without a declaration gets an automatic `b-<10 hex>` id from its
+ * content and its page.
+ */
+export interface Block {
+  /** The stable identifier. */
+  readonly id: string;
+  /** Where the block sits in the source. */
+  readonly pos: SourcePos;
+}
+
 /** One page of the site model. */
 export interface Page {
   /** Output URL including `base`, such as `/evergreen/guide/install/`. */
@@ -100,6 +113,11 @@ export interface Page {
   readonly dir: Direction;
   /** Headings in document order. */
   readonly headings: readonly Heading[];
+  /**
+   * The page's blocks in document order, each with its site-wide identifier; unset when the site has no
+   * `blocks.lock.json`, so a site that does not use block ids keeps its model and output unchanged.
+   */
+  readonly blocks?: readonly Block[];
   /** The rendered body, with `data-source` on every block. */
   readonly html: string;
   /** The Markdown body without front matter, as the page's Markdown twin is written. */

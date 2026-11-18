@@ -7,6 +7,7 @@ import { discover } from "../content/discover.ts";
 import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, Site } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
 import { writeUrlsLock } from "../data/urls-lock.ts";
+import { writeBlocksLock } from "../blocks/lock.ts";
 import { MANIFEST_PATH, recordBuildHash } from "../outputs/build-hash.ts";
 import { driftPagesOf, driftRoot } from "../outputs/drift-report.ts";
 import { trustAsOf, trustPagesOf, trustRoot } from "../outputs/trust.ts";
@@ -56,6 +57,11 @@ export interface BuildOptions {
    * redirect. `mizzen build --update-urls` sets this; no other command writes the lock.
    */
   readonly updateUrls?: boolean;
+  /**
+   * Give every page its block ids and write `blocks.lock.json`: a block that declares one keeps it when it moves, and
+   * one without a declaration gets a content-derived id. `mizzen build --update-blocks` sets this.
+   */
+  readonly updateBlocks?: boolean;
   /**
    * The as-of date, `YYYY-MM-DD`, from `--as-of`; it wins over the config's `asOf`. The build never reads the clock:
    * `--as-of today` is resolved by the CLI before it gets here.
@@ -255,7 +261,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const pluginKey = codeFailed ? undefined : await pluginInputs(code.plugins, root).catch(() => undefined);
 
   const cacheRoot =
-    options.cache === true && options.updateUrls !== true && pluginKey !== undefined
+    options.cache === true && options.updateUrls !== true && options.updateBlocks !== true && pluginKey !== undefined
       ? resolve(options.cacheDir ?? cacheRootOf(root))
       : undefined;
   let key: string | undefined;
@@ -297,6 +303,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     ...(cacheRoot === undefined ? {} : { pageCacheDir: join(cacheRoot, "pages") }),
     plugins: code.plugins,
     ...(options.updateUrls === true ? { updateUrls: true } : {}),
+    ...(options.updateBlocks === true ? { updateBlocks: true } : {}),
     ...(options.asOf === undefined ? {} : { asOf: options.asOf }),
   });
   for (const d of model.diagnostics) diagnostics.report(d);
@@ -682,6 +689,9 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     // The lock is a promise about what this build published, so only a clean build writes it.
     if (options.updateUrls === true && !findings.some((finding) => finding.severity === "error")) {
       await writeUrlsLock(root, model.urls.next);
+    }
+    if (options.updateBlocks === true && !findings.some((finding) => finding.severity === "error")) {
+      await writeBlocksLock(root, model.blocksLock);
     }
     if (settingsDir !== undefined) await writeRenderInputs(settingsDir, includeInputs);
     if (renderRoot !== undefined && settingsKey !== undefined) await pruneRenderCache(renderRoot, settingsKey);
