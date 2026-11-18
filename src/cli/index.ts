@@ -88,7 +88,7 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
-  import <name> <dir>         Preview a migration: proposed destinations and manual items, writing nothing
+  import <name> <dir>         Preview a migration; --out <dir> writes it to a folder outside the source
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
@@ -105,7 +105,7 @@ Commands:
   watch [dir]               Rebuild the site whenever a source or theme file changes
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
   --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
@@ -321,6 +321,7 @@ type ImportOpts = {
   readonly command: "import";
   readonly name: string;
   readonly root: string;
+  readonly out?: string;
 };
 
 type Parsed =
@@ -735,19 +736,25 @@ function parseMcp(args: readonly string[]): Parsed {
   return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
 }
 
-/** Parses `import <name> [dir]`. */
+/** Parses `import <name> [dir] [--out <dir>]`. */
 function parseImport(args: readonly string[]): Parsed {
   let name: string | undefined;
   let root: string | undefined;
-  for (const arg of args) {
+  let out: string | undefined;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
     if (arg === "-h" || arg === "--help") return { help: true };
-    if (arg.startsWith("-")) return { error: `unknown option for import: ${arg}` };
-    if (name === undefined) name = arg;
+    if (arg === "--out") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--out needs a value" };
+      out = next;
+    } else if (arg.startsWith("-")) return { error: `unknown option for import: ${arg}` };
+    else if (name === undefined) name = arg;
     else if (root === undefined) root = arg;
     else return { error: `unexpected argument: ${arg}` };
   }
   if (name === undefined) return { error: "import needs an importer name: mizzen import <name> [dir]" };
-  return { options: { command: "import", name, root: root ?? "." } };
+  return { options: { command: "import", name, root: root ?? ".", ...(out === undefined ? {} : { out }) } };
 }
 
 /** Parses `argv` after the process name. */
@@ -1126,7 +1133,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   if (options.command === "import") {
     try {
-      return await runImport(options.name, options.root, { log, error });
+      return await runImport(options.name, options.root, { log, error }, options.out);
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
