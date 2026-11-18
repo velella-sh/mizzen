@@ -353,11 +353,11 @@ export interface SnapshotConfig {
 }
 
 /** What a data-quality rule measures. */
-export type QualityRuleKind = "completeness" | "coverage" | "count";
+export type QualityRuleKind = "completeness" | "coverage" | "count" | "threshold";
 
 /** One data-quality rule: what it measures, on which collection, and when it reports. */
 export interface QualityRule {
-  /** What the rule measures: a missing field, a field's coverage drop, or a record-count drop. */
+  /** What the rule measures: a missing field, a field's coverage drop, a record-count drop, or a value outside a range. */
   readonly kind: QualityRuleKind;
   /** The collection it reads. */
   readonly collection: string;
@@ -367,6 +367,10 @@ export interface QualityRule {
   readonly where?: Readonly<Record<string, unknown>>;
   /** For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds. */
   readonly maxDrop?: number;
+  /** For `threshold`: the lowest value the field may hold. At least one of `min` and `max` is required. */
+  readonly min?: number;
+  /** For `threshold`: the highest value the field may hold. At least one of `min` and `max` is required. */
+  readonly max?: number;
 }
 
 /** A dated exception: a finding the rules would make, held back until a day. */

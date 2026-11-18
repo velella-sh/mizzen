@@ -52,6 +52,12 @@ export interface QualityFinding {
   readonly drop?: number;
   /** For coverage and count: the rule's limit. */
   readonly maxDrop?: number;
+  /** For threshold: the value the record holds. */
+  readonly value?: number;
+  /** For threshold: the lowest value the rule allows. */
+  readonly min?: number;
+  /** For threshold: the highest value the rule allows. */
+  readonly max?: number;
   /** One line a reader can act on. */
   readonly message: string;
 }
@@ -164,6 +170,19 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** The value of a numeric field, or `undefined` when the field is missing or holds anything else. */
+function numberAt(fields: Readonly<Record<string, unknown>>, field: string): number | undefined {
+  const found = resolveIn(fields, field);
+  return found.found && typeof found.value === "number" && Number.isFinite(found.value) ? found.value : undefined;
+}
+
+/** A rule's bounds, written for a finding message. */
+function boundsText(min: number | undefined, max: number | undefined): string {
+  return [min === undefined ? undefined : `min ${min}`, max === undefined ? undefined : `max ${max}`]
+    .filter((part): part is string => part !== undefined)
+    .join(", ");
+}
+
 /** The percentage of records that hold a value for each field. */
 function coverageOf(records: readonly DataRecord[], fields: readonly string[]): Record<string, number> {
   const coverage: Record<string, number> = {};
@@ -264,7 +283,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
   const loaded = await loadCollections({ root, config });
   diagnostics.push(...loaded.diagnostics);
 
-  const compares = !write && rules.some((rule) => rule.kind !== "completeness");
+  const compares = !write && rules.some((rule) => rule.kind === "coverage" || rule.kind === "count");
   const read: { readonly baseline?: Baseline; readonly diagnostics: readonly Diagnostic[] } = compares
     ? await readBaseline(root)
     : { diagnostics: [] };
@@ -301,7 +320,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
     });
 
     if (write) {
-      if (rule.kind !== "completeness") {
+      if (rule.kind === "coverage" || rule.kind === "count") {
         const collectionScopes = (draft.collections[rule.collection] ??= {});
         collectionScopes[scopeKeyOf(rule.where)] = snapshotOf(checked);
       }
@@ -323,6 +342,41 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
             record: record.id,
             field,
             message: `Record "${record.id}" of collection "${rule.collection}" is missing field "${field}".`,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (rule.kind === "threshold") {
+      if (rule.min === undefined && rule.max === undefined) {
+        diagnostics.push({
+          id: "data.quality-bounds",
+          severity: "error",
+          message: `The threshold rule for collection "${rule.collection}" needs min, max, or both.`,
+          help: "Write min and max in mizzen.yml: the inclusive numbers the field must stay between.",
+        });
+        continue;
+      }
+      for (const record of checked) {
+        for (const field of rule.fields ?? fieldsOf(checked)) {
+          const value = numberAt(record.fields, field);
+          // A missing or non-numeric value is not out of range; the completeness rule reports a missing one.
+          if (value === undefined) continue;
+          const below = rule.min !== undefined && value < rule.min;
+          const above = rule.max !== undefined && value > rule.max;
+          if (!below && !above) continue;
+          findings.push({
+            id: `data.quality.threshold.${rule.collection}.${record.id}.${field}`,
+            kind: rule.kind,
+            severity,
+            collection: rule.collection,
+            record: record.id,
+            field,
+            value,
+            ...(rule.min === undefined ? {} : { min: rule.min }),
+            ...(rule.max === undefined ? {} : { max: rule.max }),
+            message: `Record "${record.id}" of collection "${rule.collection}" has field "${field}" = ${value}, outside the threshold (${boundsText(rule.min, rule.max)}).`,
           });
         }
       }

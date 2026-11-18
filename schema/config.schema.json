@@ -536,8 +536,8 @@
       ],
       "properties": {
         "kind": {
-          "enum": ["completeness", "coverage", "count"],
-          "description": "What the rule measures: a missing field, a field's coverage drop, or a record-count drop."
+          "enum": ["completeness", "coverage", "count", "threshold"],
+          "description": "What the rule measures: a missing field, a field's coverage drop, a record-count drop, or a value outside a range."
         },
         "collection": {
           "type": "string",
@@ -561,6 +561,14 @@
           "type": "integer",
           "minimum": 0,
           "description": "For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds."
+        },
+        "min": {
+          "type": "number",
+          "description": "For `threshold`: the lowest value the field may hold. At least one of `min` and `max` is required."
+        },
+        "max": {
+          "type": "number",
+          "description": "For `threshold`: the highest value the field may hold. At least one of `min` and `max` is required."
         }
       },
       "description": "One data-quality rule: what it measures, on which collection, and when it reports."
@@ -574,7 +582,7 @@
       ],
       "properties": {
         "rule": {
-          "enum": ["completeness", "coverage", "count"],
+          "enum": ["completeness", "coverage", "count", "threshold"],
           "description": "The kind of finding it covers."
         },
         "record": {

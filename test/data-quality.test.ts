@@ -211,6 +211,70 @@ test("a record count dropping by exactly maxDrop is clean", async () => {
   assert.deepEqual(report.diagnostics, []);
 });
 
+/** A site with one threshold rule on `price`, with `bounds` as the rule's remaining YAML lines. */
+function thresholdSite(records: string, bounds = "      min: 0\n      max: 10"): Record<string, string> {
+  return {
+    "mizzen.yml": [
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      "quality:",
+      "  rules:",
+      "    - kind: threshold",
+      "      collection: items",
+      "      fields: [price]",
+      bounds,
+      "",
+    ].join("\n"),
+    "_data/items.yml": records,
+  };
+}
+
+test("a value inside the threshold is clean", async () => {
+  const { diagnostics, report } = await check(thresholdSite("- id: a\n  price: 5\n- id: b\n  price: 10\n- id: c\n  price: 0\n"));
+  assert.deepEqual(diagnostics, []);
+  assert.deepEqual(report.findings, []);
+});
+
+test("a value outside the threshold reports the value and its bounds", async () => {
+  const { config, report } = await check(thresholdSite("- id: a\n  price: -1\n- id: b\n  price: 12\n- id: c\n  price: high\n"));
+  assert.deepEqual(config.quality?.rules, [{ kind: "threshold", collection: "items", fields: ["price"], min: 0, max: 10 }]);
+  assert.deepEqual(report.findings, [
+    {
+      id: "data.quality.threshold.items.a.price",
+      kind: "threshold",
+      severity: "warning",
+      collection: "items",
+      record: "a",
+      field: "price",
+      value: -1,
+      min: 0,
+      max: 10,
+      message: 'Record "a" of collection "items" has field "price" = -1, outside the threshold (min 0, max 10).',
+    },
+    {
+      id: "data.quality.threshold.items.b.price",
+      kind: "threshold",
+      severity: "warning",
+      collection: "items",
+      record: "b",
+      field: "price",
+      value: 12,
+      min: 0,
+      max: 10,
+      message: 'Record "b" of collection "items" has field "price" = 12, outside the threshold (min 0, max 10).',
+    },
+  ], "the non-numeric value of c is skipped");
+});
+
+test("a threshold rule without bounds is a diagnostic, not a crash", async () => {
+  const { config, report } = await check(thresholdSite("- id: a\n  price: 5\n", ""));
+  assert.deepEqual(config.quality?.rules, [{ kind: "threshold", collection: "items", fields: ["price"] }]);
+  assert.deepEqual(report.findings, []);
+  assert.deepEqual(report.diagnostics.map((diagnostic) => diagnostic.id), ["data.quality-bounds"]);
+  assert.match(report.diagnostics[0]!.message, /needs min, max, or both/);
+});
+
 test("a coverage rule without a baseline is a diagnostic", async () => {
   const { report } = await check(coverageSite(10));
   assert.deepEqual(report.findings, []);
