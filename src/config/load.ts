@@ -824,6 +824,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const lifecycle = lifecycleFrom(entry.lifecycle);
     const json = collectionJsonFrom(entry.json);
     const raw = collectionRawFrom(entry.raw);
+    const publicFields = fieldsFrom(entry.public);
     const changelog = collectionChangelogFrom(entry.changelog);
     const transform = collectionTransformFrom(entry.transform);
     const join = joinFrom(entry.join);
@@ -862,6 +863,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(seo === undefined ? {} : { seo }),
       ...(index === undefined ? {} : { index }),
       ...(raw === undefined ? {} : { raw }),
+      ...(publicFields === undefined ? {} : { public: publicFields }),
       ...(changelog === undefined ? {} : { changelog }),
       ...(transform === undefined ? {} : { transform }),
       ...(join === undefined ? {} : { join }),
