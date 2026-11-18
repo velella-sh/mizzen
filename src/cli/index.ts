@@ -12,6 +12,7 @@ import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts"
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot, dataTransform } from "./data.ts";
+import { diffRuleVersions } from "../data/rule-diff.ts";
 import { dataSchema } from "../data/schema-evolution.ts";
 import { dataMigrate } from "../data/schema-migrate.ts";
 import { verifyData } from "../data/verify.ts";
@@ -91,6 +92,8 @@ Commands:
   data schema [dir]          Report the fields each schema added or removed since its recorded baseline
   data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
   data transform [name] [dir]  Preview the records a collection's transform rules produce (--limit, --json)
+  data transform-diff <baseline> <proposed> [dir]
+                            Compare two rule versions on one input (--collection, --format, --check)
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -123,7 +126,7 @@ Commands:
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
   --domain <host>      The one host published-site check may request (default: the sitemap's host)
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
@@ -134,7 +137,7 @@ Options:
   --host <host>        Host for dev (default: 127.0.0.1)
   --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
-  --check              For data fetch: compare with mizzen.lock.json without writing
+  --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --json               For data quality: print the findings and scopes as JSON; for inputs inspect: print the report as JSON
   --limit <n>          For data transform: records to show per collection (default: 5)
@@ -161,6 +164,7 @@ Options:
   --print-config <c>   For mcp: print the configuration for claude-code, claude-desktop, cursor, or vscode, and exit
   --starter <name>     For init: the theme starter to copy into the folder (default folder: .)
   --collections <a,b>  For inputs export: collections to carry; their references targets are added (default: every collection)
+  --collection <name>  For data transform-diff: the collection to compare when both configs declare several
   --accept <ids|all>   For inputs import: inputs whose differing destination files or lock entries may be replaced
   --list               For init: print the theme's starters with their titles and descriptions
   --lang <a,b>         For init: keep only these of the starter's optional languages
@@ -302,6 +306,16 @@ type DataTransformOpts = {
   readonly json: boolean;
 };
 
+type DataTransformDiffOpts = {
+  readonly command: "data-transform-diff";
+  readonly root: string;
+  readonly baseline: string;
+  readonly proposed: string;
+  readonly collection?: string;
+  readonly format: "text" | "json";
+  readonly check: boolean;
+};
+
 type DataQualityOpts = {
   readonly command: "data-quality";
   readonly root: string;
@@ -423,6 +437,7 @@ type Parsed =
         | DataSchemaOpts
         | DataMigrateOpts
         | DataTransformOpts
+        | DataTransformDiffOpts
         | DataQualityOpts
         | DataChangesOpts
         | UrlsCheckOpts
@@ -683,6 +698,43 @@ function parseDataTransform(rest: readonly string[]): Parsed {
   };
 }
 
+/** Parses `data transform-diff <baseline> <proposed> [dir] [--collection <name>] [--format text|json] [--check]`. */
+function parseDataTransformDiff(rest: readonly string[]): Parsed {
+  const positional: string[] = [];
+  let collection: string | undefined;
+  let format: "text" | "json" = "text";
+  let check = false;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--check") check = true;
+    else if (arg === "--collection") {
+      const next = rest[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--collection needs a name" };
+      collection = next;
+    } else if (arg === "--format") {
+      const next = rest[++i];
+      if (next !== "text" && next !== "json") return { error: `--format for data transform-diff must be text or json, not ${next ?? ""}` };
+      format = next;
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else positional.push(arg);
+  }
+  if (positional.length < 2) return { error: "data transform-diff needs a baseline and a proposed config: data transform-diff <baseline> <proposed> [dir]" };
+  if (positional.length > 3) return { error: `unexpected argument: ${positional[3]}` };
+  const [baseline, proposed, root] = positional;
+  return {
+    options: {
+      command: "data-transform-diff",
+      root: root ?? ".",
+      baseline: baseline!,
+      proposed: proposed!,
+      ...(collection === undefined ? {} : { collection }),
+      format,
+      check,
+    },
+  };
+}
+
 /** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
@@ -691,6 +743,7 @@ function parseData(args: readonly string[]): Parsed {
   if (subcommand === "schema") return parseDataSchema(rest);
   if (subcommand === "migrate") return parseDataMigrate(rest);
   if (subcommand === "transform") return parseDataTransform(rest);
+  if (subcommand === "transform-diff") return parseDataTransformDiff(rest);
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
   if (subcommand === "changes") return parseDataChanges(rest);
   if (subcommand === "verify") {
@@ -1629,6 +1682,25 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     try {
       const result = await dataMigrate({ root, ...(options.name === undefined ? {} : { name: options.name }) });
       write(result.output);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-transform-diff") {
+    try {
+      const result = await diffRuleVersions({
+        root,
+        baseline: options.baseline,
+        proposed: options.proposed,
+        ...(options.collection === undefined ? {} : { collection: options.collection }),
+        format: options.format,
+        check: options.check,
+      });
+      if (result.output !== "") write(result.output);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
     } catch (err) {

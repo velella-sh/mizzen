@@ -91,3 +91,53 @@ Changing a rule therefore refreshes the affected output, and an incremental buil
 `mizzen data transform [name] [dir] --limit 5 --json` loads the site exactly as a build does and prints a sample of the
 records each collection's rules produce, plus every finding. It writes nothing: no cache, no lock, no output folder.
 Without `name`, it previews every collection that declares rules. The command exits `1` when a finding is an error.
+
+## Comparing two rule versions
+
+`mizzen data transform-diff <baseline> <proposed> [dir] [--collection <name>] [--format text|json] [--check]`
+runs two configurations over the same collection input and reports what the rules would change. The baseline is
+usually `mizzen.yml`; put the proposed file beside it, such as `rules/price-cents.yml`.
+
+The command records the path and SHA-256 of each config and of the input, and refuses to compare when the two
+configs read different input bytes: both versions must see the same locked input. It writes nothing — no lock, cache,
+or output folder.
+
+Records align by id and appear as `+` added, `-` removed, or `~` changed. Each changed field prints both values, with
+`missing` kept apart from `null`, and a type change shown as `number 7 -> string "7"`. The steps that last wrote the
+field are named per side, such as `(baseline price-cents (unit), proposed price-cents (unit))`; when no step wrote it,
+the report says `unknown: no transformation step wrote this field`. Affected outputs come from the dependency graph
+of the changed records, the same impact report a build uses.
+
+A transform or validation error on either side is listed with its side and stage (`transform`, `validation-input`,
+`validation-output`) and sets `complete: no`. Exit codes are `0` unchanged (or compared without `--check`), `1` a
+record difference under `--check`, and `2` an invalid target or an incomplete comparison. An invalid target is a
+config, collection, or input that cannot be read, or two inputs whose hashes differ.
+
+### Reviewing a unit-conversion change
+
+Change `factor` in a copy of the config, keep the baseline, and compare the two:
+
+```bash
+cp mizzen.yml rules/price-cents.yml
+# edit factor in rules/price-cents.yml
+mizzen data transform-diff mizzen.yml rules/price-cents.yml . --collection products
+mizzen data transform-diff mizzen.yml rules/price-cents.yml . --collection products --format json --check
+```
+
+```text
+rule diff: products
+baseline mizzen.yml (sha256 4251eddbd581)
+proposed rules/price-cents.yml (sha256 871461a59ff0)
+input _data/products.yml (sha256 c071d5585ad9)
+complete: yes
+records: 0 added, 0 removed, 1 changed; 1 fields; 1 affected outputs
+
+~ products/bolt
+  ~ price: number 1200 -> number 12000 (baseline price-cents (unit), proposed price-cents (unit))
+
+affected outputs:
+  /products/bolt/ (page) [bolt]
+```
+
+The first command exits `0`; the second exits `1` because the record changed. Neither writes
+`mizzen.lock.json`: reviewing a rule version does not move the project lock or the source data.

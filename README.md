@@ -70,6 +70,8 @@ Commands:
   data schema [dir]          Report the fields each schema added or removed since its recorded baseline
   data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
   data transform [name] [dir]  Preview the records a collection's transform rules produce (--limit, --json)
+  data transform-diff <baseline> <proposed> [dir]
+                            Compare two rule versions on one input (--collection, --format, --check)
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -102,7 +104,7 @@ Commands:
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
   --domain <host>      The one host published-site check may request (default: the sitemap's host)
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
@@ -113,7 +115,7 @@ Options:
   --host <host>        Host for dev (default: 127.0.0.1)
   --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
-  --check              For data fetch: compare with mizzen.lock.json without writing
+  --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --json               For data quality: print the findings and scopes as JSON; for inputs inspect: print the report as JSON
   --limit <n>          For data transform: records to show per collection (default: 5)
@@ -140,6 +142,7 @@ Options:
   --print-config <c>   For mcp: print the configuration for claude-code, claude-desktop, cursor, or vscode, and exit
   --starter <name>     For init: the theme starter to copy into the folder (default folder: .)
   --collections <a,b>  For inputs export: collections to carry; their references targets are added (default: every collection)
+  --collection <name>  For data transform-diff: the collection to compare when both configs declare several
   --accept <ids|all>   For inputs import: inputs whose differing destination files or lock entries may be replaced
   --list               For init: print the theme's starters with their titles and descriptions
   --lang <a,b>         For init: keep only these of the starter's optional languages
@@ -165,6 +168,7 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen data schema [dir] --format text\|json` | Compares each collection's schema with the one its snapshot recorded in `mizzen.lock.json` and names the top-level fields it added or removed, with both versions and the schema file; a collection with no recorded schema is skipped. Read-only; exits `1` on a config, lock, or schema error. |
 | `mizzen data migrate [name] [dir]` | Previews moving each record to the current schema: it applies the collection's `schemaRenames`, validates every record, and prints a sample of the migrated records and each rejected one with its source line. Writes nothing; exits `1` on a config, schema, or source error. |
 | `mizzen data transform [name] [dir] --limit <n> --json` | Previews the records each collection's `transform` rules produce: a sample per collection, every finding with its source line, and with `--json` the field-change events. It loads the site as a build does and writes nothing. Without a name it previews every collection that declares rules; `--limit` defaults to 5. Exits `1` on an error. |
+| `mizzen data transform-diff <baseline> <proposed> [dir] --collection <name> --format text\|json --check` | Runs two configs over the same collection input and reports records added, removed, or changed by id. Each field shows both values, with missing kept apart from null and type changes marked, and the step that last wrote it on each side or why none could be named. Transform and validation failures name their side and stage and mark the result incomplete; affected outputs come from the dependency graph. Both configs and the input are hashed, and unequal input hashes are a target error. Writes nothing. Exits `0` unchanged, `1` a change under `--check`, `2` an invalid target or failure. |
 | `mizzen data verify [dir]` | Compares each collection with the lock and prints the first differing record with its source position; exits `1` on a difference and never writes. |
 | `mizzen dev [dir] --port <number> --host <host> --theme <dir>` | Builds `dir`, serves the output with pretty URLs, watches the source and theme, rebuilds on change, and reloads the browser over Server-Sent Events. The reload script is added to HTML responses only; the files on disk stay as `build` wrote them. Ctrl-C stops the server. |
 | `mizzen doctor [dir] --format text\|json\|sarif --theme <dir>` | Checks the runtime, the config, the content, the output paths, and the toolchain without writing to the site, and prints the findings in the chosen format. Exits `1` on an error. |
