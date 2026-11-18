@@ -17,7 +17,7 @@ checks for the same bytes.
 
 - A **collection** is one data file, read into records and given the rules that turn them into pages: which field is the
   record's id, which template to use, and what URL a page gets. It is declared under `collections` in `mizzen.yml`.
-  See [Collections](/data/collections/).
+  See [Collections](/data/collections/) and [Public fields](/data/public-fields/).
 - A **record** is one entry of the collection: an id and its fields. A record is data, not HTML.
 - A **template** is a Markdown file under `_templates/`. It is instantiated once per record into a **record page**. Its
   front matter and directives take their values from the record. See [Templates](/data/templates/).
