@@ -603,6 +603,14 @@
           "additionalProperties": { "type": "string", "minLength": 1 },
           "description": "Fields an earlier record may still hold under an old name, keyed by the new name: `{ slug: path }` reads `path` as `slug`. A record that holds both keeps the new one and earns a warning naming its line. Default {}."
         },
+        "onSchemaChange": {
+          "enum": [
+            "error",
+            "warn"
+          ],
+          "default": "error",
+          "description": "What a schema change that earlier records may not satisfy does: error fails the build; warn reports a warning. Default error."
+        },
         "unique": {
           "type": "array",
           "default": [],

@@ -33,6 +33,7 @@ collections:
 | `aliases` | string | | Field that holds earlier ids or paths of a record; each redirects to the record's page. See [Stable URLs](/data/urls/). |
 | `schema` | string | | JSON Schema file, relative to the site root, that validates every record. |
 | `schemaRenames` | object | `{}` | Fields an earlier record may still hold under an old name, keyed by the new name: `{ slug: path }` reads `path` as `slug`. A record that holds both keeps the new one and earns a warning naming its line. |
+| `onSchemaChange` | `error` or `warn` | `error` | What a schema change that earlier records may not satisfy does: `error` fails the build, `warn` reports a warning. A rename mapped by `schemaRenames` is a warning either way. |
 | `unique` | list of string | `[]` | Fields whose values must be unique; a duplicate is an error naming both records. |
 | `references` | object | `{}` | Fields that hold the id of another collection's record, keyed by field: `component: components`. |
 | `dates` | list of string | `[]` | Fields that hold a date, written `YYYY-MM-DD`, `YYYY-MM`, or `YYYY`, or as a full ISO 8601 instant. |

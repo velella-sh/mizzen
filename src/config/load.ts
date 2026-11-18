@@ -551,6 +551,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(typeof entry.aliases === "string" ? { aliases: entry.aliases } : {}),
       ...(typeof entry.schema === "string" ? { schema: entry.schema } : {}),
       ...(renames === undefined ? {} : { schemaRenames: renames }),
+      ...(entry.onSchemaChange === "error" || entry.onSchemaChange === "warn" ? { onSchemaChange: entry.onSchemaChange } : {}),
       ...(unique === undefined ? {} : { unique }),
       ...(references === undefined ? {} : { references }),
       ...(dates === undefined ? {} : { dates }),

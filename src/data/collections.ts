@@ -32,6 +32,7 @@ import { skippedSummary } from "./policy.ts";
 import { fieldPositionsOf, keyPositionsOf, keyText, lineIndex, mappingPairs, nodePos, sourcePosOf } from "./positions.ts";
 import { readRemoteSource } from "./remote-source.ts";
 import { compileSchemas, validateRecords } from "./schema.ts";
+import { compareSchemas } from "./schema-evolution.ts";
 import type { SourceFormat } from "./schema-fix.ts";
 
 /** What {@link loadCollections} read. */
@@ -438,6 +439,25 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     lock = read.lock;
     lockInvalid = read.diagnostics.some((diagnostic) => diagnostic.severity === "error");
     diagnostics.push(...read.diagnostics);
+  }
+
+  if (lock !== undefined) {
+    for (const name of names) {
+      const schema = schemas.schemas[name];
+      const baseline = lock.snapshots?.[name]?.schema;
+      if (schema === undefined || baseline === undefined) continue;
+      const entry = config.collections[name]!;
+      for (const change of compareSchemas(schema, baseline, entry.schemaRenames ?? {})) {
+        if (change.severity !== "error") continue;
+        diagnostics.push({
+          id: change.id,
+          severity: entry.onSchemaChange === "warn" ? "warning" : "error",
+          message: `Collection "${name}" field "${change.field}" ${change.message}`,
+          pos: configPositions[name]!,
+          help: `Update the records of "${name}", then run \`mizzen data snapshot ${name}\`, or set \`collections.${name}.onSchemaChange: warn\` in mizzen.yml.`,
+        });
+      }
+    }
   }
 
   for (const name of names) {

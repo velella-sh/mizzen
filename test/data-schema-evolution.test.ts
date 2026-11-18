@@ -300,3 +300,56 @@ test("a schema equal to its baseline is reported as matching, and the parser ref
       migrateParsed.options.root === root,
   );
 });
+
+test("the build fails on an incompatible schema change, warns with onSchemaChange: warn, and is clean after a renamed snapshot", async () => {
+  const root = tree();
+  try {
+    writeFileSync(join(root, "_data/items.yml"), "- id: a\n  title: A\n  legacy: old-a\n");
+    execFileSync("git", ["-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "-qam", "legacy"], { cwd: root, stdio: "ignore" });
+    assert.equal((await dataSnapshot({ root, name: "items" })).code, 0);
+    const typeChanged = schema({
+      id: { type: "number" },
+      legacy: { type: "string" },
+      status: { type: "string", values: ["draft", "published"] },
+      title: { type: "string" },
+    });
+    writeFileSync(join(root, "_data", "items.schema.json"), typeChanged);
+
+    const failed = await loadCollections({ root, config: loadConfig(root).config });
+    const errors = failed.diagnostics.filter((diagnostic) => diagnostic.id === "data.schema-type-change");
+    assert.equal(errors.length, 1, JSON.stringify(failed.diagnostics));
+    assert.equal(errors[0]!.severity, "error");
+    assert.match(errors[0]!.message, /^Collection "items" field "id" field `id` changed type from `string` to `number`; baseline [0-9a-f]{12} -> now [0-9a-f]{12}$/);
+    assert.equal(errors[0]!.pos?.file, "mizzen.yml");
+    assert.match(errors[0]!.help ?? "", /`mizzen data snapshot items`/);
+    assert.match(errors[0]!.help ?? "", /`collections\.items\.onSchemaChange: warn`/);
+
+    writeFileSync(
+      join(root, "mizzen.yml"),
+      "collections:\n  items:\n    source: _data/items.yml\n    schema: _data/items.schema.json\n    onSchemaChange: warn\n  notes:\n    source: _data/notes.yml\n",
+    );
+    const warned = await loadCollections({ root, config: loadConfig(root).config });
+    assert.deepEqual(
+      warned.diagnostics.filter((diagnostic) => diagnostic.id === "data.schema-type-change").map(({ severity }) => severity),
+      ["warning"],
+    );
+
+    writeFileSync(
+      join(root, "mizzen.yml"),
+      "collections:\n  items:\n    source: _data/items.yml\n    schema: _data/items.schema.json\n    schemaRenames:\n      slug: legacy\n  notes:\n    source: _data/notes.yml\n",
+    );
+    writeFileSync(
+      join(root, "_data", "items.schema.json"),
+      schema({ id: { type: "string" }, slug: { type: "string" }, status: { type: "string", values: ["draft", "published"] }, title: { type: "string" } }, ["title", "slug"]),
+    );
+
+    const mapped = await loadCollections({ root, config: loadConfig(root).config });
+    assert.deepEqual(mapped.diagnostics.filter((diagnostic) => diagnostic.id.startsWith("data.schema-")), []);
+    assert.equal((await dataSnapshot({ root, name: "items" })).code, 0);
+
+    const renamed = await loadCollections({ root, config: loadConfig(root).config });
+    assert.deepEqual(renamed.diagnostics.filter((diagnostic) => diagnostic.id.startsWith("data.schema-")), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
