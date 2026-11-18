@@ -14,6 +14,7 @@ import { localizeFields, prefixOfLang } from "../data/record-context.ts";
 import { planUrls, readUrlsLock, urlKey, type PublishedUrl, type UrlsPlan } from "../data/urls-lock.ts";
 import { loadTemplates } from "../data/template.ts";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
+import { buildApiReferencePagesFor } from "../content/api-reference.ts";
 import { buildBlogPages } from "../content/blog/pages.ts";
 import { buildBlogRoutes, type BlogPostSource, type BlogRoute } from "../content/blog/routes.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
@@ -22,7 +23,7 @@ import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
 import { permalink } from "../content/permalink.ts";
 import { resolveTitle } from "../content/title.ts";
-import type { Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
+import type { Diagnostic, FrontMatter, Heading, NavItem, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { applyRecordLinks } from "../markdown/plugins/links.ts";
@@ -403,6 +404,28 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     add(hooked, hooked.source.file, hooked.frontMatter.order, false);
   }
 
+  // The OpenAPI reference is ordinary doc pages: one index and one page per operation, both kept out of folder
+  // navigation and added as one group below.
+  let apiReferenceGroup: NavItem | undefined;
+  if (config.apiReference !== undefined) {
+    const built = await buildApiReferencePagesFor(siteRoot, config);
+    for (const d of built.diagnostics) diagnostics.report(d);
+    for (const generated of built.pages) {
+      const known = seen.get(generated.url);
+      if (known !== undefined) {
+        diagnostics.error(
+          "page.duplicate-url",
+          `Two pages have the URL ${generated.url}: ${known.file} and ${generated.source.file}.`,
+          { pos: generated.source, help: "Change `apiReference.path`, or the `permalink` of the other page." },
+        );
+        continue;
+      }
+      const hooked = await hookPage(generated);
+      add(hooked, hooked.source.file, hooked.frontMatter.order, false);
+    }
+    if (built.pages.length > 0) apiReferenceGroup = { title: built.title, children: built.navigation };
+  }
+
   const records = await buildRecordPages({
     root: siteRoot,
     config,
@@ -572,8 +595,12 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     defaultLang: config.lang,
   });
   for (const d of navResult.diagnostics) diagnostics.report(d);
-  const nav: NavTree =
+  const loadedNav: NavTree =
     Object.keys(navResult.nav).length > 0 ? navResult.nav : { docs: navFromFolders(folderPages) };
+  const nav: NavTree =
+    apiReferenceGroup === undefined
+      ? loadedNav
+      : { ...loadedNav, docs: [...(loadedNav.docs ?? []), apiReferenceGroup] };
 
   // Derived facts run last, once the pages and `_data` are final, and land at `data[fact.name]`; `_data` wins.
   const gone = urls.removed

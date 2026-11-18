@@ -18,6 +18,7 @@ import type {
   ApiCollectionConfig,
   ApiVersionConfig,
   ApiConfig,
+  ApiReferenceConfig,
   AnalyticsConfig,
   AnalyticsProvider,
   BlogConfig,
@@ -340,6 +341,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const network = networkFrom(raw.network);
   const snapshot = snapshotFrom(raw.snapshot);
   const api = apiFrom(raw.api);
+  const apiReference = apiReferenceFrom(raw.apiReference);
   const blog = blogFrom(raw.blog);
   const dates = datesFrom(raw.dates);  const social = socialFrom(raw.social);
   const stale = staleFrom(raw.stale);
@@ -376,6 +378,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(dates === undefined ? {} : { dates }),
     ...(snapshot === undefined ? {} : { snapshot }),
     ...(api === undefined ? {} : { api }),
+    ...(apiReference === undefined ? {} : { apiReference }),
     ...(blog === undefined ? {} : { blog }),
     ...(stale === undefined ? {} : { stale }),
     ...(drift === undefined ? {} : { drift }),
@@ -383,6 +386,13 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
   };
+}
+
+/** The `apiReference` block, on when `source` names a file. The schema check reports a bad shape. */
+function apiReferenceFrom(value: unknown): ApiReferenceConfig | undefined {
+  if (!isPlainObject(value) || typeof value.source !== "string" || value.source.trim() === "") return undefined;
+  const path = typeof value.path === "string" && /^\/(?:[^./][^/]*\/)*$/.test(value.path) ? value.path : "/reference/";
+  return { source: value.source.trim(), path };
 }
 
 const PROVIDERS: readonly string[] = ["goatcounter", "plausible", "umami", "cloudflare", "custom"];

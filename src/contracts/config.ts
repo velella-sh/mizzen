@@ -59,6 +59,14 @@ export interface BlogConfig {
   readonly pageSize?: number;
 }
 
+/** The `apiReference` block: the pinned OpenAPI document and the path its pages live under. */
+export interface ApiReferenceConfig {
+  /** One YAML or JSON OpenAPI 3.1 or 3.0 file, relative to the site root. */
+  readonly source: string;
+  /** Path the reference lives under, starting and ending with `/`. Default `/reference/`. */
+  readonly path?: string;
+}
+
 /** How the `examples-report` output treats a failing example. */
 export interface ExamplesConfig {
   /** Report a failed example as an error at its fence, so `mizzen check` exits `1`. Default `false`. */
@@ -459,6 +467,8 @@ export interface SiteConfig {
   readonly calendars?: Readonly<Record<string, CalendarConfig>>;
   /** The blog: posts, archive, author pages, and feed. Default: none, and no `/blog/` route exists. */
   readonly blog?: BlogConfig;
+  /** A static reference built from one pinned OpenAPI document. Default: none, and no reference pages exist. */
+  readonly apiReference?: ApiReferenceConfig;
   /** Front matter applied by folder; later entries win over earlier ones, and a page always wins. Default `[]`. */
   readonly defaults: readonly DefaultsEntry[];
   /** Where the source lives, for edit links. */
