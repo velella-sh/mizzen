@@ -936,6 +936,79 @@ export function affectedOutputs(graph: DependencyGraph, recordIds: readonly stri
   return groups;
 }
 
+/** Why one output must be rebuilt: the record that changed and how the output reads it. */
+export interface AffectedOutputReason {
+  /** Node id of the changed record. */
+  readonly record: string;
+  /** `record` when the output reads that record, `collection` when it reads the collection as a whole. */
+  readonly relation: "record" | "collection";
+}
+
+/** One output in the invalidation plan, with the changed records that reach it. */
+export interface ExplainedOutput {
+  /** Output node id. */
+  readonly id: string;
+  /** The output's URL. */
+  readonly path: string;
+  /** What the output is. */
+  readonly role: "page" | "list" | "feed" | "api";
+  /** Every changed record that reaches this output, sorted by record id. */
+  readonly reasons: readonly AffectedOutputReason[];
+  /** True when the graph is incomplete and names no reason for this output. */
+  readonly unknown?: true;
+}
+
+/**
+ * The outputs {@link affectedNodes} would rebuild for `recordIds`, each with the changed records that reach it and
+ * whether it reads the record or its collection. A direct record edge wins over a collection edge, because it is the
+ * narrower answer. Outputs are sorted by id and reasons by record, so two plans for one change are identical.
+ *
+ * An incomplete graph asks for every output; one the graph cannot explain is marked `unknown` rather than guessed.
+ */
+export function explainAffectedOutputs(graph: DependencyGraph, recordIds: readonly string[]): ExplainedOutput[] {
+  const collectionOf = new Map<string, string>();
+  for (const edge of graph.edges) {
+    if (edge.from.startsWith(COLLECTION) && edge.to.startsWith(RECORD)) collectionOf.set(edge.to, edge.from);
+  }
+  const wanted = new Set(recordIds);
+  const records = new Set<string>();
+  for (const node of graph.nodes) {
+    if (node.kind === "record" && (wanted.has(node.id) || wanted.has(node.path))) records.add(node.id);
+  }
+
+  const dependencies = new Map<string, Set<string>>();
+  for (const edge of graph.edges) {
+    const set = dependencies.get(edge.from);
+    if (set === undefined) dependencies.set(edge.from, new Set([edge.to]));
+    else set.add(edge.to);
+  }
+
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  const incomplete = graph.incomplete !== undefined && graph.incomplete.length > 0;
+  const outputs: ExplainedOutput[] = [];
+  for (const id of affectedNodes(graph, recordIds)) {
+    const node = nodes.get(id);
+    if (node === undefined || node.kind !== "output") continue;
+    const deps = dependencies.get(id) ?? new Set<string>();
+    const reasons: AffectedOutputReason[] = [];
+    for (const record of records) {
+      const collection = collectionOf.get(record);
+      if (deps.has(record)) reasons.push({ record, relation: "record" });
+      else if (collection !== undefined && deps.has(collection)) reasons.push({ record, relation: "collection" });
+    }
+    reasons.sort((a, b) => byCodePoint(a.record, b.record));
+    outputs.push({
+      id: node.id,
+      path: node.path,
+      role: node.role ?? "page",
+      reasons,
+      ...(incomplete && reasons.length === 0 ? { unknown: true as const } : {}),
+    });
+  }
+  outputs.sort((a, b) => byCodePoint(a.id, b.id));
+  return outputs;
+}
+
 /**
  * The graph as JSON with a trailing newline. Nodes and edges are sorted here too, so two graphs built from the
  * same files serialize identically whatever order discovery or insertion used.

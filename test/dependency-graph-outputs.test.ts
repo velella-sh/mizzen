@@ -9,6 +9,7 @@ import {
   affectedOutputs,
   buildDependencyGraph,
   collectionNodeId,
+  explainAffectedOutputs,
   outputNodeId,
   recordNodeId,
 } from "../src/pipeline/dependency-graph.ts";
@@ -98,6 +99,63 @@ test("a changed record affects its cells, feeds and api files, grouped by role",
         outputNodeId("/api/v1/posts/a.json"),
       ],
     });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("each affected output names the changed record and whether it reads the record or its collection", async () => {
+  const root = tree({ ...FILES, "posts.md": "---\ntitle: Posts\nlist:\n  collection: posts\n---\n" });
+  try {
+    const { site } = await buildModel(root);
+    const { graph } = await buildDependencyGraph({ root, site });
+    const list = site.pages.find((page) => page.list !== undefined);
+    assert.ok(list !== undefined);
+    const listOutput = outputNodeId(list.url);
+    const record = recordNodeId("posts", "a");
+    const reason = (relation: "record" | "collection") => [{ record, relation }];
+
+    const explained = explainAffectedOutputs(graph, [record]);
+    const byId = new Map(explained.map((output) => [output.id, output]));
+    assert.deepEqual(byId.get(outputNodeId("/posts/a/"))?.reasons, reason("record"));
+    assert.deepEqual(byId.get(listOutput)?.reasons, reason("record"));
+    assert.deepEqual(byId.get(outputNodeId("/feeds/posts.xml"))?.reasons, reason("collection"));
+    assert.deepEqual(byId.get(outputNodeId("/api/v1/posts.json"))?.reasons, reason("collection"));
+    assert.equal(byId.get(outputNodeId("/api/v1/posts/a.json"))?.reasons[0]?.relation, "record");
+    assert.equal(byId.get(listOutput)?.role, "list");
+    assert.equal(byId.get(outputNodeId("/feeds/posts.rss.xml"))?.role, "feed");
+    assert.equal(byId.get(outputNodeId("/api/v1/posts.json"))?.role, "api");
+
+    const ids = explained.map((output) => output.id);
+    assert.deepEqual(ids, [...ids].sort());
+    assert.equal(new Set(ids).size, ids.length);
+    assert.equal(explained.some((output) => output.unknown === true), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("an incomplete graph marks an output it cannot explain instead of guessing", async () => {
+  const root = tree({
+    ...FILES,
+    "posts.md": "---\ntitle: Posts\nlist:\n  collection: posts\n---\n",
+    "guide.md": "---\ntitle: Guide\n---\n:data[unknown.key]\n",
+  });
+  try {
+    const { site } = await buildModel(root);
+    const { graph } = await buildDependencyGraph({ root, site });
+    assert.notEqual((graph.incomplete ?? []).length, 0);
+    const guide = site.pages.find((page) => page.kind === "doc" && page.source.file.endsWith("guide.md"));
+    assert.ok(guide !== undefined);
+
+    const explained = explainAffectedOutputs(graph, [recordNodeId("posts", "a")]);
+    const unknown = explained.filter((output) => output.unknown === true);
+    assert.deepEqual(unknown.map((output) => output.id), [outputNodeId(guide.url)]);
+    assert.deepEqual(unknown[0]?.reasons, []);
+    assert.deepEqual(
+      explained.find((output) => output.id === outputNodeId("/feeds/posts.xml"))?.reasons,
+      [{ record: recordNodeId("posts", "a"), relation: "collection" }],
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
