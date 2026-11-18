@@ -14,6 +14,8 @@ main:
         url: /first-project/
       - title: Try a migration
         url: /first-project-trial/
+      - title: Review a data change
+        url: /first-project-ci/
   - title: Guide
     tab: true
     children:
