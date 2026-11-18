@@ -71,6 +71,8 @@ export interface RetiredPage {
   readonly id: string;
   /** The URL the record's page would have had, including `base` and the language's prefix. */
   readonly url: string;
+  /** Every earlier address its `aliases` field names, each redirecting to `target`. */
+  readonly aliases: readonly string[];
   /** The current URL of the record that replaces it. */
   readonly target: string;
   /** The language this URL belongs to; only the default language's URL is the record's address in the URL lock. */
@@ -730,6 +732,19 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
             collection: name,
             id: record.id,
             url: main.url,
+            aliases: aliasUrlsOf(
+              name,
+              record.id,
+              fields,
+              entry,
+              {
+                base: config.base,
+                prefix: language.prefix,
+                position: record.position,
+                url: main.url,
+              },
+              diagnostics,
+            ),
             target: replacementUrl,
             lang: language.code,
             position: record.position,

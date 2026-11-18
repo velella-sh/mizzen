@@ -541,8 +541,11 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     collection: entry.collection,
     id: entry.id,
     urls: [
-      entry.url,
-      ...(entry.lang === config.lang ? (urls.previous[urlKey(entry.collection, entry.id)] ?? []) : []),
+      ...new Set([
+        entry.url,
+        ...(entry.lang === config.lang ? (urls.previous[urlKey(entry.collection, entry.id)] ?? []) : []),
+        ...entry.aliases,
+      ]),
     ],
     target: entry.target,
   }));

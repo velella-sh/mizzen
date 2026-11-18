@@ -325,10 +325,14 @@ export const redirects: Output = {
       const first = claimed.get(path);
       if (first !== undefined) {
         const where = first.from === claim.from ? first.from : `${first.from} and ${claim.from}`;
+        const targets =
+          first.target === claim.target
+            ? ""
+            : ` The first sends readers to ${quote(first.target)}, the other to ${quote(claim.target)}.`;
         ctx.report({
           id: "redirects.duplicate",
           severity: "error",
-          message: `The old path ${quote(claim.oldPath)} writes the same file as ${quote(first.oldPath)}, claimed by ${where}.`,
+          message: `The old path ${quote(claim.oldPath)} writes the same file as ${quote(first.oldPath)}, claimed by ${where}.${targets}`,
           ...(claim.pos === undefined ? {} : { pos: claim.pos }),
           help: "Keep one redirect for each old path.",
         });

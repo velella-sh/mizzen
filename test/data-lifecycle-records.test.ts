@@ -23,6 +23,7 @@ function files(items: string, url: "retain" | "redirect" = "retain"): Record<str
       "    source: _data/items.yml\n" +
       "    template: _templates/item.md\n" +
       "    permalink: /items/{slug}/\n" +
+      "    aliases: aka\n" +
       "    lifecycle:\n" +
       "      states: [current, retired]\n" +
       "      retired: [retired]\n" +
@@ -119,6 +120,63 @@ test("url: redirect removes the retired page and sends its old URLs to the repla
         written.get("_redirects"),
         "/items/before/ /items/after/ 301\n/items/new-old/ /items/after/ 301\n/items/older/ /items/after/ 301\n",
       );
+    },
+  );
+});
+
+test("a merged record sends its alias and every locked earlier URL to its replacement", async () => {
+  const lock = `${JSON.stringify({
+    version: 1,
+    collections: {
+      items: {
+        old: { url: "/items/before/", previous: ["/items/original/"] },
+        new: { url: "/items/after/", previous: [] },
+      },
+    },
+  })}\n`;
+  await withSite(
+    {
+      ...files(
+        "- id: old\n  slug: before\n  state: retired\n  replacedBy: new\n  aka: [\"/items/aka/\"]\n- id: new\n  slug: after\n",
+        "redirect",
+      ),
+      [URLS_LOCK_FILE]: lock,
+    },
+    async (_root, result) => {
+      assert.deepEqual(ids(result), []);
+      const { files: written, reported } = await redirectOutput(result.site);
+      assert.deepEqual(reported, []);
+      for (const path of ["items/before/index.html", "items/original/index.html", "items/aka/index.html"]) {
+        assert.match(written.get(path)!, /url=\/items\/after\//);
+      }
+      assert.equal(
+        written.get("_redirects"),
+        "/items/aka/ /items/after/ 301\n/items/before/ /items/after/ 301\n/items/original/ /items/after/ 301\n",
+      );
+    },
+  );
+});
+
+test("an earlier path claimed for two different replacements is reported once and written once", async () => {
+  await withSite(
+    files(
+      "- id: old\n  slug: before\n  state: retired\n  replacedBy: new\n  aka: [\"/items/shared/\"]\n" +
+        "- id: new\n  slug: after\n" +
+        "- id: other\n  slug: other\n  state: retired\n  replacedBy: last\n  aka: [\"/items/shared/\"]\n" +
+        "- id: last\n  slug: last\n",
+      "redirect",
+    ),
+    async (_root, result) => {
+      assert.deepEqual(ids(result), []);
+      const { files: written, reported } = await redirectOutput(result.site);
+      const conflict = reported.find((finding) => finding.id === "redirects.duplicate");
+      assert.equal(conflict?.severity, "error");
+      assert.match(conflict?.message ?? "", /items\.old/);
+      assert.match(conflict?.message ?? "", /items\.other/);
+      assert.match(conflict?.message ?? "", /\/items\/after\//);
+      assert.match(conflict?.message ?? "", /\/items\/last\//);
+      const shared = written.get("_redirects")!.split("\n").filter((line) => line.startsWith("/items/shared/"));
+      assert.deepEqual(shared, ["/items/shared/ /items/after/ 301"], "one claim wins and only one line is written");
     },
   );
 });
