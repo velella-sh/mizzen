@@ -21,6 +21,9 @@ export interface ImportMapping {
 /** The generated config's destination. */
 export const CONFIG_DESTINATION = "mizzen.yml";
 
+/** The generated navigation's destination, the default `navigation` path. */
+export const NAVIGATION_DESTINATION = "_data/navigation.yml";
+
 /** Where the generated project records every input file's destination and URL. */
 export const MAPPING_DESTINATION = ".mizzen-import.json";
 
