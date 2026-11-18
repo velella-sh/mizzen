@@ -23,6 +23,7 @@ import { runStale } from "./stale.ts";
 import { referencesUsage, runReferences } from "./references.ts";
 import { runDocsVersion } from "./docs-version.ts";
 import { runImport } from "./import.ts";
+import { runInputs } from "./inputs.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
@@ -41,7 +42,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "references", "stale", "urls", "verify", "versions", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "references", "stale", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -112,9 +113,14 @@ Commands:
   versions snapshot <vN> [dir]
                             Copy the current pages and navigation into a new version folder
   watch [dir]               Rebuild the site whenever a source or theme file changes
+  inputs export [dir]       Write selected collection sources to one transferable package (--collections, --out)
+  inputs inspect <file>     Print a package's format, inputs, sizes, and hashes (--json); changes nothing
+  inputs verify <file>      Check every content hash and that no undeclared bytes follow; changes nothing
+  inputs import <file> [dir]
+                            Install a package's inputs and lock entries (--accept on a conflict)
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
   --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
@@ -129,7 +135,7 @@ Options:
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
-  --json               For data quality: print the findings and scopes as JSON
+  --json               For data quality: print the findings and scopes as JSON; for inputs inspect: print the report as JSON
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --report             For build: print why each page was rebuilt after a warm build
@@ -152,6 +158,8 @@ Options:
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
   --print-config <c>   For mcp: print the configuration for claude-code, claude-desktop, cursor, or vscode, and exit
   --starter <name>     For init: the theme starter to copy into the folder (default folder: .)
+  --collections <a,b>  For inputs export: collections to carry; their references targets are added (default: every collection)
+  --accept <ids|all>   For inputs import: inputs whose differing destination files or lock entries may be replaced
   --list               For init: print the theme's starters with their titles and descriptions
   --lang <a,b>         For init: keep only these of the starter's optional languages
   --dry-run            For edit apply: print the diff without writing; for versions snapshot: print the files without writing
@@ -292,6 +300,11 @@ type DataQualityOpts = {
   readonly asOf?: string;
 };
 
+type InputsOpts = {
+  readonly command: "inputs";
+  readonly args: readonly string[];
+};
+
 type InitOpts = {
   readonly command: "init";
   readonly root: string;
@@ -404,6 +417,7 @@ type Parsed =
         | UrlsCheckOpts
         | InitOpts
         | ImportOpts
+        | InputsOpts
         | McpOpts
         | NetworkOpts
         | PublishedSiteOpts
@@ -928,6 +942,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "versions", args: rest } };
   }
+  if (command === "inputs") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "inputs", args: rest } };
+  }
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "init") return parseInit(rest);
@@ -1299,6 +1317,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "published-site") {
     try {
       return await runPublishedSite(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "inputs") {
+    try {
+      return await runInputs(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
