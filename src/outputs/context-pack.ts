@@ -1,8 +1,9 @@
 import type { Diagnostic, Severity } from "../contracts/diagnostic.ts";
 import type { Direction } from "../contracts/config.ts";
-import type { Page, Site } from "../contracts/content.ts";
+import type { BlockReference, Page, Site } from "../contracts/content.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import type { SourcePos } from "../contracts/source.ts";
+import { blockReference } from "../blocks/reference.ts";
 import { discoverVersions } from "../content/versions.ts";
 import { version } from "../index.ts";
 import { rankPages, type RankedPage, type RankReason } from "../packs/rank.ts";
@@ -126,6 +127,8 @@ export interface PackSection {
   readonly text: string;
   /** The heading's span in the source file. */
   readonly span: string;
+  /** The stored machine reference to the section's block; present when the page's build recorded block ids. */
+  readonly reference?: BlockReference;
 }
 
 /** Why a page's rank placed it where it did: the score and the contributions that sum to it. */
@@ -402,7 +405,14 @@ function normalizedSpan(pos: SourcePos): string {
 /** A section's span with the page's normalized source path, so a Windows model still writes forward slashes. */
 function sectionOf(page: Page, section: { readonly pos: Page["source"]; readonly text: string }): PackSection {
   const span = { ...section.pos, file: sourceOf(page) };
-  return { id: blockIdOf(span), text: section.text, span: formatSpan(span) };
+  const source = sourceOf(page);
+  const block = page.blocks?.find((entry) => entry.pos.line === section.pos.line && entry.pos.column === section.pos.column);
+  return {
+    id: blockIdOf(span),
+    text: section.text,
+    span: formatSpan(span),
+    ...(block === undefined ? {} : { reference: blockReference(source, block.id, version) }),
+  };
 }
 
 /** One selected page, with its origin, build identity, locale, rank, trust, kept sections, and shown Markdown. */

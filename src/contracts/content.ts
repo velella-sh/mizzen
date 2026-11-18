@@ -105,6 +105,36 @@ export interface Block {
   readonly aliases?: readonly string[];
 }
 
+/**
+ * A stored machine reference to one block. It names the page by its stable source path, never by URL, so a permalink
+ * change leaves it readable, and it names the block by the id `blocks.lock.json` records, which survives a move.
+ */
+export interface BlockReference {
+  /** The reference format version; any value but 1 is not a reference this engine reads. */
+  readonly version: 1;
+  /** The page identifier: the page's source path, which a URL change leaves alone. */
+  readonly page: string;
+  /** The block identifier the lock records. */
+  readonly block: string;
+  /** The engine version that wrote the reference, when the writer records it. Resolution ignores it. */
+  readonly build?: string;
+}
+
+/** What resolving a stored reference found. */
+export type ReferenceStatus = "resolved" | "removed" | "unknown";
+
+/** One reference's answer: its status and, when resolved, where the block is now. */
+export interface ReferenceResolution {
+  readonly status: ReferenceStatus;
+  readonly reference: BlockReference;
+  /** The block's current URL; present when `status` is `resolved`. */
+  readonly url?: string;
+  /** The source path of the page that holds the block now; present when `status` is `resolved`. */
+  readonly source?: string;
+  /** True when the block now lives on another page than the reference names. */
+  readonly moved?: boolean;
+}
+
 /** One page of the site model. */
 export interface Page {
   /** Output URL including `base`, such as `/evergreen/guide/install/`. */
