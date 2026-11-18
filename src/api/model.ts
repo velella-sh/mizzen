@@ -5,6 +5,7 @@
  */
 import type { CollectionSnapshot, Diagnostic, Site } from "../contracts/index.ts";
 import { lifecycleOf, listedForMachines } from "../data/lifecycle.ts";
+import { isPublicReference } from "../data/public.ts";
 import { indexRecords } from "../outputs/search-shared.ts";
 
 /** One published record: its id and only the fields the config lists. */
@@ -82,12 +83,14 @@ export function apiCollections(site: Site, report: (diagnostic: Diagnostic) => v
       }
     }
     const lifecycle = site.config.collections[name]?.lifecycle;
+    const policy = site.config.collections[name]?.public;
+    const published = entry.fields.filter((field) => isPublicReference(policy, field));
     const pages = new Map(indexRecords(site, name).map(({ record, page }) => [record.id, page] as const));
     const records = collection.records
       .filter((record) => listedForMachines(lifecycleOf(record.fields, lifecycle)))
       .map((record): ApiRecord => {
         const fields: Record<string, unknown> = {};
-        for (const field of entry.fields) {
+        for (const field of published) {
           if (Object.hasOwn(record.fields, field)) fields[field] = record.fields[field];
         }
         const page = pages.get(record.id);
@@ -97,7 +100,7 @@ export function apiCollections(site: Site, report: (diagnostic: Diagnostic) => v
     out.push({
       name,
       idKey,
-      fields: [...entry.fields],
+      fields: [...published],
       records,
       snapshot: collection.snapshot ?? null,
       hasSchema: site.config.collections[name]?.schema !== undefined,

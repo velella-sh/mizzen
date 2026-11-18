@@ -6,7 +6,8 @@
  * A policy is an allowlist. Entries name leaves (`author.name`) or a whole subtree (`author`), a record's `id` is always
  * public, and an absent policy publishes every field as before. `public: []` therefore publishes only `id`.
  */
-import type { DataRecord, Diagnostic, SourcePos } from "../contracts/index.ts";
+import type { ChangeEvent, DataRecord, Diagnostic, SourcePos } from "../contracts/index.ts";
+import { fieldsWithDerived } from "./derived.ts";
 
 /** A collection's `public` list; `undefined` means every field is public. */
 export type PublicPolicy = readonly string[] | undefined;
@@ -129,8 +130,37 @@ export function publicRecord<T extends {
   };
 }
 
-/** The field paths a text names: `{path}` and `{path|slug}` placeholders, and `:field[path]` directives. */
-export function publicReferencesIn(text: string): readonly string[] {
+/** A record's fields with its derived values under them, projected through the policy. */
+export function publicFieldsOf(
+  record: {
+    readonly fields: Readonly<Record<string, unknown>>;
+    readonly derived?: Readonly<Record<string, unknown>> | undefined;
+  },
+  policy: PublicPolicy,
+): Readonly<Record<string, unknown>> {
+  return publicFields(fieldsWithDerived(record), policy);
+}
+
+/**
+ * One change event as a report may publish it: the values of a field outside the policy (`old`, `new`, and the tracked
+ * fields of an `added` event) are left out, while the event's identity, type, date, and field name stay.
+ */
+export function publicChangeEvent(event: ChangeEvent, policy: PublicPolicy): ChangeEvent {
+  if (policy === undefined) return event;
+  const fieldIsPublic = event.field === undefined || isPublicReference(policy, event.field);
+  const { old, new: next, fields, ...rest } = event;
+  return {
+    ...rest,
+    ...(old === undefined || !fieldIsPublic ? {} : { old }),
+    ...(next === undefined || !fieldIsPublic ? {} : { new: next }),
+    ...(fields === undefined ? {} : { fields: publicFields(fields, policy) }),
+  };
+}
+
+// shortcut: lineage reports have no published payload yet, so only change events and build diffs are projected; add a
+// projection here when a lineage report starts carrying field values.
+
+/** The field paths a text names: `{path}` and `{path|slug}` placeholders, and `:field[path]` directives. */export function publicReferencesIn(text: string): readonly string[] {
   const paths: string[] = [];
   for (const match of text.matchAll(/\{\{|\}\}|\{([^{}]+)\}/g)) {
     const inner = match[1];

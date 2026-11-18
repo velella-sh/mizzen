@@ -5,6 +5,7 @@
  * one line feed, so the same data always gives the same bytes.
  */
 import type { Collection, CollectionConfig } from "../contracts/index.ts";
+import { publicFields } from "./public.ts";
 import { sha256 } from "./lock.ts";
 
 /** The files of one collection's raw data. */
@@ -42,7 +43,10 @@ function cell(value: unknown): string {
 export function rawFiles(collection: Collection, entry: CollectionConfig | undefined, jsonWritten = true): RawFiles | undefined {
   if (!rawEnabled(entry)) return undefined;
   const hidden = new Set(entry?.raw === undefined || entry.raw === false ? [] : (entry.raw.private ?? []));
-  const records = collection.records.map((record) => ({ id: record.id, fields: fieldsWithout(record.fields, hidden) }));
+  const records = collection.records.map((record) => ({
+    id: record.id,
+    fields: fieldsWithout(publicFields(record.fields, entry?.public), hidden),
+  }));
 
   const body = {
     collection: collection.name,

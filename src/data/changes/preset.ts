@@ -20,6 +20,7 @@ import { atomFeed } from "../../feeds/atom.ts";
 import { entryId } from "../../feeds/id.ts";
 import { originOf, type FeedEntry } from "../../feeds/model.ts";
 import { buildListPages } from "../lists.ts";
+import { publicChangeEvent, publicFields } from "../public.ts";
 import { instantOf } from "../query.ts";
 import { slugOf } from "../slug.ts";
 import { changesName } from "./collection.ts";
@@ -135,8 +136,14 @@ function dateOf(text: string): Date | undefined {
 }
 
 /** The current fields of a record, for a summary template that names one; `{}` when the record is gone. */
-function recordFieldsOf(collections: Readonly<Record<string, Collection>>, name: string, id: string): Readonly<Record<string, unknown>> {
-  return collections[name]?.records.find((record) => record.id === id)?.fields ?? {};
+function recordFieldsOf(
+  collections: Readonly<Record<string, Collection>>,
+  name: string,
+  id: string,
+  policy: readonly string[] | undefined,
+): Readonly<Record<string, unknown>> {
+  const fields = collections[name]?.records.find((record) => record.id === id)?.fields ?? {};
+  return publicFields(fields, policy);
 }
 
 /** The page URL of each record of a collection, for a feed entry that can link to it. */
@@ -168,7 +175,8 @@ export function changelogFeeds(site: Site): readonly OutputFile[] {
     const events = [...eventsOf(site.collections[changesName(name)])].sort((a, b) =>
       a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
     );
-    for (const event of events.slice(0, 50)) {
+    for (const raw of events.slice(0, 50)) {
+      const event = publicChangeEvent(raw, site.config.collections[name]?.public);
       const date = dateOf(event.date);
       if (date === undefined) continue;
       const page = urls.get(event.record);
@@ -184,7 +192,7 @@ export function changelogFeeds(site: Site): readonly OutputFile[] {
           ...("new" in event ? { new: event.new } : {}),
           ...(event.from === undefined ? {} : { from: event.from }),
           ...(event.count === undefined ? {} : { count: event.count }),
-          record: recordFieldsOf(site.collections, name, event.record),
+          record: recordFieldsOf(site.collections, name, event.record, site.config.collections[name]?.public),
         }),
         link,
         date,

@@ -10,7 +10,7 @@ import type { Diagnostic } from "../contracts/diagnostic.ts";
 import { filterRows, instantOf, parseQuery, type Row } from "../data/query.ts";
 import { lifecycleOf, listedForMachines } from "../data/lifecycle.ts";
 import { localizeFields, resolveIn, scalarText } from "../data/record-context.ts";
-import { fieldsWithDerived } from "../data/derived.ts";
+import { publicFieldsOf } from "../data/public.ts";
 import { referenceDateOf } from "../data/reference-date.ts";
 import { indexRecords } from "../outputs/search-shared.ts";
 import { entryId } from "./id.ts";
@@ -70,7 +70,10 @@ export function feedEntries(
     const localized = localizeFields(record.fields, site.config.lang, site.config.lang).fields;
     return {
       id: record.id,
-      fields: fieldsWithDerived({ fields: localized, derived: record.derived }),
+      fields: publicFieldsOf(
+        { fields: localized, derived: record.derived },
+        site.config.collections[feed.collection]?.public,
+      ),
       ...(record.normalizedDates === undefined ? {} : { dates: record.normalizedDates }),
       record,
       page,

@@ -41,7 +41,7 @@ import { markdownFieldBlocks } from "./markdown-field.ts";
 import { recordSourcePos, recordUrl, recordUrlsOf } from "./permalink.ts";
 import { localizeFields, prefixed, prefixOfLang, type RecordScope } from "./record-context.ts";
 import { fieldsWithDerived } from "./derived.ts";
-import { publicFields, type PublicPolicy } from "./public.ts";
+import { publicFields, publicChangeEvent, type PublicPolicy } from "./public.ts";
 import { lifecycleOf, listedForMachines, replacementOf } from "./lifecycle.ts";
 import type { Template } from "./template.ts";
 import { viewUrls, viewsOf } from "./views.ts";
@@ -564,7 +564,9 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
         entry.public,
       );
       const evidence = publicEvidenceOf(record, entry.evidence);
-      const changes = showsChanges(source.body) ? recordChanges(historyEvents, record.id, fields, entry) : [];
+      const changes = showsChanges(source.body)
+        ? recordChanges(historyEvents, record.id, fields, entry).map((event) => publicChangeEvent(event, entry.public))
+        : [];
       const scope: RecordScope = {
         collection: name,
         record,

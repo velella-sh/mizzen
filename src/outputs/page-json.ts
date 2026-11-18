@@ -3,6 +3,7 @@ import type { Output, OutputFile } from "../contracts/output.ts";
 import { publicEvidenceOf } from "../data/evidence/public.ts";
 import type { EvidenceClaims } from "../data/evidence/validate.ts";
 import { localizeFields } from "../data/record-context.ts";
+import { publicFields } from "../data/public.ts";
 
 /** Characters per token the estimator assumes, until a tokenizer is chosen. */
 const CHARS_PER_TOKEN = 4;
@@ -52,7 +53,7 @@ function recordOf(site: Site, page: Page): PageJsonRecord | undefined {
   if (record === undefined) return undefined;
   const config = site.config.collections[identity.collection];
   const hidden = config?.evidence;
-  const fields = localizeFields(record.fields, page.lang, site.config.lang).fields;
+  const fields = publicFields(localizeFields(record.fields, page.lang, site.config.lang).fields, config?.public);
   const picked: Record<string, unknown> = {};
   for (const field of config?.json?.fields ?? Object.keys(fields)) {
     if (field !== hidden && Object.prototype.hasOwnProperty.call(fields, field)) picked[field] = fields[field];
