@@ -18,6 +18,7 @@ import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
 import { runDocsVersion } from "./docs-version.ts";
+import { runImport } from "./import.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
@@ -36,7 +37,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -87,6 +88,7 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  import <name> <dir>         Preview a migration: proposed destinations and manual items, writing nothing
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
@@ -315,6 +317,12 @@ type McpOpts = {
   readonly printConfig?: string;
 };
 
+type ImportOpts = {
+  readonly command: "import";
+  readonly name: string;
+  readonly root: string;
+};
+
 type Parsed =
   | { readonly help: true }
   | { readonly error: string }
@@ -337,6 +345,7 @@ type Parsed =
         | DataChangesOpts
         | UrlsCheckOpts
         | InitOpts
+        | ImportOpts
         | McpOpts
         | NetworkOpts
         | PublishedSiteOpts
@@ -726,6 +735,21 @@ function parseMcp(args: readonly string[]): Parsed {
   return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
 }
 
+/** Parses `import <name> [dir]`. */
+function parseImport(args: readonly string[]): Parsed {
+  let name: string | undefined;
+  let root: string | undefined;
+  for (const arg of args) {
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg.startsWith("-")) return { error: `unknown option for import: ${arg}` };
+    if (name === undefined) name = arg;
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  if (name === undefined) return { error: "import needs an importer name: mizzen import <name> [dir]" };
+  return { options: { command: "import", name, root: root ?? "." } };
+}
+
 /** Parses `argv` after the process name. */
 export function parseArgs(args: readonly string[]): Parsed {
   const [command, ...rest] = args;
@@ -756,6 +780,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "init") return parseInit(rest);
+  if (command === "import") return parseImport(rest);
   if (command === "diff") return parseDiff(rest);
   if (command === "api") return parseApi(rest);
   if (command === "mcp") return parseMcp(rest);
@@ -1093,6 +1118,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "import") {
+    try {
+      return await runImport(options.name, options.root, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
