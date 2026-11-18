@@ -1,0 +1,9 @@
+- sku: field-lamp
+  label: Field Lamp (warehouse)
+  stock: 4
+- sku: desk-mat
+  label: Desk Mat
+  stock: 0
+- sku: retired-lamp
+  label: Retired Lamp
+  stock: 9

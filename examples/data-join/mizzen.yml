@@ -1,0 +1,26 @@
+title: Field Catalog
+exclude: [README.md]
+collections:
+  catalog:
+    source: data/catalog.yml
+    id: sku
+    template: _templates/catalog.md
+    permalink: /catalog/{sku}/
+    join:
+      type: left
+      key: sku
+      fields:
+        sku: sku
+        title: name
+        price: price
+      sources:
+        - collection: inventory
+          key: sku
+          fields:
+            title: label
+            stock: stock
+      onConflict: precedence
+      onMissingKey: skip
+  inventory:
+    source: data/inventory.yml
+    id: sku

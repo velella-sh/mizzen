@@ -1,0 +1,9 @@
+- sku: field-lamp
+  name: Field Lamp
+  price: 42
+- sku: desk-mat
+  name: Desk Mat
+  price: 18
+- sku: pack-bag
+  name: Pack Bag
+  price: 24
