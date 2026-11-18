@@ -1,0 +1,1 @@
+- The public build serves the release named `default` in `_data/versions.yml` at the unprefixed URL, keeps every version-prefixed URL reachable, and lists one sitemap entry per page.

@@ -8,6 +8,7 @@ import { discover } from "../content/discover.ts";
 import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, PreviewPolicy, Site } from "../contracts/index.ts";
 import { buildModel } from "../model/build.ts";
 import { writeUrlsLock } from "../data/urls-lock.ts";
+import { writeBlocksLock } from "../blocks/lock.ts";
 import { diffReadBuilds, type SiteDiff } from "../diff/index.ts";
 import { readBuild, type Build } from "../diff/builds.ts";
 import { MANIFEST_PATH, PREVIEW_DIFF_PATH, recordBuildHash } from "../outputs/build-hash.ts";
@@ -23,6 +24,7 @@ import { buildIslandModules, islandUrl } from "../render/islands.ts";
 import { cacheKey, cacheRootOf, includedSnippets, renderSettingsKey, restoreCache, writeCache } from "./cache.ts";
 import { createDiagnostics, diagnosticsReport, sortDiagnostics, type Diagnostics } from "./diagnostics.ts";
 import { stalePageStates } from "../stale/diagnostics.ts";
+import { applyVersionRouting } from "../versions/apply.ts";
 import { buildDependencyGraph } from "./dependency-graph.ts";
 import { planInvalidation, type InvalidationPlan } from "./invalidation.ts";
 import { pruneRenderCache, pruneRenderEntries, readRenderInputs, recordKeyOf, recordShapeOf, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
@@ -60,6 +62,11 @@ export interface BuildOptions {
    * redirect. `mizzen build --update-urls` sets this; no other command writes the lock.
    */
   readonly updateUrls?: boolean;
+  /**
+   * Give every page its block ids and write `blocks.lock.json`: a block that declares one keeps it when it moves, and
+   * one without a declaration gets a content-derived id. `mizzen build --update-blocks` sets this.
+   */
+  readonly updateBlocks?: boolean;
   /**
    * The as-of date, `YYYY-MM-DD`, from `--as-of`; it wins over the config's `asOf`. The build never reads the clock:
    * `--as-of today` is resolved by the CLI before it gets here.
@@ -343,7 +350,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const pluginKey = codeFailed ? undefined : await pluginInputs(code.plugins, root).catch(() => undefined);
 
   const cacheRoot =
-    options.cache === true && options.updateUrls !== true && pluginKey !== undefined
+    options.cache === true && options.updateUrls !== true && options.updateBlocks !== true && pluginKey !== undefined
       ? resolve(options.cacheDir ?? cacheRootOf(root))
       : undefined;
   let key: string | undefined;
@@ -387,6 +394,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     ...(cacheRoot === undefined ? {} : { pageCacheDir: join(cacheRoot, "pages") }),
     plugins: code.plugins,
     ...(options.updateUrls === true ? { updateUrls: true } : {}),
+    ...(options.updateBlocks === true ? { updateBlocks: true } : {}),
     ...(options.asOf === undefined ? {} : { asOf: options.asOf }),
     ...(basePath === undefined ? {} : { base: basePath }),
     ...(preview === undefined ? {} : { preview }),
@@ -396,14 +404,19 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // The model hooks run once, on the assembled site and before anything is rendered from it.
   const hookedModel = await runModelHooks(code.plugins, model.site);
   for (const d of hookedModel.diagnostics) diagnostics.report(d);
+  // Version routing decides what the public build writes: the default release also answers at the unprefixed URL and
+  // current docs stay out of the output while a release is default. The model keeps one page per source file.
+  const versioned = applyVersionRouting(hookedModel.value.pages, hookedModel.value.data.versions, hookedModel.value.config.base);
+  for (const d of versioned.diagnostics) diagnostics.report(d);
+  const hookedSite: Site = versioned.pages === hookedModel.value.pages ? hookedModel.value : { ...hookedModel.value, pages: versioned.pages };
   // The stale state is carried on the page, so the layout and the page JSON see what `mizzen stale` reports. A page
   // without `covers`, or one whose files are current, has none.
   const site: Site =
     staleBySource.size === 0
-      ? hookedModel.value
+      ? hookedSite
       : {
-          ...hookedModel.value,
-          pages: hookedModel.value.pages.map((page) => {
+          ...hookedSite,
+          pages: hookedSite.pages.map((page) => {
             const stale = staleBySource.get(page.source.file);
             return stale === undefined ? page : { ...page, stale };
           }),
@@ -797,6 +810,9 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     // The lock is a promise about what this build published, so only a clean build writes it.
     if (options.updateUrls === true && !findings.some((finding) => finding.severity === "error")) {
       await writeUrlsLock(root, model.urls.next);
+    }
+    if (options.updateBlocks === true && !findings.some((finding) => finding.severity === "error")) {
+      await writeBlocksLock(root, model.blocksLock);
     }
     if (settingsDir !== undefined) await writeRenderInputs(settingsDir, includeInputs);
     if (renderRoot !== undefined && settingsKey !== undefined) await pruneRenderCache(renderRoot, settingsKey);

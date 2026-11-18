@@ -1,28 +1,12 @@
 import type { Code, Data, Parent, Root, RootContent } from "mdast";
 import type { Plugin } from "unified";
+import type { CodeMeta } from "../../contracts/code.ts";
+import { parseAnnotations } from "./code-annotations.ts";
 
 /** Inclusive run of 1-based line numbers inside a code block: `3-5` is `{ from: 3, to: 5 }`. */
 export interface LineRange {
   readonly from: number;
   readonly to: number;
-}
-
-/** Structured fence meta a code component reads from `data.code`. Nothing here is highlighted. */
-export interface CodeMeta {
-  /** The fence's meta string, verbatim. */
-  readonly raw: string;
-  /** `title="..."`, or `null` when absent or empty. */
-  readonly title: string | null;
-  /** Lines in bare braces, `{1,3-5}`. */
-  readonly highlight: readonly LineRange[];
-  /** Lines in `ins={...}`: inserted in a diff. */
-  readonly ins: readonly LineRange[];
-  /** Lines in `del={...}`: deleted in a diff. */
-  readonly del: readonly LineRange[];
-  /** A bare `diff` flag: the fence is a diff. */
-  readonly diff: boolean;
-  /** `showLineNumbers` turns numbering on; `showLineNumbers=false` turns it off. */
-  readonly showLineNumbers: boolean;
 }
 
 /** Why one part of a line list is not a usable range. */
@@ -162,7 +146,7 @@ export function parseCodeMeta(raw: string): CodeMeta {
     }
   }
 
-  return { raw, title, highlight, ins, del, diff, showLineNumbers };
+  return { raw, title, highlight, ins, del, diff, showLineNumbers, annotations: [] };
 }
 
 /** The meta a code node carries after this plugin ran, or `undefined` for any other node. */
@@ -170,10 +154,20 @@ export function codeMetaOf(node: Code): CodeMeta | undefined {
   return (node.data as CodeData | undefined)?.code;
 }
 
+/** How many lines a fence's value occupies; an empty fence has none. */
+function lineCount(value: string): number {
+  return value === "" ? 0 : value.split(/\r?\n/).length;
+}
+
 /** Puts `data.code` on every code node, in every container. */
 function attachMeta(node: RootContent | Root): void {
   if (node.type === "code") {
-    const data: CodeData = { ...node.data, code: parseCodeMeta(node.meta ?? "") };
+    const meta = node.meta ?? "";
+    const code: CodeMeta = {
+      ...parseCodeMeta(meta),
+      annotations: parseAnnotations(meta, lineCount(node.value)).annotations,
+    };
+    const data: CodeData = { ...node.data, code };
     node.data = data;
   }
   if ("children" in node) {
