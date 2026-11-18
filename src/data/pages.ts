@@ -60,7 +60,23 @@ export interface RecordPagesOptions {
 /** The record pages a build made, and every finding it made while making them. */
 export interface RecordPagesResult {
   readonly pages: readonly Page[];
+  /** Records the lifecycle retires whose page is replaced by a redirect to their replacement. */
+  readonly retired: readonly RetiredPage[];
   readonly diagnostics: readonly Diagnostic[];
+}
+
+/** A retired record whose page was left out: its own URL now redirects to the record that replaces it. */
+export interface RetiredPage {
+  readonly collection: string;
+  readonly id: string;
+  /** The URL the record's page would have had, including `base` and the language's prefix. */
+  readonly url: string;
+  /** The current URL of the record that replaces it. */
+  readonly target: string;
+  /** The language this URL belongs to; only the default language's URL is the record's address in the URL lock. */
+  readonly lang: string;
+  /** Where the record sits in its data file. */
+  readonly position: RecordPos;
 }
 
 /** One language a record page is built in. */
@@ -499,6 +515,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
   const { root, config, collections, templates, views, filePrefix } = options;
   const diagnostics: Diagnostic[] = [];
   const pages: Page[] = [];
+  const retired: RetiredPage[] = [];
   const sourceLines = new Map<string, readonly string[]>();
   const languages: readonly PageLanguage[] =
     config.languages.length === 0
@@ -705,6 +722,19 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
         }
         const replacementUrl = replacement.kind === "found" ? replacement.url : undefined;
 
+        // A retired record whose collection redirects its URL is published as a redirect only: no page, no views.
+        if (lifecycle.retired && lifecycle.url === "redirect" && replacementUrl !== undefined) {
+          retired.push({
+            collection: name,
+            id: record.id,
+            url: main.url,
+            target: replacementUrl,
+            lang: language.code,
+            position: record.position,
+          });
+          continue;
+        }
+
         const suffix = urlMap.suffixes.get(record.id);
         const viewPaths = viewUrls(
           namedViews,
@@ -752,5 +782,5 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     }
   }
 
-  return { pages, diagnostics };
+  return { pages, retired, diagnostics };
 }

@@ -465,6 +465,15 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     if (earlier.length > 0) aliases.set(key, earlier);
   }
   for (const d of aliasDiagnostics) diagnostics.report(d);
+  // A record retired behind a redirect still owns its URL: it stays in the lock, or leaving it out would read as a removal.
+  const publishedKeys = new Set(published.map((entry) => urlKey(entry.collection, entry.id)));
+  for (const entry of records.retired) {
+    if (entry.lang !== config.lang) continue;
+    const key = urlKey(entry.collection, entry.id);
+    if (publishedKeys.has(key)) continue;
+    publishedKeys.add(key);
+    published.push({ collection: entry.collection, id: entry.id, url: entry.url, position: entry.position });
+  }
   const urls = planUrls({
     lock: locked.lock,
     locked: locked.found,
@@ -528,6 +537,15 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       urls: entry.urls,
       ...(entry.target === undefined ? {} : { target: entry.target }),
     }));
+  const retired = records.retired.map((entry) => ({
+    collection: entry.collection,
+    id: entry.id,
+    urls: [
+      entry.url,
+      ...(entry.lang === config.lang ? (urls.previous[urlKey(entry.collection, entry.id)] ?? []) : []),
+    ],
+    target: entry.target,
+  }));
   const applied = await applyFacts({
     site: {
       config,
@@ -536,6 +554,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       data: data.data,
       collections: allCollections,
       ...(gone.length === 0 ? {} : { removed: gone }),
+      ...(retired.length === 0 ? {} : { retired }),
     },
     root: siteRoot,
     sourceDir,

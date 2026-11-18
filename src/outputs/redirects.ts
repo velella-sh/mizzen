@@ -111,10 +111,15 @@ function configTarget(value: string, site: Site): string | undefined {
   return origin === undefined ? path : `${origin}${path}`;
 }
 
+/** A URL on the site, made absolute when the site sets `url`. */
+function urlTarget(url: string, site: Site): string {
+  const origin = originOf(site);
+  return origin === undefined ? url : `${origin}${url}`;
+}
+
 /** The target of a `redirect_from`: the page's URL, already carrying `base`, made absolute when the site sets `url`. */
 function pageTarget(page: Page, site: Site): string {
-  const origin = originOf(site);
-  return origin === undefined ? page.url : `${origin}${page.url}`;
+  return urlTarget(page.url, site);
 }
 
 /**
@@ -267,8 +272,9 @@ function redirectsTarget(target: string, base: string): string {
 }
 
 /**
- * Writes a small redirect page at every old address, from the config's `redirects` map and from each page's
- * `redirect_from` (a string or a list).
+ * Writes a small redirect page at every old address, from the config's `redirects` map, from each page's
+ * `redirect_from` (a string or a list), from the URLs a retired record published, and from the URLs of a record the
+ * collection no longer holds.
  *
  * A path is under `base`, as the config and the front matter define it: `/old/` and `/old` both write
  * `old/index.html`, and a path that names a file (`/old.html`, `/old.mp3`) writes that file exactly, as the HTML
@@ -448,6 +454,16 @@ export const redirects: Output = {
           continue;
         }
         add({ oldPath: normalized, target, from, ...(removed.target === undefined ? { gone: true as const } : {}) });
+      }
+    }
+
+    for (const retired of site.retired ?? []) {
+      const from = `the retirement of ${retired.collection}.${retired.id}`;
+      const target = urlTarget(retired.target, site);
+      for (const url of retired.urls) {
+        const normalized = normalizeOldPath(underBase(url, base));
+        if (normalized === undefined) continue;
+        add({ oldPath: normalized, target, from });
       }
     }
 
