@@ -81,6 +81,25 @@ test("import plain --out writes the mapped project into an empty folder and leav
   assert.match(logs.join("\n"), /wrote 5 files|5 files written/);
 });
 
+test("import plain --out rewrites internal page links and reports the ones it cannot resolve", async () => {
+  const root = tree({
+    "index.md": "[intro](./guide/intro.mdx?tab=1#install) and [site](https://example.com/x.md)\n",
+    "guide/intro.mdx": "# Intro\n",
+    "guide/setup.md": "[intro](./intro.mdx) and [missing](./gone.md)\n",
+  });
+  const out = mkdtempSync(join(tmpdir(), "import-generated-"));
+  const { logs, io } = capture();
+  const status = await main(["import", "plain", root, "--out", out], io);
+
+  assert.equal(status, 0);
+  assert.equal(
+    readFileSync(join(out, "index.md"), "utf8"),
+    "[intro](/guide/intro.md?tab=1#install) and [site](https://example.com/x.md)\n",
+  );
+  assert.equal(readFileSync(join(out, "guide/setup.md"), "utf8"), "[intro](/guide/intro.md) and [missing](./gone.md)\n");
+  assert.match(logs.join("\n"), /guide\/setup\.md:1:26 {2}import\.unresolved-link/);
+});
+
 test("import plain --out refuses a non-empty destination and writes nothing", async () => {
   const root = tree({ "index.md": "# Home\n" });
   const out = tree({ "keep.txt": "already here\n", "nested/other.txt": "also here\n" });

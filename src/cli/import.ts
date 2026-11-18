@@ -1,8 +1,8 @@
 /**
  * `mizzen import <name> <dir> [--out <folder>]`: previews a migration, or writes it to a separate folder. The named
- * importer reads the source, the shared command builds one mapping per input file, and the report lists the proposed
- * destinations and the items a person still has to do. A preview writes nothing; `--out` writes the mapped project and
- * never touches the source.
+ * importer reads the source, the shared command builds one mapping per input file, rewrites links to the mapped
+ * destination, and the report lists the proposed destinations and the items a person still has to do. A preview writes
+ * nothing; `--out` writes the mapped project and never touches the source.
  */
 import { resolve } from "node:path";
 import type { Diagnostic } from "../contracts/index.ts";
@@ -10,6 +10,7 @@ import { FILE_KINDS } from "../import/inventory.ts";
 import type { Importer } from "../import/contract.ts";
 import { CONFIG_DESTINATION, buildMappings, type ImportMapping } from "../import/mapping.ts";
 import { generateProject } from "../import/generate.ts";
+import { rewriteLinks } from "../import/links.ts";
 import { plainImporter } from "../import/plain.ts";
 import { inventoryOf } from "../import/inventory.ts";
 import { readImportSource } from "../import/source.ts";
@@ -103,7 +104,8 @@ export async function runImport(name: string, root: string, io: ImportIo, out?: 
   const outcome = await importer.import(source);
   const { files } = inventoryOf(source.files, outcome.files);
   const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config);
-  const found = [...outcome.diagnostics, ...diagnostics];
+  const links = rewriteLinks(outcome.pages, mappings);
+  const found = [...outcome.diagnostics, ...diagnostics, ...links.diagnostics];
   if (out === undefined) {
     io.log(importReport(name, source.root, mappings, outcome.config.source === undefined, found).replace(/\n$/, ""));
     return found.some((finding) => finding.severity === "error") ? 1 : 0;
@@ -112,7 +114,7 @@ export async function runImport(name: string, root: string, io: ImportIo, out?: 
   const destination = resolve(out);
   const generated = found.some((finding) => finding.severity === "error")
     ? { files: [] as readonly string[], diagnostics: [] as readonly Diagnostic[] }
-    : generateProject({ source, destination, mappings, pages: outcome.pages, assets: outcome.assets, config: outcome.config });
+    : generateProject({ source, destination, mappings, pages: links.pages, assets: outcome.assets, config: outcome.config });
   const all = [...found, ...generated.diagnostics];
   io.log(
     importReport(name, source.root, mappings, outcome.config.source === undefined, all, { path: destination, files: generated.files }).replace(/\n$/, ""),
