@@ -84,7 +84,7 @@ function urlOffset(body: string, node: PageLink): number | undefined {
 export function rewriteLinks(pages: readonly ImportedPage[], mappings: readonly ImportMapping[]): LinkRewriteResult {
   const destinations = new Map<string, string>();
   for (const mapping of mappings) {
-    if (mapping.kind === "content" && mapping.destination !== undefined) destinations.set(mapping.source, mapping.destination);
+    if (mapping.kind === "content" && mapping.url !== undefined) destinations.set(mapping.source, mapping.url);
   }
   const diagnostics: Diagnostic[] = [];
   const rewritten: ImportedPage[] = [];
@@ -125,7 +125,7 @@ export function rewriteLinks(pages: readonly ImportedPage[], mappings: readonly 
       }
       const start = urlOffset(body, node);
       if (start !== undefined) {
-        edits.push({ start, end: start + node.url.length, text: `/${destination}${tail}` });
+        edits.push({ start, end: start + node.url.length, text: `${destination}${tail}` });
         resolved++;
       }
     });

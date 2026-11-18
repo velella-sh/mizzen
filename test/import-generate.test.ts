@@ -151,9 +151,9 @@ test("import plain --out rewrites internal page links and reports the ones it ca
   assert.equal(status, 0);
   assert.equal(
     readFileSync(join(out, "index.md"), "utf8"),
-    "[intro](/guide/intro.md?tab=1#install) and [site](https://example.com/x.md)\n",
+    "[intro](/guide/intro/?tab=1#install) and [site](https://example.com/x.md)\n",
   );
-  assert.equal(readFileSync(join(out, "guide/setup.md"), "utf8"), "[intro](/guide/intro.md) and [missing](./gone.md)\n");
+  assert.equal(readFileSync(join(out, "guide/setup.md"), "utf8"), "[intro](/guide/intro/) and [missing](./gone.md)\n");
   assert.match(logs.join("\n"), /guide\/setup\.md:1:26 {2}import\.unresolved-link/);
 });
 
