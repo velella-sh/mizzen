@@ -1,6 +1,6 @@
 {
   "name": "@velella/mizzen",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A deterministic docs engine with exact source positions.",
   "keywords": [
     "docs",
