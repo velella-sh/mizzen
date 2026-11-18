@@ -119,6 +119,7 @@ Options:
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --update-urls        For build: accept changed record URLs and write urls.lock.json
+  --report             For build: print why each page was rebuilt after a warm build
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
@@ -158,6 +159,7 @@ type BuildOpts = {
   readonly workers?: number;
   readonly updateUrls?: boolean;
   readonly asOf?: string;
+  readonly report?: boolean;
 };
 
 type CheckOpts = {
@@ -785,6 +787,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let packFormat: PackFormat | undefined;
   let updateUrls = false;
   let asOf: string | undefined;
+  let report = false;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -861,6 +864,9 @@ export function parseArgs(args: readonly string[]): Parsed {
       } else if (arg === "--update-urls") {
         if (command !== "build") return { error: "--update-urls is only valid for build" };
         updateUrls = true;
+      } else if (arg === "--report") {
+        if (command !== "build") return { error: "--report is only valid for build" };
+        report = true;
       } else if (arg === "--topic") {
         if (command !== "pack") return { error: "--topic is only valid for pack" };
         const raw = value().trim();
@@ -902,6 +908,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(theme === undefined ? {} : { theme }),
         ...(workers === undefined ? {} : { workers }),
         ...(updateUrls ? { updateUrls: true } : {}),
+        ...(report ? { report: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
       },
     };
@@ -1409,8 +1416,10 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         cache: true,
         ...(options.workers === undefined ? {} : { workers: options.workers }),
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
+        ...(options.report === true ? { report: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
       });
+      if (result.report !== undefined) write(result.report);
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);
       return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;
     } catch (err) {

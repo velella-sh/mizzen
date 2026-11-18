@@ -20,7 +20,7 @@ import { cacheKey, cacheRootOf, includedSnippets, renderSettingsKey, restoreCach
 import { createDiagnostics, sortDiagnostics, type Diagnostics } from "./diagnostics.ts";
 import { stalePageStates } from "../stale/diagnostics.ts";
 import { buildDependencyGraph } from "./dependency-graph.ts";
-import { planInvalidation, type InvalidationPlan } from "./invalidation.ts";
+import { planInvalidation, formatInvalidationReport, type InvalidationPlan } from "./invalidation.ts";
 import { pruneRenderCache, pruneRenderEntries, readRenderInputs, recordKeyOf, recordShapeOf, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
 import { moduleName } from "../runtime/modules.ts";
 import { createRenderPool, renderOnePage, type RenderPool } from "./parallel.ts";
@@ -61,6 +61,11 @@ export interface BuildOptions {
    * `--as-of today` is resolved by the CLI before it gets here.
    */
   readonly asOf?: string;
+  /**
+   * Explain each page rebuilt after a warm build in {@link BuildResult.report}: the changed input and the shortest
+   * dependency chain to the page. `mizzen build --report` prints it; a build that rebuilt nothing reports nothing.
+   */
+  readonly report?: boolean;
 }
 
 /** Where a build spent its wall time, in milliseconds. */
@@ -97,6 +102,8 @@ export interface BuildResult {
    * cold build or when the settings changed, where every output is rebuilt and there is nothing to narrow.
    */
   readonly invalidation?: InvalidationPlan | undefined;
+  /** Why each page was rebuilt, from `invalidation`, when `report` is on and a warm build narrowed the work. */
+  readonly report?: string | undefined;
 }
 
 /** The default folder of outputs: `src/outputs/` beside this file's folder. */
@@ -725,6 +732,8 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
         new Set(site.pages.filter((page) => page.kind === "doc").map((page) => pageKeyOf(page))),
       );
     }
+    const report =
+      options.report === true && invalidation !== undefined ? formatInvalidationReport(invalidation) : "";
     return {
       out,
       files: fileList,
@@ -733,6 +742,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       cachedPages,
       timings: { dataMs, renderMs, outputsMs, writeMs: performance.now() - writeStartedAt },
       ...(invalidation === undefined ? {} : { invalidation }),
+      ...(report === "" ? {} : { report }),
     };
   } finally {
     await rm(staging, { recursive: true, force: true });
