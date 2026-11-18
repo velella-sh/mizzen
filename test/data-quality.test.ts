@@ -116,6 +116,8 @@ async function qualityJson(root: string, ...extra: readonly string[]): Promise<{
   readonly code: number;
   readonly printed: {
     readonly findings: readonly unknown[];
+    readonly groups: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+    readonly totals: { readonly findings: number; readonly warnings: number; readonly errors: number };
     readonly exceptions: readonly unknown[];
     readonly scopes: readonly unknown[];
     readonly diagnostics: readonly unknown[];
@@ -327,6 +329,7 @@ test("a value outside the threshold reports the value and its bounds", async () 
       value: -1,
       min: 0,
       max: 10,
+      pos: { file: "_data/items.yml", line: 2, column: 10, endLine: 2, endColumn: 11 },
       message: 'Record "a" of collection "items" has field "price" = -1, outside the threshold (min 0, max 10).',
     },
     {
@@ -339,6 +342,7 @@ test("a value outside the threshold reports the value and its bounds", async () 
       value: 12,
       min: 0,
       max: 10,
+      pos: { file: "_data/items.yml", line: 4, column: 10, endLine: 4, endColumn: 11 },
       message: 'Record "b" of collection "items" has field "price" = 12, outside the threshold (min 0, max 10).',
     },
   ], "the non-numeric value of c is skipped");
@@ -372,9 +376,107 @@ test("an outlier reports the value and the range rule", async () => {
       value: 12,
       min: 0,
       max: 10,
+      pos: { file: "_data/items.yml", line: 2, column: 10, endLine: 2, endColumn: 11 },
       message: 'Record "a" of collection "items" has field "price" = 12, outside the range rule (min 0, max 10).',
     },
   ], "the non-numeric value of b is skipped");
+});
+
+/** Two collections and two kinds: `items` misses an author and holds an outlier, `posts` misses two titles. */
+const GROUPED_SITE: Record<string, string> = {
+  "mizzen.yml": [
+    "collections:",
+    "  items:",
+    "    source: _data/items.yml",
+    "  posts:",
+    "    source: _data/posts.yml",
+    "quality:",
+    "  rules:",
+    "    - kind: completeness",
+    "      collection: items",
+    "      fields: [author]",
+    "    - kind: outlier",
+    "      collection: items",
+    "      fields: [price]",
+    "      min: 0",
+    "      max: 10",
+    "    - kind: completeness",
+    "      collection: posts",
+    "      fields: [title]",
+    "  policy:",
+    "    completeness: error",
+    "",
+  ].join("\n"),
+  "_data/items.yml": "- id: a\n  price: 50\n- id: b\n  author: Ada\n  price: 5\n",
+  "_data/posts.yml": "- id: p\n- id: q\n",
+};
+
+test("the JSON report groups findings by collection and kind, in code-point order", async () => {
+  const root = tree(GROUPED_SITE);
+  try {
+    const { code, printed } = await qualityJson(root);
+    assert.equal(code, 1, "the policy makes completeness an error");
+    assert.deepEqual(Object.keys(printed.groups), ["items", "posts"]);
+    assert.deepEqual(Object.keys(printed.groups.items!), ["completeness", "outlier"]);
+    assert.deepEqual(printed.groups, {
+      items: {
+        completeness: { kind: "completeness", count: 1, warnings: 0, errors: 1 },
+        outlier: { kind: "outlier", count: 1, warnings: 1, errors: 0 },
+      },
+      posts: { completeness: { kind: "completeness", count: 2, warnings: 0, errors: 2 } },
+    });
+    assert.deepEqual(printed.totals, { findings: 4, warnings: 1, errors: 3 });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the JSON report prints each finding's collection, kind, id, field, message, severity, and position", async () => {
+  const root = tree(GROUPED_SITE);
+  try {
+    const { printed } = await qualityJson(root);
+    const findings = printed.findings as ReadonlyArray<Record<string, unknown>>;
+    assert.deepEqual(findings.map(({ id, kind, collection, record, field }) => ({ id, kind, collection, record, field })), [
+      { id: "data.quality.completeness.items.a.author", kind: "completeness", collection: "items", record: "a", field: "author" },
+      { id: "data.quality.outlier.items.a.price", kind: "outlier", collection: "items", record: "a", field: "price" },
+      { id: "data.quality.completeness.posts.p.title", kind: "completeness", collection: "posts", record: "p", field: "title" },
+      { id: "data.quality.completeness.posts.q.title", kind: "completeness", collection: "posts", record: "q", field: "title" },
+    ]);
+    assert.deepEqual(findings.map((finding) => finding.severity), ["error", "warning", "error", "error"]);
+    assert.equal(findings[0]!.message, 'Record "a" of collection "items" is missing field "author".');
+    assert.deepEqual(findings[1]!.pos, { file: "_data/items.yml", line: 2, column: 10, endLine: 2, endColumn: 11 });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the JSON report prints a coverage finding's before and after", async () => {
+  const root = tree(coverageSite(10, baselineOf({ author: 100 })));
+  try {
+    const { code, printed } = await qualityJson(root);
+    assert.equal(code, 0, "a warning finding is not a failed build");
+    assert.deepEqual(printed.findings, [
+      {
+        id: "data.quality.coverage.items.author",
+        kind: "coverage",
+        severity: "warning",
+        collection: "items",
+        record: "",
+        field: "author",
+        before: 100,
+        after: 50,
+        drop: 50,
+        maxDrop: 10,
+        message: 'Field "author" of collection "items" dropped from 100% to 50% coverage (drop 50, maxDrop 10).',
+      },
+    ]);
+    assert.deepEqual(printed.groups, {
+      items: { coverage: { kind: "coverage", count: 1, warnings: 1, errors: 0 } },
+    });
+    assert.deepEqual(printed.totals, { findings: 1, warnings: 1, errors: 0 });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("a coverage rule without a baseline is a diagnostic", async () => {

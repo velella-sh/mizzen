@@ -76,6 +76,24 @@ export interface QualityFinding {
   readonly message: string;
 }
 
+/** One rule kind's findings in one collection, as the JSON report groups them. */
+export interface QualityGroup {
+  readonly kind: QualityRuleKind;
+  /** How many findings the group holds. */
+  readonly count: number;
+  /** How many of them are warnings. */
+  readonly warnings: number;
+  /** How many of them are errors. */
+  readonly errors: number;
+}
+
+/** Every finding in a report, counted by severity. */
+export interface QualityTotals {
+  readonly findings: number;
+  readonly warnings: number;
+  readonly errors: number;
+}
+
 /** One rule's scope: the records it checked, and the records its `where` left out. */
 export interface QualityScope {
   readonly collection: string;
@@ -96,6 +114,10 @@ export interface ActiveQualityException extends QualityException {
 export interface QualityReport {
   /** Findings in config order, then source order, then field order, without the ones an exception holds back. */
   readonly findings: readonly QualityFinding[];
+  /** The findings grouped by collection, then rule kind, each in code-point order; a group without a finding is absent. */
+  readonly groups: Readonly<Record<string, Readonly<Partial<Record<QualityRuleKind, QualityGroup>>>>>;
+  /** Every finding, counted by severity. */
+  readonly totals: QualityTotals;
   /** The exceptions that held a finding back, in config order. */
   readonly exceptions: readonly ActiveQualityException[];
   /** One entry per rule that reads a loaded collection. */
@@ -354,6 +376,41 @@ function applyExceptions(
 }
 
 /**
+ * Groups the findings by collection, then rule kind, both in code-point order, and counts them by severity. A map keeps
+ * a collection named `__proto__` an ordinary key.
+ */
+function groupFindings(findings: readonly QualityFinding[]): {
+  readonly groups: QualityReport["groups"];
+  readonly totals: QualityTotals;
+} {
+  const byCollection = new Map<string, Map<QualityRuleKind, QualityGroup>>();
+  let warnings = 0;
+  let errors = 0;
+  for (const finding of findings) {
+    if (finding.severity === "error") errors += 1;
+    else warnings += 1;
+    let byKind = byCollection.get(finding.collection);
+    if (byKind === undefined) byCollection.set(finding.collection, (byKind = new Map()));
+    const group = byKind.get(finding.kind);
+    byKind.set(finding.kind, {
+      kind: finding.kind,
+      count: (group?.count ?? 0) + 1,
+      warnings: (group?.warnings ?? 0) + (finding.severity === "warning" ? 1 : 0),
+      errors: (group?.errors ?? 0) + (finding.severity === "error" ? 1 : 0),
+    });
+  }
+  const groups = Object.fromEntries(
+    [...byCollection.keys()].sort(compareCodePoint).map((collection) => [
+      collection,
+      Object.fromEntries(
+        [...byCollection.get(collection)!.entries()].sort(([a], [b]) => compareCodePoint(a, b)),
+      ),
+    ]),
+  );
+  return { groups, totals: { findings: findings.length, warnings, errors } };
+}
+
+/**
  * Applies every rule to the collections it names. A collection that did not load, a missing `maxDrop`, and a missing
  * baseline entry are diagnostics, never a throw: the other rules still run.
  */
@@ -364,7 +421,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
   const findings: QualityFinding[] = [];
   const scopes: QualityScope[] = [];
   const rules = config.quality?.rules ?? [];
-  if (rules.length === 0 && !write) return { findings, exceptions: [], scopes, diagnostics };
+  if (rules.length === 0 && !write) return { findings, ...groupFindings(findings), exceptions: [], scopes, diagnostics };
 
   const loaded = await loadCollections({ root, config });
   diagnostics.push(...loaded.diagnostics);
@@ -420,6 +477,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
         for (const field of fields) {
           const found = resolveIn(record.fields, field);
           if (found.found && hasValue(found.value)) continue;
+          const pos = sourcePosOf(record.fieldPositions[field] ?? record.position);
           findings.push({
             id: `data.quality.completeness.${rule.collection}.${record.id}.${field}`,
             kind: rule.kind,
@@ -427,6 +485,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
             collection: rule.collection,
             record: record.id,
             field,
+            pos,
             message: `Record "${record.id}" of collection "${rule.collection}" is missing field "${field}".`,
           });
         }
@@ -526,6 +585,7 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
             value,
             ...(rule.min === undefined ? {} : { min: rule.min }),
             ...(rule.max === undefined ? {} : { max: rule.max }),
+            pos: sourcePosOf(record.fieldPositions[field] ?? record.position),
             message: `Record "${record.id}" of collection "${rule.collection}" has field "${field}" = ${value}, outside the ${noun} (${boundsText(rule.min, rule.max)}).`,
           });
         }
@@ -608,9 +668,9 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
       if (collectionScopes[NO_SCOPE] === undefined) collectionScopes[NO_SCOPE] = snapshotOf(loaded.collections[name]!.records);
     }
     await writeBaseline(root, draft);
-    return { findings, exceptions: [], scopes, diagnostics, wrote: BASELINE_FILE };
+    return { findings, ...groupFindings(findings), exceptions: [], scopes, diagnostics, wrote: BASELINE_FILE };
   }
 
   const applied = applyExceptions(findings, config.quality?.exceptions ?? [], config.asOf, diagnostics);
-  return { findings: applied.findings, exceptions: applied.exceptions, scopes, diagnostics };
+  return { findings: applied.findings, ...groupFindings(applied.findings), exceptions: applied.exceptions, scopes, diagnostics };
 }

@@ -1347,7 +1347,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       const report = await checkQuality({ root, config, write: options.write });
       const diagnostics = [...configDiagnostics, ...report.diagnostics];
       if (options.json) {
-        log(JSON.stringify({ findings: report.findings, exceptions: report.exceptions, scopes: report.scopes, diagnostics, ...(report.wrote === undefined ? {} : { wrote: report.wrote }) }, null, 2));
+        log(JSON.stringify({ findings: report.findings, exceptions: report.exceptions, scopes: report.scopes, groups: report.groups, totals: report.totals, diagnostics, ...(report.wrote === undefined ? {} : { wrote: report.wrote }) }, null, 2));
       } else {
         if (report.wrote !== undefined) log(`wrote ${report.wrote}`);
         for (const finding of report.findings) log(`${finding.severity} ${finding.id}: ${finding.message}`);
