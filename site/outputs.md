@@ -11,6 +11,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | --- | --- |
 | `agents-md` | `AGENTS.md`, a guide to the built site for agents. |
 | `api` | `api/<version>/`, the data API: `index.json`, each collection's records as `<collection>.json` and `.ndjson`, one file per record, its JSON Schema, and `openapi.json`. |
+| `blog-feed` | `<route>/feed.xml`, an Atom feed of the public blog posts, newest first. |
 | `changelog-feed` | `changelog.xml`, an Atom feed of the changelog page's dated release headings. |
 | `code-meta-check` | No files: reports fence meta that names lines the fence does not have. |
 | `collection-index` | `data/<collection>.index.json` for each collection with `index`: a column layout of its records and page URLs, split into numbered chunks over the byte budget. |
