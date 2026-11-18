@@ -12,6 +12,7 @@ import { loadConfig } from "../config/load.ts";
 import { dataLimitsOf } from "../data/limits.ts";
 import { LOCK_FILE, readLock, sha256, storedPath, writeLock, type DataLock, type LockedSource } from "../data/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
+import { compileSchemas, schemaSnapshotOf, type CompiledSchemas } from "../data/schema.ts";
 import { gitSnapshot, instantOfHttpDate, orderedSnapshot, snapshotOfPinned } from "../data/snapshot.ts";
 import type { CollectionSnapshot } from "../contracts/index.ts";
 
@@ -124,6 +125,12 @@ function sortedSources(entries: ReadonlyMap<string, LockedSource>): Readonly<Rec
   return sources;
 }
 
+/** `snapshot` with the collection's schema, when it compiles, so a later schema can be compared with it. */
+function withSchema(snapshot: CollectionSnapshot, schemas: CompiledSchemas, name: string): CollectionSnapshot {
+  const schema = schemas.schemas[name];
+  return schema === undefined ? snapshot : orderedSnapshot({ ...snapshot, schema: schemaSnapshotOf(schema) });
+}
+
 /**
  * Fetches or verifies every remote and package source the config declares. Nothing is written when any source fails,
  * and `check` writes nothing at all.
@@ -139,6 +146,7 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
   if (errors.length > 0) return { code: 1, messages, errors };
 
   const config = loaded.config;
+  const compiled = compileSchemas(root, config, {}, []);
   const names = Object.keys(config.collections).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const pinned = await readLock(root);
   for (const diagnostic of pinned.diagnostics) {
@@ -245,13 +253,17 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
     const locked = address === undefined ? undefined : next.get(address);
     const now = address === undefined ? undefined : current.get(address);
     if (address !== undefined && locked !== undefined && now !== undefined) {
-      snapshots[name] = snapshotOfPinned({
-        address,
-        ...(now.packageName === undefined ? {} : { packageName: now.packageName }),
-        ...(locked.version === undefined ? {} : { version: locked.version }),
-        sha256: locked.sha256,
-        ...(locked.fetchedAt === undefined ? {} : { fetchedAt: locked.fetchedAt }),
-      });
+      snapshots[name] = withSchema(
+        snapshotOfPinned({
+          address,
+          ...(now.packageName === undefined ? {} : { packageName: now.packageName }),
+          ...(locked.version === undefined ? {} : { version: locked.version }),
+          sha256: locked.sha256,
+          ...(locked.fetchedAt === undefined ? {} : { fetchedAt: locked.fetchedAt }),
+        }),
+        compiled,
+        name,
+      );
     } else if (!/^(https:\/\/|npm:)/.test(config.collections[name]!.source) && pinned.lock.snapshots?.[name] !== undefined) {
       snapshots[name] = orderedSnapshot(pinned.lock.snapshots[name]!);
     }
@@ -319,11 +331,12 @@ export async function dataSnapshot(options: DataSnapshotOptions): Promise<DataFe
 
   const result = gitSnapshot(root, entry.source, options.allowDirty === true);
   if (!result.ok) return { code: 1, messages, errors: [result.message] };
+  const snapshot = withSchema(result.snapshot, compileSchemas(root, loaded.config, {}, []), name);
 
-  const lock: DataLock = { ...pinned.lock, snapshots: { ...pinned.lock.snapshots, [name]: result.snapshot } };
+  const lock: DataLock = { ...pinned.lock, snapshots: { ...pinned.lock.snapshots, [name]: snapshot } };
   await writeLock(root, lock);
   if (result.dirty) messages.push(`warning: ${entry.source} has uncommitted changes; the snapshot names the last commit`);
-  messages.push(`snapshot ${name} at ${result.snapshot.ref} (${result.snapshot.capturedAt})`);
+  messages.push(`snapshot ${name} at ${snapshot.ref} (${snapshot.capturedAt})`);
   messages.push(`wrote ${LOCK_FILE}`);
   return { code: 0, messages, errors };
 }

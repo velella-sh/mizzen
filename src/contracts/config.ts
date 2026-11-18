@@ -295,6 +295,16 @@ export interface CollectionConfig {
   readonly aliases?: string;
   /** JSON Schema file that validates every record, relative to the site root. */
   readonly schema?: string;
+  /**
+   * Fields an earlier record may still hold under an old name, keyed by the new name: `{ slug: path }` reads `path`
+   * as `slug`. A record that holds both keeps the new one and earns a warning naming its line. Default `{}`.
+   */
+  readonly schemaRenames?: Readonly<Record<string, string>>;
+  /**
+   * What a schema change that earlier records may not satisfy does: `error` fails the build, `warn` reports a warning.
+   * Default `error`.
+   */
+  readonly onSchemaChange?: "error" | "warn";
   /** Fields whose values must be unique in the collection; a duplicate is an error naming both records. Default `[]`. */
   readonly unique?: readonly string[];
   /** Fields that hold a reference to another collection's record id, keyed by field name. Default `{}`. */

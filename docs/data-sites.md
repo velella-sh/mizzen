@@ -222,6 +222,10 @@ file exists), `gone` (a notice at each old URL that says the record was removed)
 engine version and a hash of the data. Only the default language names a record in it. Like the rest of the data
 contract, the file only gains fields.
 
+A schema version change moves records, not addresses: while a record keeps its `id` and its `permalink` still fills
+it, the record page, `urls.json`, the collection index, and the data API files keep the same URLs and API version, and
+`urls.lock.json` is unchanged, so no `--update-urls` is needed.
+
 With `languages` configured, every record gets one page per language: `<template>.<lang>.md` is used when it exists,
 `<field>.<lang>` is read from a mapping and falls back to the default language, and pages that share a record carry the
 same `translation_key`. `collections.<name>.llms: false` keeps a collection's pages out of `llms-full.txt`.
