@@ -275,6 +275,18 @@
             "count": {
               "enum": ["warning", "error"],
               "description": "How a count finding is reported. Default warning."
+            },
+            "threshold": {
+              "enum": ["warning", "error"],
+              "description": "How a threshold finding is reported. Default warning."
+            },
+            "outlier": {
+              "enum": ["warning", "error"],
+              "description": "How an outlier finding is reported. Default warning."
+            },
+            "freshness": {
+              "enum": ["warning", "error"],
+              "description": "How a freshness finding is reported. Default warning."
             }
           },
           "description": "How a finding of each kind is reported. Default warning."
@@ -536,8 +548,8 @@
       ],
       "properties": {
         "kind": {
-          "enum": ["completeness", "coverage", "count", "threshold", "outlier"],
-          "description": "What the rule measures: a missing field, a field's coverage drop, a record-count drop, or a value outside a threshold or range."
+          "enum": ["completeness", "coverage", "count", "threshold", "outlier", "freshness"],
+          "description": "What the rule measures: a missing field, a field's coverage drop, a record-count drop, a value outside a threshold or range, or a date older than a limit."
         },
         "collection": {
           "type": "string",
@@ -553,6 +565,11 @@
           },
           "description": "The fields it checks. Default: every field the collection's records hold."
         },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "For `freshness`: the date field whose age the rule measures. Required for that kind."
+        },
         "where": {
           "type": "object",
           "description": "A record must match to be in scope, written like a list page's `where`. Default: every record."
@@ -561,6 +578,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds."
+        },
+        "maxAgeDays": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "For `freshness`: how many days before the as-of date a record's date may be. Required for that kind."
         },
         "min": {
           "type": "number",
@@ -582,7 +604,7 @@
       ],
       "properties": {
         "rule": {
-          "enum": ["completeness", "coverage", "count", "threshold", "outlier"],
+          "enum": ["completeness", "coverage", "count", "threshold", "outlier", "freshness"],
           "description": "The kind of finding it covers."
         },
         "record": {

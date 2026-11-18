@@ -353,20 +353,24 @@ export interface SnapshotConfig {
 }
 
 /** What a data-quality rule measures. */
-export type QualityRuleKind = "completeness" | "coverage" | "count" | "threshold" | "outlier";
+export type QualityRuleKind = "completeness" | "coverage" | "count" | "threshold" | "outlier" | "freshness";
 
 /** One data-quality rule: what it measures, on which collection, and when it reports. */
 export interface QualityRule {
-  /** What the rule measures: a missing field, a field's coverage drop, a record-count drop, or a value outside a range. */
+  /** What the rule measures: a missing field, a field's coverage drop, a record-count drop, a value outside a range, or a date older than a limit. */
   readonly kind: QualityRuleKind;
   /** The collection it reads. */
   readonly collection: string;
   /** The fields it checks. Default: every field the collection's records hold. */
   readonly fields?: readonly string[];
+  /** For `freshness`: the date field whose age the rule measures. Required for that kind. */
+  readonly field?: string;
   /** A record must match to be in scope, written like a list page's `where`. Default: every record. */
   readonly where?: Readonly<Record<string, unknown>>;
   /** For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds. */
   readonly maxDrop?: number;
+  /** For `freshness`: how many days before the as-of date a record's date may be. Required for that kind. */
+  readonly maxAgeDays?: number;
   /** For `threshold` and `outlier`: the lowest value the field may hold. At least one of `min` and `max` is required. */
   readonly min?: number;
   /** For `threshold` and `outlier`: the highest value the field may hold. At least one of `min` and `max` is required. */

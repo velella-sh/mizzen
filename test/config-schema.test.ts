@@ -106,6 +106,12 @@ test("valid configs pass", () => {
         policy: { completeness: "error", coverage: "warning", count: "warning" },
       },
     },
+    {
+      quality: {
+        rules: [{ kind: "freshness", collection: "items", field: "updated", maxAgeDays: 30 }],
+        policy: { threshold: "error", outlier: "warning", freshness: "error" },
+      },
+    },
     { feeds: {} },
     { calendars: {} },
     { calendars: { eol: { collection: "runtimes", events: [{ name: "eol", field: "eol" }] } } },
@@ -199,6 +205,8 @@ test("invalid configs fail", () => {
     ["a redirect to a plain http URL", { redirects: { "/old/": "http://example.com/" } }],
     ["a redirect to a relative path", { redirects: { "/old/": "new/" } }],
     ["outputs with a non-boolean", { outputs: { twins: "off" } }],
+    ["a freshness rule with a zero maxAgeDays", { quality: { rules: [{ kind: "freshness", collection: "items", field: "updated", maxAgeDays: 0 }] } }],
+    ["a freshness rule with an empty field", { quality: { rules: [{ kind: "freshness", collection: "items", field: "", maxAgeDays: 30 }] } }],
     ["the whole config a list", []],
   ];
   for (const [name, config] of invalid) assert.equal(validate(config), false, name);

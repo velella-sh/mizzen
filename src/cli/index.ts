@@ -81,7 +81,7 @@ Commands:
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
-  data quality [dir]        Report records that fail the config's quality rules (--json, --write)
+  data quality [dir]        Report records that fail the config's quality rules (--json, --write, --as-of)
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
@@ -116,7 +116,7 @@ Options:
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
-  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch); today reads the system date once. Wins over the config's asOf
+  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
@@ -253,6 +253,7 @@ type DataQualityOpts = {
   readonly root: string;
   readonly json: boolean;
   readonly write: boolean;
+  readonly asOf?: string;
 };
 
 type InitOpts = {
@@ -561,15 +562,24 @@ function parseData(args: readonly string[]): Parsed {
     let root: string | undefined;
     let json = false;
     let write = false;
-    for (const arg of rest) {
+    let asOf: string | undefined;
+    for (let i = 0; i < rest.length; i++) {
+      const arg = rest[i]!;
       if (arg === "-h" || arg === "--help") return { help: true };
       if (arg === "--json") json = true;
       else if (arg === "--write") write = true;
-      else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      else if (arg === "--as-of") {
+        const raw = rest[++i];
+        if (raw === undefined || raw.startsWith("-")) return { error: "--as-of needs a value" };
+        // `today` is resolved at the edge of main, where the clock may be read; here only the shape is checked.
+        const read = readAsOfFlag(raw, () => "0001-01-01");
+        if (!read.ok) return { error: `--as-of ${read.message}` };
+        asOf = raw;
+      } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
       else if (root === undefined) root = arg;
       else return { error: `unexpected argument: ${arg}` };
     }
-    return { options: { command: "data-quality", root: root ?? ".", json, write } };
+    return { options: { command: "data-quality", root: root ?? ".", json, write, ...(asOf === undefined ? {} : { asOf }) } };
   }
   if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
 
@@ -1040,7 +1050,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   // `--as-of today` is the only place the clock is read: once, here, printed, and passed on as a plain date.
   let asOf: string | undefined;
-  if ((options.command === "build" || options.command === "check" || options.command === "watch") && options.asOf !== undefined) {
+  if ((options.command === "build" || options.command === "check" || options.command === "watch" || options.command === "data-quality") && options.asOf !== undefined) {
     const read = readAsOfFlag(options.asOf, () => todayOf((io.now ?? (() => new Date()))()));
     if (!read.ok) {
       error(`${NAME}: --as-of ${read.message}`);
@@ -1332,7 +1342,8 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   if (options.command === "data-quality") {
     try {
-      const { config, diagnostics: configDiagnostics } = loadConfig(root);
+      const { config: loaded, diagnostics: configDiagnostics } = loadConfig(root);
+      const config = asOf === undefined ? loaded : { ...loaded, asOf };
       const report = await checkQuality({ root, config, write: options.write });
       const diagnostics = [...configDiagnostics, ...report.diagnostics];
       if (options.json) {

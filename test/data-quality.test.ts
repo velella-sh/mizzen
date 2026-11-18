@@ -366,3 +366,71 @@ test("--write records a count baseline that a second run passes", async () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+/** A site with one freshness rule on `updated`, dated `asOf` when given. */
+function freshnessSite(records: string, asOf?: string): Record<string, string> {
+  return {
+    "mizzen.yml": [
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      ...(asOf === undefined ? [] : [`asOf: ${asOf}`]),
+      "quality:",
+      "  rules:",
+      "    - kind: freshness",
+      "      collection: items",
+      "      field: updated",
+      "      maxAgeDays: 30",
+      "",
+    ].join("\n"),
+    "_data/items.yml": records,
+  };
+}
+
+test("a stale record is a finding; a fresh one is clean", async () => {
+  const { config, report } = await check(freshnessSite(
+    "- id: a\n  updated: 2026-03-10\n- id: b\n  updated: 2026-03-11\n- id: c\n  updated: 2026-04-01\n",
+    "2026-04-10",
+  ));
+  assert.deepEqual(config.quality?.rules, [
+    { kind: "freshness", collection: "items", field: "updated", maxAgeDays: 30 },
+  ]);
+  assert.deepEqual(report.diagnostics, []);
+  assert.deepEqual(report.findings.map((finding) => finding.id), ["data.quality.freshness.items.a.updated"]);
+  const finding = report.findings[0]!;
+  assert.equal(finding.value, 31);
+  assert.equal(finding.maxAgeDays, 30);
+  assert.equal(finding.asOf, "2026-04-10");
+  assert.equal(finding.pos?.file, "_data/items.yml");
+  assert.equal(finding.pos?.line, 2);
+  assert.match(finding.message, /dated 2026-03-10, 31 days before the as-of date 2026-04-10/);
+});
+
+test("a freshness rule without an as-of date is a diagnostic, not a crash", async () => {
+  const { report } = await check(freshnessSite("- id: a\n  updated: 2026-03-10\n"));
+  assert.deepEqual(report.findings, []);
+  assert.deepEqual(report.diagnostics.map((diagnostic) => diagnostic.id), ["dates.no-as-of"]);
+  assert.match(report.diagnostics[0]!.message, /freshness rule for collection "items" needs an as-of date/);
+});
+
+test("a record whose date field is not a date is a diagnostic at the field", async () => {
+  const { report } = await check(freshnessSite("- id: a\n  updated: soon\n", "2026-04-10"));
+  assert.deepEqual(report.findings, []);
+  assert.deepEqual(report.diagnostics.map((diagnostic) => diagnostic.id), ["data.quality-date"]);
+  assert.equal(report.diagnostics[0]!.pos?.line, 2);
+  assert.match(report.diagnostics[0]!.message, /Record "a" of collection "items" has no valid date in field "updated"/);
+});
+
+test("--as-of is accepted by data quality and stands in for the config's asOf", async () => {
+  const root = tree(freshnessSite("- id: a\n  updated: 2026-03-10\n"));
+  try {
+    const { code, printed } = await qualityJson(root, "--as-of", "2026-04-10");
+    assert.equal(code, 0);
+    assert.deepEqual(printed.findings.map((finding) => (finding as { id: string }).id), [
+      "data.quality.freshness.items.a.updated",
+    ]);
+    assert.deepEqual(printed.diagnostics, []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

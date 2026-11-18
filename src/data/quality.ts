@@ -18,9 +18,13 @@ import type {
   QualityRule,
   QualityRuleKind,
   SiteConfig,
+  SourcePos,
 } from "../contracts/index.ts";
+import { missingAsOf } from "../dates/as-of.ts";
+import { dayNumber, latestDay, normalizeDate, parseDate } from "../dates/parse.ts";
 import { loadCollections } from "./collections.ts";
 import { canonicalJson } from "./lock.ts";
+import { sourcePosOf } from "./positions.ts";
 import { compareCodePoint, filterRows, hasValue, parseQuery } from "./query.ts";
 import { resolveIn } from "./record-context.ts";
 import { referenceDateOf } from "./reference-date.ts";
@@ -52,12 +56,18 @@ export interface QualityFinding {
   readonly drop?: number;
   /** For coverage and count: the rule's limit. */
   readonly maxDrop?: number;
-  /** For threshold and outlier: the value the record holds. */
+  /** For threshold and outlier: the value the record holds; for freshness: its age in days. */
   readonly value?: number;
   /** For threshold and outlier: the lowest value the rule allows. */
   readonly min?: number;
   /** For threshold and outlier: the highest value the rule allows. */
   readonly max?: number;
+  /** For freshness: the rule's limit, in days. */
+  readonly maxAgeDays?: number;
+  /** For freshness: the as-of date the age is counted from. */
+  readonly asOf?: string;
+  /** Where the finding sits in the data file. */
+  readonly pos?: SourcePos;
   /** One line a reader can act on. */
   readonly message: string;
 }
@@ -174,6 +184,12 @@ function round2(value: number): number {
 function numberAt(fields: Readonly<Record<string, unknown>>, field: string): number | undefined {
   const found = resolveIn(fields, field);
   return found.found && typeof found.value === "number" && Number.isFinite(found.value) ? found.value : undefined;
+}
+
+/** The latest day a normalized date or instant names, as days since 1970-01-01. */
+function dayOf(normalized: string): number | undefined {
+  const parsed = parseDate(normalized.slice(0, 10));
+  return parsed.ok ? dayNumber(latestDay(parsed.date)) : undefined;
 }
 
 /** A rule's bounds, written for a finding message. */
@@ -344,6 +360,69 @@ export async function checkQuality(options: CheckQualityOptions): Promise<Qualit
             message: `Record "${record.id}" of collection "${rule.collection}" is missing field "${field}".`,
           });
         }
+      }
+      continue;
+    }
+
+    if (rule.kind === "freshness") {
+      if (rule.field === undefined) {
+        diagnostics.push({
+          id: "data.quality-field",
+          severity: "error",
+          message: `The freshness rule for collection "${rule.collection}" needs field.`,
+          help: "Write field in mizzen.yml: the date field whose age the rule measures.",
+        });
+        continue;
+      }
+      if (rule.maxAgeDays === undefined) {
+        diagnostics.push({
+          id: "data.quality-max-age",
+          severity: "error",
+          message: `The freshness rule for collection "${rule.collection}" needs maxAgeDays.`,
+          help: "Write maxAgeDays in mizzen.yml: how many days before the as-of date a record's date may be.",
+        });
+        continue;
+      }
+      const reference = referenceDateOf(rule.collection, config.collections[rule.collection], {}, config.asOf);
+      if (reference.error !== undefined) {
+        diagnostics.push({ id: "data.reference-date", severity: "error", message: reference.error });
+        continue;
+      }
+      if (reference.date === undefined) {
+        diagnostics.push(missingAsOf(`The freshness rule for collection "${rule.collection}"`));
+        continue;
+      }
+      const asOfDay = dayOf(reference.date)!;
+      for (const record of checked) {
+        const found = resolveIn(record.fields, rule.field);
+        const normalized = found.found && typeof found.value === "string" && found.value !== "" ? normalizeDate(found.value) : undefined;
+        const day = normalized === undefined ? undefined : dayOf(normalized);
+        const pos = sourcePosOf(record.fieldPositions[rule.field] ?? record.position);
+        if (day === undefined) {
+          diagnostics.push({
+            id: "data.quality-date",
+            severity: "error",
+            message: `Record "${record.id}" of collection "${rule.collection}" has no valid date in field "${rule.field}".`,
+            pos,
+            help: "Write `YYYY-MM-DD`, `YYYY-MM`, or `YYYY`, or a full ISO 8601 instant.",
+          });
+          continue;
+        }
+        const age = asOfDay - day;
+        if (age <= rule.maxAgeDays) continue;
+        findings.push({
+          id: `data.quality.freshness.${rule.collection}.${record.id}.${rule.field}`,
+          kind: rule.kind,
+          severity,
+          collection: rule.collection,
+          record: record.id,
+          field: rule.field,
+          value: age,
+          maxAgeDays: rule.maxAgeDays,
+          asOf: reference.date,
+          pos,
+          message: `Record "${record.id}" of collection "${rule.collection}" has field "${rule.field}" dated ${normalized}, ${age} days before the as-of date ${reference.date} (maxAgeDays ${rule.maxAgeDays}).`,
+        });
       }
       continue;
     }

@@ -434,7 +434,7 @@ function snapshotFrom(value: unknown): SnapshotConfig | undefined {
   return typeof days === "number" && Number.isSafeInteger(days) && days > 0 ? { maxAgeDays: days } : undefined;
 }
 
-const QUALITY_KINDS: readonly QualityRuleKind[] = ["completeness", "coverage", "count", "threshold", "outlier"];
+const QUALITY_KINDS: readonly QualityRuleKind[] = ["completeness", "coverage", "count", "threshold", "outlier", "freshness"];
 
 function qualityKind(value: unknown): QualityRuleKind | undefined {
   return QUALITY_KINDS.find((kind) => kind === value);
@@ -449,6 +449,7 @@ function qualityRuleFrom(value: unknown): QualityRule | undefined {
     ? value.fields.filter((field): field is string => typeof field === "string" && field !== "")
     : undefined;
   const maxDrop = value.maxDrop;
+  const maxAgeDays = value.maxAgeDays;
   const bound = (entry: unknown): number | undefined =>
     typeof entry === "number" && Number.isFinite(entry) ? entry : undefined;
   const min = bound(value.min);
@@ -457,8 +458,10 @@ function qualityRuleFrom(value: unknown): QualityRule | undefined {
     kind,
     collection: value.collection,
     ...(fields === undefined || fields.length === 0 ? {} : { fields }),
+    ...(typeof value.field === "string" && value.field !== "" ? { field: value.field } : {}),
     ...(isPlainObject(value.where) ? { where: value.where } : {}),
     ...(typeof maxDrop === "number" && Number.isSafeInteger(maxDrop) && maxDrop >= 0 ? { maxDrop } : {}),
+    ...(typeof maxAgeDays === "number" && Number.isSafeInteger(maxAgeDays) && maxAgeDays > 0 ? { maxAgeDays } : {}),
     ...(min === undefined ? {} : { min }),
     ...(max === undefined ? {} : { max }),
   };
