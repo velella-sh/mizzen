@@ -149,7 +149,7 @@ mizzen build . --out dist
 ```
 
 The fresh checkout needs the site's pages, config, and theme, but not `_data/`, `.mizzen/data/`, or network access.
-The build reads the imported files and the store; nothing fetches.
+The build runs offline: it reads the imported files and the store, and nothing fetches.
 
 A subset transfer names only the collections needed. Their `references` targets are added, and everything else stays
 behind:
