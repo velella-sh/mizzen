@@ -18,6 +18,7 @@ import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
 import { runDocsVersion } from "./docs-version.ts";
+import { runImport } from "./import.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
 import { buildModel } from "../model/build.ts";
 import { urlsReport } from "./urls.ts";
@@ -36,7 +37,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
+export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "stale", "urls", "verify", "versions", "watch"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -87,6 +88,7 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
@@ -103,7 +105,7 @@ Commands:
   watch [dir]               Rebuild the site whenever a source or theme file changes
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch); pack writes a file here instead of stdout
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
   --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
@@ -125,6 +127,8 @@ Options:
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
+  --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
+  --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
@@ -315,6 +319,15 @@ type McpOpts = {
   readonly printConfig?: string;
 };
 
+type ImportOpts = {
+  readonly command: "import";
+  readonly name: string;
+  readonly root: string;
+  readonly out?: string;
+  readonly failOnManual?: boolean;
+  readonly allow?: readonly string[];
+};
+
 type Parsed =
   | { readonly help: true }
   | { readonly error: string }
@@ -337,6 +350,7 @@ type Parsed =
         | DataChangesOpts
         | UrlsCheckOpts
         | InitOpts
+        | ImportOpts
         | McpOpts
         | NetworkOpts
         | PublishedSiteOpts
@@ -726,6 +740,47 @@ function parseMcp(args: readonly string[]): Parsed {
   return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
 }
 
+/** Parses `import <name> [dir] [--out <dir>] [--fail-on-manual] [--allow <ids>]`. */
+function parseImport(args: readonly string[]): Parsed {
+  let name: string | undefined;
+  let root: string | undefined;
+  let out: string | undefined;
+  let failOnManual = false;
+  const allow: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--out") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--out needs a value" };
+      out = next;
+    } else if (arg === "--fail-on-manual") {
+      failOnManual = true;
+    } else if (arg === "--allow") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-") || next.trim() === "") return { error: "--allow needs a value" };
+      for (const id of next.split(",")) {
+        const trimmed = id.trim();
+        if (trimmed !== "" && !allow.includes(trimmed)) allow.push(trimmed);
+      }
+    } else if (arg.startsWith("-")) return { error: `unknown option for import: ${arg}` };
+    else if (name === undefined) name = arg;
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  if (name === undefined) return { error: "import needs an importer name: mizzen import <name> [dir]" };
+  return {
+    options: {
+      command: "import",
+      name,
+      root: root ?? ".",
+      ...(out === undefined ? {} : { out }),
+      ...(failOnManual ? { failOnManual: true } : {}),
+      ...(allow.length === 0 ? {} : { allow }),
+    },
+  };
+}
+
 /** Parses `argv` after the process name. */
 export function parseArgs(args: readonly string[]): Parsed {
   const [command, ...rest] = args;
@@ -756,6 +811,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "data") return parseData(rest);
   if (command === "urls") return parseUrls(rest);
   if (command === "init") return parseInit(rest);
+  if (command === "import") return parseImport(rest);
   if (command === "diff") return parseDiff(rest);
   if (command === "api") return parseApi(rest);
   if (command === "mcp") return parseMcp(rest);
@@ -1093,6 +1149,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "import") {
+    try {
+      return await runImport(options.name, options.root, { log, error }, options.out, {
+        ...(options.failOnManual === undefined ? {} : { failOnManual: options.failOnManual }),
+        ...(options.allow === undefined ? {} : { allow: options.allow }),
+      });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
