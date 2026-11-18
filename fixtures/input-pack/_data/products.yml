@@ -1,0 +1,6 @@
+- slug: alpha
+  name: Alpha
+  supplier: north
+- slug: beta
+  name: Beta
+  supplier: south

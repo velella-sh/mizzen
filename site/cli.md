@@ -45,9 +45,14 @@ Commands:
   versions snapshot <vN> [dir]
                             Copy the current pages and navigation into a new version folder
   watch [dir]               Rebuild the site whenever a source or theme file changes
+  inputs export [dir]       Write selected collection sources to one transferable package (--collections, --out)
+  inputs inspect <file>     Print a package's format, inputs, sizes, and hashes (--json); changes nothing
+  inputs verify <file>      Check every content hash and that no undeclared bytes follow; changes nothing
+  inputs import <file> [dir]
+                            Install a package's inputs and lock entries (--accept on a conflict)
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
   --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
@@ -62,7 +67,7 @@ Options:
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
-  --json               For data quality: print the findings and scopes as JSON
+  --json               For data quality: print the findings and scopes as JSON; for inputs inspect: print the report as JSON
   --limit <n>          For data transform: records to show per collection (default: 5)
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
@@ -86,6 +91,8 @@ Options:
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
   --print-config <c>   For mcp: print the configuration for claude-code, claude-desktop, cursor, or vscode, and exit
   --starter <name>     For init: the theme starter to copy into the folder (default folder: .)
+  --collections <a,b>  For inputs export: collections to carry; their references targets are added (default: every collection)
+  --accept <ids|all>   For inputs import: inputs whose differing destination files or lock entries may be replaced
   --list               For init: print the theme's starters with their titles and descriptions
   --lang <a,b>         For init: keep only these of the starter's optional languages
   --dry-run            For edit apply: print the diff without writing; for versions snapshot: print the files without writing
@@ -116,6 +123,10 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen edit apply <patch.json> [dir] --dry-run --proof <path> --allow-unchecked` | Applies one span patch (the JSON shape of `src/edits/patch.ts`) to the source file its `span.file` names, resolved against `dir` and refused outside it. The patch is applied in memory and the file is replaced through a rename only when it succeeds, so a refused patch leaves it byte-identical. A patch that carries neither `expected` nor `beforeHash` is refused (exit `2`) unless `--allow-unchecked` is given; one that carries only one is still refused. Writes an edit proof (`src/edits/proof.ts`) with the SHA-256 before and after, at `--proof` or `<patch>.proof.json`, and prints its path. `--dry-run` prints a unified diff and writes neither. Exits `1` on a refused patch or path, `2` on a missing or invalid patch. `--format json` prints the same outcome as one report: `status`, `exitCode`, the file, the proof, and any `diagnostics` with their path and span. |
 | `mizzen edit verify <proof.json> --site <dir> --doctor` | Re-hashes every file the edit's proof record names, under `--site` (default `.`), and compares each with its after-edit hash. The first mismatch is named, and the command exits `1`; a proof that cannot be read exits `2`. With `--doctor` it also runs `mizzen doctor --format json` and compares the level with the recorded one; without it, the hashes are checked and the command says the doctor check did not run. `--format json` prints the same outcome as one report, with the failed check, its path, and the doctor levels it compared. |
 | `mizzen import <name> <dir> [--out <dir>] [--fail-on-manual] [--allow <ids>]` | Previews a migration: the importer reads `dir` and prints each file's proposed destination and URL, and the items a person still has to do. Writes nothing, or writes the mapped project to the empty `--out` folder outside the source. Exits `1` on an error and `2` on an unknown importer. `--fail-on-manual` also exits `1` while a manual item is unresolved, and `--allow <ids>` records the diagnostic ids (comma-separated) a person has reviewed, so those items no longer fail the gate. |
+| `mizzen inputs export [dir] --collections <a,b> --out <file>` | Writes one deterministic package of the selected collections' sources and their `references` targets, plus the lock entries those sources need; `--out` defaults to `inputs.mizzenpack` in the current folder. Every missing input is reported by id and nothing is written. Environment files, the cache, and files outside the site never enter. See `docs/input-pack.md`. |
+| `mizzen inputs inspect <file> --json` | Reads a package and prints its format, package hash, and each input's source, size, and hash. Changes nothing in the site; exits `1` on an invalid package. |
+| `mizzen inputs verify <file>` | Checks the package format, every content hash, and that no undeclared bytes follow the declared contents, before an install. Changes nothing; exits `1` on a tampered, truncated, or oversized package. |
+| `mizzen inputs import <file> [dir] --accept <ids\|all>` | Validates the package, every destination path and size, and the destination lock, then installs the declared inputs and merges their lock entries. A differing file or lock entry changes nothing until its input is named by `--accept`; the same package installed twice changes nothing. Exits `1` on a conflict or bad package. A package holds raw source bytes: keep it private. See `docs/input-pack.md`. |
 | `mizzen init --starter <name> [dir] --theme <dir> --lang <a,b>` | Copies the theme's `starters/<name>/` folder into `dir` (default `.`), resolving the theme the way `build` does. `--list` prints each starter with its title and description from `starter.json`; `--lang` keeps only the named optional languages. It refuses a folder that is not empty and names a missing theme or starter. |
 | `mizzen mcp [dir] [--allow-edits] [--print-config <client>]` | Serves the site to an AI client over MCP on stdio. Read-only unless `--allow-edits` adds `apply_edit`. Logs go to stderr. See [MCP server](/mcp/). |
 | `mizzen network check <file>` | Checks the shared network file: ids, paths, and titles. See [Several projects](/network/). |
