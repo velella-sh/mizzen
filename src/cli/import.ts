@@ -9,6 +9,7 @@ import type { Diagnostic } from "../contracts/index.ts";
 import { FILE_KINDS } from "../import/inventory.ts";
 import type { Importer } from "../import/contract.ts";
 import { accuracyReport, type AccuracyCounts, type AccuracyReport } from "../import/accuracy.ts";
+import { COVERAGE_MEASURES, coverageReport, type CoverageReport, type FileCoverage } from "../import/coverage.ts";
 import { CONFIG_DESTINATION, buildMappings, type ImportMapping } from "../import/mapping.ts";
 import { generateProject } from "../import/generate.ts";
 import { rewriteLinks } from "../import/links.ts";
@@ -72,6 +73,28 @@ function accuracyLines(report: AccuracyReport): string[] {
   return lines;
 }
 
+/** The measures that differ from zero before or after, as `blocks 1 -> 1, links 2 -> 1`; absent when all are zero. */
+function coverageLine(file: FileCoverage): string | undefined {
+  const parts = COVERAGE_MEASURES.filter((measure) => file.before[measure] !== 0 || file.after[measure] !== 0).map(
+    (measure) => `${measure} ${file.before[measure]} -> ${file.after[measure]}`,
+  );
+  return parts.length === 0 ? undefined : `  ${file.source}  ${parts.join(", ")}`;
+}
+
+/** The coverage section: every file whose counts are not all zero, then the totals of all four measures. */
+function coverageLines(report: CoverageReport): string[] {
+  const lines = ["Coverage:"];
+  for (const file of report.files) {
+    const line = coverageLine(file);
+    if (line !== undefined) lines.push(line);
+  }
+  const totals = COVERAGE_MEASURES.map(
+    (measure) => `${measure} ${report.totals.before[measure]} -> ${report.totals.after[measure]}`,
+  );
+  lines.push(`  totals  ${totals.join(", ")}`);
+  return lines;
+}
+
 /** The destination a generation filled, for a report that must not claim it was a preview. */
 export interface GeneratedDestination {
   readonly path: string;
@@ -79,8 +102,8 @@ export interface GeneratedDestination {
 }
 
 /**
- * The whole report, in inventory order: the non-empty kinds, the accuracy of every file, then the manual items and the
- * counts. `generated` says the importer wrote the config rather than converting one, so its destination
+ * The whole report, in inventory order: the non-empty kinds, the accuracy and coverage of every file, then the manual
+ * items and the counts. `generated` says the importer wrote the config rather than converting one, so its destination
  * is reported too. `destination` is absent for a preview and names the folder just written for a generation.
  */
 export function importReport(
@@ -90,6 +113,7 @@ export function importReport(
   generated: boolean,
   diagnostics: readonly Diagnostic[],
   accuracy: AccuracyReport,
+  coverage: CoverageReport,
   destination?: GeneratedDestination,
 ): string {
   const header =
@@ -105,7 +129,7 @@ export function importReport(
     else lines.push(`${kind}:`);
     for (const mapping of group) lines.push(mappingLine(mapping));
   }
-  lines.push(...accuracyLines(accuracy));
+  lines.push(...accuracyLines(accuracy), ...coverageLines(coverage));
   lines.push("Manual items:");
   if (diagnostics.length === 0) lines.push("  none");
   else for (const finding of diagnostics) lines.push(diagnosticLine(finding));
@@ -134,9 +158,10 @@ export async function runImport(name: string, root: string, io: ImportIo, out?: 
   const links = rewriteLinks(outcome.pages, mappings);
   const found = [...outcome.diagnostics, ...diagnostics, ...links.diagnostics];
   const accuracy = accuracyReport(links.pages, mappings, found);
+  const coverage = coverageReport(links.pages, mappings, links.counts);
   if (out === undefined) {
     io.log(
-      importReport(name, source.root, mappings, outcome.config.source === undefined, found, accuracy).replace(/\n$/, ""),
+      importReport(name, source.root, mappings, outcome.config.source === undefined, found, accuracy, coverage).replace(/\n$/, ""),
     );
     return found.some((finding) => finding.severity === "error") ? 1 : 0;
   }
@@ -151,11 +176,11 @@ export async function runImport(name: string, root: string, io: ImportIo, out?: 
         pages: links.pages,
         assets: outcome.assets,
         config: outcome.config,
-        sections: { accuracy },
+        sections: { accuracy, coverage },
       });
   const all = [...found, ...generated.diagnostics];
   io.log(
-    importReport(name, source.root, mappings, outcome.config.source === undefined, all, accuracy, {
+    importReport(name, source.root, mappings, outcome.config.source === undefined, all, accuracy, coverage, {
       path: destination,
       files: generated.files,
     }).replace(/\n$/, ""),

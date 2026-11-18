@@ -100,6 +100,38 @@ test("import plain --out writes the mapped project into an empty folder and leav
         blocks: { full: 3, approximate: 1, manual: 0 },
       },
     },
+    coverage: {
+      files: [
+        {
+          source: "guide/intro.mdx",
+          destination: "guide/intro.md",
+          before: { blocks: 1, links: 0, assets: 0, unsupported: 0 },
+          after: { blocks: 1, links: 0, assets: 0, unsupported: 0 },
+        },
+        {
+          source: "index.md",
+          destination: "index.md",
+          before: { blocks: 1, links: 0, assets: 0, unsupported: 0 },
+          after: { blocks: 1, links: 0, assets: 0, unsupported: 0 },
+        },
+        {
+          source: "logo.png",
+          destination: "logo.png",
+          before: { blocks: 0, links: 0, assets: 1, unsupported: 0 },
+          after: { blocks: 0, links: 0, assets: 1, unsupported: 0 },
+        },
+        {
+          source: "mizzen.yml",
+          destination: "mizzen.yml",
+          before: { blocks: 0, links: 0, assets: 0, unsupported: 0 },
+          after: { blocks: 0, links: 0, assets: 0, unsupported: 0 },
+        },
+      ],
+      totals: {
+        before: { blocks: 2, links: 0, assets: 1, unsupported: 0 },
+        after: { blocks: 2, links: 0, assets: 1, unsupported: 0 },
+      },
+    },
   });
   assert.match(logs.join("\n"), /wrote 5 files|5 files written/);
 });

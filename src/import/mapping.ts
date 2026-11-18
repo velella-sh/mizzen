@@ -30,6 +30,7 @@ export const MAPPING_VERSION = 1;
 /** Extra report sections the generated record carries beside the mapping, when the command computed them. */
 export interface ImportRecordSections {
   readonly accuracy?: unknown;
+  readonly coverage?: unknown;
 }
 
 /** The mapping record as the generated file's exact text: every input path, sorted by source. */
@@ -42,6 +43,7 @@ export function mappingRecord(mappings: readonly ImportMapping[], sections: Impo
       version: MAPPING_VERSION,
       files,
       ...(sections.accuracy === undefined ? {} : { accuracy: sections.accuracy }),
+      ...(sections.coverage === undefined ? {} : { coverage: sections.coverage }),
     },
     null,
     2,

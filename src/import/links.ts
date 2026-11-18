@@ -19,10 +19,19 @@ const PAGE_LINK = /\.(?:md|mdx|markdown)$/i;
 /** A scheme (`https:`, `mailto:`) or protocol-relative (`//`) URL, which leaves the site. */
 const EXTERNAL = /^(?:[a-z][a-z\d+.-]*:|\/\/)/i;
 
+/** One page's internal page links: how many its text writes and how many now name a destination. */
+export interface PageLinkCount {
+  readonly source: string;
+  readonly links: number;
+  readonly rewritten: number;
+}
+
 /** What {@link rewriteLinks} found. */
 export interface LinkRewriteResult {
   readonly pages: readonly ImportedPage[];
   readonly diagnostics: readonly Diagnostic[];
+  /** One entry per page, in the order the pages were given. */
+  readonly counts: readonly PageLinkCount[];
 }
 
 /** A link or a reference definition, the two places a page link's URL is written. */
@@ -79,16 +88,20 @@ export function rewriteLinks(pages: readonly ImportedPage[], mappings: readonly 
   }
   const diagnostics: Diagnostic[] = [];
   const rewritten: ImportedPage[] = [];
+  const counts: PageLinkCount[] = [];
   for (const page of pages) {
     const { body, bodyLine } = parseFrontMatter(page.contents, page.source);
     const prefix = page.contents.slice(0, page.contents.length - body.length);
     const tree: Root = unified().use(remarkParse).parse(body);
     const edits: Edit[] = [];
+    let links = 0;
+    let resolved = 0;
     eachNode(tree, (node) => {
       if (node.type !== "link" && node.type !== "definition") return;
       if (EXTERNAL.test(node.url)) return;
       const { path, tail } = splitTail(node.url);
       if (path === "" || !PAGE_LINK.test(path)) return;
+      links++;
       const destination = destinations.get(sourceOf(page.source, path));
       if (destination === undefined) {
         const start = node.position?.start;
@@ -111,13 +124,17 @@ export function rewriteLinks(pages: readonly ImportedPage[], mappings: readonly 
         return;
       }
       const start = urlOffset(body, node);
-      if (start !== undefined) edits.push({ start, end: start + node.url.length, text: `/${destination}${tail}` });
+      if (start !== undefined) {
+        edits.push({ start, end: start + node.url.length, text: `/${destination}${tail}` });
+        resolved++;
+      }
     });
     let text = body;
     for (const edit of [...edits].sort((a, b) => b.start - a.start)) {
       text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
     }
+    counts.push({ source: page.source, links, rewritten: resolved });
     rewritten.push({ ...page, contents: prefix + text });
   }
-  return { pages: rewritten, diagnostics };
+  return { pages: rewritten, diagnostics, counts };
 }

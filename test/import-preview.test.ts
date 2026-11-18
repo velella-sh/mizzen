@@ -61,7 +61,7 @@ test("import plain writes nothing and reports destinations and manual items", as
   assert.match(report, /^1 manual item, 0 errors\.$/m);
 });
 
-test("import plain reports each file's accuracy", async () => {
+test("import plain reports each file's accuracy and what the conversion keeps", async () => {
   const root = tree({
     "index.md": "# Home\n\nSee [intro](./guide/intro.md) and [missing](./gone.md).\n",
     "guide/intro.md": "# Intro\n",
@@ -83,4 +83,9 @@ test("import plain reports each file's accuracy", async () => {
   assert.match(report, /^ {2}guide\/intro\.md {2}full$/m);
   assert.match(report, /^ {2}index\.md {2}approximate$/m);
   assert.match(report, /^ {4}index\.md:3 {2}approximate {2}`\.\/gone\.md` names no imported page/m);
+  assert.match(report, /^Coverage:$/m);
+  assert.match(report, /^ {2}index\.md {2}blocks 1 -> 1, links 2 -> 1$/m);
+  assert.match(report, /^ {2}logo\.png {2}assets 1 -> 1$/m);
+  assert.match(report, /^ {2}notes\.txt {2}unsupported 1 -> 0$/m);
+  assert.match(report, /^ {2}totals {2}blocks 2 -> 2, links 2 -> 1, assets 1 -> 1, unsupported 1 -> 0$/m);
 });
