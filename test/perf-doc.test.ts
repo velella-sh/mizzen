@@ -14,7 +14,16 @@ const report: BenchReport = {
   cpu: "Test CPU",
   runs: 3,
   measurements: [
-    { records: 1000, case: "cold", ms: 2200, peakMb: 250, renderedPages: 1011, cachedPages: 0, indexKb: 0 },
+    {
+      records: 1000,
+      case: "cold",
+      ms: 2200,
+      peakMb: 250,
+      renderedPages: 1011,
+      cachedPages: 0,
+      indexKb: 0,
+      timings: { dataMs: 1200, renderMs: 1000, outputsMs: 50, writeMs: 50 },
+    },
     { records: 1000, case: "search", ms: 140, peakMb: 160, renderedPages: 0, cachedPages: 0, indexKb: 930 },
   ],
 };
@@ -25,6 +34,17 @@ test("the section prints each measured number next to its budget and names the m
   assert.match(text, /Test CPU \(darwin\/arm64\), Node 24\.0\.0, the median of 3 runs/);
   assert.match(text, /\| 1,000 \| cold build, no cache \| 2\.2 s \| 7\.0 s \| 250 MB \| 650 MB \| – \| 1,011 \| 0 \|/);
   assert.match(text, /\| 1,000 \| search index alone \| 0\.1 s \| 1\.0 s \| 160 MB \| 400 MB \| 930 KB \| – \| – \|/);
+});
+
+test("the section prints a stage table when the build timed its stages, and none when it did not", () => {
+  const text = section(report, budgets);
+  assert.match(text, /\| Records \| Case \| Data \| Page generation \| Outputs \| Write \|/);
+  assert.match(text, /\| 1,000 \| cold build, no cache \| 1\.2 s \| 1\.0 s \| 50 ms \| 50 ms \|/);
+  const stages = text.slice(text.indexOf("| Records | Case | Data"));
+  assert.doesNotMatch(stages, /search index alone/, "an untimed measurement has no stage row");
+
+  const untimed = section({ ...report, measurements: report.measurements.map((m) => ({ ...m, timings: undefined })) }, budgets);
+  assert.doesNotMatch(untimed, /Page generation/, "a measurement with no stage times has no stage table");
 });
 
 test("withSection replaces only what is between the markers", () => {

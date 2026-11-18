@@ -24,7 +24,7 @@ Measured by `scripts/bench-data.ts` on Apple M5 (darwin/arm64), Node 22.23.1, th
 | 10,000 | one record edited | 49.4 s | 165.0 s | 4,141 MB | 8,000 MB | – | 1 | 10,100 |
 | 10,000 | search index alone | 1.4 s | 8.0 s | 387 MB | 1,000 MB | 3,665 KB | – | – |
 
-The budgets are what the `data benchmark` CI job enforces; the measurements are one machine's, and a slower runner is why a budget is about twice the number next to it.
+The budgets are what the `data benchmark` CI job enforces; the measurements are one machine's, and a slower runner is why a budget is about twice the number next to it. A whole-build cache hit runs no stage, so it has no row in the stage table.
 
 <!-- bench:end -->
 
