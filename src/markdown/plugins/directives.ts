@@ -92,11 +92,20 @@ function walk(parent: Parent): void {
         };
       }
     }
-    if (node.type === "textDirective" && !COMPONENT_NAME.test(node.name) && (node.children === undefined || node.children.length === 0)) {
-      // `4.5:1` reads as a text directive named `1`; a bare non-name stays the text the author wrote.
-      node = { type: "text", value: `:${node.name}`, position: node.position };
+    if (
+      node.type === "textDirective" &&
+      !COMPONENT_NAME.test(node.name) &&
+      (node.children === undefined || node.children.length === 0)
+    ) {
+      // `4.5:1` reads as a text directive named `1`. A span keeps the characters the author wrote and
+      // leaves the node in place, so the bidi plugin and the drift scanner still see one run.
+      const data = (node.data ??= {}) as Record<string, unknown>;
+      data.hName = "span";
+      data.hProperties = {};
+      node.children = [{ type: "text", value: `:${node.name}` }];
+    } else if (isDirective(node)) {
+      toComponent(node);
     }
-    if (isDirective(node)) toComponent(node);
     if ("children" in node) walk(node as Parent);
     return node;
   });
