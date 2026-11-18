@@ -79,6 +79,26 @@ export interface DataStats {
   readonly unchecked: readonly string[];
 }
 
+/** One top-level field of a recorded schema, as `mizzen.lock.json` keeps it for comparison. */
+export interface SchemaFieldSnapshot {
+  /** The field's declared JSON type, when the schema names one. */
+  readonly type?: string;
+  /** True when the schema lists the field as required. */
+  readonly required: boolean;
+  /** The values the schema accepts, when it declares an `enum`. */
+  readonly enum?: readonly unknown[];
+}
+
+/** A collection's schema when its data was recorded, so a later schema can be compared with it. */
+export interface SchemaSnapshot {
+  /** SHA-256 of the schema file's bytes; two recordings of the same schema carry the same version. */
+  readonly version: string;
+  /** The schema file, relative to the site root, with `/` separators. */
+  readonly file: string;
+  /** Each top-level field the schema declares, keyed by name. */
+  readonly fields: Readonly<Record<string, SchemaFieldSnapshot>>;
+}
+
 /** Where a collection's data was recorded from, as `mizzen.lock.json` holds it. Nothing in it is the build clock. */
 export interface CollectionSnapshot {
   /** The source the data was recorded from: a path, a URL, or an `npm:` address. */
@@ -91,6 +111,8 @@ export interface CollectionSnapshot {
   readonly tool?: string;
   /** That tool's version. */
   readonly toolVersion?: string;
+  /** The collection's schema at recording time; absent when the data was recorded without one. */
+  readonly schema?: SchemaSnapshot;
 }
 
 /** One collection: its name, the records it was read into, and the source file they came from. */
