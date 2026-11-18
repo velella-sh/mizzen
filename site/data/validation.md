@@ -37,6 +37,27 @@ its help names the two accepted formats.
 | `data.record-not-mapping` | An entry of the source is not a mapping of fields. | Write each record as `field: value` pairs. |
 | `data.record-missing-id` | A record has no scalar field to use as its id. | Add the id field, or set `collections.<name>.id` to another field. |
 
+## API fetch
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.api-url` | A source or followed URL is not an acceptable address: not `https://`, or plain `http://` outside the loopback interface. | Use an `https://` source. |
+| `data.api-origin` | A next-page URL names an origin outside the allowlist. | Add the origin under `collections.<name>.pagination.origins`, or fix the API. |
+| `data.api-http` | A page returned a permanent error status. | Fix the source URL, or run the fetch again after the service recovers. |
+| `data.api-request` | A request failed after its retries, or the service could not be reached. | Check the network and `pagination.retries`. |
+| `data.api-redirect` | A response redirects too many times or names no usable location. | Point the source at the final URL. |
+| `data.api-invalid-json` | A page is not valid JSON. | Fix the API response, or the source URL. |
+| `data.api-records` | A page has no record array at the configured `records` path. | Fix `collections.<name>.records`. |
+| `data.api-auth` | The environment variable named by `pagination.auth.env` is unset or empty. | Set the variable before `mizzen data fetch`. |
+| `data.api-cursor` | A response writes a cursor that is not a string. | Fix the API, or the `pagination.cursor` path. |
+| `data.api-cursor-repeat` | The API returned a cursor it already returned. | Fix the API's cursor logic. |
+| `data.api-next` | A response writes a next-page URL that is not a string, or not a URL. | Fix the API, or the `pagination.next` path. |
+| `data.api-page-repeat` | A next-page URL repeats a page already read. | Fix the API's next-page link. |
+| `data.api-too-many-pages` | A walk passed `pagination.maxPages`. | Raise `collections.<name>.pagination.maxPages`, or fix the end condition. |
+| `data.api-too-large` | A walk passed `pagination.maxBytes`. | Raise `collections.<name>.pagination.maxBytes`, or split the API. |
+| `data.api-source-too-large` | The combined records are larger than `limits.bytes`. | Raise `collections.<name>.limits.bytes`, or split the API. |
+| `data.api-duplicate-id` | Two records on different pages share an id. | Make the API's ids unique. |
+
 ## Templates
 
 | ID | Meaning | Fix |
