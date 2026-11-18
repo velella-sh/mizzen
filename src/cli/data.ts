@@ -9,11 +9,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { loadConfig } from "../config/load.ts";
+import { loadCollections } from "../data/collections.ts";
 import { dataLimitsOf } from "../data/limits.ts";
 import { LOCK_FILE, readLock, sha256, storedPath, writeLock, type DataLock, type LockedSource } from "../data/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
 import { compileSchemas, schemaSnapshotOf, type CompiledSchemas } from "../data/schema.ts";
 import { gitSnapshot, instantOfHttpDate, orderedSnapshot, snapshotOfPinned } from "../data/snapshot.ts";
+import type { TransformEvent } from "../data/transform.ts";
 import type { CollectionSnapshot } from "../contracts/index.ts";
 
 /** How long one request may take. */
@@ -339,4 +341,86 @@ export async function dataSnapshot(options: DataSnapshotOptions): Promise<DataFe
   messages.push(`snapshot ${name} at ${snapshot.ref} (${snapshot.capturedAt})`);
   messages.push(`wrote ${LOCK_FILE}`);
   return { code: 0, messages, errors };
+}
+
+/** Options of {@link dataTransform}. */
+export interface DataTransformOptions {
+  /** The site root: the folder that holds `mizzen.yml`. */
+  readonly root: string;
+  /** One collection to preview. Default: every collection that declares transformation rules. */
+  readonly name?: string;
+  /** Records to show per collection. Default 5. */
+  readonly limit?: number;
+  /** Print one JSON report instead of text. */
+  readonly json?: boolean;
+}
+
+/** What {@link dataTransform} read, ready for the CLI to print. */
+export interface DataTransformResult {
+  /** 0 when no finding is an error, 1 when one is, 2 for a usage problem. */
+  readonly code: number;
+  /** The sample and the findings. */
+  readonly output: string;
+  /** Problems, printed to stderr. */
+  readonly errors: readonly string[];
+}
+
+/** One collection's preview. */
+interface TransformPreview {
+  readonly name: string;
+  readonly steps: number;
+  readonly total: number;
+  readonly records: readonly { readonly id: string; readonly fields: Readonly<Record<string, unknown>> }[];
+}
+
+/** A diagnostic as one line for the preview. */
+function previewLine(diagnostic: { readonly severity: string; readonly id: string; readonly message: string; readonly pos?: { readonly file: string; readonly line: number } }): string {
+  return `${diagnostic.severity} ${diagnostic.id}: ${diagnostic.message}${diagnostic.pos === undefined ? "" : ` (${diagnostic.pos.file}:${diagnostic.pos.line})`}`;
+}
+
+/**
+ * Previews the records a collection's transformation rules produce, and every finding they make, without writing
+ * anything. It loads the config and the collections exactly as a build does, so the sample and the errors are the
+ * ones a build would meet; no cache, lock, or output is written.
+ */
+export async function dataTransform(options: DataTransformOptions): Promise<DataTransformResult> {
+  const limit = options.limit ?? 5;
+  const { config, diagnostics: configDiagnostics } = loadConfig(options.root);
+  if (options.name !== undefined && config.collections[options.name] === undefined) {
+    return { code: 2, output: "", errors: [`the site has no collection "${options.name}"`] };
+  }
+  const names =
+    options.name === undefined
+      ? Object.keys(config.collections).filter((name) => config.collections[name]!.transform !== undefined)
+      : [options.name];
+  const events: TransformEvent[] = [];
+  const result = await loadCollections({ root: options.root, config, onTransformEvent: (event) => events.push(event) });
+  const previews: TransformPreview[] = names.map((name) => {
+    const records = result.collections[name]?.records ?? [];
+    return {
+      name,
+      steps: config.collections[name]!.transform?.steps.length ?? 0,
+      total: records.length,
+      records: records.slice(0, limit).map((record) => ({ id: record.id, fields: record.fields })),
+    };
+  });
+  const diagnostics = [...configDiagnostics, ...result.diagnostics];
+  const errors = diagnostics.filter((diagnostic) => diagnostic.severity === "error").map(previewLine);
+
+  if (options.json === true) {
+    return {
+      code: errors.length === 0 ? 0 : 1,
+      output: `${JSON.stringify({ collections: previews, diagnostics, events }, null, 2)}\n`,
+      errors,
+    };
+  }
+
+  const lines: string[] = [];
+  if (previews.length === 0) lines.push("no collection declares transformation rules");
+  for (const preview of previews) {
+    lines.push(`${preview.name}: ${preview.records.length} of ${preview.total} records, ${preview.steps} steps`);
+    for (const record of preview.records) lines.push(`- ${record.id}: ${JSON.stringify(record.fields)}`);
+  }
+  for (const diagnostic of diagnostics) lines.push(previewLine(diagnostic));
+  return { code: errors.length === 0 ? 0 : 1, output: `${lines.join("\n")}\n`, errors };
 }

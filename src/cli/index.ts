@@ -11,7 +11,7 @@ import { build } from "../pipeline/build.ts";
 import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts";
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
-import { dataFetch, dataSnapshot } from "./data.ts";
+import { dataFetch, dataSnapshot, dataTransform } from "./data.ts";
 import { dataSchema } from "../data/schema-evolution.ts";
 import { dataMigrate } from "../data/schema-migrate.ts";
 import { verifyData } from "../data/verify.ts";
@@ -89,6 +89,7 @@ Commands:
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   data schema [dir]          Report the fields each schema added or removed since its recorded baseline
   data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
+  data transform [name] [dir]  Preview the records a collection's transform rules produce (--limit, --json)
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
@@ -130,6 +131,7 @@ Options:
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --json               For data quality: print the findings and scopes as JSON
+  --limit <n>          For data transform: records to show per collection (default: 5)
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --report             For build: print why each page was rebuilt after a warm build
@@ -284,6 +286,14 @@ type DataMigrateOpts = {
   readonly name?: string;
 };
 
+type DataTransformOpts = {
+  readonly command: "data-transform";
+  readonly root: string;
+  readonly name?: string;
+  readonly limit?: number;
+  readonly json: boolean;
+};
+
 type DataQualityOpts = {
   readonly command: "data-quality";
   readonly root: string;
@@ -399,6 +409,7 @@ type Parsed =
         | DataVerifyOpts
         | DataSchemaOpts
         | DataMigrateOpts
+        | DataTransformOpts
         | DataQualityOpts
         | DataChangesOpts
         | UrlsCheckOpts
@@ -627,13 +638,45 @@ function parseDataMigrate(rest: readonly string[]): Parsed {
   return { options: { command: "data-migrate", root: root ?? ".", ...(name === undefined ? {} : { name }) } };
 }
 
+/** Parses `data transform [name] [dir] [--limit <n>] [--json]`. */
+function parseDataTransform(rest: readonly string[]): Parsed {
+  let name: string | undefined;
+  let root: string | undefined;
+  let limit: number | undefined;
+  let json = false;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--json") json = true;
+    else if (arg === "--limit") {
+      const raw = rest[++i];
+      const value = raw === undefined ? Number.NaN : Number(raw);
+      if (!Number.isSafeInteger(value) || value < 1) return { error: "--limit needs a whole number of at least 1" };
+      limit = value;
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else if (name === undefined) name = arg;
+    else if (root === undefined) root = arg;
+    else return { error: `unexpected argument: ${arg}` };
+  }
+  return {
+    options: {
+      command: "data-transform",
+      root: root ?? ".",
+      ...(name === undefined ? {} : { name }),
+      ...(limit === undefined ? {} : { limit }),
+      json,
+    },
+  };
+}
+
 /** Parses `data fetch [dir] [--check]` and `data snapshot <name> [dir] [--allow-dirty]`. */
 function parseData(args: readonly string[]): Parsed {
   const [subcommand, ...rest] = args;
-  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify, schema, migrate" };
+  if (subcommand === undefined) return { error: "data needs a subcommand: fetch, snapshot, changes, verify, schema, migrate, transform" };
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
   if (subcommand === "schema") return parseDataSchema(rest);
   if (subcommand === "migrate") return parseDataMigrate(rest);
+  if (subcommand === "transform") return parseDataTransform(rest);
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
   if (subcommand === "changes") return parseDataChanges(rest);
   if (subcommand === "verify") {
@@ -1558,6 +1601,23 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "data-migrate") {
     try {
       const result = await dataMigrate({ root, ...(options.name === undefined ? {} : { name: options.name }) });
+      write(result.output);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-transform") {
+    try {
+      const result = await dataTransform({
+        root,
+        ...(options.name === undefined ? {} : { name: options.name }),
+        ...(options.limit === undefined ? {} : { limit: options.limit }),
+        json: options.json,
+      });
       write(result.output);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
