@@ -9,8 +9,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { loadConfig } from "../config/load.ts";
+import { fetchApiSource, isFetchableUrl, type ApiPage } from "../data/api-fetch.ts";
 import { dataLimitsOf } from "../data/limits.ts";
-import { LOCK_FILE, readLock, sha256, storedPath, writeLock, type DataLock, type LockedSource } from "../data/lock.ts";
+import { LOCK_FILE, canonicalJson, readLock, sha256, storedPath, writeLock, type DataLock, type LockedSource } from "../data/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
 import { compileSchemas, schemaSnapshotOf, type CompiledSchemas } from "../data/schema.ts";
 import { gitSnapshot, instantOfHttpDate, orderedSnapshot, snapshotOfPinned } from "../data/snapshot.ts";
@@ -65,7 +66,7 @@ async function fetchRemote(address: string, maxBytes: number, fetcher: FetchLike
     } catch {
       throw new Error(`"${current}" is not a URL`);
     }
-    if (url.protocol !== "https:") throw new Error(`"${current}" is not an https URL`);
+    if (!isFetchableUrl(url)) throw new Error(`"${current}" is not an https URL`);
 
     const response = await fetcher(current, {
       redirect: "manual",
@@ -125,6 +126,15 @@ function sortedSources(entries: ReadonlyMap<string, LockedSource>): Readonly<Rec
   return sources;
 }
 
+/** True for an address whose bytes `mizzen data fetch` reads over the network. */
+function isFetchedAddress(address: string): boolean {
+  try {
+    return isFetchableUrl(new URL(address));
+  } catch {
+    return false;
+  }
+}
+
 /** `snapshot` with the collection's schema, when it compiles, so a later schema can be compared with it. */
 function withSchema(snapshot: CollectionSnapshot, schemas: CompiledSchemas, name: string): CollectionSnapshot {
   const schema = schemas.schemas[name];
@@ -158,6 +168,7 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
   const current = new Map<string, Current>();
   const next = new Map<string, LockedSource>();
   const remote = new Map<string, string>();
+  const manifests = new Map<string, readonly ApiPage[]>();
   let changed = false;
 
   for (const name of names) {
@@ -184,14 +195,38 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
       }
       current.set(source, { address: source, bytes, version: resolved.source.version, packageName: resolved.source.name });
       remote.set(name, source);
-    } else if (/^https:\/\//.test(source)) {
-      try {
-        const fetched = await fetchRemote(source, limits.bytes, fetcher);
-        current.set(source, { address: source, bytes: fetched.bytes, ...(fetched.fetchedAt === undefined ? {} : { fetchedAt: fetched.fetchedAt }) });
+    } else if (isFetchedAddress(source)) {
+      if (entry.records !== undefined) {
+        const fetched = await fetchApiSource({
+          collection: name,
+          source,
+          records: entry.records,
+          ...(entry.pagination === undefined ? {} : { pagination: entry.pagination }),
+          idField: entry.id ?? "id",
+          limits,
+          fetcher,
+          env: process.env,
+        });
+        if (fetched.bytes === undefined) {
+          errors.push(fetched.diagnostic?.message ?? `Cannot read ${source}`);
+          continue;
+        }
+        current.set(source, {
+          address: source,
+          bytes: fetched.bytes,
+          ...(fetched.fetchedAt === undefined ? {} : { fetchedAt: fetched.fetchedAt }),
+        });
         remote.set(name, source);
-      } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err));
-        continue;
+        if (fetched.pages !== undefined) manifests.set(source, fetched.pages);
+      } else {
+        try {
+          const fetched = await fetchRemote(source, limits.bytes, fetcher);
+          current.set(source, { address: source, bytes: fetched.bytes, ...(fetched.fetchedAt === undefined ? {} : { fetchedAt: fetched.fetchedAt }) });
+          remote.set(name, source);
+        } catch (err) {
+          errors.push(err instanceof Error ? err.message : String(err));
+          continue;
+        }
       }
     } else if (/^[a-z][a-z\d+.-]*:/i.test(source)) {
       errors.push(`Collection "${name}" uses "${source}"; only https://, npm:, and site paths are supported.`);
@@ -214,11 +249,12 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
       bytes: bytes.byteLength,
       sha256: hash,
       ...(fetchedAt === undefined ? {} : { fetchedAt }),
+      ...(manifests.get(address) === undefined ? {} : { pages: manifests.get(address)! }),
     };
     next.set(address, entry);
-    let same = before !== undefined && before.sha256 === entry.sha256 && before.bytes === entry.bytes && before.version === entry.version;
+    let same = before !== undefined && canonicalJson(before) === canonicalJson(entry);
     // A matching lock is not enough for a remote source: its stored bytes must still be there and still hash right.
-    if (same && before !== undefined && /^https:\/\//.test(address)) {
+    if (same && before !== undefined && isFetchedAddress(address)) {
       try {
         const stored = await readFile(storedPath(root, before.sha256));
         same = stored.byteLength === before.bytes && sha256(stored) === before.sha256;
@@ -264,7 +300,7 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
         compiled,
         name,
       );
-    } else if (!/^(https:\/\/|npm:)/.test(config.collections[name]!.source) && pinned.lock.snapshots?.[name] !== undefined) {
+    } else if (!/^(https:\/\/|npm:)/.test(config.collections[name]!.source) && !isFetchedAddress(config.collections[name]!.source) && pinned.lock.snapshots?.[name] !== undefined) {
       snapshots[name] = orderedSnapshot(pinned.lock.snapshots[name]!);
     }
   }

@@ -6,6 +6,7 @@
 import { readFile, stat } from "node:fs/promises";
 import { relative, sep } from "node:path";
 import type { Diagnostic } from "../contracts/index.ts";
+import { isFetchableUrl } from "./api-fetch.ts";
 import type { DataLimits } from "./limits.ts";
 import { sha256, storedPath, type DataLock } from "./lock.ts";
 
@@ -41,7 +42,7 @@ function schemeError(address: string): Diagnostic {
   return {
     id: "data.source-scheme",
     severity: "error",
-    message: `Collection source "${address}" is not allowed; a remote source must start with https://.`,
+    message: `Collection source "${address}" is not allowed; a remote source must start with https:// (or http:// on the loopback interface).`,
     help: "Use https://, or keep the file inside the site.",
   };
 }
@@ -62,7 +63,7 @@ export async function readRemoteSource(
   } catch {
     return { diagnostic: schemeError(address) };
   }
-  if (url.protocol !== "https:") return { diagnostic: schemeError(address) };
+  if (!isFetchableUrl(url)) return { diagnostic: schemeError(address) };
 
   const entry = lock.sources[address];
   if (entry === undefined) {

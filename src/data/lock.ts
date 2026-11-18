@@ -22,6 +22,16 @@ export const LOCK_FILE = "mizzen.lock.json";
 /** Folder under a site root that holds the fetched bytes, named by their SHA-256. */
 export const DATA_STORE = ".mizzen/data";
 
+/** One page of a paginated API source, in fetch order. */
+export interface LockedPage {
+  /** The page's final URL. */
+  readonly url: string;
+  /** Byte size of the page's body. */
+  readonly bytes: number;
+  /** SHA-256 of the page's body. */
+  readonly sha256: string;
+}
+
 /** One pinned source. */
 export interface LockedSource {
   /** The source address as the config writes it: an `https:` URL or `npm:<package>/<path>`. */
@@ -34,6 +44,8 @@ export interface LockedSource {
   readonly sha256: string;
   /** When a URL source was fetched, from the response's own date header and never the build clock; absent for a package. */
   readonly fetchedAt?: string;
+  /** Pages of a paginated API source, in fetch order; absent for a single request. */
+  readonly pages?: readonly LockedPage[];
 }
 
 /** The whole lock file. */
@@ -88,6 +100,9 @@ export function lockText(lock: DataLock): string {
       bytes: entry.bytes,
       sha256: entry.sha256,
       ...(entry.fetchedAt === undefined ? {} : { fetchedAt: entry.fetchedAt }),
+      ...(entry.pages === undefined
+        ? {}
+        : { pages: entry.pages.map((page) => ({ url: page.url, bytes: page.bytes, sha256: page.sha256 })) }),
     };
   }
   const snapshots: Record<string, CollectionSnapshot> = {};

@@ -292,8 +292,9 @@ export function readText(
   text: string,
   idField: string,
   diagnostics: Diagnostic[],
+  kindHint?: "json",
 ): DataRecord[] | undefined {
-  const kind = kindOf(source);
+  const kind = kindHint ?? kindOf(source);
   if (kind === undefined) {
     diagnostics.push({
       id: "data.source-kind",
@@ -559,7 +560,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       if (text === undefined) continue;
     }
 
-    const readRecords = readText(name, source, display, text, idField, diagnostics);
+    const readRecords = readText(name, source, display, text, idField, diagnostics, entry.records === undefined ? undefined : "json");
     if (readRecords === undefined) continue;
     const records = applySchemaRenames(name, readRecords, entry.schemaRenames ?? {}, diagnostics);
     const tooMany = checkRecordCount(name, display, records.length, limits);
@@ -572,7 +573,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     let kept: readonly DataRecord[] = records;
     const schema = schemas.schemas[name];
     if (schema !== undefined) {
-      const validated = validateRecords(name, kept, schema, entry, formatOf(source), diagnostics);
+      const validated = validateRecords(name, kept, schema, entry, entry.records === undefined ? formatOf(source) : "json", diagnostics);
       kept = validated.records;
       skipped += validated.skipped;
     }
