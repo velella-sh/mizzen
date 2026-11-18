@@ -2,10 +2,15 @@
  * `mizzen import docusaurus` reads every docs section of a Docusaurus site. The config is scanned as text, never run:
  * a section is a `{...}` block that follows `docs:` or `@docusaurus/plugin-content-docs` and holds a `path`, so a
  * classic preset and a plugin with its own folder both become pages. Files under a section keep their paths; `static/`
- * is copied unchanged; the generated `mizzen.yml` says the site was imported.
+ * is copied unchanged; page front matter keeps its title and description, an explicit `slug` becomes `permalink`; a
+ * manual `sidebars.js` or `sidebars.ts` becomes the generated `docs` navigation; the generated `mizzen.yml` says the
+ * site was imported.
  */
 import type { Diagnostic } from "../../contracts/index.ts";
 import type { ImportedAsset, ImportedConfig, ImportedPage, ImportFile, Importer } from "../contract.ts";
+import { NAVIGATION_DESTINATION } from "../mapping.ts";
+import { mapFrontMatter } from "./frontmatter.ts";
+import { convertSidebar, type SidebarPage } from "./sidebar.ts";
 
 /** One docs section: the folder to read and the URL prefix it is served under. */
 interface DocsSection {
@@ -13,7 +18,13 @@ interface DocsSection {
   readonly routeBasePath: string;
 }
 
+/** One converted page, with what the navigation needs to link to it. */
+interface SectionPage extends SidebarPage {
+  readonly source: string;
+}
+
 const CONFIG = /(^|\/)docusaurus\.config\.(js|ts|mjs)$/;
+const SIDEBAR = /^sidebars\.(js|ts|mjs|cjs|json)$/;
 const SECTION = /docs\s*:|@docusaurus\/plugin-content-docs/g;
 const MARKDOWN = /\.mdx?$/i;
 const STATIC = "static/";
@@ -53,6 +64,16 @@ function docsSections(text: string): readonly DocsSection[] {
   return sections;
 }
 
+/** A page's Docusaurus doc id: its path inside the section, without the extension. */
+function docId(sectionPath: string, path: string): string {
+  return path.slice(sectionPath.length + 1).replace(/\.mdx?$/i, "");
+}
+
+/** A URL as a duplicate check sees it: Docusaurus serves `/a` and `/a/` at the same place. */
+function urlKey(url: string): string {
+  return url.replace(/\/+$/, "") || "/";
+}
+
 export const docusaurusImporter: Importer = {
   name: "docusaurus",
   description: "a Docusaurus site",
@@ -79,6 +100,7 @@ export const docusaurusImporter: Importer = {
     const pages: ImportedPage[] = [];
     const assets: ImportedAsset[] = [];
     const diagnostics: Diagnostic[] = [];
+    const sectionPages: SectionPage[] = [];
 
     for (const section of docsSections(source.read(configPath))) {
       const prefix = `${section.path}/`;
@@ -89,8 +111,15 @@ export const docusaurusImporter: Importer = {
       }
       for (const path of found) {
         if (MARKDOWN.test(path)) {
+          const mapped = mapFrontMatter(source.read(path), path);
           files.push({ path, kind: "content" });
-          pages.push({ source: path, destination: path, contents: source.read(path) });
+          pages.push({ source: path, destination: path, contents: mapped.contents });
+          sectionPages.push({
+            source: path,
+            id: docId(section.path, path),
+            title: mapped.sidebarLabel ?? mapped.title ?? docId(section.path, path).split("/").pop() ?? path,
+            url: mapped.url,
+          });
         } else {
           files.push({ path, kind: "asset" });
           assets.push({ source: path, destination: path });
@@ -98,11 +127,33 @@ export const docusaurusImporter: Importer = {
       }
     }
 
+    const urlOwner = new Map<string, string>();
+    for (const page of sectionPages) {
+      const key = urlKey(page.url);
+      const owner = urlOwner.get(key);
+      if (owner === undefined) {
+        urlOwner.set(key, page.source);
+        continue;
+      }
+      diagnostics.push(
+        finding("import.duplicate-url", `${page.source} and ${owner} would both be served at \`${page.url}\`; choose one of them.`, page.source),
+      );
+    }
+
+    let navigation: ImportedConfig | undefined;
+    const sidebarPath = source.files.find((path) => SIDEBAR.test(path));
+    if (sidebarPath !== undefined) {
+      const sidebar = convertSidebar(source.read(sidebarPath), sidebarPath, sectionPages);
+      files.push({ path: sidebarPath, kind: "unsupported", reason: `merged into ${NAVIGATION_DESTINATION}` });
+      diagnostics.push(...sidebar.diagnostics);
+      navigation = sidebar.navigation;
+    }
+
     for (const path of source.files.filter((path) => path.startsWith(STATIC))) {
       files.push({ path, kind: "asset" });
       assets.push({ source: path, destination: path });
     }
 
-    return { files, pages, assets, config, diagnostics };
+    return { files, pages, assets, config, ...(navigation === undefined ? {} : { navigation }), diagnostics };
   },
 };
