@@ -22,9 +22,9 @@ import { parseFrontMatter } from "../content/frontmatter.ts";
 import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
-import { permalink } from "../content/permalink.ts";
+import { normalizeBase, permalink } from "../content/permalink.ts";
 import { resolveTitle } from "../content/title.ts";
-import type { Block, Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, Site, SourcePos } from "../contracts/index.ts";
+import type { Block, Diagnostic, FrontMatter, Heading, NavTree, Page, Plugin, PreviewPolicy, Site, SourcePos } from "../contracts/index.ts";
 import { markdownToHtml } from "../markdown/to-html.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 import { applyRecordLinks } from "../markdown/plugins/links.ts";
@@ -68,6 +68,10 @@ export interface BuildModelOptions {
   readonly updateBlocks?: boolean;
   /** The as-of date from `--as-of`, `YYYY-MM-DD`; it wins over the config's `asOf`. */
   readonly asOf?: string;
+  /** The site `base` from `--base`; it wins over the config's `base`, so one source builds under a preview path. */
+  readonly base?: string;
+  /** The preview policy from `--preview-canonical` and `--commit`; the site keeps it, so every render and output marks the page. */
+  readonly preview?: PreviewPolicy;
   /** The clock the stale-lock warning reads; a test sets it. Default: `Date.now`. */
   readonly now?: () => number;
 }
@@ -218,6 +222,8 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       config = { ...config, base };
     }
   }
+  // A preview build puts the same pages under its own path, so the flag wins over both the config and the network.
+  if (options.base !== undefined) config = { ...config, base: normalizeBase(options.base) };
   const sourceDir = resolve(siteRoot, config.source);
   // Positions are relative to the repository root, so a site in `docs/` names `docs/…` paths. Without a repository
   // folder they stay relative to the site root, which is always stable wherever the site is checked out.
@@ -607,6 +613,15 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     if (earlier.length > 0) aliases.set(key, earlier);
   }
   for (const d of aliasDiagnostics) diagnostics.report(d);
+  // A record retired behind a redirect still owns its URL: it stays in the lock, or leaving it out would read as a removal.
+  const publishedKeys = new Set(published.map((entry) => urlKey(entry.collection, entry.id)));
+  for (const entry of records.retired) {
+    if (entry.lang !== config.lang) continue;
+    const key = urlKey(entry.collection, entry.id);
+    if (publishedKeys.has(key)) continue;
+    publishedKeys.add(key);
+    published.push({ collection: entry.collection, id: entry.id, url: entry.url, position: entry.position });
+  }
   const urls = planUrls({
     lock: locked.lock,
     locked: locked.found,
@@ -670,6 +685,18 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       urls: entry.urls,
       ...(entry.target === undefined ? {} : { target: entry.target }),
     }));
+  const retired = records.retired.map((entry) => ({
+    collection: entry.collection,
+    id: entry.id,
+    urls: [
+      ...new Set([
+        entry.url,
+        ...(entry.lang === config.lang ? (urls.previous[urlKey(entry.collection, entry.id)] ?? []) : []),
+        ...entry.aliases,
+      ]),
+    ],
+    target: entry.target,
+  }));
   const applied = await applyFacts({
     site: {
       config,
@@ -678,13 +705,15 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       data: data.data,
       collections: allCollections,
       ...(gone.length === 0 ? {} : { removed: gone }),
+      ...(retired.length === 0 ? {} : { retired }),
     },
     root: siteRoot,
     sourceDir,
   });
   for (const d of applied.diagnostics) diagnostics.report(d);
 
-  const site = network?.site === undefined ? applied.site : { ...applied.site, network: network.site };
+  const settled = network?.site === undefined ? applied.site : { ...applied.site, network: network.site };
+  const site = options.preview === undefined ? settled : { ...settled, preview: options.preview };
   return {
     site,
     diagnostics: sortDiagnostics(diagnostics.all),

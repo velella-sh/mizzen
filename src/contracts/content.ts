@@ -160,6 +160,29 @@ export interface RemovedRecord {
   readonly target?: string;
 }
 
+/** A record its collection's lifecycle retires, whose page is replaced by a redirect to the record that replaced it. */
+export interface RetiredRecord {
+  /** The collection's name. */
+  readonly collection: string;
+  /** The record's id. */
+  readonly id: string;
+  /** Every URL the retired page published, its last one first; each redirects to `target`. */
+  readonly urls: readonly string[];
+  /** The current URL of the record that replaces it. */
+  readonly target: string;
+}
+
+/**
+ * How a preview build treats search engines: every page is `noindex`, and its canonical points at the preview's URL
+ * rather than the production site's. Front matter `canonical_url` still wins.
+ */
+export interface PreviewPolicy {
+  /** The absolute URL a page's canonical starts with: this base followed by the page's own URL. */
+  readonly canonicalBase: string;
+  /** The commit this preview was built from, from `--commit` or `GITHUB_SHA`; absent when unknown. */
+  readonly commit?: string;
+}
+
 /** The site model: everything a build knows, assembled once and read by rendering and outputs. */
 export interface Site {
   /** The site config. */
@@ -174,6 +197,10 @@ export interface Site {
   readonly collections: Readonly<Record<string, Collection>>;
   /** Records the URL lock published that their collections no longer hold, in lock order. */
   readonly removed?: readonly RemovedRecord[];
+  /** Records the lifecycle retires whose URLs redirect to their replacement, in model order. */
+  readonly retired?: readonly RetiredRecord[];
   /** The shared network, from the locked file; unset for a site that has no `network` key. */
   readonly network?: SiteNetwork;
+  /** The preview policy, from `--preview-canonical` and `--commit`; unset for a normal build. */
+  readonly preview?: PreviewPolicy;
 }

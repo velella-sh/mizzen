@@ -42,8 +42,11 @@ function mainPages(pages: readonly Page[], defaultLang: string): readonly Page[]
   return [...chosen.values()];
 }
 
-/** The hash of the data the map describes: every record id and field, in a stable order. */
-function dataHash(site: Site): string {
+/**
+ * The hash of the data a build read: every record id and field, in a stable order. `urls.json` writes it, and a
+ * preview's manifest repeats it, so a reader can match the build to the data it mapped.
+ */
+export function dataHash(site: Site): string {
   const collections: Record<string, readonly unknown[]> = {};
   for (const name of Object.keys(site.collections).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
     collections[name] = [...site.collections[name]!.records]

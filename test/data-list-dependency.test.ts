@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { buildModel } from "../src/model/build.ts";
-import { affectedNodes, buildDependencyGraph, fileNodeId, outputNodeId } from "../src/pipeline/dependency-graph.ts";
+import { affectedNodes, buildDependencyGraph, fileNodeId, outputNodeId, recordNodeId } from "../src/pipeline/dependency-graph.ts";
 import { planInvalidation } from "../src/pipeline/invalidation.ts";
 
 function tree(files: Record<string, string>): string {
@@ -65,6 +65,17 @@ test("every page generated from one source is an output node, for pagination and
         `${url} depends on ${source}`,
       );
     }
+
+    // Every page of a paginated or expanded list links to the records it shows, not to every record of the collection.
+    const listNode = (url: string) => graph.nodes.find((node) => node.id === outputNodeId(url));
+    assert.equal(listNode("/blog/page/2/")?.role, "list");
+    assert.equal(listNode("/tags/news/page/2/")?.role, "list");
+    const dependsOn = (url: string, record: string) =>
+      graph.edges.some((edge) => edge.from === outputNodeId(url) && edge.to === recordNodeId("posts", record));
+    assert.equal(dependsOn("/blog/page/2/", "b"), true);
+    assert.equal(dependsOn("/blog/page/2/", "a"), false);
+    assert.equal(dependsOn("/tags/news/page/2/", "b"), true);
+    assert.equal(dependsOn("/tags/ui/", "c"), true);
 
     const affected = affectedNodes(graph, ["_data/posts.yml"]);
     for (const url of outputs) assert.ok(affected.includes(outputNodeId(url)), `${url} is affected`);

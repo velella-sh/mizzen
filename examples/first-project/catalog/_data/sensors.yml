@@ -1,0 +1,63 @@
+- slug: thermometer
+  name: Thermometer
+  summary: |
+    A **thermometer** reports the temperature of a probe. It reads between
+    -40 °C and 125 °C and needs no calibration after the first burn-in.
+  interface: I2C
+  range: -40 to 125 °C
+  status: stable
+  released: 2026-01-15
+- slug: hygrometer
+  name: Hygrometer
+  summary: |
+    A **hygrometer** reports relative humidity. Condensation on the sensor
+    gives a reading that is too high, so keep it out of still air.
+  interface: I2C
+  range: 0 to 100 %
+  status: stable
+  released: 2026-01-29
+- slug: barometer
+  name: Barometer
+  summary: |
+    A **barometer** reports air pressure. The absolute value matters less
+    than its change over a few hours.
+  interface: SPI
+  range: 300 to 1100 hPa
+  status: stable
+  released: 2026-02-12
+- slug: anemometer
+  name: Anemometer
+  summary: |
+    An **anemometer** reports wind speed from a spinning cup. Mount it
+    clear of a wall, or the reading drops by half.
+  interface: pulse
+  range: 0 to 60 m/s
+  status: beta
+  released: 2026-03-05
+- slug: light-meter
+  name: Light meter
+  summary: |
+    A **light meter** reports illuminance. It is cosine-corrected, so it
+    reads the light a flat surface receives, not the light a reader sees.
+  interface: I2C
+  range: 0 to 120000 lx
+  status: beta
+  released: 2026-03-19
+- slug: ph-probe
+  name: pH probe
+  summary: |
+    A **pH probe** reports acidity. Its glass bulb dries out when stored
+    dry, so keep it in the storage solution between runs.
+  interface: analog
+  range: 0 to 14 pH
+  status: stable
+  released: 2026-04-02
+- slug: current-clamp
+  name: Current clamp
+  summary: |
+    A **current clamp** reports current without breaking the circuit. It
+    reads AC only, and the jaw must close fully.
+  interface: analog
+  range: 0 to 100 A
+  status: deprecated
+  released: 2026-04-16
