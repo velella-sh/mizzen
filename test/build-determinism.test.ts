@@ -4,6 +4,7 @@
  * the same build hash. A semantic change moves only the identities that belong to the changed page.
  */
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
@@ -105,6 +106,31 @@ test("two clean builds from different checkout paths at different times are iden
   } finally {
     rmSync(one, { recursive: true });
     rmSync(two, { recursive: true });
+  }
+});
+
+test("one worker and four workers write the same files, bytes, and manifest", async () => {
+  const one = scratch();
+  const two = scratch();
+  try {
+    const outOne = join(one, "out");
+    const outTwo = join(two, "out");
+    const serial = await build({ root: copyFixture(one), out: outOne, themeRoot: THEME, defaultLayout: "doc" });
+    const parallel = await build({ root: copyFixture(two), out: outTwo, themeRoot: THEME, defaultLayout: "doc", workers: 4 });
+
+    assert.deepEqual(parallel.diagnostics, serial.diagnostics, "the same findings, in the same order");
+    const oneFiles = filesOf(outOne);
+    assert.deepEqual(filesOf(outTwo), oneFiles, "the same files, in the same order");
+    const sha = (root: string, path: string): string => createHash("sha256").update(readFileSync(join(root, path))).digest("hex");
+    for (const path of oneFiles) assert.equal(sha(outTwo, path), sha(outOne, path), `${path} is the same byte for byte`);
+    assert.equal(
+      readFileSync(join(outTwo, MANIFEST_PATH), "utf8"),
+      readFileSync(join(outOne, MANIFEST_PATH), "utf8"),
+      "the manifest is the same byte for byte",
+    );
+  } finally {
+    rmSync(one, { recursive: true, force: true });
+    rmSync(two, { recursive: true, force: true });
   }
 });
 

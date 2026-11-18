@@ -481,3 +481,22 @@ export function serializeInvalidationPlan(plan: InvalidationPlan): string {
 
   return `${JSON.stringify({ version: 1, complete: plan.complete, reasons, changes, outputs, collections }, null, 2)}\n`;
 }
+
+/**
+ * The plan as a short human report, read from the same causes: the changed inputs, then every affected output and
+ * the shortest chain from it to each change. A plan that affects no output is an empty string, so a report requested
+ * after a build that rebuilt nothing prints nothing. Lists are sorted here as well, so the report is deterministic.
+ */
+export function formatInvalidationReport(plan: InvalidationPlan): string {
+  if (plan.outputs.length === 0) return "";
+  const changes = [...plan.changes].sort(compareChanges).map((change) =>
+    change.kind === "renamed" ? `${change.from} → ${change.path} (renamed)` : `${change.path} (${change.kind})`,
+  );
+  const lines = [`changed: ${changes.length === 0 ? "an input outside the graph" : changes.join(", ")}`];
+  for (const reason of [...plan.reasons].sort(compareReasons)) lines.push(`full build: ${reason.detail}`);
+  for (const output of [...plan.outputs].sort((a, b) => byCodePoint(a.id, b.id))) {
+    lines.push(`${output.action}: ${output.url}`);
+    for (const cause of sortedCauses([...output.direct, ...output.transitive])) lines.push(`  ${cause.explanation}`);
+  }
+  return `${lines.join("\n")}\n`;
+}

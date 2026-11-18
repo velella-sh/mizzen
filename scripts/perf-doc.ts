@@ -22,6 +22,8 @@ const CASE_LABEL: Record<string, string> = {
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(1)} s`;
 const count = (n: number): string => n.toLocaleString("en-US");
+/** A stage time: milliseconds under a second, seconds above it. */
+const stageTime = (ms: number): string => (ms < 1000 ? `${Math.round(ms)} ms` : seconds(ms));
 
 /** The generated section: machine, table of measurements next to their budgets, and the fall-back rules. */
 export function section(report: BenchReport, budgets: BudgetFile): string {
@@ -46,6 +48,11 @@ export function section(report: BenchReport, budgets: BudgetFile): string {
       ].join(" | ").replace(/^/, "| ").replace(/$/, " |"),
     );
   }
+  const timed = report.measurements.flatMap((m) => (m.timings === undefined ? [] : [{ m, t: m.timings }]));
+  const stageRows = timed.map(
+    ({ m, t }) =>
+      `| ${count(m.records)} | ${CASE_LABEL[m.case] ?? m.case} | ${stageTime(t.dataMs)} | ${stageTime(t.renderMs)} | ${stageTime(t.outputsMs)} | ${stageTime(t.writeMs)} |`,
+  );
   return [
     START,
     "",
@@ -55,7 +62,17 @@ export function section(report: BenchReport, budgets: BudgetFile): string {
     "",
     ...rows,
     "",
-    "The budgets are what the `data benchmark` CI job enforces; the measurements are one machine's, and a slower runner is why a budget is about twice the number next to it.",
+    ...(timed.length === 0
+      ? []
+      : [
+          "Where each build's own time went, as the pipeline measured it: **data** is reading the site and building its model, **page generation** is the theme rendering pages, **outputs** is running them, and **write** is the output folder and the cache.",
+          "",
+          "| Records | Case | Data | Page generation | Outputs | Write |",
+          "| ---: | --- | ---: | ---: | ---: | ---: |",
+          ...stageRows,
+          "",
+        ]),
+    "The budgets are what the `data benchmark` CI job enforces; the measurements are one machine's, and a slower runner is why a budget is about twice the number next to it. A whole-build cache hit runs no stage, so it has no row in the stage table.",
     "",
     END,
   ].join("\n");

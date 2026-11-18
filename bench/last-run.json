@@ -1,5 +1,5 @@
 {
-  "node": "v22.23.1",
+  "node": "v24.22.3",
   "platform": "darwin",
   "arch": "arm64",
   "cpu": "Apple M5",
@@ -8,17 +8,23 @@
     {
       "records": 1000,
       "case": "cold",
-      "ms": 3267,
-      "peakMb": 314,
+      "ms": 3305,
+      "peakMb": 442,
       "renderedPages": 1011,
       "cachedPages": 0,
-      "indexKb": 0
+      "indexKb": 0,
+      "timings": {
+        "dataMs": 697,
+        "renderMs": 904,
+        "outputsMs": 689,
+        "writeMs": 1040
+      }
     },
     {
       "records": 1000,
       "case": "warm",
-      "ms": 772,
-      "peakMb": 196,
+      "ms": 777,
+      "peakMb": 303,
       "renderedPages": 0,
       "cachedPages": 0,
       "indexKb": 0
@@ -26,17 +32,23 @@
     {
       "records": 1000,
       "case": "one-record",
-      "ms": 4954,
-      "peakMb": 394,
+      "ms": 4234,
+      "peakMb": 570,
       "renderedPages": 1,
       "cachedPages": 1010,
-      "indexKb": 0
+      "indexKb": 0,
+      "timings": {
+        "dataMs": 1523,
+        "renderMs": 9,
+        "outputsMs": 1448,
+        "writeMs": 1253
+      }
     },
     {
       "records": 1000,
       "case": "search",
-      "ms": 126,
-      "peakMb": 171,
+      "ms": 130,
+      "peakMb": 196,
       "renderedPages": 0,
       "cachedPages": 0,
       "indexKb": 931
@@ -44,17 +56,23 @@
     {
       "records": 10000,
       "case": "cold",
-      "ms": 37688,
-      "peakMb": 4034,
+      "ms": 44054,
+      "peakMb": 3825,
       "renderedPages": 10101,
       "cachedPages": 0,
-      "indexKb": 0
+      "indexKb": 0,
+      "timings": {
+        "dataMs": 7220,
+        "renderMs": 11410,
+        "outputsMs": 13691,
+        "writeMs": 11082
+      }
     },
     {
       "records": 10000,
       "case": "warm",
-      "ms": 4074,
-      "peakMb": 369,
+      "ms": 4749,
+      "peakMb": 435,
       "renderedPages": 0,
       "cachedPages": 0,
       "indexKb": 0
@@ -62,17 +80,23 @@
     {
       "records": 10000,
       "case": "one-record",
-      "ms": 49369,
-      "peakMb": 4141,
+      "ms": 44043,
+      "peakMb": 3981,
       "renderedPages": 1,
       "cachedPages": 10100,
-      "indexKb": 0
+      "indexKb": 0,
+      "timings": {
+        "dataMs": 9281,
+        "renderMs": 28,
+        "outputsMs": 21240,
+        "writeMs": 13469
+      }
     },
     {
       "records": 10000,
       "case": "search",
-      "ms": 1360,
-      "peakMb": 387,
+      "ms": 1409,
+      "peakMb": 514,
       "renderedPages": 0,
       "cachedPages": 0,
       "indexKb": 3665

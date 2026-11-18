@@ -188,6 +188,56 @@ test("an unchanged rebuild is one cache hit and renders nothing", async () => {
   }
 });
 
+test("a report names the changed input and the chain to every rebuilt page, and is silent when nothing rebuilds", async () => {
+  // Two pages include the same snippet, so one change reaches both; the third page must stay out of the report.
+  const root = tree({
+    "mizzen.yml": "title: Report\n",
+    // A static navigation keeps the plan narrow: only the pages that share the snippet depend on it.
+    "_data/navigation.yml": "main:\n  - title: Alpha\n    url: /alpha/\n  - title: Beta\n    url: /beta/\n  - title: Gamma\n    url: /gamma/\n",
+    "_snippets/shared.md": "Shared snippet.\n",
+    "alpha.md": "---\ntitle: Alpha\n---\n# Alpha\n\n::include[_snippets/shared.md]\n",
+    "beta.md": "---\ntitle: Beta\n---\n# Beta\n\n::include[_snippets/shared.md]\n",
+    "gamma.md": "---\ntitle: Gamma\n---\n# Gamma\n",
+  });
+  const theme = makeTheme();
+  const { parent, out, cacheDir } = scratch();
+  try {
+    const cold = await build({ root, out, themeRoot: theme, defaultLayout: "doc", cache: true, cacheDir });
+    assert.equal(cold.report, undefined, "a build that asked for no report stays silent");
+
+    writeFileSync(join(root, "_snippets/shared.md"), "Shared snippet, edited once.\n");
+    const quiet = await build({ root, out, themeRoot: theme, defaultLayout: "doc", cache: true, cacheDir });
+    assert.equal(quiet.renderedPages, 2, "the snippet edit rebuilds its two includers");
+    assert.equal(quiet.report, undefined, "a normal build reports nothing");
+
+    writeFileSync(join(root, "_snippets/shared.md"), "Shared snippet, edited twice.\n");
+    const warm = await build({ root, out, themeRoot: theme, defaultLayout: "doc", cache: true, cacheDir, report: true });
+    assert.equal(warm.renderedPages, 2, "the second snippet edit rebuilds its two includers");
+    // The includers' expanded bodies changed with the snippet, so the plan names them as changed pages as well.
+    assert.equal(
+      warm.report,
+      [
+        "changed: _snippets/shared.md (changed), alpha.md (changed), beta.md (changed)",
+        "rebuild: /alpha/",
+        "  /alpha/ → alpha.md (changed)",
+        "  /alpha/ → alpha.md → _snippets/shared.md (changed)",
+        "rebuild: /beta/",
+        "  /beta/ → beta.md (changed)",
+        "  /beta/ → beta.md → _snippets/shared.md (changed)",
+        "",
+      ].join("\n"),
+    );
+
+    const again = await build({ root, out, themeRoot: theme, defaultLayout: "doc", cache: true, cacheDir, report: true });
+    assert.equal(again.renderedPages, 0, "nothing changed, so nothing is rebuilt");
+    assert.equal(again.report, undefined, "a build with nothing to explain reports nothing");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(theme, { recursive: true, force: true });
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
 test("a corrupt page render is a miss, never stale output", async () => {
   const root = site();
   const theme = makeTheme();

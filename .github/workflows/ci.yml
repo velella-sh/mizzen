@@ -64,6 +64,21 @@ jobs:
         run: node --test --test-concurrency=4 --test-shard=${{ matrix.shard }}/2 "test/**/*.test.ts"
         working-directory: mizzen
 
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run every shipped acceptance case through the public CLI
+        run: node scripts/acceptance.ts --mizzen bin/mizzen.ts --candidate "$GITHUB_SHA" --summary "$GITHUB_STEP_SUMMARY"
+
   package:
     name: package (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -129,7 +144,7 @@ jobs:
 
   ci-required:
     if: always()
-    needs: [static, test, package, social-images]
+    needs: [static, test, acceptance, package, social-images]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

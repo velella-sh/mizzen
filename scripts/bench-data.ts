@@ -7,12 +7,14 @@
 // when one is over: that is the gate. Without it, nothing is asserted.
 //
 // Usage: node scripts/bench-data.ts [--records 1000,10000] [--runs 3] [--theme ../lateen] [--check bench/budget.json]
+//        [--report saved.json]   with --report, check that saved report instead of measuring again (the gate test does this)
 import { spawnSync } from "node:child_process";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { cpus, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { write } from "../fixtures/data-large/generate.ts";
+import type { BuildTimings } from "../src/pipeline/build.ts";
 
 export const CASES = ["cold", "warm", "one-record", "search"] as const;
 export type CaseName = (typeof CASES)[number];
@@ -28,6 +30,11 @@ export interface Measurement {
   readonly cachedPages: number;
   /** Size of the search index in kilobytes for the `search` case (the `search` output alone, no render); 0 for the others. */
   readonly indexKb: number;
+  /**
+   * Median of each stage's time, when the pipeline reported them. Absent for `search`, which runs one output, and for
+   * `warm`, a whole-build cache hit where no stage ran.
+   */
+  readonly timings?: BuildTimings | undefined;
 }
 
 export interface BenchReport {
@@ -116,7 +123,16 @@ async function child(args: Map<string, string>): Promise<void> {
   });
   const ms = performance.now() - start;
   const peakMb = process.resourceUsage().maxRSS / 1024;
-  console.log(JSON.stringify({ ms, peakMb, renderedPages: result.renderedPages, cachedPages: result.cachedPages, indexKb: 0 }));
+  console.log(
+    JSON.stringify({
+      ms,
+      peakMb,
+      renderedPages: result.renderedPages,
+      cachedPages: result.cachedPages,
+      indexKb: 0,
+      ...(result.timings === undefined ? {} : { timings: result.timings }),
+    }),
+  );
 }
 
 interface Run {
@@ -125,6 +141,7 @@ interface Run {
   readonly renderedPages: number;
   readonly cachedPages: number;
   readonly indexKb: number;
+  readonly timings?: BuildTimings | undefined;
 }
 
 function runChild(opts: { root: string; out: string; cacheDir: string; cache: boolean; theme: string; search?: boolean }): Run {
@@ -158,6 +175,8 @@ export function bench(options: { records: readonly number[]; runs: number; theme
       const cacheDir = join(parent, `cache-${records}`);
       const base = { root, out, cacheDir, theme: options.theme };
       const summarize = (name: CaseName, runs: readonly Run[]): void => {
+        const timed = runs.flatMap((run) => (run.timings === undefined ? [] : [run.timings]));
+        const stage = (key: keyof BuildTimings): number => Math.round(median(timed.map((timing) => timing[key])));
         measurements.push({
           records,
           case: name,
@@ -166,6 +185,16 @@ export function bench(options: { records: readonly number[]; runs: number; theme
           renderedPages: median(runs.map((r) => r.renderedPages)),
           cachedPages: median(runs.map((r) => r.cachedPages)),
           indexKb: Math.round(median(runs.map((r) => r.indexKb))),
+          ...(timed.length === 0
+            ? {}
+            : {
+                timings: {
+                  dataMs: stage("dataMs"),
+                  renderMs: stage("renderMs"),
+                  outputsMs: stage("outputsMs"),
+                  writeMs: stage("writeMs"),
+                },
+              }),
         });
       };
       const cold = Array.from({ length: options.runs }, () => runChild({ ...base, cache: false }));
@@ -201,7 +230,8 @@ if (process.argv[1] && fileURLToPath(new URL(`file://${process.argv[1]}`)) === S
     const runs = Number(named.get("runs") ?? "3");
     const theme = fileURLToPath(new URL(named.get("theme") ?? "../../lateen", import.meta.url));
     mkdirSync(tmpdir(), { recursive: true });
-    const report = bench({ records, runs, theme });
+    const saved = named.get("report");
+    const report = saved === undefined ? bench({ records, runs, theme }) : (JSON.parse(readFileSync(saved, "utf8")) as BenchReport);
     console.log(JSON.stringify(report, null, 2));
     const budgetPath = named.get("check");
     if (budgetPath !== undefined) {

@@ -132,6 +132,7 @@ Options:
   --json               For data quality: print the findings and scopes as JSON
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
+  --report             For build: print why each page was rebuilt after a warm build
   --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
@@ -180,6 +181,7 @@ type BuildOpts = {
   readonly updateUrls?: boolean;
   readonly updateBlocks?: boolean;
   readonly asOf?: string;
+  readonly report?: boolean;
   readonly basePath?: string;
   readonly previewCanonical?: string;
   readonly baseline?: string;
@@ -960,6 +962,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let updateUrls = false;
   let updateBlocks = false;
   let asOf: string | undefined;
+  let report = false;
   let basePath: string | undefined;
   let previewCanonical: string | undefined;
   let baseline: string | undefined;
@@ -1040,6 +1043,9 @@ export function parseArgs(args: readonly string[]): Parsed {
       } else if (arg === "--update-urls") {
         if (command !== "build") return { error: "--update-urls is only valid for build" };
         updateUrls = true;
+      } else if (arg === "--report") {
+        if (command !== "build") return { error: "--report is only valid for build" };
+        report = true;
       } else if (arg === "--update-blocks") {
         if (command !== "build") return { error: "--update-blocks is only valid for build" };
         updateBlocks = true;
@@ -1107,6 +1113,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(theme === undefined ? {} : { theme }),
         ...(workers === undefined ? {} : { workers }),
         ...(updateUrls ? { updateUrls: true } : {}),
+        ...(report ? { report: true } : {}),
         ...(updateBlocks ? { updateBlocks: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
         ...(basePath === undefined ? {} : { basePath }),
@@ -1690,6 +1697,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         cache: true,
         ...(options.workers === undefined ? {} : { workers: options.workers }),
         ...(options.updateUrls === true ? { updateUrls: true } : {}),
+        ...(options.report === true ? { report: true } : {}),
         ...(options.updateBlocks === true ? { updateBlocks: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
         ...(options.basePath === undefined ? {} : { basePath: options.basePath }),
@@ -1698,6 +1706,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
           ? {}
           : { preview: { canonicalBase: options.previewCanonical, ...(commit === undefined ? {} : { commit }) } }),
       });
+      if (result.report !== undefined) write(result.report);
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);
       return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;
     } catch (err) {

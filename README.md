@@ -112,6 +112,7 @@ Options:
   --json               For data quality: print the findings and scopes as JSON
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
+  --report             For build: print why each page was rebuilt after a warm build
   --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
