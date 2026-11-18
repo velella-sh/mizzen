@@ -64,7 +64,7 @@ function errorIds(diagnostics: readonly Diagnostic[]): string[] {
 }
 
 const LIST_PAGE = "monthly/index.md";
-const LIST = "---\ntitle: Monthly\nlist:\n  collection: summary\n  sort: month\n---\n# Monthly\n";
+const LIST = "---\ntitle: Monthly\nlist:\n  collection: summary\n  sort: region\n---\n# Monthly\n";
 
 test("#975 a source that is missing or an unknown operator is an error at the config line", async () => {
   await withSite(
@@ -85,7 +85,7 @@ test("#975 a source that is missing or an unknown operator is an error at the co
       const errors = result.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
       assert.deepEqual(errors.map((diagnostic) => diagnostic.id), ["data.aggregate-source"]);
       assert.equal(errors[0]!.pos?.file, "mizzen.yml");
-      assert.equal(errors[0]!.pos?.line, 5, "the finding points at the collection, not the file");
+      assert.equal(errors[0]!.pos?.line, 4, "the finding points at the collection, not the file");
       assert.equal(result.site.collections["summary"], undefined);
     },
   );
@@ -352,14 +352,14 @@ test("#985 a list page and the static API publish the same summary counts", asyn
       const page = result.site.pages.find((candidate) => candidate.url === "/monthly/");
       assert.ok(page?.list !== undefined);
       const files = new Map((await api.run(result.site, { renderPage: async () => "", report: () => {} })).map((file) => [file.path, String(file.contents)]));
-      const body = JSON.parse(files.get("api/v1/summary.json")!) as { count: number; records: { id: string; fields: Record<string, unknown> }[] };
+      const body = JSON.parse(files.get("api/v1/summary.json")!) as { count: number; records: ({ id: string } & Record<string, unknown>)[] };
       assert.equal(page.list.records.length, body.count);
       assert.equal(body.count, 4);
       assert.deepEqual(
         page.list.records.map((record) => record.id).sort(),
         body.records.map((record) => record.id).sort(),
       );
-      assert.deepEqual(body.records.find((record) => record.id === "eu-web")?.fields, { region: "eu", channel: "web", orders: 2 });
-    },
+      const eu = body.records.find((record) => record.id === "eu-web");
+      assert.deepEqual({ region: eu?.["region"], channel: eu?.["channel"], orders: eu?.["orders"] }, { region: "eu", channel: "web", orders: 2 });    },
   );
 });

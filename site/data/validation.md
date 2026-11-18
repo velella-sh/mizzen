@@ -99,6 +99,23 @@ its help names the two accepted formats.
 | `data.permalink-disambiguator` | The collection's `disambiguate` field is missing or has no letters or digits. | Add the field to the record, or change `collections.<name>.disambiguate`. |
 | `data.permalink-collision` | Two records of one collection build the same URL. | Set `collections.<name>.disambiguate`, or put another field in the URL pattern. |
 
+## Aggregate collections
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.aggregate-source` | An aggregate names a source collection that did not load or is itself an aggregate. | Point `collections.<name>.source` at a collection read from a file. |
+| `data.aggregate-by` | An aggregate groups by the same field more than once. | Name each grouping field once. |
+| `data.aggregate-timezone` | A `period` has no time zone, or names one the runtime does not know. | Add `timezone: UTC` (or another IANA zone) to the `by` entry. |
+| `data.aggregate-id-field` | An aggregate groups by the field its summary id is written under. | Set `collections.<name>.id` to another field, or group by another field. |
+| `data.aggregate-metric-name` | A metric has the same name as a grouping field or the id field. | Rename the metric. |
+| `data.aggregate-metric-field` | A metric other than `count` names no field. | Add `field: <name>` to the metric. |
+| `data.aggregate-reference` | A before/after filter has no reference date. | Set `collections.<source>.referenceDate` to a date, or the site's `asOf`. |
+| `data.aggregate-key` | A grouping value is not text, a finite number, or a boolean. | Group by a scalar field, or remove it from `aggregate.by`. |
+| `data.aggregate-period` | A value grouped by month or year is not a date or an ISO 8601 instant. | Write a date, or stop grouping the field by a period. |
+| `data.aggregate-number` | A `sum` or `average` value is not a finite number. | Write a number, or cast the field in the source collection's `transform` rules. |
+| `data.aggregate-distinct` | A `count-distinct` value is not a scalar. | Count distinct values of a scalar field. |
+| `data.aggregate-bound` | A `min` or `max` value is not text or a number, or one group mixes the two. | Cast the field so every value in the group has one kind. |
+
 ## List pages
 
 | ID | Meaning | Fix |
