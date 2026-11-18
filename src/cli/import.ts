@@ -9,6 +9,7 @@ import { FILE_KINDS } from "../import/inventory.ts";
 import type { Importer } from "../import/contract.ts";
 import { CONFIG_DESTINATION, buildMappings, type ImportMapping } from "../import/mapping.ts";
 import { plainImporter } from "../import/plain.ts";
+import { inventoryOf } from "../import/inventory.ts";
 import { readImportSource } from "../import/source.ts";
 
 /** The importers `mizzen import <name>` can select. */
@@ -83,7 +84,8 @@ export async function runImport(name: string, root: string, io: ImportIo): Promi
   }
   const source = readImportSource(resolve(root));
   const outcome = await importer.import(source);
-  const { mappings, diagnostics } = buildMappings(outcome.files, outcome.pages, outcome.assets, outcome.config);
+  const { files } = inventoryOf(source.files, outcome.files);
+  const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config);
   const diagnostics_ = [...outcome.diagnostics, ...diagnostics];
   io.log(importReport(name, source.root, mappings, outcome.config.source === undefined, diagnostics_).replace(/\n$/, ""));
   return diagnostics_.some((finding) => finding.severity === "error") ? 1 : 0;
