@@ -13,6 +13,7 @@ import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot } from "./data.ts";
 import { verifyData } from "../data/verify.ts";
+import { checkQuality } from "../data/quality.ts";
 import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
@@ -81,6 +82,7 @@ Commands:
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
+  data quality [dir]        Report records that fail the config's quality rules (--json, --write, --as-of)
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
@@ -116,10 +118,12 @@ Options:
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
-  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch); today reads the system date once. Wins over the config's asOf
+  --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
+  --json               For data quality: print the findings and scopes as JSON
+  --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
@@ -248,6 +252,14 @@ type DataVerifyOpts = {
   readonly root: string;
 };
 
+type DataQualityOpts = {
+  readonly command: "data-quality";
+  readonly root: string;
+  readonly json: boolean;
+  readonly write: boolean;
+  readonly asOf?: string;
+};
+
 type InitOpts = {
   readonly command: "init";
   readonly root: string;
@@ -347,6 +359,7 @@ type Parsed =
         | DataFetchOpts
         | DataSnapshotOpts
         | DataVerifyOpts
+        | DataQualityOpts
         | DataChangesOpts
         | UrlsCheckOpts
         | InitOpts
@@ -558,6 +571,29 @@ function parseData(args: readonly string[]): Parsed {
       else return { error: `unexpected argument: ${arg}` };
     }
     return { options: { command: "data-verify", root: root ?? "." } };
+  }
+  if (subcommand === "quality") {
+    let root: string | undefined;
+    let json = false;
+    let write = false;
+    let asOf: string | undefined;
+    for (let i = 0; i < rest.length; i++) {
+      const arg = rest[i]!;
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--json") json = true;
+      else if (arg === "--write") write = true;
+      else if (arg === "--as-of") {
+        const raw = rest[++i];
+        if (raw === undefined || raw.startsWith("-")) return { error: "--as-of needs a value" };
+        // `today` is resolved at the edge of main, where the clock may be read; here only the shape is checked.
+        const read = readAsOfFlag(raw, () => "0001-01-01");
+        if (!read.ok) return { error: `--as-of ${read.message}` };
+        asOf = raw;
+      } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      else if (root === undefined) root = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    }
+    return { options: { command: "data-quality", root: root ?? ".", json, write, ...(asOf === undefined ? {} : { asOf }) } };
   }
   if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
 
@@ -1070,7 +1106,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   // `--as-of today` is the only place the clock is read: once, here, printed, and passed on as a plain date.
   let asOf: string | undefined;
-  if ((options.command === "build" || options.command === "check" || options.command === "watch") && options.asOf !== undefined) {
+  if ((options.command === "build" || options.command === "check" || options.command === "watch" || options.command === "data-quality") && options.asOf !== undefined) {
     const read = readAsOfFlag(options.asOf, () => todayOf((io.now ?? (() => new Date()))()));
     if (!read.ok) {
       error(`${NAME}: --as-of ${read.message}`);
@@ -1366,6 +1402,28 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-quality") {
+    try {
+      const { config: loaded, diagnostics: configDiagnostics } = loadConfig(root);
+      const config = asOf === undefined ? loaded : { ...loaded, asOf };
+      const report = await checkQuality({ root, config, write: options.write });
+      const diagnostics = [...configDiagnostics, ...report.diagnostics];
+      if (options.json) {
+        log(JSON.stringify({ findings: report.findings, exceptions: report.exceptions, scopes: report.scopes, groups: report.groups, totals: report.totals, diagnostics, ...(report.wrote === undefined ? {} : { wrote: report.wrote }) }, null, 2));
+      } else {
+        if (report.wrote !== undefined) log(`wrote ${report.wrote}`);
+        for (const finding of report.findings) log(`${finding.severity} ${finding.id}: ${finding.message}`);
+        for (const diagnostic of diagnostics) error(`${NAME}: ${diagnostic.id}: ${diagnostic.message}`);
+      }
+      const failed = diagnostics.some((d) => d.severity === "error") ||
+        report.findings.some((finding) => finding.severity === "error");
+      return failed ? 1 : 0;
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
