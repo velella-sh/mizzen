@@ -11,8 +11,9 @@ import { dirname } from "node:path";
 import { loadConfig } from "../config/load.ts";
 import { fetchApiSource, isFetchableUrl, type ApiPage } from "../data/api-fetch.ts";
 import { loadCollections } from "../data/collections.ts";
+import { extractSite } from "../data/extract.ts";
 import { dataLimitsOf } from "../data/limits.ts";
-import { LOCK_FILE, canonicalJson, readLock, sha256, storedPath, writeLock, type DataLock, type LockedSource } from "../data/lock.ts";
+import { LOCK_FILE, canonicalJson, readLock, sha256, storedPath, writeLock, type DataLock, type LockedExtraction, type LockedSource } from "../data/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
 import { compileSchemas, schemaSnapshotOf, type CompiledSchemas } from "../data/schema.ts";
 import { gitSnapshot, instantOfHttpDate, orderedSnapshot, snapshotOfPinned } from "../data/snapshot.ts";
@@ -349,6 +350,92 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
   return { code: 0, messages, errors };
 }
 
+
+/** Options of {@link dataExtract}. */
+export interface DataExtractOptions {
+  /** The site root: the folder that holds `mizzen.yml`. */
+  readonly root: string;
+  /** Compare with the lock without writing anything. */
+  readonly check?: boolean;
+}
+
+/**
+ * `mizzen data extract [dir] [--check]`: reads every local SQLite and NDJSON collection and locks its canonical
+ * result. Nothing is written when any collection fails, so a build never reads a partial result.
+ */
+export async function dataExtract(options: DataExtractOptions): Promise<DataFetchResult> {
+  const root = options.root;
+  const messages: string[] = [];
+  const errors: string[] = [];
+  const loaded = loadConfig(root);
+  for (const diagnostic of loaded.diagnostics) {
+    if (diagnostic.severity === "error") errors.push(diagnostic.message);
+  }
+  if (errors.length > 0) return { code: 1, messages, errors };
+
+  const pinned = await readLock(root);
+  for (const diagnostic of pinned.diagnostics) {
+    if (diagnostic.severity === "error") errors.push(diagnostic.message);
+  }
+  if (errors.length > 0) return { code: 1, messages, errors };
+
+  const result = await extractSite(root, loaded.config);
+  for (const diagnostic of result.diagnostics) {
+    if (diagnostic.severity === "error") errors.push(diagnostic.message);
+  }
+  if (errors.length > 0) return { code: 1, messages, errors };
+
+  const next: Record<string, LockedExtraction> = {};
+  let changed = false;
+  for (const extracted of result.collections) {
+    const before = pinned.lock.extractions?.[extracted.name];
+    const sameLock = before !== undefined && canonicalJson(before) === canonicalJson(extracted.locked);
+    let same = sameLock;
+    if (same && before !== undefined) {
+      try {
+        const stored = await readFile(storedPath(root, before.sha256));
+        same = stored.byteLength === before.bytes && sha256(stored) === before.sha256;
+      } catch {
+        same = false;
+      }
+    }
+    if (before === undefined) {
+      changed = true;
+      messages.push(`new ${extracted.name} (${extracted.locked.records} records)`);
+    } else if (!same) {
+      changed = true;
+      messages.push(`changed ${extracted.name} (${extracted.locked.records} records)`);
+    } else {
+      messages.push(`unchanged ${extracted.name}`);
+    }
+    next[extracted.name] = extracted.locked;
+  }
+  for (const name of Object.keys(pinned.lock.extractions ?? {})) {
+    if (next[name] === undefined) {
+      changed = true;
+      messages.push(`removed ${name}`);
+    }
+  }
+
+  if (options.check === true) return { code: changed ? 1 : 0, messages, errors };
+  if (!changed) return { code: 0, messages, errors };
+
+  for (const extracted of result.collections) {
+    const path = storedPath(root, extracted.locked.sha256);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, extracted.bytes);
+  }
+  const extractions = Object.fromEntries(Object.entries(next).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  const lock: DataLock = {
+    version: 1,
+    sources: pinned.lock.sources,
+    ...(pinned.lock.snapshots === undefined ? {} : { snapshots: pinned.lock.snapshots }),
+    ...(Object.keys(extractions).length === 0 ? {} : { extractions }),
+  };
+  await writeLock(root, lock);
+  messages.push(`wrote ${LOCK_FILE}`);
+  return { code: 0, messages, errors };
+}
 
 /** Options of {@link dataSnapshot}. */
 export interface DataSnapshotOptions {

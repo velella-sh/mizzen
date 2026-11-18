@@ -1446,11 +1446,12 @@
         {
           "if": {
             "required": ["source"],
-            "properties": { "source": { "pattern": "\\.(?:sqlite|sqlite3|db)$" } }
+            "properties": { "source": { "type": "string", "pattern": "\\.(?:sqlite|sqlite3|db)$" } }
           },
           "then": {
             "required": ["sqlite"],
             "properties": {
+              "sqlite": { "$ref": "#/$defs/sqlite" },
               "records": false,
               "pagination": false
             }
@@ -1459,7 +1460,7 @@
         {
           "if": {
             "required": ["source"],
-            "properties": { "source": { "pattern": "\\.(?:ndjson|jsonl)$" } }
+            "properties": { "source": { "type": "string", "pattern": "\\.(?:ndjson|jsonl)$" } }
           },
           "then": {
             "properties": {
@@ -1472,7 +1473,7 @@
         {
           "if": { "required": ["sqlite"] },
           "then": {
-            "properties": { "source": { "pattern": "\\.(?:sqlite|sqlite3|db)$" } }
+            "properties": { "source": { "type": "string", "pattern": "\\.(?:sqlite|sqlite3|db)$" } }
           }
         }
       ]

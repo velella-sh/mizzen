@@ -28,7 +28,8 @@ import { parseCsv } from "./csv.ts";
 import { deriveRecords } from "./derived.ts";
 import { applyJoins } from "./join.ts";
 import { checkFieldSizes, checkRecordCount, checkSourceBytes, dataLimitsOf } from "./limits.ts";
-import { readLock, type DataLock } from "./lock.ts";
+import { emptyLock, readLock, type DataLock } from "./lock.ts";
+import { isExtractedSource, readLockedExtraction } from "./extract.ts";
 import { resolveNpmSource } from "./package-source.ts";
 import { skippedSummary } from "./policy.ts";
 import { fieldPositionsOf, keyPositionsOf, keyText, lineIndex, mappingPairs, nodePos, sourcePosOf } from "./positions.ts";
@@ -476,7 +477,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
         records,
         schema,
         entry,
-        entry.records === undefined ? formatOf(source) : "json",
+        entry.records === undefined && !isExtractedSource(source) ? formatOf(source) : "json",
         diagnostics,
         transforming
           ? { stage: "output", stepOf: (field) => (field === undefined ? undefined : lastRuleByField[field]) }
@@ -529,6 +530,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     const source = entry.source;
     let display: string;
     let text: string | undefined;
+    let lockedRecords: readonly DataRecord[] | undefined;
     let packageInfo: Collection["package"];
 
     if (source.startsWith("npm:")) {
@@ -602,6 +604,15 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       }
       display = result.source.display;
       text = result.source.text;
+    } else if (isExtractedSource(source)) {
+      if (lockInvalid) continue;
+      const result = await readLockedExtraction(root, name, entry, lock ?? emptyLock());
+      if (result.records === undefined) {
+        diagnostics.push({ ...result.diagnostic!, pos: result.diagnostic!.pos ?? configPos });
+        continue;
+      }
+      display = source;
+      lockedRecords = result.records;
     } else {
       const file = resolve(root, source);
       const rel = relative(root, file);
@@ -620,7 +631,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       if (text === undefined) continue;
     }
 
-    const readRecords = readText(name, source, display, text, idField, diagnostics, entry.records === undefined ? undefined : "json");
+    const readRecords = lockedRecords ?? readText(name, source, display, text ?? "", idField, diagnostics, entry.records === undefined ? undefined : "json");
     if (readRecords === undefined) continue;
     const records = applySchemaRenames(name, readRecords, entry.schemaRenames ?? {}, diagnostics);
     const tooMany = checkRecordCount(name, display, records.length, limits);
@@ -637,7 +648,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     const joining = entry.join !== undefined;
     if (joining) joined.add(name);
     if (!joining && transforming && schema !== undefined && transform?.validate === "before-and-after") {
-      validateRecords(name, kept, schema, entry, entry.records === undefined ? formatOf(source) : "json", diagnostics, { stage: "input", keepInvalid: true });
+      validateRecords(name, kept, schema, entry, entry.records === undefined && !isExtractedSource(source) ? formatOf(source) : "json", diagnostics, { stage: "input", keepInvalid: true });
     }
     let lastRuleByField: Readonly<Record<string, string>> = {};
     if (transforming) {
