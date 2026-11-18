@@ -354,3 +354,187 @@ test("a retired record leaves the feed and the API record files together unless 
     }
   }
 });
+
+/** The sequence fixture: one collection with a feed and an API, addressed by a slug that may change. */
+function sequenceFiles(items: string): Record<string, string> {
+  return {
+    "mizzen.yml": [
+      "title: Example",
+      "url: https://example.com",
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      "    template: _templates/item.md",
+      "    permalink: /items/{slug}/",
+      "    dates: [published]",
+      "    lifecycle:",
+      "      states: [current, retired]",
+      "      retired: [retired]",
+      "      replacement: replacedBy",
+      "      url: redirect",
+      "feeds:",
+      "  items:",
+      "    collection: items",
+      "    date: published",
+      "api:",
+      "  collections:",
+      "    items:",
+      "      fields: [summary]",
+      "",
+    ].join("\n"),
+    "_data/items.yml": items,
+    "_templates/item.md": '---\ntitle: "{id}"\nlayout: doc\n---\n# :field[id]\n\n:field[summary]\n',
+  };
+}
+
+/** One release's records: `old` retired behind a redirect, and `new` at the given slug. */
+function sequenceItems(retired: boolean, replacementSlug: string): string {
+  return (
+    "- id: old\n" +
+    "  slug: before\n" +
+    `  state: ${retired ? "retired" : "current"}\n` +
+    (retired ? "  replacedBy: new\n" : "") +
+    "  summary: alpha\n  published: 2026-01-01\n" +
+    "- id: new\n" +
+    `  slug: ${replacementSlug}\n` +
+    "  state: current\n  summary: beta\n  published: 2026-01-02\n"
+  );
+}
+
+/** A file the build wrote, as text. */
+function outputText(out: string, path: string): string {
+  return readFileSync(join(out, path), "utf8");
+}
+
+/** Asserts that `path` is a redirect page whose target is `target`. */
+function assertRedirect(out: string, path: string, target: string): void {
+  const html = outputText(out, path);
+  assert.ok(html.includes(`<link rel="canonical" href="${target}">`), `${path} redirects to ${target}`);
+  assert.ok(html.includes(`<meta http-equiv="refresh" content="0; url=${target}">`), `${path} refreshes to ${target}`);
+}
+
+/** Asserts that `path` is a real page showing `text`, not a redirect. */
+function assertPage(out: string, path: string, text: string): void {
+  const html = outputText(out, path);
+  assert.ok(html.includes(text), `${path} shows ${text}`);
+  assert.doesNotMatch(html, /http-equiv="refresh"/, `${path} is not a redirect`);
+}
+
+/** The page URLs in the sitemap. */
+function sitemapUrls(out: string): string[] {
+  return [...outputText(out, "sitemap.xml").matchAll(/<loc>([^<]+)<\/loc>/g)].map((match) => match[1]!);
+}
+
+/** The entry links in the collection's feed. */
+function feedUrls(out: string): string[] {
+  return [...outputText(out, "feeds/items.xml").matchAll(/<entry>[\s\S]*?<link href="([^"]+)"/g)].map(
+    (match) => match[1]!,
+  );
+}
+
+/** The record ids in the collection's API document, in order. */
+function apiIds(out: string): string[] {
+  const document = JSON.parse(outputText(out, "api/v1/items.json")) as { records: readonly { id: string }[] };
+  return document.records.map((record) => record.id);
+}
+
+/** Asserts what the built site's search finds for the two records' summaries. */
+async function assertSearch(out: string, alpha: string[], beta: string[]): Promise<void> {
+  const { runtime, restore } = await loadRuntime(out);
+  try {
+    assert.deepEqual(await urlsOf(await runtime.search("alpha")), alpha);
+    assert.deepEqual(await urlsOf(await runtime.search("beta")), beta);
+  } finally {
+    restore();
+  }
+}
+
+test("retirement, a replacement's move, and a restore hold every output across three releases", async () => {
+  const theme = fileURLToPath(new URL("../../lateen", import.meta.url));
+  const root = site(sequenceFiles(sequenceItems(true, "after")));
+  const outputs = mkdtempSync(join(tmpdir(), "lifecycle-sequence-"));
+  const errorsOf = (result: { readonly diagnostics: readonly Diagnostic[] }): Diagnostic[] =>
+    result.diagnostics.filter((finding) => finding.severity === "error");
+  try {
+    // Release 1: `old` is retired behind a redirect to `new` at /items/after/.
+    const one = join(outputs, "one");
+    const first = await build({ root, out: one, themeRoot: theme, updateUrls: true });
+    assert.deepEqual(errorsOf(first), []);
+    assertRedirect(one, "items/before/index.html", "https://example.com/items/after/");
+    assertPage(one, "items/after/index.html", "beta");
+    assert.equal(outputText(one, "_redirects"), "/items/before/ https://example.com/items/after/ 301\n");
+    assert.deepEqual(sitemapUrls(one), ["https://example.com/items/after/"]);
+    assert.deepEqual(feedUrls(one), ["https://example.com/items/after/"]);
+    assert.deepEqual(apiIds(one), ["new"]);
+    assert.equal(existsSync(join(one, "api/v1/items/old.json")), false);
+    assert.deepEqual(JSON.parse(readFileSync(join(root, URLS_LOCK_FILE), "utf8")), {
+      version: 1,
+      collections: {
+        items: {
+          new: { url: "/items/after/", previous: [] },
+          old: { url: "/items/before/", previous: [] },
+        },
+      },
+    });
+    await assertSearch(one, [], ["/items/after/"]);
+
+    // Release 2: `new` moves to /items/after-renamed/, so both its old path and `old`'s redirect follow it.
+    writeFileSync(join(root, "_data/items.yml"), sequenceItems(true, "after-renamed"));
+    const two = join(outputs, "two");
+    const second = await build({ root, out: two, themeRoot: theme, updateUrls: true });
+    assert.deepEqual(errorsOf(second), []);
+    assertRedirect(two, "items/after/index.html", "https://example.com/items/after-renamed/");
+    assertRedirect(two, "items/before/index.html", "https://example.com/items/after-renamed/");
+    assertPage(two, "items/after-renamed/index.html", "beta");
+    assert.equal(
+      outputText(two, "_redirects"),
+      "/items/after/ https://example.com/items/after-renamed/ 301\n" +
+        "/items/before/ https://example.com/items/after-renamed/ 301\n",
+    );
+    assert.deepEqual(sitemapUrls(two), ["https://example.com/items/after-renamed/"]);
+    assert.deepEqual(feedUrls(two), ["https://example.com/items/after-renamed/"]);
+    assert.deepEqual(apiIds(two), ["new"]);
+    assert.equal(existsSync(join(two, "api/v1/items/old.json")), false);
+    assert.deepEqual(JSON.parse(readFileSync(join(root, URLS_LOCK_FILE), "utf8")), {
+      version: 1,
+      collections: {
+        items: {
+          new: { url: "/items/after-renamed/", previous: ["/items/after/"] },
+          old: { url: "/items/before/", previous: [] },
+        },
+      },
+    });
+    const movedLock = readFileSync(join(root, URLS_LOCK_FILE), "utf8");
+    await assertSearch(two, [], ["/items/after-renamed/"]);
+
+    // Release 3: `old` is restored at its locked URL while the replacement's old path keeps resolving.
+    writeFileSync(join(root, "_data/items.yml"), sequenceItems(false, "after-renamed"));
+    const three = join(outputs, "three");
+    const third = await build({ root, out: three, themeRoot: theme, updateUrls: true });
+    assert.deepEqual(errorsOf(third), []);
+    assertPage(three, "items/before/index.html", "alpha");
+    assertRedirect(three, "items/after/index.html", "https://example.com/items/after-renamed/");
+    assertPage(three, "items/after-renamed/index.html", "beta");
+    assert.equal(outputText(three, "_redirects"), "/items/after/ https://example.com/items/after-renamed/ 301\n");
+    assert.deepEqual(sitemapUrls(three), [
+      "https://example.com/items/after-renamed/",
+      "https://example.com/items/before/",
+    ]);
+    assert.deepEqual(feedUrls(three), [
+      "https://example.com/items/after-renamed/",
+      "https://example.com/items/before/",
+    ]);
+    assert.deepEqual(apiIds(three), ["new", "old"]);
+    const oldRecord = JSON.parse(outputText(three, "api/v1/items/old.json")) as {
+      url: string;
+      previousUrls: readonly string[];
+    };
+    assert.equal(oldRecord.url, "/items/before/");
+    assert.deepEqual(oldRecord.previousUrls, []);
+    assert.equal(readFileSync(join(root, URLS_LOCK_FILE), "utf8"), movedLock);
+    await assertSearch(three, ["/items/before/"], ["/items/after-renamed/"]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outputs, { recursive: true, force: true });
+  }
+});
