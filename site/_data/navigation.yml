@@ -16,6 +16,8 @@ main:
         url: /first-project-trial/
       - title: Review a data change
         url: /first-project-ci/
+      - title: First build errors
+        url: /first-project-errors/
   - title: Guide
     tab: true
     children:
