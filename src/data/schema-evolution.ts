@@ -14,6 +14,7 @@ export type SchemaChangeId =
   | "data.schema-required-field-added"
   | "data.schema-optional-field-added"
   | "data.schema-field-removed"
+  | "data.schema-field-renamed"
   | "data.schema-type-change"
   | "data.schema-enum-removed";
 
@@ -24,8 +25,8 @@ export interface SchemaChange {
   /** `error` when earlier records may no longer satisfy the schema; `warning` when they still do. */
   readonly severity: "error" | "warning";
   readonly field: string;
-  /** `added` when the current schema declares the field and the baseline did not; `removed` when the reverse. */
-  readonly change: "added" | "removed" | "type-changed" | "enum-removed";
+  /** `added` when the current schema declares the field and the baseline did not; `removed` when the reverse; `renamed` for a mapped old name. */
+  readonly change: "added" | "removed" | "renamed" | "type-changed" | "enum-removed";
   /** What changed, in one sentence, naming the field and both versions. */
   readonly message: string;
   /** The baseline schema's version, as the lock recorded it. */
@@ -59,26 +60,42 @@ export interface DataSchemaResult {
   readonly errors: readonly string[];
 }
 
-/** The fields the current schema gained or lost since the baseline, sorted by field name. */
-export function compareSchemas(current: SchemaSnapshot, baseline: SchemaSnapshot): readonly SchemaChange[] {
+/**
+ * The fields the current schema gained or lost since the baseline, sorted by field name. A `renames` entry keyed by
+ * the new name reports its mapped pair as one rename instead of a removal and an addition.
+ */
+export function compareSchemas(
+  current: SchemaSnapshot,
+  baseline: SchemaSnapshot,
+  renames: Readonly<Record<string, string>> = {},
+): readonly SchemaChange[] {
   const changes: SchemaChange[] = [];
   const currentVersion = { version: current.version, file: current.file };
   const versions = `baseline ${short(baseline.version)} -> now ${short(current.version)}`;
   const push = (change: Omit<SchemaChange, "baseline" | "current">): void => {
     changes.push({ ...change, message: `${change.message}; ${versions}`, baseline: baseline.version, current: currentVersion });
   };
+  /** The baseline name each new name replaces, for a pair that only the rename explains. */
+  const renamedFrom = new Map<string, string>();
+  for (const [now, was] of Object.entries(renames)) {
+    if (baseline.fields[was] !== undefined && baseline.fields[now] === undefined && current.fields[now] !== undefined) renamedFrom.set(now, was);
+  }
+  const renamedOld = new Set(renamedFrom.values());
   const fields = [...new Set([...Object.keys(baseline.fields), ...Object.keys(current.fields)])].sort();
   for (const field of fields) {
     const was = baseline.fields[field];
     const now = current.fields[field];
     if (was === undefined && now !== undefined) {
-      if (now.required) {
+      const old = renamedFrom.get(field);
+      if (old !== undefined) {
+        push({ id: "data.schema-field-renamed", severity: "warning", field, change: "renamed", message: `field \`${old}\` was renamed to \`${field}\`` });
+      } else if (now.required) {
         push({ id: "data.schema-required-field-added", severity: "error", field, change: "added", message: `field \`${field}\` is required, and earlier records lack it` });
       } else {
         push({ id: "data.schema-optional-field-added", severity: "warning", field, change: "added", message: `field \`${field}\` was added as optional` });
       }
     } else if (was !== undefined && now === undefined) {
-      push({ id: "data.schema-field-removed", severity: "warning", field, change: "removed", message: `field \`${field}\` was removed` });
+      if (!renamedOld.has(field)) push({ id: "data.schema-field-removed", severity: "warning", field, change: "removed", message: `field \`${field}\` was removed` });
     } else if (was !== undefined && now !== undefined) {
       if (was.type !== undefined && now.type !== undefined && was.type !== now.type) {
         push({
@@ -136,7 +153,13 @@ export async function dataSchema(options: { readonly root: string; readonly form
       skipped.push({ collection: name, reason: "the schema cannot be read" });
       continue;
     }
-    reports.push({ collection: name, file: schema.file, version: schema.version, baseline: baseline.version, changes: compareSchemas(schema, baseline) });
+    reports.push({
+      collection: name,
+      file: schema.file,
+      version: schema.version,
+      baseline: baseline.version,
+      changes: compareSchemas(schema, baseline, loaded.config.collections[name]?.schemaRenames ?? {}),
+    });
   }
 
   if (options.format === "json") {

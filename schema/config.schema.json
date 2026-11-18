@@ -596,6 +596,13 @@
           "minLength": 1,
           "description": "JSON Schema file that validates every record, relative to the site root."
         },
+        "schemaRenames": {
+          "type": "object",
+          "default": {},
+          "propertyNames": { "minLength": 1 },
+          "additionalProperties": { "type": "string", "minLength": 1 },
+          "description": "Fields an earlier record may still hold under an old name, keyed by the new name: `{ slug: path }` reads `path` as `slug`. A record that holds both keeps the new one and earns a warning naming its line. Default {}."
+        },
         "unique": {
           "type": "array",
           "default": [],

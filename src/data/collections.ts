@@ -370,6 +370,53 @@ export function readText(
 }
 
 /**
+ * Reads a field an earlier record still holds under an old name as its new name, moving its value and spans.
+ * A record that holds both keeps the new value, loses the old one, and earns a warning at the old key.
+ */
+function applySchemaRenames(
+  collection: string,
+  records: readonly DataRecord[],
+  renames: Readonly<Record<string, string>>,
+  diagnostics: Diagnostic[],
+): readonly DataRecord[] {
+  const pairs = Object.entries(renames);
+  if (pairs.length === 0) return records;
+  return records.map((record) => {
+    let next = record;
+    for (const [now, old] of pairs) {
+      if (!Object.hasOwn(next.fields, old)) continue;
+      const conflict = Object.hasOwn(next.fields, now);
+      if (conflict) {
+        const pos = next.keyPositions?.[old] ?? next.fieldPositions[old] ?? next.position;
+        diagnostics.push({
+          id: "data.schema-rename-conflict",
+          severity: "warning",
+          message: `Record "${record.id}" of "${collection}" holds both "${old}" and "${now}"; the "${now}" value is kept.`,
+          pos: sourcePosOf(pos),
+        });
+      }
+      next = {
+        ...next,
+        fields: renameKey(next.fields, old, now, conflict),
+        fieldPositions: renameKey(next.fieldPositions, old, now, conflict),
+        ...(next.keyPositions === undefined ? {} : { keyPositions: renameKey(next.keyPositions, old, now, conflict) }),
+      };
+    }
+    return next;
+  });
+}
+
+/** `old` renamed to `now` where it sits, or dropped when the new name is also present. */
+function renameKey<T>(values: Readonly<Record<string, T>>, old: string, now: string, drop: boolean): Record<string, T> {
+  const entries: [string, T][] = [];
+  for (const [key, value] of Object.entries(values)) {
+    if (key !== old) entries.push([key, value]);
+    else if (!drop) entries.push([now, value]);
+  }
+  return Object.fromEntries(entries);
+}
+
+/**
  * Loads every collection the config declares, in config order. Each source is read once; a source that cannot be
  * read or parsed is reported and left out, and the lock file is validated whenever the site declares collections.
  */
@@ -492,8 +539,9 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       if (text === undefined) continue;
     }
 
-    const records = readText(name, source, display, text, idField, diagnostics);
-    if (records === undefined) continue;
+    const readRecords = readText(name, source, display, text, idField, diagnostics);
+    if (readRecords === undefined) continue;
+    const records = applySchemaRenames(name, readRecords, entry.schemaRenames ?? {}, diagnostics);
     const tooMany = checkRecordCount(name, display, records.length, limits);
     if (tooMany !== undefined) {
       diagnostics.push(tooMany);

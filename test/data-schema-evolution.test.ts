@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { dataSnapshot } from "../src/cli/data.ts";
 import { main, parseArgs } from "../src/cli/index.ts";
+import { loadConfig } from "../src/config/load.ts";
+import { loadCollections } from "../src/data/collections.ts";
 import { sha256 } from "../src/data/lock.ts";
 import { compareSchemas } from "../src/data/schema-evolution.ts";
 
@@ -81,6 +83,54 @@ test("compareSchemas reports an added required field as an error and an added op
   assert.match(changes[0]?.message ?? "", /`author` was added as optional; baseline before -> now after/);
   assert.match(changes[2]?.message ?? "", /`slug` is required, and earlier records lack it; baseline before -> now after/);
   assert.deepEqual(compareSchemas(current, current), []);
+});
+
+test("compareSchemas reports a mapped rename once, while an unmapped pair stays a removal and an addition", () => {
+  const baseline = { version: "before", file: "_data/items.schema.json", fields: { path: { required: true }, title: { required: true } } };
+  const current = { version: "after", file: "_data/items.schema.json", fields: { slug: { required: true }, title: { required: true } } };
+  const changes = compareSchemas(current, baseline, { slug: "path" });
+  assert.deepEqual(
+    changes.map(({ id, severity, field, change }) => ({ id, severity, field, change })),
+    [{ id: "data.schema-field-renamed", severity: "warning", field: "slug", change: "renamed" }],
+  );
+  assert.match(changes[0]?.message ?? "", /`path` was renamed to `slug`; baseline before -> now after/);
+  assert.deepEqual(
+    compareSchemas(current, baseline).map(({ id, field, change }) => ({ id, field, change })),
+    [
+      { id: "data.schema-field-removed", field: "path", change: "removed" },
+      { id: "data.schema-required-field-added", field: "slug", change: "added" },
+    ],
+  );
+});
+
+test("schemaRenames moves an old field's value and spans before validation and warns when both names are present", async () => {
+  const root = mkdtempSync(join(tmpdir(), "data-schema-renames-"));
+  try {
+    for (const [path, text] of Object.entries({
+      "mizzen.yml":
+        "collections:\n  items:\n    source: _data/items.yml\n    schema: _data/items.schema.json\n    schemaRenames:\n      slug: legacy\n",
+      "_data/items.schema.json": schema({ id: { type: "string" }, slug: { type: "string" }, title: { type: "string" } }, ["title", "slug"]),
+      "_data/items.yml": "- id: a\n  title: A\n  legacy: old-a\n- id: b\n  title: B\n  slug: new-b\n  legacy: old-b\n",
+    })) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), text);
+    }
+
+    const { config } = loadConfig(root);
+    const result = await loadCollections({ root, config });
+    const [a, b] = result.collections["items"]!.records;
+    assert.deepEqual(a!.fields, { id: "a", title: "A", slug: "old-a" });
+    assert.deepEqual(a!.fieldPositions["slug"], { file: "_data/items.yml", startLine: 3, startColumn: 11, endLine: 3, endColumn: 15 });
+    assert.deepEqual(a!.keyPositions?.["slug"], { file: "_data/items.yml", startLine: 3, startColumn: 3, endLine: 3, endColumn: 8 });
+    assert.deepEqual(b!.fields, { id: "b", title: "B", slug: "new-b" });
+    assert.deepEqual(
+      result.diagnostics.filter((diagnostic) => diagnostic.id === "data.schema-rename-conflict").map(({ severity, pos }) => ({ severity, pos })),
+      [{ severity: "warning", pos: { file: "_data/items.yml", line: 7, column: 3, endLine: 7, endColumn: 8 } }],
+    );
+    assert.ok(!result.diagnostics.some((diagnostic) => diagnostic.severity === "error"), "the renamed records validate");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("compareSchemas reports a type change and each removed enum value with both versions", () => {
