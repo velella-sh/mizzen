@@ -65,6 +65,33 @@ test("import plain --out writes the mapped project into an empty folder and leav
   assert.match(logs.join("\n"), /wrote 4 files|4 files written/);
 });
 
+test("import plain --out refuses a non-empty destination and writes nothing", async () => {
+  const root = tree({ "index.md": "# Home\n" });
+  const out = tree({ "keep.txt": "already here\n", "nested/other.txt": "also here\n" });
+  const before = snapshot(out);
+  const { logs, errors, io } = capture();
+  const status = await main(["import", "plain", root, "--out", out], io);
+
+  assert.equal(status, 1);
+  assert.deepEqual(errors, []);
+  assert.equal(logs.join("\n").includes(join(out, "keep.txt")), true);
+  assert.deepEqual(snapshot(out), before);
+});
+
+test("import plain --out refuses a conflicting file and leaves the destination byte-identical", async () => {
+  const root = tree({ "index.md": "# Imported\n", "guide/intro.md": "# Intro\n" });
+  const out = tree({ "index.md": "# Existing\n" });
+  const before = snapshot(out);
+  const { logs, errors, io } = capture();
+  const status = await main(["import", "plain", root, "--out", out], io);
+
+  assert.equal(status, 1);
+  assert.deepEqual(errors, []);
+  assert.equal(logs.join("\n").includes(join(out, "index.md")), true);
+  assert.deepEqual(snapshot(out), before);
+  assert.equal(readFileSync(join(out, "index.md"), "utf8"), "# Existing\n");
+});
+
 test("import plain --out refuses the source folder itself", async () => {
   const root = tree({ "index.md": "# Home\n" });
   const before = snapshot(root);

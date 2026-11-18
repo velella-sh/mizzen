@@ -88,7 +88,7 @@ Commands:
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
-  import <name> <dir>         Preview a migration; --out <dir> writes it to a folder outside the source
+  import <name> <dir>         Preview a migration; --out <dir> writes it to an empty folder outside the source
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles

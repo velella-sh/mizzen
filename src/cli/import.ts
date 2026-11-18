@@ -90,7 +90,7 @@ export function importReport(
 
 /**
  * Reads the source, maps every file, prints the preview, and exits 1 when a mapping is an error. With `out`, writes the
- * mapped project there instead, but only when nothing is an error and the destination is outside the source.
+ * mapped project there instead, but only when nothing is an error and the destination is empty and outside the source.
  */
 export async function runImport(name: string, root: string, io: ImportIo, out?: string): Promise<number> {
   const importer = importerNamed(name);
