@@ -88,3 +88,23 @@ test "$(hash_of first)" = "$(hash_of second)"
 test -s first/feeds/releases.xml
 test -s first/search-facets.json
 echo "the example data site builds twice with the same hash: $(hash_of first)"
+
+# The first-project guides promise these files and URLs. Build every sample with the installed CLI and theme, from a
+# copy in the project, so a broken tarball, theme resolution, or sample fails here and not in a reader's terminal.
+build_first_project_sample() {
+  sample="$1"
+  shift
+  cp -R "$mizzen/examples/first-project/$sample" "sample-$sample"
+  node -e '
+    const fs = require("node:fs");
+    const file = process.argv[1];
+    const text = fs.readFileSync(file, "utf8");
+    fs.writeFileSync(file, text.replace(/^collections:$/m, "theme:\n  name: \"@velella/lateen\"\ncollections:"));
+  ' "sample-$sample/mizzen.yml"
+  npx mizzen build "sample-$sample" --out "out-$sample"
+  for page in "$@"; do test -s "out-$sample/$page"; done
+  echo "the $sample first-project sample builds from the installed package"
+}
+build_first_project_sample catalog index.html sensors/index.html sensors/thermometer/index.html
+build_first_project_sample report index.html archive/index.html
+build_first_project_sample mixed guide/index.html stations/index.html stations/riverside/index.html

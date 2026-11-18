@@ -1,0 +1,21 @@
+- slug: riverside
+  name: Riverside
+  river: Calder
+  installed: 2026-02-03
+  summary: |
+    The **riverside** station sits below the last bridge. It is the reference
+    station: the other two are compared against it.
+- slug: north-ridge
+  name: North ridge
+  river: Calder
+  installed: 2026-02-17
+  summary: |
+    The **north ridge** station sits above the tree line. It reads colder
+    than the valley and is often the first to report snow.
+- slug: tidal-flat
+  name: Tidal flat
+  river: Ouse
+  installed: 2026-03-02
+  summary: |
+    The **tidal flat** station sits where the river meets the estuary. Its
+    readings follow the tide, so compare it at the same hour of the day.

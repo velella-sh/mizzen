@@ -8,6 +8,7 @@
 import type { FeedConfig, Site } from "../contracts/index.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
 import { filterRows, instantOf, parseQuery, type Row } from "../data/query.ts";
+import { lifecycleOf, listedForMachines } from "../data/lifecycle.ts";
 import { localizeFields, resolveIn, scalarText } from "../data/record-context.ts";
 import { fieldsWithDerived } from "../data/derived.ts";
 import { referenceDateOf } from "../data/reference-date.ts";
@@ -76,8 +77,10 @@ export function feedEntries(
     };
   });
 
+  const lifecycle = site.config.collections[feed.collection]?.lifecycle;
   const entries: FeedEntry[] = [];
   for (const row of filterRows(rows, query.where)) {
+    if (!listedForMachines(lifecycleOf(row.fields, lifecycle))) continue;
     const date = dateOf(row.fields, row.dates, feed.date);
     if (date === undefined) continue;
     if (bounds.window !== undefined && !inWindow(date, bounds.window)) continue;

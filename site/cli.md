@@ -60,7 +60,11 @@ Options:
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
-  --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
+  --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
+  --commit <sha>       For build: record this commit in a preview's manifest (default: GITHUB_SHA)
+  --preview-canonical <url>
+                       For build: mark every page noindex and point its canonical at this URL plus the page's URL
+  --baseline <dir>     For build: the latest public build to compare this preview with, written to .mizzen/preview-diff.json; needs --preview-canonical
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
   --max-entries <n>    For diff --format markdown: table rows before "N more" (default: 50)
   --link-base <url>    For diff --format markdown: link page URLs under this base

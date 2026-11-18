@@ -1,0 +1,8 @@
+title: First build errors
+url: https://example.com
+collections:
+  sensors:
+    source: _data/sensor.yml
+    id: slug
+    template: _templates/sensors.md
+    permalink: /sensors/{slug}/
