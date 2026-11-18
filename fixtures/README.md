@@ -8,6 +8,7 @@ Shared inputs for tests, benchmarks, and screenshots. Every epic builds against 
 | `rtl-site/` | Five Persian pages, right to left, mixing Persian and English, code blocks, and numbers. |
 | `docs-versions/` | Current docs, an old release, and the default release, each version keeping its navigation; see its README and `docs/docs-versions.md`. |
 | `compat-0.2/` | The `0.2.0` docs-site HTML hashes and a fixed test-only render fixture; see its README for provenance and the intentional-difference policy. |
+| `compat-0.2.2/` | A small `0.2.2` data site and the published package's public-output hashes, canonical links, redirects, and sitemap; see its README and `scripts/release-compat.ts`. |
 | `import-vitepress/` | A VitePress page with a container, a mapped Vue component, and a dynamic part, plus the expected import; see its README. |
 
 ## Rules

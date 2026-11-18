@@ -4,6 +4,86 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+## 0.2.3 — 2026-11-18
+
+This release makes a site's claims checkable after publishing, connects records across projects, and adds
+authoring features for content that a docs team repeats. An existing docs or data site needs no content migration;
+everything below is opt-in. The [upgrade guide](site/upgrade.md) covers the optional additions and the one
+compatibility fixture.
+
+### Added
+
+- **Published-site checks.** `mizzen published-site check --sitemap <url>` fetches every URL a published sitemap
+  lists and reports its status, canonical URL, and redirect destination as text or JSON. `--domain` limits the
+  hosts it may request and `--redirects` supplies the expected final address for each old path. The check is a
+  recipe for CI; a build still opens no network connection.
+- **Network sitemap discovery.** `mizzen network sitemap` writes a sitemap index for the public projects in a
+  `network.lock.json`, and the root `robots.txt` can point at it. Projects outside the lock, duplicate entries,
+  and an index that points at itself are refused.
+- **Cross-site record links.** A link written as `[[project:collection/id]]` resolves to the record's current page
+  from the locked project inputs, so a renamed record does not require rewriting every referring page. A removed
+  record and an unknown id name the referring file and line. No build request is made.
+- **Record relations.** A list of ids in a field named by `references` resolves to the related records in record
+  templates and list queries, in declared order. Changing a related record invalidates the pages, lists, feeds,
+  and JSON that show it, and an incremental build gives the same bytes as a full build.
+- **Report archive.** A run is identified by its configured fields and pinned inputs, the latest and archived
+  report views keep stable URLs as later runs are published, and an earlier report can be rebuilt from its locked
+  inputs. A filterable gallery shows the runs with their dates and commits.
+- **Claim evidence.** A collection can name an `evidence` field whose claims map values to sources. The source is
+  rendered beside the value with `:evidence[…]`, published with the same id and URL in the page JSON, and
+  validated with the record. Private fields never reach an output.
+- **Documented command checks.** A `test` fence meta says which code blocks are runnable examples. The
+  `examples-report` output records each result, a failure points at the fence's file and line, and
+  `examples.failOnFailure` makes `mizzen check` exit 1. A recipe wires the report into CI.
+- **Page tools.** A page selects a browser tool with `tool:` front matter; the `page-tools` output copies it to the
+  page's site-relative path and the theme receives the asset URL. A page without `tool:` loads no tool.
+- **Blogs.** The `blog` config block plus post front matter writes post, archive, and author routes, pagination,
+  search metadata, and an Atom feed. It never implies a blog from a folder name.
+- **API reference.** A pinned OpenAPI document builds searchable, stable operation pages with navigation and
+  source-position diagnostics. The input is a file in the repository; the build reads nothing else.
+- **Code annotations.** `annotations={…}` on a code fence attaches notes to exact source lines. The notes are
+  accessible HTML, keep their source positions, and stay byte-for-byte in the Markdown twin.
+- **Code snippets.** A fence or include can read a line range from a source file, with the exact origin of every
+  line and a diagnostic for a missing file or range. A change to the source rebuilds its consumers.
+- **Shared content.** `::include` accepts parameters, nests, and reports the file and line of the fragment and the
+  call site. A change to a fragment invalidates every page that includes it.
+- **Math.** Inline and block math are rendered to deterministic MathML through the same source positions,
+  diagnostics, and Markdown twins as other text; no runtime, stylesheet, or font is downloaded.
+- **Documentation versions.** `mizzen versions snapshot <vN>` copies the current pages and navigation into a `vN/`
+  folder, refuses a name that exists or is not newer, and writes nothing with `--dry-run`. Default routing and the
+  existing versioned URLs are unchanged.
+- **Component imports.** Docusaurus MDX, Starlight MDX/Markdoc, and VitePress containers and Vue components convert
+  to readable Markdown or HTML, with a report for every pattern that has no exact equivalent. No Vue or MDX is
+  executed.
+- **Plugin contract.** A content validator, a Markdown transform, and custom outputs can be declared in
+  `mizzen.config.ts`. Plugins declare the version, settings, and files they read, so a cached build misses when one
+  changes; executable examples and a compatibility test pin the hooks.
+- **API contract checks.** A page that cites a public TypeScript symbol or member is compared with the source.
+  `drift.json`, `mizzen check`, and `mizzen doctor` report a changed signature, a removed symbol, or an unchecked
+  claim; the config's `drift` key chooses whether a failure warns or fails.
+
+### Fixed
+
+- Published-site checks stop at off-domain redirects, reject non-2xx redirect destinations, and report malformed
+  redirect locations instead of throwing.
+- OpenAPI reference reading reports cyclic YAML aliases instead of overflowing the stack.
+
+### Compatibility
+
+- `0.2.2` Markdown, configuration, navigation, CLI commands, and flags remain supported. New features are opt-in:
+  a site without their keys builds the same pages at the same URLs.
+- The release compatibility test installs the published `0.2.2` and the release tarball in separate empty
+  projects and builds the same 0.2.2 fixture with a fixed render fixture. All 197 public files, every canonical
+  link, `_redirects`, and the sitemap URLs match; the only normalized value is the engine version stamp in
+  `agent.json`. See `fixtures/compat-0.2.2/README.md`.
+- The same fixture builds with the published `@velella/lateen@0.2.2` theme. Canonical links, theme assets, the
+  Mermaid diagram, and redirect targets keep the configured base path.
+- Existing CLI commands and flags are unchanged; new commands and flags are listed in [Command line](site/cli.md).
+  Existing schemas gain optional fields, and the package exports gain optional contract types.
+- Generated JSON reports this engine as `0.2.3`; consumers should read `version` from `@velella/mizzen` rather
+  than pinning a literal. Document-format versions are separate.
+- Follow the [upgrade guide](site/upgrade.md) before enabling the new authoring or publishing features.
+
 ## 0.2.2 — 2026-11-17
 
 This release extends data publishing and adds tools for comparing builds, reading a site through MCP,

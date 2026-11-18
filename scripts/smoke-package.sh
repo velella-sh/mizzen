@@ -1,17 +1,29 @@
 #!/usr/bin/env bash
 # Packs Mizzen and Lateen, installs both tarballs into an empty project, and builds the Lateen docs site with the
 # installed `mizzen` command, then checks the example data site. The engine runs from node_modules, not a checkout.
-# Usage: scripts/smoke-package.sh [mizzen-dir] [lateen-dir]   (defaults: ../mizzen and ../lateen)
+# Usage: scripts/smoke-package.sh [mizzen-dir] [lateen-dir] [--mizzen-tarball <file>] [--lateen-tarball <file>]
+#   (dirs default to ../mizzen and ../lateen). A tarball argument tests that exact file instead of packing again, so
+#   the release workflow tests and publishes one artifact.
 set -euo pipefail
 
 mizzen="$(cd "${1:-../mizzen}" && pwd)"
 lateen="$(cd "${2:-../lateen}" && pwd)"
+if [ $# -ge 2 ]; then shift 2; elif [ $# -eq 1 ]; then shift; fi
+mizzen_tarball=""
+lateen_tarball=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --mizzen-tarball) mizzen_tarball="$2"; shift 2 ;;
+    --lateen-tarball) lateen_tarball="$2"; shift 2 ;;
+    *) echo "smoke: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 mkdir "$work/tar" "$work/project"
-(cd "$mizzen" && npm pack --silent --pack-destination "$work/tar" >/dev/null)
-(cd "$lateen" && npm pack --silent --pack-destination "$work/tar" >/dev/null)
+if [ -n "$mizzen_tarball" ]; then cp "$mizzen_tarball" "$work/tar/"; else (cd "$mizzen" && npm pack --silent --pack-destination "$work/tar" >/dev/null); fi
+if [ -n "$lateen_tarball" ]; then cp "$lateen_tarball" "$work/tar/"; else (cd "$lateen" && npm pack --silent --pack-destination "$work/tar" >/dev/null); fi
 
 cd "$work/project"
 npm init -y >/dev/null
@@ -52,4 +64,6 @@ TS
   --target es2023 --allowImportingTsExtensions contract-check.ts
 echo "the tarball alone exposes the data contract types"
 
-bash "$mizzen/scripts/smoke-example.sh" "$mizzen" "$lateen"
+bash "$mizzen/scripts/smoke-example.sh" "$mizzen" "$lateen" \
+  --mizzen-tarball "$(ls "$work"/tar/velella-mizzen-*.tgz)" \
+  --lateen-tarball "$(ls "$work"/tar/velella-lateen-*.tgz)"
