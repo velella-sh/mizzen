@@ -1,0 +1,16 @@
+title: Refresh fixture
+description: A data site refreshed by the sample CI workflow.
+collections:
+  items:
+    source: http://127.0.0.1:4317/items
+    records: data.items
+    id: id
+    template: _templates/item.md
+    permalink: /items/{id}/
+    schema: schema/items.json
+quality:
+  rules:
+    - kind: completeness
+      collection: items
+      fields: [note]
+      severity: error
