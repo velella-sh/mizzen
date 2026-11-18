@@ -352,6 +352,45 @@ export interface SnapshotConfig {
   readonly maxAgeDays?: number;
 }
 
+/** What a data-quality rule measures. */
+export type QualityRuleKind = "completeness" | "coverage" | "count";
+
+/** One data-quality rule: what it measures, on which collection, and when it reports. */
+export interface QualityRule {
+  /** What the rule measures: a missing field, a field's coverage drop, or a record-count drop. */
+  readonly kind: QualityRuleKind;
+  /** The collection it reads. */
+  readonly collection: string;
+  /** The fields it checks. Default: every field the collection's records hold. */
+  readonly fields?: readonly string[];
+  /** A record must match to be in scope, written like a list page's `where`. Default: every record. */
+  readonly where?: Readonly<Record<string, unknown>>;
+  /** For `coverage` and `count`: how much the value may drop before the rule reports. Default `0`. */
+  readonly maxDrop?: number;
+}
+
+/** A dated exception: a finding the rules would make, held back until a day. */
+export interface QualityException {
+  /** The kind of finding it covers. */
+  readonly rule: QualityRuleKind;
+  /** The record it covers. Default: every record. */
+  readonly record?: string;
+  /** The field it covers. Default: every field. */
+  readonly field?: string;
+  /** Why the finding is allowed. */
+  readonly reason: string;
+  /** The last day it holds, `YYYY-MM-DD`. Default: no end. */
+  readonly until?: string;
+}
+
+/** The `quality` key: rules that report missing fields and falling coverage or counts, with dated exceptions. */
+export interface QualityConfig {
+  readonly rules: readonly QualityRule[];
+  readonly exceptions: readonly QualityException[];
+  /** How a finding of each kind is reported. Default `warning`. */
+  readonly policy: Readonly<Partial<Record<QualityRuleKind, "warning" | "error">>>;
+}
+
 /** One collection of the data API: which of its fields are published, and under which key its id is written. */
 export interface ApiCollectionConfig {
   /** The record fields the API publishes. A field not listed is never written. */
@@ -463,6 +502,8 @@ export interface SiteConfig {
   readonly dates?: DatesConfig;
   /** Snapshot freshness. Default: none, and no snapshot is ever reported as stale. */
   readonly snapshot?: SnapshotConfig;
+  /** Data-quality rules and dated exceptions. Default: none, and `mizzen data quality` reports nothing. */
+  readonly quality?: QualityConfig;
   /** The versioned static data API. Default: none, and nothing is written under `api/`. */
   readonly api?: ApiConfig;
   /** Stale page detection. Default: none, and `covers` paths are relative to the site root. */

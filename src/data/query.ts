@@ -125,7 +125,7 @@ function textsOf(value: unknown): readonly string[] {
 }
 
 /** True when a field holds a value; an empty string, an empty list, `null`, and an absent field do not. */
-function hasValue(value: unknown): boolean {
+export function hasValue(value: unknown): boolean {
   if (value === undefined || value === null) return false;
   if (typeof value === "string") return value.trim() !== "";
   if (Array.isArray(value)) return value.length > 0;

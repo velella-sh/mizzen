@@ -99,6 +99,13 @@ test("valid configs pass", () => {
     { collections: { components: { source: "_data/components.yml", json: { fields: ["title", "status"] } } } },
     { api: { collections: {} } },
     { api: { version: "v2", collections: { packages: { fields: ["name"], id: "key" } } } },
+    {
+      quality: {
+        rules: [{ kind: "completeness", collection: "items", fields: ["author"], where: { status: "stable" } }],
+        exceptions: [{ rule: "completeness", record: "b", field: "author", reason: "Not written yet", until: "2026-12-31" }],
+        policy: { completeness: "error", coverage: "warning", count: "warning" },
+      },
+    },
     { feeds: {} },
     { calendars: {} },
     { calendars: { eol: { collection: "runtimes", events: [{ name: "eol", field: "eol" }] } } },
