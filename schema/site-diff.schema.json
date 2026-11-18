@@ -3,8 +3,9 @@
   "title": "Mizzen site diff",
   "description": "What `mizzen diff <a> <b> --format json` prints: how build B differs from build A, as the two build hashes and the pages added, removed, changed, and moved, with the changed blocks of each changed page, the URLs that now answer 404, the other files that changed, and the records that changed. The report holds no page content by default: it names pages, headings, line ranges, and field names, and a field value only when it is short. Paths are relative with forward slashes, never absolute. The format only gains fields: a reader ignores a field it does not know, and a field it knows never changes meaning or disappears within version 1. Every list is sorted, so the same two builds give the same bytes.",
   "type": "object",
-  "required": ["version", "base", "head", "identical", "summary", "pages", "brokenUrls", "files", "records"],
+  "required": ["schemaVersion", "version", "base", "head", "identical", "summary", "pages", "brokenUrls", "files", "records"],
   "properties": {
+    "schemaVersion": { "const": 1, "description": "The report schema version. Only 1 exists." },
     "version": { "const": 1, "description": "The format version. Only 1 exists." },
     "base": { "$ref": "#/$defs/build", "description": "The build being compared from (`<a>`)." },
     "head": { "$ref": "#/$defs/build", "description": "The build being compared to (`<b>`)." },
@@ -128,18 +129,62 @@
         "title": { "type": "string" }
       }
     },
-    "block": {
+    "span": {
       "type": "object",
-      "description": "One section of a changed page. `range` is 1-based and inclusive, in the Markdown twin of build B, or of build A for a removed section. A section with a `heading` of null is the text before the first heading.",
-      "required": ["heading", "id", "kind"],
+      "description": "A source file and a 1-based, inclusive line range.",
+      "required": ["path", "range"],
       "properties": {
-        "heading": { "type": ["string", "null"] },
-        "id": { "type": ["string", "null"], "description": "The section's anchor id." },
-        "kind": { "enum": ["added", "removed", "edited", "moved"] },
+        "path": { "$ref": "#/$defs/path" },
         "range": {
           "type": "object",
           "required": ["start", "end"],
           "properties": { "start": { "type": "integer", "minimum": 1 }, "end": { "type": "integer", "minimum": 1 } }
+        }
+      }
+    },
+    "block": {
+      "type": "object",
+      "description": "One changed block of a changed page, matched by its stable id when the build carries block ids. `kind` names the change: added, removed, edited, moved, moved-edited, heading, code, code-language, table, link, image, record, or uncertain. `before` and `after` are the source spans on each side, present when that side has the block. `range` stays for readers of version 1.",
+      "required": ["heading", "id", "kind"],
+      "properties": {
+        "heading": { "type": ["string", "null"] },
+        "id": { "type": ["string", "null"], "description": "The block's stable id." },
+        "kind": { "enum": ["added", "removed", "edited", "moved", "moved-edited", "heading", "code", "code-language", "table", "link", "image", "record", "uncertain"] },
+        "range": {
+          "type": "object",
+          "required": ["start", "end"],
+          "properties": { "start": { "type": "integer", "minimum": 1 }, "end": { "type": "integer", "minimum": 1 } }
+        },
+        "before": { "$ref": "#/$defs/span" },
+        "after": { "$ref": "#/$defs/span" },
+        "cell": {
+          "type": "object",
+          "description": "The first changed table cell, 1-based.",
+          "required": ["row", "column"],
+          "properties": { "row": { "type": "integer", "minimum": 1 }, "column": { "type": "integer", "minimum": 1 } }
+        },
+        "destination": {
+          "type": "object",
+          "required": ["before", "after"],
+          "properties": { "before": { "type": "string" }, "after": { "type": "string" } }
+        },
+        "text": {
+          "type": "object",
+          "description": "The heading or table cell text on each side.",
+          "required": ["before", "after"],
+          "properties": { "before": { "type": "string" }, "after": { "type": "string" } }
+        },
+        "language": {
+          "type": "object",
+          "description": "The fence language on each side of a code-language change.",
+          "required": ["before", "after"],
+          "properties": { "before": { "type": "string" }, "after": { "type": "string" } }
+        },
+        "field": { "type": "string", "description": "The record field a record change came from." },
+        "value": {
+          "type": "object",
+          "required": ["before", "after"],
+          "properties": { "before": { "type": "string" }, "after": { "type": "string" } }
         }
       }
     },

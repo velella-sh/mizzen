@@ -53,7 +53,16 @@ export function summaryLine(diff: SiteDiff): string {
 
 function blockText(block: ChangedPage["blocks"][number]): string {
   const where = block.range === undefined ? "" : block.range.start === block.range.end ? ` (line ${block.range.start})` : ` (lines ${block.range.start}-${block.range.end})`;
-  return `${block.kind} ${block.heading === null ? "text before the first heading" : block.heading}${where}`;
+  const head = `${block.kind} ${block.heading === null ? "text before the first heading" : block.heading}${where}`;
+  if (block.destination !== undefined) return `${head}: ${block.destination.before} -> ${block.destination.after}`;
+  if (block.field !== undefined && block.value !== undefined) return `${head}: ${block.field} ${block.value.before} -> ${block.value.after}`;
+  if (block.language !== undefined) return `${head}: ${block.language.before || "none"} -> ${block.language.after || "none"}`;
+  if (block.cell !== undefined) {
+    const value = block.text === undefined ? "" : `: ${block.text.before} -> ${block.text.after}`;
+    return `${head}: cell ${block.cell.row}:${block.cell.column}${value}`;
+  }
+  if (block.text !== undefined) return `${head}: ${block.text.before} -> ${block.text.after}`;
+  return head;
 }
 
 function moveText(move: MovedPage): string {
