@@ -1,0 +1,13 @@
+# Markdown guides beside records and lists generated from data.
+title: Sample field guide
+description: A hand-written guide that links to a record and to a generated list.
+lang: en
+url: https://example.com
+collections:
+  stations:
+    source: _data/stations.yml
+    id: slug
+    template: _templates/stations.md
+    permalink: /stations/{slug}/
+    markdown: [summary]
+    dates: [installed]
