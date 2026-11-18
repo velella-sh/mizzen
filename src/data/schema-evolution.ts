@@ -9,11 +9,25 @@ import type { Diagnostic, SchemaSnapshot } from "../contracts/index.ts";
 import { readLock } from "./lock.ts";
 import { compileSchemas } from "./schema.ts";
 
+/** The diagnostic a schema change reports. */
+export type SchemaChangeId =
+  | "data.schema-required-field-added"
+  | "data.schema-optional-field-added"
+  | "data.schema-field-removed"
+  | "data.schema-type-change"
+  | "data.schema-enum-removed";
+
 /** One top-level field the current schema gained or lost since the collection's data was recorded. */
 export interface SchemaChange {
+  /** Stable identifier, such as `data.schema-required-field-added`. */
+  readonly id: SchemaChangeId;
+  /** `error` when earlier records may no longer satisfy the schema; `warning` when they still do. */
+  readonly severity: "error" | "warning";
   readonly field: string;
   /** `added` when the current schema declares the field and the baseline did not; `removed` when the reverse. */
-  readonly change: "added" | "removed";
+  readonly change: "added" | "removed" | "type-changed" | "enum-removed";
+  /** What changed, in one sentence, naming the field and both versions. */
+  readonly message: string;
   /** The baseline schema's version, as the lock recorded it. */
   readonly baseline: string;
   /** The current schema: its version and the file that declares it. */
@@ -49,14 +63,22 @@ export interface DataSchemaResult {
 export function compareSchemas(current: SchemaSnapshot, baseline: SchemaSnapshot): readonly SchemaChange[] {
   const changes: SchemaChange[] = [];
   const currentVersion = { version: current.version, file: current.file };
+  const versions = `baseline ${short(baseline.version)} -> now ${short(current.version)}`;
+  const push = (change: Omit<SchemaChange, "baseline" | "current">): void => {
+    changes.push({ ...change, message: `${change.message}; ${versions}`, baseline: baseline.version, current: currentVersion });
+  };
   const fields = [...new Set([...Object.keys(baseline.fields), ...Object.keys(current.fields)])].sort();
   for (const field of fields) {
     const was = baseline.fields[field];
     const now = current.fields[field];
     if (was === undefined && now !== undefined) {
-      changes.push({ field, change: "added", baseline: baseline.version, current: currentVersion });
+      if (now.required) {
+        push({ id: "data.schema-required-field-added", severity: "error", field, change: "added", message: `field \`${field}\` is required, and earlier records lack it` });
+      } else {
+        push({ id: "data.schema-optional-field-added", severity: "warning", field, change: "added", message: `field \`${field}\` was added as optional` });
+      }
     } else if (was !== undefined && now === undefined) {
-      changes.push({ field, change: "removed", baseline: baseline.version, current: currentVersion });
+      push({ id: "data.schema-field-removed", severity: "warning", field, change: "removed", message: `field \`${field}\` was removed` });
     }
   }
   return changes;
@@ -106,7 +128,7 @@ export async function dataSchema(options: { readonly root: string; readonly form
       continue;
     }
     lines.push(`${report.collection}: ${report.file}, baseline ${short(report.baseline)} -> now ${short(report.version)}`);
-    for (const change of report.changes) lines.push(`  ${change.change} field \`${change.field}\``);
+    for (const change of report.changes) lines.push(`  ${change.severity} ${change.id}: ${change.message}`);
   }
   for (const skip of skipped) lines.push(`skipped ${skip.collection}: ${skip.reason}`);
   return { code: errors.length === 0 ? 0 : 1, output: lines.length === 0 ? "" : `${lines.join("\n")}\n`, errors };
