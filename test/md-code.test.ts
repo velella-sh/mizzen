@@ -4,9 +4,10 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Code, Nodes, Root } from "mdast";
+import type { CodeMeta } from "../src/contracts/code.ts";
 import { parseFrontMatter } from "../src/content/frontmatter.ts";
 import { loadMarkdownPlugins, parseMarkdown } from "../src/markdown/parse.ts";
-import { codeMetaOf, parseCodeMeta, type CodeGroup, type CodeMeta, type LineRange } from "../src/markdown/plugins/code.ts";
+import { codeMetaOf, parseCodeMeta, type CodeGroup, type LineRange } from "../src/markdown/plugins/code.ts";
 
 /** The fixture site the issue's done-when names. */
 const FIXTURES_ROOT = fileURLToPath(new URL("../fixtures/docs-site/", import.meta.url));
@@ -113,6 +114,7 @@ test("title, bare line marks, ins, del, and showLineNumbers parse from one fence
     del: [range(4)],
     diff: false,
     showLineNumbers: true,
+    annotations: [],
   });
 });
 
@@ -128,6 +130,7 @@ test("a bare diff token turns diff mode on and leaves the other fields empty", a
     del: [],
     diff: true,
     showLineNumbers: false,
+    annotations: [],
   });
 });
 
@@ -148,6 +151,7 @@ test("a fence with no meta gets empty fields, not missing ones", async () => {
     del: [],
     diff: false,
     showLineNumbers: false,
+    annotations: [],
   });
 });
 

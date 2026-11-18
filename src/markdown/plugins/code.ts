@@ -1,31 +1,12 @@
 import type { Code, Data, Parent, Root, RootContent } from "mdast";
 import type { Plugin } from "unified";
-import { parseAnnotations, type CodeAnnotation } from "./code-annotations.ts";
+import type { CodeMeta } from "../../contracts/code.ts";
+import { parseAnnotations } from "./code-annotations.ts";
 
 /** Inclusive run of 1-based line numbers inside a code block: `3-5` is `{ from: 3, to: 5 }`. */
 export interface LineRange {
   readonly from: number;
   readonly to: number;
-}
-
-/** Structured fence meta a code component reads from `data.code`. Nothing here is highlighted. */
-export interface CodeMeta {
-  /** The fence's meta string, verbatim. */
-  readonly raw: string;
-  /** `title="..."`, or `null` when absent or empty. */
-  readonly title: string | null;
-  /** Lines in bare braces, `{1,3-5}`. */
-  readonly highlight: readonly LineRange[];
-  /** Lines in `ins={...}`: inserted in a diff. */
-  readonly ins: readonly LineRange[];
-  /** Lines in `del={...}`: deleted in a diff. */
-  readonly del: readonly LineRange[];
-  /** A bare `diff` flag: the fence is a diff. */
-  readonly diff: boolean;
-  /** `showLineNumbers` turns numbering on; `showLineNumbers=false` turns it off. */
-  readonly showLineNumbers: boolean;
-  /** `annotations={…}`: notes on 1-based lines, in line order. */
-  readonly annotations: readonly CodeAnnotation[];
 }
 
 /** Why one part of a line list is not a usable range. */

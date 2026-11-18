@@ -11,7 +11,12 @@ const fixture = fileURLToPath(new URL("../fixtures/docs-site", import.meta.url))
 const compat = fileURLToPath(new URL("../fixtures/compat-0.2", import.meta.url));
 
 // Every intentional difference must name the page, its new hash, and the reason; never replace the 0.2.0 hashes.
-const intendedDifferences: Record<string, { sha256: string; reason: string }> = {};
+const intendedDifferences: Record<string, { sha256: string; reason: string }> = {
+  "features/index.html": {
+    sha256: "a8eb846e424876014d0e21c68ed3df8100e47495840ffc5745007726c60f4e2c",
+    reason: "Code fences carry highlight, line, and annotation data in one data-code attribute (#866).",
+  },
+};
 
 test("the 0.2.0 docs fixture keeps its page list and every page's HTML bytes", async () => {
   const baseline: { engine: string; pages: Record<string, string> } =

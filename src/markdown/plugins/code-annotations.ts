@@ -1,16 +1,9 @@
 import type { Nodes, Root } from "mdast";
 import type { Plugin } from "unified";
+import type { CodeAnnotation } from "../../contracts/code.ts";
 import type { Diagnostic } from "../../contracts/diagnostic.ts";
 import type { SourcePos } from "../../contracts/source.ts";
 import { spanFromPosition } from "../../source/spans.ts";
-
-/** One note attached to an inclusive run of 1-based lines in a code block. */
-export interface CodeAnnotation {
-  readonly from: number;
-  readonly to: number;
-  /** The note after the colon, with `\|` and `\\` decoded. */
-  readonly text: string;
-}
 
 /** Why one annotation entry is dropped. */
 export type AnnotationProblem = "syntax" | "range" | "overlap";

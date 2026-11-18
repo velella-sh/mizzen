@@ -8,8 +8,7 @@ export type { NavGroup, NavItem, NavLink, NavTree, Pager, Trail } from "./nav.ts
 export type { Output, OutputBuild, OutputContext, OutputFile } from "./output.ts";
 export type { Chrome, ChromeProps, Component, ComponentProps, Head, Island, Layout, LayoutProps, LinkTag, MetaTag, RenderHints, RenderNode, ScriptTag } from "./render.ts";
 export type { CodeConfig, MarkdownSource, MaybePromise, Plugin, PluginHooks } from "./plugin.ts";
-export type { CodeAnnotation } from "../markdown/plugins/code-annotations.ts";
-export type { CodeMeta, InvalidCodeMeta, LineRange } from "../markdown/plugins/code.ts";
+export type { CodeAnnotation, CodeLineRange, CodeMeta } from "./code.ts";
 export type { ContextConstraints, ContextRequest, ContextRequestProblem, ContextRequestResult, EvidenceRequirement, TaskIntent, TaskKind, TokenBudget, VersionRange } from "./context-request.ts";
 export type { EditAuditCheck, EditAuditCheckStatus, EditAuditOutcome, EditAuditPlan, EditAuditRecord, EditAuditSpan, EditAuditVerification, EditAuditVersion } from "./edit-audit.ts";
 export type { NetworkProject, SiteNetwork } from "./network.ts";
