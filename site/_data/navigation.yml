@@ -12,6 +12,8 @@ main:
     children:
       - title: From a data file
         url: /first-project/
+      - title: Try a migration
+        url: /first-project-trial/
   - title: Guide
     tab: true
     children:
