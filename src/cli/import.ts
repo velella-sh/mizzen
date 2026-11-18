@@ -203,6 +203,7 @@ export async function runImport(
         pages: links.pages,
         assets: outcome.assets,
         config: outcome.config,
+        ...(outcome.navigation === undefined ? {} : { navigation: outcome.navigation }),
         sections: { accuracy, coverage },
       });
   const all = [...found, ...generated.diagnostics];

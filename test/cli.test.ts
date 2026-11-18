@@ -60,6 +60,10 @@ test("parseArgs: help, build defaults, check format, and usage errors", () => {
   assert.deepEqual(parseArgs(["build", "site", "--out", "public", "--theme", "/t"]), {
     options: { command: "build", root: "site", out: "public", theme: "/t" },
   });
+  assert.deepEqual(parseArgs(["build", "--commit", "abc123"]), {
+    options: { command: "build", root: ".", out: "dist", commit: "abc123" },
+  });
+  assert.equal("error" in parseArgs(["check", "--commit", "abc123"]), true);
   assert.deepEqual(parseArgs(["check", "--format", "json"]), {
     options: { command: "check", root: ".", format: "json" },
   });
@@ -91,6 +95,34 @@ test("build writes the site and exits 0 when there are no errors", async () => {
     assert.deepEqual(logs, []);
   } finally {
     rmSync(root, { recursive: true });
+  }
+});
+
+test("a preview build records --commit, and GITHUB_SHA is the fallback", async () => {
+  const root = tree({
+    "mizzen.yml":
+      "title: Demo\nurl: https://example.com\ndefaults:\n  - path: \"\"\n    values:\n      layout: doc\n",
+    "index.md": "# Hello\n",
+  });
+  const previous = process.env.GITHUB_SHA;
+  const { errors, io } = capture();
+  const read = (out: string): { preview?: { commit?: string; dataHash?: string } } =>
+    JSON.parse(readFileSync(join(out, ".mizzen/manifest.json"), "utf8")) as { preview?: { commit?: string; dataHash?: string } };
+  try {
+    const flagOut = join(root, "_flag");
+    assert.equal(await main(["build", root, "--out", flagOut, "--theme", THEME, "--preview-canonical", "https://preview.example.com", "--commit", "flag-sha"], io), 0);
+    assert.deepEqual(errors, []);
+    assert.equal(read(flagOut).preview?.commit, "flag-sha");
+    assert.match(read(flagOut).preview?.dataHash ?? "", /^[0-9a-f]{64}$/);
+
+    process.env.GITHUB_SHA = "env-sha";
+    const envOut = join(root, "_env");
+    assert.equal(await main(["build", root, "--out", envOut, "--theme", THEME, "--preview-canonical", "https://preview.example.com"], io), 0);
+    assert.equal(read(envOut).preview?.commit, "env-sha");
+  } finally {
+    if (previous === undefined) delete process.env.GITHUB_SHA;
+    else process.env.GITHUB_SHA = previous;
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

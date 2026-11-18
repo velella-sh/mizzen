@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { main } from "../src/cli/index.ts";
+import { generateProject } from "../src/import/generate.ts";
+import { readImportSource } from "../src/import/source.ts";
 
 /** A temporary folder holding `files`. */
 function tree(files: Record<string, string | Uint8Array>): string {
@@ -180,6 +182,23 @@ test("import plain --out refuses a conflicting file and leaves the destination b
   assert.equal(logs.join("\n").includes(join(out, "index.md")), true);
   assert.deepEqual(snapshot(out), before);
   assert.equal(readFileSync(join(out, "index.md"), "utf8"), "# Existing\n");
+});
+
+test("an importer that declares navigation writes the default navigation file", async () => {
+  const root = tree({ "index.md": "# Home\n" });
+  const out = mkdtempSync(join(tmpdir(), "import-navigation-"));
+  const result = generateProject({
+    source: readImportSource(root),
+    destination: out,
+    mappings: [],
+    pages: [],
+    assets: [],
+    config: { contents: "title: Import\n" },
+    navigation: { contents: "docs:\n  - title: Home\n    url: /\n" },
+  });
+
+  assert.deepEqual(result.diagnostics, []);
+  assert.equal(readFileSync(join(out, "_data/navigation.yml"), "utf8"), "docs:\n  - title: Home\n    url: /\n");
 });
 
 test("import plain --out refuses the source folder itself", async () => {

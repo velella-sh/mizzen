@@ -114,7 +114,11 @@ Options:
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
-  --base <ref>         For diff: build this git ref and compare it with the current site (one dir)
+  --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
+  --commit <sha>       For build: record this commit in a preview's manifest (default: GITHUB_SHA)
+  --preview-canonical <url>
+                       For build: mark every page noindex and point its canonical at this URL plus the page's URL
+  --baseline <dir>     For build: the latest public build to compare this preview with, written to .mizzen/preview-diff.json; needs --preview-canonical
   --fail-on <kinds>    For diff: exit 1 on removed-pages, broken-urls, or render-only (comma-separated)
   --fail-on-manual     For import: exit 1 while a manual item has no recorded decision
   --allow <ids>        For import: comma-separated manual-item ids recorded as reviewed, with --fail-on-manual
@@ -338,6 +342,8 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `variables` | `variables.json`, every variable placeholder a page uses and its declaration. |
 | `version-diff` | `diff/<version>/<path>.json` for each adjacent pair of versions whose page sections differ. |
 | `versions` | `versions.json`, the versions each page path exists in and how it differs from the newest. |
+
+A preview build also writes `.mizzen/doctor.json`: the `doctor --format json` report of that build, the count of each severity, and the base and canonical it was built under.
 
 `outputs` in `mizzen.yml` turns one off by name:
 

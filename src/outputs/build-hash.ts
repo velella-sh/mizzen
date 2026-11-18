@@ -1,9 +1,9 @@
 /**
  * One SHA-256 for a whole build, recorded in `.mizzen/manifest.json` and checked by `mizzen verify` (#1252).
  *
- * Every file the build writes, except the manifest that records the result, is hashed; the whole-build hash is the
- * SHA-256 of one line per file (`<path>`, a NUL, the file's hash, and a line feed), with the paths sorted by code
- * point. A build that uses the as-of date writes `asOf` to the manifest and puts an `as-of` line before the files, so a
+ * Every file the build writes, except the manifest that records the result and a preview's diff report, is hashed; the
+ * whole-build hash is the SHA-256 of one line per file (`<path>`, a NUL, the file's hash, and a line feed), with the
+ * paths sorted by code point. A file that describes the build cannot be part of the identity it describes. A build that uses the as-of date writes `asOf` to the manifest and puts an `as-of` line before the files, so a
  * site that derives values from dates gets a new hash when the date moves and a site that does not keeps its old one.
  * The build and `verify` run the same rule, so both agree byte for byte.
  *
@@ -27,6 +27,12 @@ import { join, relative, sep } from "node:path";
 
 /** Where the manifest lands, relative to the output folder. The build hash leaves it out. */
 export const MANIFEST_PATH = ".mizzen/manifest.json";
+
+/**
+ * Where a preview build records its difference from the public build, relative to the output folder. The report names
+ * the build it compared, so the build hash leaves it out, as it leaves out the manifest.
+ */
+export const PREVIEW_DIFF_PATH = ".mizzen/preview-diff.json";
 
 /** The files of a build and the hash of all of them: what the manifest's `build` field holds. */
 export interface BuildRecord {
@@ -86,9 +92,9 @@ function isPlatformMetadata(path: string): boolean {
   return path.split("/").some((segment) => PLATFORM_METADATA.has(segment) || segment.startsWith("._"));
 }
 
-/** True for a path a manifest may record: an identity path that is neither the manifest nor platform metadata. */
+/** True for a path a manifest may record: an identity path that is neither the manifest, the preview diff, nor platform metadata. */
 export function isIdentityFile(path: string): boolean {
-  return path !== MANIFEST_PATH && !isPlatformMetadata(path) && isIdentityPath(path);
+  return path !== MANIFEST_PATH && path !== PREVIEW_DIFF_PATH && !isPlatformMetadata(path) && isIdentityPath(path);
 }
 
 /**
@@ -152,7 +158,7 @@ async function collect(
       if (!isPlatformMetadata(path)) await collect(root, join(dir, entry.name), files, unsupported);
       continue;
     }
-    if (path === MANIFEST_PATH || isPlatformMetadata(path)) continue;
+    if (path === MANIFEST_PATH || path === PREVIEW_DIFF_PATH || isPlatformMetadata(path)) continue;
     if (!isIdentityPath(path)) {
       unsupported.push(new UnsupportedEntryError(path, "path"));
       continue;
