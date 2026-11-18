@@ -59,6 +59,7 @@ import type {
   SourcePos,
   ThemeConfig,
 } from "../contracts/index.ts";
+import type { CollectionTransformConfig, TransformCastTarget, TransformStepConfig } from "../contracts/config.ts";
 
 /** The site config file name. */
 export const CONFIG_FILE = "mizzen.yml";
@@ -647,6 +648,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const json = collectionJsonFrom(entry.json);
     const raw = collectionRawFrom(entry.raw);
     const changelog = collectionChangelogFrom(entry.changelog);
+    const transform = collectionTransformFrom(entry.transform);
     const derived = derivedFrom(entry.derived);
     collections[name] = {
       source: entry.source,
@@ -679,6 +681,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(index === undefined ? {} : { index }),
       ...(raw === undefined ? {} : { raw }),
       ...(changelog === undefined ? {} : { changelog }),
+      ...(transform === undefined ? {} : { transform }),
     };
   }
   return collections;
@@ -861,6 +864,139 @@ function collectionChangelogFrom(value: unknown): CollectionChangelogConfig | un
     ...(Object.keys(labels).length === 0 ? {} : { labels }),
     ...(typeof threshold === "number" && Number.isSafeInteger(threshold) && threshold >= 1 ? { importThreshold: threshold } : {}),
     ...(typeof value.pages === "boolean" ? { pages: value.pages } : {}),
+  };
+}
+
+/** A non-empty list of field paths, or `undefined` when the key is not such a list. */
+function pathsFrom(value: unknown): readonly string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const paths = value.filter((entry): entry is string => typeof entry === "string" && entry !== "");
+  return paths.length === 0 ? undefined : paths;
+}
+
+/** A plain own-key copy of a mapping of values, or `undefined` when the key is not a mapping. */
+function mappingFrom(value: unknown): Readonly<Record<string, unknown>> | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const copy: Record<string, unknown> = {};
+  for (const key of Object.keys(value)) {
+    Object.defineProperty(copy, key, { value: value[key], writable: true, enumerable: true, configurable: true });
+  }
+  return copy;
+}
+
+/** One transformation step, keeping only the keys its operator reads; `undefined` when the step names no usable operator. */
+function transformStepFrom(value: unknown): TransformStepConfig | undefined {
+  if (!isPlainObject(value) || typeof value.op !== "string") return undefined;
+  const id = typeof value.id === "string" && value.id !== "" ? { id: value.id } : {};
+  switch (value.op) {
+    case "select": {
+      const fields = pathsFrom(value.fields);
+      return fields === undefined ? undefined : { ...id, op: "select", fields };
+    }
+    case "remove": {
+      const fields = pathsFrom(value.fields);
+      return fields === undefined ? undefined : { ...id, op: "remove", fields };
+    }
+    case "rename": {
+      if (typeof value.from !== "string" || value.from === "" || typeof value.to !== "string" || value.to === "") return undefined;
+      return {
+        ...id,
+        op: "rename",
+        from: value.from,
+        to: value.to,
+        ...(value.onConflict === "overwrite" ? { onConflict: "overwrite" as const } : {}),
+      };
+    }
+    case "default": {
+      if (typeof value.field !== "string" || value.field === "" || !Object.hasOwn(value, "value")) return undefined;
+      const when = value.when;
+      return {
+        ...id,
+        op: "default",
+        field: value.field,
+        value: value.value,
+        ...(when === null || when === "null" || when === "missing-or-null" ? { when: when === null ? ("null" as const) : when } : {}),
+      };
+    }
+    case "cast": {
+      const target = value.to;
+      const to: TransformCastTarget | undefined =
+        target === "string" || target === "number" || target === "integer" || target === "boolean" ? target : undefined;
+      if (typeof value.field !== "string" || value.field === "" || to === undefined) return undefined;
+      return { ...id, op: "cast", field: value.field, to };
+    }
+    case "normalize": {
+      if (typeof value.field !== "string" || value.field === "") return undefined;
+      return {
+        ...id,
+        op: "normalize",
+        field: value.field,
+        ...(typeof value.trim === "boolean" ? { trim: value.trim } : {}),
+        ...(value.case === "lower" || value.case === "upper" || value.case === "none" ? { case: value.case } : {}),
+      };
+    }
+    case "map": {
+      const values = mappingFrom(value.values);
+      if (typeof value.field !== "string" || value.field === "" || values === undefined) return undefined;
+      return {
+        ...id,
+        op: "map",
+        field: value.field,
+        values,
+        ...(value.unknown === "error" || value.unknown === "default" || value.unknown === "keep" ? { unknown: value.unknown } : {}),
+        ...(Object.hasOwn(value, "default") ? { default: value.default } : {}),
+      };
+    }
+    case "date": {
+      if (typeof value.field !== "string" || value.field === "" || typeof value.format !== "string" || typeof value.timezone !== "string") {
+        return undefined;
+      }
+      return {
+        ...id,
+        op: "date",
+        field: value.field,
+        format: value.format,
+        timezone: value.timezone,
+        ...(value.output === "date" ? { output: "date" as const } : {}),
+      };
+    }
+    case "unit": {
+      if (typeof value.field !== "string" || value.field === "" || typeof value.factor !== "number" || !Number.isFinite(value.factor)) return undefined;
+      const round = value.round;
+      return {
+        ...id,
+        op: "unit",
+        field: value.field,
+        factor: value.factor,
+        ...(typeof round === "number" && Number.isInteger(round) && round >= 0 && round <= 10 ? { round } : {}),
+      };
+    }
+    case "filter": {
+      const where = mappingFrom(value.where);
+      return where === undefined ? undefined : { ...id, op: "filter", where };
+    }
+    case "dedupe": {
+      const by = pathsFrom(value.by);
+      if (by === undefined) return undefined;
+      return { ...id, op: "dedupe", by, ...(value.keep === "last" ? { keep: "last" as const } : {}) };
+    }
+    default:
+      return undefined;
+  }
+}
+
+/** A collection's transformation rules, keeping only steps the schema accepts; `undefined` when it declares none. */
+function collectionTransformFrom(value: unknown): CollectionTransformConfig | undefined {
+  if (!isPlainObject(value) || !Array.isArray(value.steps)) return undefined;
+  const steps: TransformStepConfig[] = [];
+  for (const raw of value.steps) {
+    const step = transformStepFrom(raw);
+    if (step !== undefined) steps.push(step);
+  }
+  if (steps.length === 0) return undefined;
+  return {
+    ...(value.validate === "before-and-after" ? { validate: "before-and-after" as const } : {}),
+    steps,
   };
 }
 

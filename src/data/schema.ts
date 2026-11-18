@@ -379,6 +379,16 @@ function findingOf(
   };
 }
 
+/** How a validation pass names its findings: the raw input before transformation or the transformed output. */
+export interface ValidationStageOptions {
+  /** `input` is the raw record before any rule; `output` is the record a rule wrote. */
+  readonly stage: "input" | "output";
+  /** Keep a record that fails, so a transformation rule can still repair it. Default `false`. */
+  readonly keepInvalid?: boolean;
+  /** The rule that last touched a failing field, for an `output` finding. */
+  readonly stepOf?: (field: string | undefined) => string | undefined;
+}
+
 /**
  * Checks every record against its collection's schema and keeps the sound ones. A finding names the collection, the
  * record id, and the field, and points at the field's value; a field the schema says is missing points at the record.
@@ -391,10 +401,27 @@ export function validateRecords(
   config: CollectionConfig | undefined,
   format: SourceFormat,
   diagnostics: Diagnostic[],
+  options?: ValidationStageOptions,
 ): ValidationResult {
   const severity = policyOf(config) === "skip" ? "warning" : "error";
   const kept: DataRecord[] = [];
   const offered = new Set<string>();
+  const id =
+    options === undefined
+      ? "data.record-invalid"
+      : options.stage === "input"
+        ? "data.record-invalid-input"
+        : "data.record-invalid-output";
+  const tail = (field: string | undefined): string => {
+    if (options === undefined) return " The record was skipped.";
+    if (options.stage === "input") {
+      return options.keepInvalid === true
+        ? " The raw record does not match the schema and was transformed anyway."
+        : " The raw record does not match the schema.";
+    }
+    const step = options.stepOf?.(field);
+    return ` The transformed record was skipped${step === undefined ? "" : ` after step "${step}"`}.`;
+  };
 
   for (const record of records) {
     if (schema.validate(record.fields)) {
@@ -404,17 +431,19 @@ export function validateRecords(
     const errors = [...(schema.validate.errors ?? [])];
     if (errors.length === 0) {
       diagnostics.push({
-        id: "data.record-invalid",
+        id,
         severity,
-        message: `Record "${record.id}" of "${collection}" does not match its schema. The record was skipped.`,
+        message: `Record "${record.id}" of "${collection}" does not match its schema.${tail(undefined)}`,
         pos: sourcePosOf(record.position),
       });
+      if (options?.keepInvalid === true) kept.push(record);
       continue;
     }
     for (const error of groupsOf(errors).values()) {
       const finding = findingOf(error, record, collection, schema, format, offered);
-      diagnostics.push({ ...finding, severity, message: `${finding.message} The record was skipped.` });
+      diagnostics.push({ ...finding, id, severity, message: `${finding.message}${tail(pathOf(error)[0])}` });
     }
+    if (options?.keepInvalid === true) kept.push(record);
   }
 
   return { records: kept, skipped: records.length - kept.length };

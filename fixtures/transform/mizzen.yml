@@ -1,0 +1,28 @@
+title: Transform fixture
+collections:
+  items:
+    source: data/items.yml
+    id: slug
+    transform:
+      steps:
+        - id: move-title
+          op: rename
+          from: title
+          to: label
+        - id: tidy-label
+          op: normalize
+          field: label
+          trim: true
+          case: upper
+        - id: price-number
+          op: cast
+          field: price
+          to: number
+        - id: price-cents
+          op: unit
+          field: price
+          factor: 100
+          round: 0
+  plain:
+    source: data/plain.yml
+    id: slug
