@@ -38,13 +38,15 @@ import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-v
 import { clientConfig, isClient, serveMcp, CLIENTS } from "./mcp.ts";
 import { pack } from "./pack.ts";
 import { verify, verifyMessage } from "./verify.ts";
+import { compareReports, reproduce } from "./reproduce.ts";
+import { BUILD_REPORT_PATH, buildReportOf, writeBuildReport } from "../reproduce/manifest.ts";
 import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 
 /** The command name on the PATH. */
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "references", "stale", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -85,6 +87,7 @@ Commands:
   api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
+  compare <a> <b>           Compare two build diagnostic reports
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data refresh [dir]        Fetch selected sources, validate, and write a review report (--collections, --report)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
@@ -112,6 +115,7 @@ Commands:
   published-site check      Check a published site from --sitemap <url>: status, canonical URL, redirects
   references check <file|-> [dir]
                             Resolve a JSON array of stored block references: resolved, removed, or unknown
+  reproduce <report> [dir]  Preflight a recorded build, rebuild it, and compare the reports (--check: preflight only)
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   urls check [dir]          Compare record page URLs with urls.lock.json
@@ -128,7 +132,8 @@ Commands:
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
+  --diagnose           For build: write .mizzen/build-report.json after the build
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for compare, reproduce, data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
   --domain <host>      The one host published-site check may request (default: the sitemap's host)
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
@@ -139,7 +144,7 @@ Options:
   --host <host>        Host for dev (default: 127.0.0.1)
   --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
-  --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure
+  --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure; for reproduce: preflight only
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for inputs inspect: print the report as JSON
   --limit <n>          For data transform: records to show per collection (default: 5)
@@ -203,6 +208,7 @@ type BuildOpts = {
   readonly previewCanonical?: string;
   readonly baseline?: string;
   readonly commit?: string;
+  readonly diagnose?: boolean;
 };
 
 type CheckOpts = {
@@ -402,6 +408,23 @@ type DiffOpts = {
   readonly theme?: string;
 };
 
+type ReproduceOpts = {
+  readonly command: "reproduce";
+  readonly manifest: string;
+  readonly root: string;
+  readonly out: string;
+  readonly theme?: string;
+  readonly check: boolean;
+  readonly format: "text" | "json";
+};
+
+type CompareOpts = {
+  readonly command: "compare";
+  readonly before: string;
+  readonly after: string;
+  readonly format: "text" | "json";
+};
+
 type ApiCheckOpts = {
   readonly command: "api-check";
   readonly root: string;
@@ -439,6 +462,8 @@ type Parsed =
         | EditVerifyOpts
         | PackOpts
         | DiffOpts
+        | ReproduceOpts
+        | CompareOpts
         | ApiCheckOpts
         | VerifyOpts
         | WatchOpts
@@ -991,6 +1016,71 @@ function parseDiff(args: readonly string[]): Parsed {
   };
 }
 
+/** Parses `reproduce <report> [dir] [--out <dir>] [--theme <dir>] [--check] [--format text|json]`. */
+function parseReproduce(args: readonly string[]): Parsed {
+  let manifest: string | undefined;
+  let root: string | undefined;
+  let out = "dist";
+  let theme: string | undefined;
+  let check = false;
+  let format: "text" | "json" = "text";
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    const value = (): string => {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) throw new Error(`${arg} needs a value`);
+      return next;
+    };
+    try {
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--out") out = value();
+      else if (arg === "--theme") theme = value();
+      else if (arg === "--check") check = true;
+      else if (arg === "--format") {
+        const raw = value();
+        if (raw !== "text" && raw !== "json") return { error: `--format for reproduce must be text or json, not ${raw}` };
+        format = raw;
+      } else if (arg.startsWith("-")) return { error: `unknown option for reproduce: ${arg}` };
+      else if (manifest === undefined) manifest = arg;
+      else if (root === undefined) root = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  if (manifest === undefined) return { error: "reproduce needs a report: mizzen reproduce <report> [dir]" };
+  return {
+    options: {
+      command: "reproduce",
+      manifest,
+      root: root ?? ".",
+      out,
+      check,
+      format,
+      ...(theme === undefined ? {} : { theme }),
+    },
+  };
+}
+
+/** Parses `compare <a> <b> [--format text|json]`. */
+function parseCompare(args: readonly string[]): Parsed {
+  const reports: string[] = [];
+  let format: "text" | "json" = "text";
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--format") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--format needs a value" };
+      if (next !== "text" && next !== "json") return { error: `--format for compare must be text or json, not ${next}` };
+      format = next;
+    } else if (arg.startsWith("-")) return { error: `unknown option for compare: ${arg}` };
+    else reports.push(arg);
+  }
+  if (reports.length !== 2) return { error: "compare needs two build reports: mizzen compare <a> <b>" };
+  return { options: { command: "compare", before: reports[0]!, after: reports[1]!, format } };
+}
+
 /** Parses `mcp [dir] [--theme <dir>] [--allow-edits] [--print-config <client>]`. */
 function parseMcp(args: readonly string[]): Parsed {
   let root: string | undefined;
@@ -1097,6 +1187,8 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "init") return parseInit(rest);
   if (command === "import") return parseImport(rest);
   if (command === "diff") return parseDiff(rest);
+  if (command === "reproduce") return parseReproduce(rest);
+  if (command === "compare") return parseCompare(rest);
   if (command === "api") return parseApi(rest);
   if (command === "mcp") return parseMcp(rest);
   if (
@@ -1127,6 +1219,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let updateBlocks = false;
   let asOf: string | undefined;
   let report = false;
+  let diagnose = false;
   let basePath: string | undefined;
   let previewCanonical: string | undefined;
   let baseline: string | undefined;
@@ -1210,6 +1303,9 @@ export function parseArgs(args: readonly string[]): Parsed {
       } else if (arg === "--report") {
         if (command !== "build") return { error: "--report is only valid for build" };
         report = true;
+      } else if (arg === "--diagnose") {
+        if (command !== "build") return { error: "--diagnose is only valid for build" };
+        diagnose = true;
       } else if (arg === "--update-blocks") {
         if (command !== "build") return { error: "--update-blocks is only valid for build" };
         updateBlocks = true;
@@ -1278,6 +1374,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(workers === undefined ? {} : { workers }),
         ...(updateUrls ? { updateUrls: true } : {}),
         ...(report ? { report: true } : {}),
+        ...(diagnose ? { diagnose: true } : {}),
         ...(updateBlocks ? { updateBlocks: true } : {}),
         ...(asOf === undefined ? {} : { asOf }),
         ...(basePath === undefined ? {} : { basePath }),
@@ -1657,6 +1754,18 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     return exitCode;
   }
 
+  if (options.command === "compare") {
+    try {
+      const result = await compareReports({ before: options.before, after: options.after, format: options.format });
+      if (result.output !== "") write(result.output);
+      for (const problem of result.problems) error(`${NAME}: ${problem}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   const root = resolve(options.root);
   if (options.command === "data-fetch") {
     try {
@@ -1844,6 +1953,25 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     return 2;
   }
 
+  if (options.command === "reproduce") {
+    try {
+      const result = await reproduce({
+        manifest: options.manifest,
+        root,
+        out: resolve(options.out),
+        themeRoot,
+        check: options.check,
+        format: options.format,
+      });
+      if (result.output !== "") write(result.output);
+      for (const problem of result.problems) error(`${NAME}: ${problem}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   if (options.command === "dev") {
     // A default --out stays inside the site (and hidden, so discovery skips it); an explicit one is from the cwd.
     const out = options.out === undefined ? join(root, DEFAULT_DEV_OUT) : resolve(options.out);
@@ -1934,6 +2062,16 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
           : { preview: { canonicalBase: options.previewCanonical, ...(commit === undefined ? {} : { commit }) } }),
       });
       if (result.report !== undefined) write(result.report);
+      if (options.diagnose === true) {
+        const report = await buildReportOf({
+          root,
+          out,
+          themeRoot,
+          ...(asOf === undefined ? {} : { asOf }),
+          ...(options.basePath === undefined ? {} : { base: options.basePath }),
+        });
+        await writeBuildReport(join(root, BUILD_REPORT_PATH), report);
+      }
       if (result.diagnostics.length > 0) printDiagnostics(result.diagnostics, "text", log);
       return result.diagnostics.some((d) => d.severity === "error") ? 1 : 0;
     } catch (err) {
