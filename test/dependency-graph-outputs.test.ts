@@ -6,6 +6,7 @@ import { test } from "node:test";
 import { buildModel } from "../src/model/build.ts";
 import {
   affectedNodes,
+  affectedOutputs,
   buildDependencyGraph,
   collectionNodeId,
   outputNodeId,
@@ -75,6 +76,28 @@ test("a feed file depends on its collection and an API file on its record or col
     const affected = affectedNodes(graph, ["_data/posts.yml"]);
     assert.ok(affected.includes(outputNodeId("/feeds/posts.xml")));
     assert.ok(affected.includes(outputNodeId("/api/v1/posts/a.json")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a changed record affects its cells, feeds and api files, grouped by role", async () => {
+  const root = tree(FILES);
+  try {
+    const { site } = await buildModel(root);
+    const { graph } = await buildDependencyGraph({ root, site });
+    assert.deepEqual(affectedOutputs(graph, [recordNodeId("posts", "a")]), {
+      page: [outputNodeId("/posts/a/")],
+      list: [],
+      feed: [outputNodeId("/feeds/posts.rss.xml"), outputNodeId("/feeds/posts.xml")],
+      api: [
+        outputNodeId("/api/v1/index.json"),
+        outputNodeId("/api/v1/openapi.json"),
+        outputNodeId("/api/v1/posts.json"),
+        outputNodeId("/api/v1/posts.ndjson"),
+        outputNodeId("/api/v1/posts/a.json"),
+      ],
+    });
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

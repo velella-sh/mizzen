@@ -907,6 +907,35 @@ export function affectedNodes(graph: DependencyGraph, changed: readonly string[]
   return [...affected].filter((id) => !seeds.has(id)).sort(byCodePoint);
 }
 
+/** The affected output ids, grouped by what each output is. */
+export interface AffectedOutputs {
+  /** Ordinary page outputs, including record pages. */
+  readonly page: readonly string[];
+  /** List pages. */
+  readonly list: readonly string[];
+  /** Feed files. */
+  readonly feed: readonly string[];
+  /** API files. */
+  readonly api: readonly string[];
+}
+
+/** What {@link affectedNodes} says to rebuild, as output ids grouped by role, each group sorted. */
+export function affectedOutputs(graph: DependencyGraph, recordIds: readonly string[]): AffectedOutputs {
+  const groups: { page: string[]; list: string[]; feed: string[]; api: string[] } = {
+    page: [],
+    list: [],
+    feed: [],
+    api: [],
+  };
+  const affected = new Set(affectedNodes(graph, recordIds));
+  for (const node of graph.nodes) {
+    if (node.kind !== "output" || !affected.has(node.id)) continue;
+    groups[node.role ?? "page"].push(node.id);
+  }
+  for (const ids of Object.values(groups)) ids.sort(byCodePoint);
+  return groups;
+}
+
 /**
  * The graph as JSON with a trailing newline. Nodes and edges are sorted here too, so two graphs built from the
  * same files serialize identically whatever order discovery or insertion used.
