@@ -18,8 +18,10 @@ import type {
   ApiCollectionConfig,
   ApiVersionConfig,
   ApiConfig,
+  ApiReferenceConfig,
   AnalyticsConfig,
   AnalyticsProvider,
+  BlogConfig,
   VerifyConfig,
   CollectionConfig,
   CollectionIndexConfig,
@@ -345,8 +347,9 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const snapshot = snapshotFrom(raw.snapshot);
   const quality = qualityFrom(raw.quality);
   const api = apiFrom(raw.api);
-  const dates = datesFrom(raw.dates);
-  const social = socialFrom(raw.social);
+  const apiReference = apiReferenceFrom(raw.apiReference);
+  const blog = blogFrom(raw.blog);
+  const dates = datesFrom(raw.dates);  const social = socialFrom(raw.social);
   const stale = staleFrom(raw.stale);
   const drift = driftFrom(raw.drift);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
@@ -382,6 +385,8 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(snapshot === undefined ? {} : { snapshot }),
     ...(quality === undefined ? {} : { quality }),
     ...(api === undefined ? {} : { api }),
+    ...(apiReference === undefined ? {} : { apiReference }),
+    ...(blog === undefined ? {} : { blog }),
     ...(stale === undefined ? {} : { stale }),
     ...(drift === undefined ? {} : { drift }),
     ...(social === undefined ? {} : { social }),
@@ -390,7 +395,32 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   };
 }
 
+/** The `apiReference` block, on when `source` names a file. The schema check reports a bad shape. */
+function apiReferenceFrom(value: unknown): ApiReferenceConfig | undefined {
+  if (!isPlainObject(value) || typeof value.source !== "string" || value.source.trim() === "") return undefined;
+  const path = typeof value.path === "string" && /^\/(?:[^./][^/]*\/)*$/.test(value.path) ? value.path : "/reference/";
+  return { source: value.source.trim(), path };
+}
+
 const PROVIDERS: readonly string[] = ["goatcounter", "plausible", "umami", "cloudflare", "custom"];
+
+/** The blog key, on when `posts` names a folder; the defaults are filled in here. The schema check reports a bad key. */
+function blogFrom(value: unknown): BlogConfig | undefined {
+  if (!isPlainObject(value) || typeof value.posts !== "string" || value.posts.trim() === "") return undefined;
+  const oneSegment = (key: string, fallback: string): string => {
+    const text = value[key];
+    return typeof text === "string" && text.trim() !== "" && !/[/\\]/.test(text) ? text.trim() : fallback;
+  };
+  const size = value.pageSize;
+  return {
+    posts: value.posts.trim().replace(/^\/+|\/+$/g, ""),
+    route: oneSegment("route", "blog"),
+    archive: oneSegment("archive", "archive"),
+    authors: typeof value.authors === "boolean" ? value.authors : true,
+    feed: typeof value.feed === "boolean" ? value.feed : true,
+    pageSize: typeof size === "number" && Number.isSafeInteger(size) && size >= 1 ? size : 10,
+  };
+}
 
 /** The analytics key, kept only when the schema accepts it; an invalid one is reported by the schema check. */
 function analyticsFrom(value: unknown): AnalyticsConfig | undefined {

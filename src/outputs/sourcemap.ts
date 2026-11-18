@@ -78,6 +78,22 @@ interface ClaimEntry {
   readonly target?: TargetEntry;
 }
 
+/** One block of a page: its stable id and the exact source range it occupies. */
+interface BlockEntry {
+  /** The block's stable identifier, the same one the page's HTML carries as `data-block`. */
+  readonly id: string;
+  /** The file the block is written in: the page's source, or a data file for a field-placed block. */
+  readonly file: string;
+  /** 1-based line where the block starts. */
+  readonly line: number;
+  /** 1-based column where the block starts. */
+  readonly column: number;
+  /** 1-based line where the block ends. */
+  readonly endLine: number;
+  /** Column of the block's last character (inclusive). */
+  readonly endColumn: number;
+}
+
 /** One page of the map. `sections`, `links`, and `claims` are always present, in document order. */
 interface PageEntry {
   /** The page's URL path from the site root, as the model writes it. */
@@ -92,6 +108,8 @@ interface PageEntry {
   readonly links: readonly LinkEntry[];
   /** Trust and drift claims in document order: examples first, then code references at each position. */
   readonly claims: readonly ClaimEntry[];
+  /** Stable blocks in document order; absent on a site that builds no block ids. */
+  readonly blocks?: readonly BlockEntry[];
 }
 
 /** Where an output reports a finding, which is the engine's `ctx.report`. */
@@ -253,6 +271,12 @@ function sourcePath(page: Page, file = page.source.file): string {
  * The target range is carried, never checked or adjusted: whether the cited code still holds is the drift
  * check's finding, and reading the target file would make the map depend on more than the model. A review's
  * evidence is the page's git history rather than text, so it has no claim; the page entry is its location.
+ *
+ * ## Blocks
+ *
+ * `blocks` lists each stable block id with the exact range it occupies, when the build carries block ids. It names
+ * the same id the block's HTML element carries as `data-block`, so a consumer can go from an id to the text and the
+ * other way without reading either output.
  */
 export const sourcemap: Output = {
   name: "sourcemap",
@@ -289,6 +313,18 @@ export const sourcemap: Output = {
         sections,
         links,
         claims,
+        ...(page.blocks === undefined
+          ? {}
+          : {
+            blocks: page.blocks.map((block) => ({
+              id: block.id,
+              file: sourcePath(page, block.pos.file),
+              line: block.pos.line,
+              column: block.pos.column,
+              endLine: block.pos.endLine,
+              endColumn: block.pos.endColumn,
+            })),
+          }),
       });
     }
 

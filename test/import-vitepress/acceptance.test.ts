@@ -27,7 +27,7 @@ test("a site under a subpath imports with base-aware links, rewrites, locales, a
     assert.equal(outcome.contentRoot, "docs/");
 
     const { files } = inventoryOf(source.files, outcome.files);
-    const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.base);
+    const { mappings, diagnostics } = buildMappings(files, outcome.pages, outcome.assets, outcome.config, outcome.urls, outcome.base);
     assert.deepEqual(diagnostics, []);
     const links = rewriteLinks(outcome.pages, mappings, { base: outcome.base, contentRoot: outcome.contentRoot });
     const written = generateProject({

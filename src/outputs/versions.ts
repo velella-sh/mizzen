@@ -71,6 +71,8 @@ export const versions: Output = {
 
     for (const entry of discoverVersions(site.pages)) {
       if (entry.version === null) continue;
+      // The default release is also written at its canonical URL; only the copy that keeps the version folder belongs here.
+      if (!entry.page.url.startsWith(`${site.config.base}/${entry.version}/`)) continue;
       const version: VersionEntry = {
         version: entry.version,
         url: entry.page.url,

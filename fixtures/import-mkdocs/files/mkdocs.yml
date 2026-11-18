@@ -1,0 +1,6 @@
+site_name: Files
+docs_dir: content
+use_directory_urls: false
+nav:
+  - Home: index.md
+  - Other: guide/page.md
