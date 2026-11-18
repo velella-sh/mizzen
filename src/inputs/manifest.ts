@@ -113,6 +113,9 @@ export function validateManifest(value: unknown): string | undefined {
   if (typeof value["format"] !== "number" || !Number.isInteger(value["format"]) || value["format"] < 1) {
     return "format must be a whole number of at least 1";
   }
+  if (value["format"] !== PACK_FORMAT) {
+    return `format ${value["format"]} is not the format this version writes (${PACK_FORMAT})`;
+  }
   if (!Array.isArray(value["inputs"])) return "inputs must be a list";
   if (!Array.isArray(value["blobs"])) return "blobs must be a list";
 
