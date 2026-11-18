@@ -48,6 +48,22 @@ export interface LockedSource {
   readonly pages?: readonly LockedPage[];
 }
 
+/** One locked extraction: the result a build reads instead of the SQLite or NDJSON source. */
+export interface LockedExtraction {
+  /** The collection's source as the config writes it. */
+  readonly source: string;
+  /** The query id: `sqlite.id` for a SQLite source, `ndjson` for an NDJSON source. */
+  readonly query: string;
+  /** SHA-256 of the query and its fixed parameters, so a changed query is told apart. */
+  readonly querySha256: string;
+  /** Byte size of the stored result. */
+  readonly bytes: number;
+  /** SHA-256 of the stored result. */
+  readonly sha256: string;
+  /** Number of records in the result. */
+  readonly records: number;
+}
+
 /** The whole lock file. */
 export interface DataLock {
   /** The format version; only 1 exists. */
@@ -56,6 +72,8 @@ export interface DataLock {
   readonly sources: Readonly<Record<string, LockedSource>>;
   /** Where each collection's data was recorded from, by collection name; absent in a lock written before snapshots. */
   readonly snapshots?: Readonly<Record<string, CollectionSnapshot>>;
+  /** Locked SQLite and NDJSON results, keyed by collection name; absent before the first extraction. */
+  readonly extractions?: Readonly<Record<string, LockedExtraction>>;
 }
 
 /** An empty lock. */
@@ -109,8 +127,26 @@ export function lockText(lock: DataLock): string {
   for (const name of Object.keys(lock.snapshots ?? {}).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
     snapshots[name] = orderedSnapshot(lock.snapshots![name]!);
   }
+  const extractions: Record<string, LockedExtraction> = {};
+  for (const name of Object.keys(lock.extractions ?? {}).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const entry = lock.extractions![name]!;
+    extractions[name] = {
+      source: entry.source,
+      query: entry.query,
+      querySha256: entry.querySha256,
+      bytes: entry.bytes,
+      sha256: entry.sha256,
+      records: entry.records,
+    };
+  }
   const hasSnapshots = Object.keys(snapshots).length > 0;
-  return `${canonicalJson({ version: lock.version, sources, ...(hasSnapshots ? { snapshots } : {}) })}\n`;
+  const hasExtractions = Object.keys(extractions).length > 0;
+  return `${canonicalJson({
+    version: lock.version,
+    sources,
+    ...(hasSnapshots ? { snapshots } : {}),
+    ...(hasExtractions ? { extractions } : {}),
+  })}\n`;
 }
 
 /** True when `value` is a lock this version may trust. */
