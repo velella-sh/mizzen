@@ -5,7 +5,9 @@ import type { Diagnostic } from "../src/contracts/diagnostic.ts";
 import type { OutputContext } from "../src/contracts/output.ts";
 import { URLS_LOCK_FILE } from "../src/data/urls-lock.ts";
 import { redirects } from "../src/outputs/redirects.ts";
+import { SITEMAP_LIMITS, writeSitemap } from "../src/outputs/sitemap.ts";
 import { ids, pageAt, withSite } from "./data-record-site.ts";
+import { urlsOf, withIndexedSite } from "./search-runtime.ts";
 
 /** A site whose records are addressed by a slug, which may change without changing the record's id. */
 function files(items: string, url: "retain" | "redirect" = "retain"): Record<string, string> {
@@ -114,4 +116,41 @@ test("url: redirect removes the retired page and sends its old URLs to the repla
       );
     },
   );
+});
+
+/** A site whose retired record keeps its page; `machine` marks retired records for machine readers, or leaves it unset. */
+function presenceFiles(machine: boolean): Record<string, string> {
+  return {
+    "mizzen.yml": [
+      "url: https://example.com",
+      "collections:",
+      "  items:",
+      "    source: _data/items.yml",
+      "    template: _templates/item.md",
+      "    permalink: /items/{id}/",
+      "    lifecycle:",
+      "      states: [current, retired]",
+      "      retired: [retired]",
+      ...(machine ? ["      machine: true"] : []),
+      "",
+    ].join("\n"),
+    "_data/items.yml": "- id: old\n  state: retired\n  summary: alpha\n- id: new\n  state: current\n  summary: beta\n",
+    "_templates/item.md": '---\ntitle: "{id}"\n---\n# :field[id]\n\n:field[summary]\n',
+  };
+}
+
+test("a retained retired record leaves the sitemap and the search index together unless the collection marks it for machines", async () => {
+  const context: OutputContext = { renderPage: async () => "", report: () => {} };
+  for (const machine of [false, true]) {
+    await withIndexedSite(presenceFiles(machine), async (result, runtime) => {
+      const [sitemap] = await writeSitemap(result.site, context, SITEMAP_LIMITS);
+      const xml = sitemap!.contents.toString();
+      assert.equal(xml.includes("https://example.com/items/old/"), machine);
+      assert.match(xml, /https:\/\/example\.com\/items\/new\//);
+      assert.deepEqual(await urlsOf(await runtime.search("alpha")), machine ? ["/items/old/"] : []);
+      assert.deepEqual(await urlsOf(await runtime.search("beta")), ["/items/new/"]);
+      assert.equal(pageAt(result, "/items/old/")?.frontMatter.search, machine ? undefined : false);
+      assert.equal(pageAt(result, "/items/old/")?.frontMatter.sitemap, machine ? undefined : false);
+    });
+  }
 });

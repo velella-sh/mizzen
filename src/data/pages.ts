@@ -40,7 +40,7 @@ import { markdownFieldBlocks } from "./markdown-field.ts";
 import { recordSourcePos, recordUrl, recordUrlsOf } from "./permalink.ts";
 import { localizeFields, prefixed, prefixOfLang, type RecordScope } from "./record-context.ts";
 import { fieldsWithDerived } from "./derived.ts";
-import { lifecycleOf, replacementOf } from "./lifecycle.ts";
+import { lifecycleOf, listedForMachines, replacementOf } from "./lifecycle.ts";
 import type { Template } from "./template.ts";
 import { viewUrls, viewsOf } from "./views.ts";
 
@@ -450,6 +450,8 @@ interface Rendering {
   readonly views?: Readonly<Record<string, string>>;
   /** URL of the record that replaces this retired record, when the collection names one. */
   readonly replacement?: string;
+  /** `false` when the collection's lifecycle keeps this page out of the sitemap and the search index. */
+  readonly listed?: boolean;
 }
 
 /**
@@ -612,11 +614,11 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
       if (languages.length > 1 && rendering.view === undefined && frontMatter.translation_key === undefined) {
         frontMatter.translation_key = `${name}:${record.id}`;
       }
-      if (rendering.view !== undefined) {
+      if (rendering.view !== undefined || rendering.listed === false) {
         frontMatter.search = false;
         frontMatter.sitemap = false;
-        if (rendering.canonical !== undefined) frontMatter.canonical_url = rendering.canonical;
       }
+      if (rendering.view !== undefined && rendering.canonical !== undefined) frontMatter.canonical_url = rendering.canonical;
       const title =
         typeof frontMatter.title === "string"
           ? frontMatter.title
@@ -751,7 +753,12 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
 
         pages.push(
           await pageOf(
-            { template, ...(Object.keys(viewPaths).length === 0 ? {} : { views: viewPaths }), ...(replacementUrl === undefined ? {} : { replacement: replacementUrl }) },
+            {
+              template,
+              listed: listedForMachines(lifecycle),
+              ...(Object.keys(viewPaths).length === 0 ? {} : { views: viewPaths }),
+              ...(replacementUrl === undefined ? {} : { replacement: replacementUrl }),
+            },
             main.url,
             record,
             language,

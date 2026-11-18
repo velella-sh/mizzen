@@ -75,6 +75,15 @@ export function lifecycleOf(
   return { state, retired, replacementId, url, machine, diagnostics };
 }
 
+/**
+ * True when a record's page belongs in the outputs that list records for machines: its URL in `sitemap.xml` and its
+ * entry in the search index. A retired record stays out unless its collection marks it for machine readers, so both
+ * outputs read one decision; any record that is not retired stays in.
+ */
+export function listedForMachines(lifecycle: RecordLifecycle): boolean {
+  return !lifecycle.retired || lifecycle.machine;
+}
+
 /** What a retired record's replacement field names: nothing, a record page, or an id that page list does not hold. */
 export type Replacement =
   | { readonly kind: "none" }
