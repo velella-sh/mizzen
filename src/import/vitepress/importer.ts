@@ -6,6 +6,8 @@
 import { basename, posix } from "node:path";
 import type { Diagnostic } from "../../contracts/index.ts";
 import type { ImportedAsset, ImportedConfig, ImportedPage, ImportFile, Importer } from "../contract.ts";
+import { convertFrontMatter } from "./frontmatter.ts";
+import { convertNav } from "./nav.ts";
 
 const CONFIG = /(?:^|\/)\.vitepress\/config\.(?:js|ts|mjs|mts)$/;
 const EXCLUDED = /(?:^|\/)(?:\.vitepress|node_modules|dist)\//;
@@ -76,15 +78,29 @@ export const vitepressImporter: Importer = {
       const destination = path.slice(prefix.length);
       if (MD.test(path)) {
         files.push({ path, kind: "content" });
-        pages.push({ source: path, destination, contents: source.read(path) });
+        const page = convertFrontMatter(source.read(path), path);
+        diagnostics.push(...page.diagnostics);
+        pages.push({ source: path, destination, contents: page.contents });
       } else {
         files.push({ path, kind: "asset" });
         assets.push({ source: path, destination });
       }
     }
 
+    const navigation = configPath === undefined ? { diagnostics: [] } : convertNav(config, configPath, pages, prefix);
+    diagnostics.push(...navigation.diagnostics);
+
     const imported: ImportedConfig =
       configPath === undefined ? { contents: titleLine(title) } : { source: configPath, contents: titleLine(title) };
-    return { files, pages, assets, config: imported, diagnostics };
+    return {
+      files,
+      pages,
+      assets,
+      config: imported,
+      ...(configPath === undefined || navigation.contents === undefined
+        ? {}
+        : { navigation: { source: configPath, contents: navigation.contents } }),
+      diagnostics,
+    };
   },
 };
