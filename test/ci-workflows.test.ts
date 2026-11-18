@@ -32,10 +32,11 @@ test("PR checks cover the full suite in two shards and cancel only superseded PR
   assert.ok(ci.jobs.test!.steps!.some((step) => step.run === 'node --test --test-concurrency=4 --test-shard=${{ matrix.shard }}/2 "test/**/*.test.ts"'));
   assert.equal(ci.concurrency!["cancel-in-progress"], "${{ github.event_name == 'pull_request' }}");
   assert.match(ci.concurrency!.group, /github\.run_id/);
-  assert.deepEqual(ci.jobs["ci-required"]!.needs, ["static", "test", "package", "social-images"]);
+  assert.deepEqual(ci.jobs["ci-required"]!.needs, ["static", "test", "acceptance", "package", "social-images"]);
   assert.equal(ci.jobs["ci-required"]!.if, "always()");
   assert.equal(ci.jobs.coverage!.if, "github.event_name == 'push' && github.ref == 'refs/heads/main'");
   assert.ok(!("bench" in ci.jobs));
+  assert.ok(ci.jobs.acceptance!.steps!.some((step) => /node scripts\/acceptance\.ts .*--mizzen bin\/mizzen\.ts/.test(step.run ?? "")));
 });
 
 test("the required check refuses failed, cancelled, or skipped dependencies", () => {
@@ -85,6 +86,14 @@ test("the release tests, checksums, and publishes one tarball", () => {
   assert.match(smoke.run!, /--lateen-tarball "\$RUNNER_TEMP"\/theme/);
   const compat = verify.steps!.find((step) => step.run?.includes("release-compat.ts"))!;
   assert.match(compat.run!, /--candidate "\$RUNNER_TEMP"\/dist/);
+  const install = verify.steps!.find((step) => /npm install .*velella-mizzen-\*\.tgz/.test(step.run ?? ""))!;
+  assert.ok(install, "verify installs the tarball it will publish");
+  const gate = verify.steps!.find((step) => /acceptance\.ts/.test(step.run ?? ""))!;
+  assert.match(gate.run!, /--release --candidate "\$GITHUB_SHA" --digest "\$digest" --tarball "\$tarball"/);
+  const published = release.jobs["acceptance-published"]!;
+  assert.deepEqual(published.needs, ["verify", "publish"]);
+  assert.match(published.steps!.map((step) => step.run ?? "").join("\n"), /npm install --no-audit --no-fund "@velella\/mizzen@\$VERSION"/);
+  assert.match(published.steps!.map((step) => step.run ?? "").join("\n"), /acceptance\.ts/);
   assert.ok(release.jobs.publish!.steps!.some((step) => /sha256sum -c SHA256SUMS/.test(step.run ?? "")));
 });
 

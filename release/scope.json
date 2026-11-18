@@ -72,6 +72,42 @@
       "title": "Selected docs version at the canonical URL",
       "status": "shipped",
       "case": "versions"
+    },
+    {
+      "id": "data-schema-evolution",
+      "title": "Collection schema versions and upgrades",
+      "status": "shipped",
+      "case": "schema"
+    },
+    {
+      "id": "data-quality",
+      "title": "Data quality rules and snapshots",
+      "status": "shipped",
+      "case": "quality"
+    },
+    {
+      "id": "record-lifecycle",
+      "title": "Record retirement, replacement, and restore",
+      "status": "shipped",
+      "case": "lifecycle"
+    },
+    {
+      "id": "data-impact",
+      "title": "Data change impact review",
+      "status": "shipped",
+      "case": "records"
+    },
+    {
+      "id": "publish-preview",
+      "title": "Pull request previews and rollback",
+      "status": "shipped",
+      "case": "preview"
+    },
+    {
+      "id": "first-project",
+      "title": "First project samples and guides",
+      "status": "shipped",
+      "case": "starters"
     }
   ]
 }

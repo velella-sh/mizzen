@@ -340,6 +340,154 @@ const performance: AcceptanceCase = {
   },
 };
 
+const schema: AcceptanceCase = {
+  id: "schema",
+  title: "Collection schema evolution and migration preview",
+  run: (ctx) => {
+    const site = join(ctx.dir, "schema-site");
+    tree(site, {
+      "mizzen.yml": "collections:\n  items:\n    source: _data/items.yml\n    schema: _data/items.schema.json\n    schemaRenames:\n      slug: legacy\n",
+      "_data/items.schema.json": JSON.stringify({
+        type: "object",
+        required: ["title", "slug"],
+        properties: { id: { type: "string" }, title: { type: "string" }, slug: { type: "string" } },
+      }),
+      "_data/items.yml": "- id: a\n  title: A\n  legacy: old-a\n",
+    });
+    const result = ctx.mizzen(["data", "migrate", "items", site], ctx.dir);
+    ok(result, "data migrate");
+    check(result.stdout.includes("1 renamed"), "the migration preview did not name the renamed field");
+    check(result.stdout.includes('"slug":"old-a"'), "the migration preview did not show the migrated record");
+  },
+};
+
+const quality: AcceptanceCase = {
+  id: "quality",
+  title: "Data quality rules through the public command",
+  run: (ctx) => {
+    const site = join(ctx.dir, "quality-site");
+    tree(site, {
+      "mizzen.yml": "title: Quality\ncollections:\n  items:\n    source: _data/items.yml\nquality:\n  rules:\n    - kind: completeness\n      collection: items\n      fields: [author]\n",
+      "_data/items.yml": "- id: a\n  author: Ada\n- id: b\n",
+    });
+    const result = ctx.mizzen(["data", "quality", site, "--json"], ctx.dir);
+    ok(result, "data quality");
+    const report = JSON.parse(result.stdout) as { findings: { id: string; record: string; field: string }[] };
+    const finding = report.findings.find((entry) => entry.record === "b" && entry.field === "author");
+    check(finding !== undefined, "the missing field was not reported");
+    check(finding.id.includes("completeness"), "the finding lost its rule");
+  },
+};
+
+const lifecycle: AcceptanceCase = {
+  id: "lifecycle",
+  title: "Retired records redirect to their replacement",
+  run: (ctx) => {
+    const site = join(ctx.dir, "lifecycle-site");
+    const themeRoot = theme(site, {
+      record: 'export default (p: any) => `<html><body><h1>${p.record?.id}</h1>${p.page.html}</body></html>`;\n',
+    });
+    tree(site, {
+      "mizzen.yml": "title: Lifecycle\ncollections:\n  items:\n    source: _data/items.yml\n    template: _templates/item.md\n    permalink: /items/{slug}/\n    lifecycle:\n      states: [current, retired]\n      retired: [retired]\n      replacement: replacedBy\n      url: redirect\n",
+      "_data/items.yml": "- id: old\n  slug: before\n  state: retired\n  replacedBy: new\n- id: new\n  slug: after\n",
+      "_templates/item.md": "---\ntitle: \"{id}\"\n---\n\n# :field[id]\n",
+    });
+    const out = build(ctx, site, themeRoot);
+    check(read(out, "_redirects").includes("/items/before/ /items/after/ 301"), "the retired URL does not redirect");
+    check(existsSync(join(out, "items/after/index.html")), "the replacement has no page");
+  },
+};
+
+const preview: AcceptanceCase = {
+  id: "preview",
+  title: "Pull request preview with canonical policy and a baseline diff",
+  run: (ctx) => {
+    const site = join(ctx.dir, "preview-site");
+    const themeRoot = theme(site, {
+      doc: [
+        'export default (p: any) => `<html><head>',
+        '${p.head.links.map((link: any) => `<link rel="${link.rel}" href="${link.href}">`).join("")}',
+        '${p.head.meta.map((meta: any) => `<meta ${meta.property ? "property" : "name"}="${meta.name}" content="${meta.content}">`).join("")}',
+        '</head><body>${p.page.html}</body></html>`;',
+        "",
+      ].join(""),
+    });
+    tree(site, {
+      "mizzen.yml": "title: Preview\n",
+      "guide/page.md": "---\ntitle: Page\n---\n\nAlpha.\n",
+    });
+    const baseline = build(ctx, site, themeRoot);
+    tree(site, { "guide/page.md": "---\ntitle: Page\n---\n\nBeta.\n" });
+    const out = join(ctx.dir, "preview-out");
+    ok(ctx.mizzen(["build", site, "--out", out, "--theme", themeRoot, "--base", "/preview/pr-1", "--preview-canonical", "https://preview.example.com", "--commit", "0123456789abcdef", "--baseline", baseline], ctx.dir), "preview build");
+    const diff = JSON.parse(read(out, ".mizzen/preview-diff.json")) as { version: number; baseline: { hash: string }; diff: { identical: boolean } };
+    check(diff.version === 1, "the preview diff lost its version");
+    check(diff.diff.identical === false, "the preview diff missed the edit");
+    const page = read(out, "guide/page/index.html");
+    check(/<meta name="robots" content="noindex"/.test(page), "the preview page is not noindex");
+    check(page.includes('rel="canonical" href="https://preview.example.com/preview/pr-1/guide/page/"'), "the preview canonical is wrong");
+  },
+};
+
+const starters: AcceptanceCase = {
+  id: "starters",
+  title: "First project starters list and copy",
+  run: (ctx) => {
+    const themeRoot = join(ctx.dir, "starter-theme");
+    tree(themeRoot, {
+      "src/index.ts": 'export const theme = { name: "acceptance", folders: ["layouts"] };\n',
+      "layouts/doc.ts": 'export default (p: any) => `<html><body>${p.page.html}</body></html>`;\n',
+      "starters/catalog/starter.json": JSON.stringify({ title: "Catalog", description: "A small catalog." }),
+      "starters/catalog/mizzen.yml": "title: Catalog\n",
+      "starters/catalog/index.md": "# Catalog\n",
+    });
+    const listed = ctx.mizzen(["init", "--list", "--theme", themeRoot], ctx.dir);
+    ok(listed, "init --list");
+    check(listed.stdout.includes("Catalog") && listed.stdout.includes("A small catalog."), "the starter is not listed");
+    const out = join(ctx.dir, "catalog-site");
+    const copied = ctx.mizzen(["init", out, "--starter", "catalog", "--theme", themeRoot], ctx.dir);
+    ok(copied, "init --starter");
+    check(existsSync(join(out, "mizzen.yml")), "the starter wrote no mizzen.yml");
+    check(!existsSync(join(out, "starter.json")), "the starter metadata was copied");
+    const built = build(ctx, out, themeRoot);
+    check(existsSync(join(built, "index.html")), "the copied starter does not build");
+  },
+};
+
+const records: AcceptanceCase = {
+  id: "records",
+  title: "Record changes in the semantic diff",
+  run: (ctx) => {
+    const site = join(ctx.dir, "records-site");
+    const themeRoot = theme(site, {
+      list: 'export default (p: any) => `<html><body><ul>${(p.list?.records ?? []).map((record: any) => `<li>${record.title}</li>`).join("")}</ul></body></html>`;\n',
+      record: 'export default (p: any) => `<html><body><h1>${p.record?.id}</h1>${p.page.html}</body></html>`;\n',
+    });
+    tree(site, {
+      "mizzen.yml": "title: Records\ncollections:\n  posts:\n    source: _data/posts.yml\n    template: _templates/post.md\n    permalink: /posts/{id}/\n",
+      "posts.md": "---\ntitle: Posts\nlayout: list\nlist:\n  collection: posts\n---\n\n# Posts\n",
+      "_templates/post.md": "---\ntitle: \"{title}\"\n---\n\n# :field[title]\n",
+      "_data/posts.yml": "- id: a\n  title: Alpha\n- id: b\n  title: Beta\n",
+    });
+    const before = build(ctx, site, themeRoot);
+    tree(site, { "_data/posts.yml": "- id: a\n  title: Alpha edited\n- id: b\n  title: Beta\n- id: c\n  title: Gamma\n" });
+    const after = build(ctx, site, themeRoot);
+    const result = ctx.mizzen(["diff", before, after, "--format", "json"], ctx.dir);
+    ok(result, "records diff");
+    const report = JSON.parse(result.stdout) as {
+      summary: { records: { added: number; changed: number } };
+      records: { collection: string; added: { id: string }[]; changed: { id: string; fields?: string[] }[] }[];
+    };
+    check(report.summary.records.changed === 1 && report.summary.records.added === 1, "the record counts are wrong");
+    const collection = report.records.find((entry) => entry.collection === "posts");
+    check(collection?.changed.some((record) => record.id === "a"), "the edited record is missing");
+    check(collection?.added.some((record) => record.id === "c"), "the added record is missing");
+    const markdown = ctx.mizzen(["diff", before, after, "--format", "markdown"], ctx.dir);
+    ok(markdown, "records diff markdown");
+    check(markdown.stdout.includes("posts") && markdown.stdout.includes("Alpha edited"), "the Markdown report lost the record change");
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   blog,
@@ -348,6 +496,12 @@ export const CASES: readonly AcceptanceCase[] = [
   versions,
   imports,
   diff,
+  records,
+  schema,
+  quality,
+  lifecycle,
+  preview,
+  starters,
   blocks,
   references,
   performance,
