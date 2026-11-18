@@ -41,6 +41,7 @@ import { markdownFieldBlocks } from "./markdown-field.ts";
 import { recordSourcePos, recordUrl, recordUrlsOf } from "./permalink.ts";
 import { localizeFields, prefixed, prefixOfLang, type RecordScope } from "./record-context.ts";
 import { fieldsWithDerived } from "./derived.ts";
+import { publicFields, type PublicPolicy } from "./public.ts";
 import { lifecycleOf, listedForMachines, replacementOf } from "./lifecycle.ts";
 import type { Template } from "./template.ts";
 import { viewUrls, viewsOf } from "./views.ts";
@@ -143,15 +144,17 @@ function withItem(scope: RecordScope, item: Readonly<Record<string, unknown>>): 
 }
 
 /** A selected record as a scope: its fields come first, and its own positions name its file. */
-function withRecord(scope: RecordScope, record: DataRecord): RecordScope {
-  const fields = fieldsWithDerived(record);
+function withRecord(scope: RecordScope, record: DataRecord, collection = scope.collection): RecordScope {
+  const policy = scope.publicPolicies?.[collection];
+  const fields = publicFields(fieldsWithDerived(record), policy);
+  const derived = record.derived === undefined ? undefined : publicFields(record.derived, policy);
   return {
     ...scope,
     record,
     fields,
     recordFields: fields,
     evidence: {},
-    ...(record.derived === undefined ? {} : { derivedFields: new Set(Object.keys(record.derived)) }),
+    ...(derived === undefined ? {} : { derivedFields: new Set(Object.keys(derived)) }),
   };
 }
 
@@ -293,10 +296,11 @@ async function rewriteNode(node: Nodes, build: Build): Promise<RootContent[]> {
       }
       const selected = selectRecords(node as never, build.scope);
       build.diagnostics.push(...selected.diagnostics);
+      const from = (node as { attributes?: Readonly<Record<string, string | null | undefined>> }).attributes?.["from"]?.trim();
       const out: RootContent[] = [];
       for (const record of selected.records) {
         out.push(
-          ...(await rewriteChildren(children, { ...build, scope: withRecord(build.scope, record), depth: build.depth + 1 })),
+          ...(await rewriteChildren(children, { ...build, scope: withRecord(build.scope, record, from || undefined), depth: build.depth + 1 })),
         );
       }
       return out;
@@ -369,7 +373,8 @@ function twinNode(node: Nodes, body: string, scope: RecordScope): string {
     }
     if (node.name === "records") {
       const selected = selectRecords(node as never, scope);
-      return selected.records.map((record) => twinInner(children, body, withRecord(scope, record))).join("\n");
+      const from = (node as { attributes?: Readonly<Record<string, string | null | undefined>> }).attributes?.["from"]?.trim();
+      return selected.records.map((record) => twinInner(children, body, withRecord(scope, record, from || undefined))).join("\n");
     }
     if (node.name === "changes") {
       return (scope.changes ?? [])
@@ -526,6 +531,10 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     config.languages.length === 0
       ? [{ code: config.lang, prefix: "" }]
       : config.languages.map((language) => ({ code: language.code, prefix: language.prefix }));
+  const publicPolicies: Record<string, PublicPolicy> = {};
+  for (const [key, value] of Object.entries(config.collections)) {
+    if (value.public !== undefined) publicPolicies[key] = value.public;
+  }
 
   for (const [name, entry] of Object.entries(config.collections)) {
     if (entry.template === undefined || entry.permalink === undefined) continue;
@@ -550,7 +559,10 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
     ): Promise<Page> => {
       const source: Template = rendering.template.localized[language.code] ?? rendering.template;
       const parsed = await parseMarkdown(source.body, source.bodyLine);
-      const pageFields = fieldsWithDerived({ fields: withoutEvidence(fields, entry.evidence), derived: record.derived });
+      const pageFields = publicFields(
+        fieldsWithDerived({ fields: withoutEvidence(fields, entry.evidence), derived: record.derived }),
+        entry.public,
+      );
       const evidence = publicEvidenceOf(record, entry.evidence);
       const changes = showsChanges(source.body) ? recordChanges(historyEvents, record.id, fields, entry) : [];
       const scope: RecordScope = {
@@ -559,6 +571,7 @@ export async function buildRecordPages(options: RecordPagesOptions): Promise<Rec
         recordFields: pageFields,
         fields: pageFields,
         ...(evidence === undefined ? {} : { evidence }),
+        ...(Object.keys(publicPolicies).length === 0 ? {} : { publicPolicies }),
         ...(changes.length === 0
           ? {}
           : { changes: changes.map((event) => event as unknown as Readonly<Record<string, unknown>>) }),

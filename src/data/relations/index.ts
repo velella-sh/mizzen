@@ -15,6 +15,7 @@ import type {
   SiteConfig,
 } from "../../contracts/index.ts";
 import { localizeFields, prefixOfLang, referenceTargets, urlOfRecord } from "../record-context.ts";
+import { publicFields } from "../public.ts";
 
 export type { RecordRelations, RelatedRecord };
 
@@ -43,11 +44,12 @@ function relatedRecordOf(
   const url = urlOfRecord(collections, config.collections, config.base, prefix, target, id, lang, config.lang);
   if (url === undefined) return undefined;
   const localized = localizeFields(record.fields, lang, config.lang).fields;
+  const fields = publicFields(localized["id"] === undefined ? { ...localized, id } : localized, config.collections[target]?.public);
   return {
     collection: target,
     id,
     url,
-    fields: localized["id"] === undefined ? { ...localized, id } : localized,
+    fields,
   };
 }
 
