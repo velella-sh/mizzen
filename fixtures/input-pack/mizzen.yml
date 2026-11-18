@@ -1,0 +1,16 @@
+title: Input package fixture
+description: A small site shared by the input package tests.
+exclude: [README.md]
+collections:
+  products:
+    source: _data/products.yml
+    id: slug
+    references:
+      supplier: suppliers
+  products-copy:
+    source: _data/products-copy.yml
+    id: slug
+  suppliers:
+    source: _data/suppliers.csv
+  unused:
+    source: _data/unused.yml
