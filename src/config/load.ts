@@ -15,6 +15,9 @@ import {
   type Pair,
 } from "yaml";
 import type {
+  AggregateConfig,
+  AggregateGroupConfig,
+  AggregateMetricConfig,
   ApiCollectionConfig,
   ApiVersionConfig,
   ApiConfig,
@@ -825,6 +828,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const transform = collectionTransformFrom(entry.transform);
     const join = joinFrom(entry.join);
     const derived = derivedFrom(entry.derived);
+    const aggregate = aggregateFrom(entry.aggregate);
     const pagination = paginationFrom(entry.pagination);
     collections[name] = {
       source: entry.source,
@@ -861,9 +865,52 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(changelog === undefined ? {} : { changelog }),
       ...(transform === undefined ? {} : { transform }),
       ...(join === undefined ? {} : { join }),
+      ...(aggregate === undefined ? {} : { aggregate }),
     };
   }
   return collections;
+}
+
+/** A collection's aggregation rules, keeping only groups and metrics the schema accepts; `undefined` when it declares none. */
+function aggregateFrom(value: unknown): AggregateConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const rawBy = Array.isArray(value.by) ? value.by : typeof value.by === "string" ? [value.by] : undefined;
+  if (rawBy === undefined) return undefined;
+  const by: AggregateGroupConfig[] = [];
+  for (const item of rawBy) {
+    if (typeof item === "string" && item !== "") {
+      by.push({ field: item });
+      continue;
+    }
+    if (!isPlainObject(item) || typeof item.field !== "string" || item.field === "") continue;
+    by.push({
+      field: item.field,
+      ...(item.period === "month" || item.period === "year" ? { period: item.period } : {}),
+      ...(typeof item.timezone === "string" && item.timezone !== "" ? { timezone: item.timezone } : {}),
+    });
+  }
+  if (by.length === 0 || !isPlainObject(value.metrics)) return undefined;
+  const metrics: Record<string, AggregateMetricConfig> = {};
+  for (const [name, metric] of Object.entries(value.metrics)) {
+    if (!isPlainObject(metric)) continue;
+    const op = metric.op;
+    if (op !== "count" && op !== "count-distinct" && op !== "sum" && op !== "average" && op !== "min" && op !== "max") continue;
+    metrics[name] = {
+      op,
+      ...(typeof metric.field === "string" && metric.field !== "" ? { field: metric.field } : {}),
+      ...(typeof metric.decimals === "number" && Number.isSafeInteger(metric.decimals) && metric.decimals >= 0 && metric.decimals <= 12
+        ? { decimals: metric.decimals }
+        : {}),
+    };
+  }
+  if (Object.keys(metrics).length === 0) return undefined;
+  return {
+    by,
+    metrics,
+    ...(value.where === undefined ? {} : { where: value.where }),
+    ...(value.missing === "skip" || value.missing === "group" ? { missing: value.missing } : {}),
+    ...(value.empty === "keep" || value.empty === "omit" ? { empty: value.empty } : {}),
+  };
 }
 
 /** A collection's derived rules, keeping only rules the schema accepts. `undefined` when it declares none. */

@@ -542,8 +542,45 @@ export interface JoinConfig {
 }
 
 /** One data collection: where its records come from, and how its pages are built. */
+/** How an aggregate groups one field: by value, or by the month or year of a date. */
+export interface AggregateGroupConfig {
+  /** Field to group by; a record without a value follows the aggregate's `missing` policy. */
+  readonly field: string;
+  /** Bucket a date field by `month` or `year` instead of by its written value. */
+  readonly period?: "month" | "year";
+  /** IANA zone that decides which month or year an instant belongs to; required with `period`. */
+  readonly timezone?: string;
+}
+
+/** The operator an aggregate metric applies to its group. */
+export type AggregateMetricOp = "count" | "count-distinct" | "sum" | "average" | "min" | "max";
+
+/** One value an aggregate computes for every group. */
+export interface AggregateMetricConfig {
+  /** What to compute. */
+  readonly op: AggregateMetricOp;
+  /** Field to read, required except for `count`. */
+  readonly field?: string;
+  /** Decimal places a `sum` or `average` is rounded to. Default `2`. */
+  readonly decimals?: number;
+}
+
+/** How an aggregate collection groups its source collection's records and what it computes per group. */
+export interface AggregateConfig {
+  /** Grouping fields, in order; every distinct combination is one group. */
+  readonly by: readonly AggregateGroupConfig[];
+  /** Values computed per group, keyed by the field name the summary holds. */
+  readonly metrics: Readonly<Record<string, AggregateMetricConfig>>;
+  /** Records that must match this filter before they join a group; the same shape as a list's `where`. */
+  readonly where?: unknown;
+  /** What a record without one of the grouping values does: skip it, or group it separately. Default `skip`. */
+  readonly missing?: "skip" | "group";
+  /** What a group whose metrics all lack a value does: keep it with null values, or omit it. Default `keep`. */
+  readonly empty?: "keep" | "omit";
+}
+
 export interface CollectionConfig {
-  /** Data file the records are read from, relative to the site root. */
+  /** Data file the records are read from, relative to the site root; the source collection's name on an aggregate. */
   readonly source: string;
   /**
    * Dot path to the record array inside a JSON API response, such as `data.items`. Setting it marks the source as a
@@ -629,6 +666,12 @@ export interface CollectionConfig {
    * keeps this collection's record id, position, and order; a source that changes refreshes the dependent output.
    */
   readonly join?: JoinConfig;
+  /**
+   * Build this collection by grouping another collection's records instead of reading a file. `source` names that
+   * collection. The summary is published like any other collection: lists, pages, feeds, the API, and search read it
+   * through `collections.<name>`. Default: none.
+   */
+  readonly aggregate?: AggregateConfig;
 }
 
 /** A cookieless analytics tool the site attaches with one script tag. */
