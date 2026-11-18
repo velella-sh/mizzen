@@ -19,9 +19,11 @@ import type {
   CollectionConfig,
   DataRecord,
   Diagnostic,
+  RecordPos,
   SourcePos,
 } from "../contracts/index.ts";
 import { normalizeDate, parseDate } from "../dates/parse.ts";
+import { sourcePosOf } from "./positions.ts";
 import { compareCodePoint, filterRows, parseQuery } from "./query.ts";
 import { resolveIn } from "./record-context.ts";
 import { referenceDateOf } from "./reference-date.ts";
@@ -62,6 +64,17 @@ interface Group {
 }
 
 const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** The span of a value in a source record, or the config span when the field has none. */
+function valuePos(record: DataRecord, field: string, fallback: SourcePos): SourcePos {
+  const at = record.fieldPositions[field];
+  return at === undefined ? fallback : sourcePosOf(at);
+}
+
+/** The config span as a record position, for a summary record that has no data file of its own. */
+function recordPosOf(pos: SourcePos): RecordPos {
+  return { file: pos.file, startLine: pos.line, startColumn: pos.column, endLine: pos.endLine, endColumn: pos.endColumn };
+}
 
 /** True when the runtime knows the zone. */
 function knownZone(zone: string): boolean {
@@ -123,7 +136,7 @@ function keyOf(
         id: "data.aggregate-period",
         severity: "error",
         message: `Record "${record.id}" of "${name}" has a non-text "${group.field}" value, so it cannot be grouped by ${group.period}.`,
-        pos: record.fieldPositions[group.field] ?? pos,
+        pos: valuePos(record, group.field, pos),
         help: `Write "${group.field}" as a date or an ISO 8601 instant.`,
       });
       return undefined;
@@ -134,7 +147,7 @@ function keyOf(
         id: "data.aggregate-period",
         severity: "error",
         message: `Record "${record.id}" of "${name}" has "${group.field}" = ${JSON.stringify(found.value)}, which is not a date, so it cannot be grouped by ${group.period}.`,
-        pos: record.fieldPositions[group.field] ?? pos,
+        pos: valuePos(record, group.field, pos),
         help: `Write "${group.field}" as YYYY-MM-DD, YYYY-MM, YYYY, or an ISO 8601 instant.`,
       });
       return undefined;
@@ -147,7 +160,7 @@ function keyOf(
       id: "data.aggregate-key",
       severity: "error",
       message: `Record "${record.id}" of "${name}" has a "${group.field}" value that is not text, a finite number, or a boolean, so it cannot be a group key.`,
-      pos: record.fieldPositions[group.field] ?? pos,
+      pos: valuePos(record, group.field, pos),
       help: `Group by a scalar field, or remove "${group.field}" from \`aggregate.by\`.`,
     });
     return undefined;
@@ -223,7 +236,7 @@ function numberAt(
     id: "data.aggregate-number",
     severity: "error",
     message: `Metric "${metric}" of "${name}" reads "${field}" = ${JSON.stringify(found.value)} from record "${record.id}", which is not a finite number.`,
-    pos: record.fieldPositions[field] ?? pos,
+    pos: valuePos(record, field, pos),
     help: `Write "${field}" as a number, or cast it in the source collection's \`transform\` rules.`,
   });
   return undefined;
@@ -251,7 +264,7 @@ function metricOf(
           id: "data.aggregate-distinct",
           severity: "error",
           message: `Metric "${metricName}" of "${name}" reads "${field}" = ${JSON.stringify(found.value)} from record "${record.id}", which is not text, a finite number, or a boolean.`,
-          pos: record.fieldPositions[field] ?? pos,
+          pos: valuePos(record, field, pos),
           help: `Count distinct values of a scalar field.`,
         });
         continue;
@@ -287,7 +300,7 @@ function metricOf(
         id: "data.aggregate-bound",
         severity: "error",
         message: `Metric "${metricName}" of "${name}" reads "${field}" = ${JSON.stringify(value)} from record "${record.id}", which is not text or a finite number.`,
-        pos: record.fieldPositions[field] ?? pos,
+        pos: valuePos(record, field, pos),
         help: `Compute ${metric.op} over text or numbers, all of one kind.`,
       });
       continue;
@@ -297,7 +310,7 @@ function metricOf(
         id: "data.aggregate-bound",
         severity: "error",
         message: `Metric "${metricName}" of "${name}" compares a ${kind} with a ${family}; values in one group must be all text or all numbers.`,
-        pos: record.fieldPositions[field] ?? pos,
+        pos: valuePos(record, field, pos),
         help: `Cast "${field}" in the source collection's \`transform\` rules so the group holds one kind.`,
       });
       continue;
@@ -433,9 +446,9 @@ export function buildAggregate(input: AggregateInput): AggregateResult {
       const record: DataRecord = {
         id,
         fields,
-        position: pos,
-        fieldPositions: { ...Object.fromEntries(Object.keys(fields).map((field) => [field, pos])) },
-        keyPositions: { ...Object.fromEntries(Object.keys(fields).map((field) => [field, pos])) },
+        position: recordPosOf(pos),
+        fieldPositions: { ...Object.fromEntries(Object.keys(fields).map((field) => [field, recordPosOf(pos)])) },
+        keyPositions: { ...Object.fromEntries(Object.keys(fields).map((field) => [field, recordPosOf(pos)])) },
         inputs: group.records.map((member) => member.id),
       };
       records.push(record);
