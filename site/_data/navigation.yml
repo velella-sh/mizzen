@@ -8,6 +8,10 @@ main:
         url: /install/
       - title: Upgrade to 0.2.3
         url: /upgrade/
+  - title: First project
+    children:
+      - title: From a data file
+        url: /first-project/
   - title: Guide
     tab: true
     children:
