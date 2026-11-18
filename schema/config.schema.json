@@ -560,7 +560,7 @@
         "maxDrop": {
           "type": "integer",
           "minimum": 0,
-          "description": "For `coverage` and `count`: how much the value may drop before the rule reports. Default 0."
+          "description": "For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds."
         }
       },
       "description": "One data-quality rule: what it measures, on which collection, and when it reports."

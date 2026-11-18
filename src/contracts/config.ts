@@ -365,7 +365,7 @@ export interface QualityRule {
   readonly fields?: readonly string[];
   /** A record must match to be in scope, written like a list page's `where`. Default: every record. */
   readonly where?: Readonly<Record<string, unknown>>;
-  /** For `coverage` and `count`: how much the value may drop before the rule reports. Default `0`. */
+  /** For `coverage` and `count`: how much the value may drop before the rule reports. Required for those kinds. */
   readonly maxDrop?: number;
 }
 

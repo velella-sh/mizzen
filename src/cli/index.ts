@@ -81,7 +81,7 @@ Commands:
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
-  data quality [dir]        Report records that fail the config's quality rules (--json)
+  data quality [dir]        Report records that fail the config's quality rules (--json, --write)
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   dev [dir]                 Serve the site, rebuild on change, and reload the browser
   diff <a> <b>              Compare two built folders, or --base <ref> a git ref with the current site
@@ -121,6 +121,7 @@ Options:
   --check              For data fetch: compare with mizzen.lock.json without writing
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --json               For data quality: print the findings and scopes as JSON
+  --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
@@ -251,6 +252,7 @@ type DataQualityOpts = {
   readonly command: "data-quality";
   readonly root: string;
   readonly json: boolean;
+  readonly write: boolean;
 };
 
 type InitOpts = {
@@ -558,14 +560,16 @@ function parseData(args: readonly string[]): Parsed {
   if (subcommand === "quality") {
     let root: string | undefined;
     let json = false;
+    let write = false;
     for (const arg of rest) {
       if (arg === "-h" || arg === "--help") return { help: true };
       if (arg === "--json") json = true;
+      else if (arg === "--write") write = true;
       else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
       else if (root === undefined) root = arg;
       else return { error: `unexpected argument: ${arg}` };
     }
-    return { options: { command: "data-quality", root: root ?? ".", json } };
+    return { options: { command: "data-quality", root: root ?? ".", json, write } };
   }
   if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
 
@@ -1329,11 +1333,12 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "data-quality") {
     try {
       const { config, diagnostics: configDiagnostics } = loadConfig(root);
-      const report = await checkQuality({ root, config });
+      const report = await checkQuality({ root, config, write: options.write });
       const diagnostics = [...configDiagnostics, ...report.diagnostics];
       if (options.json) {
-        log(JSON.stringify({ findings: report.findings, scopes: report.scopes, diagnostics }, null, 2));
+        log(JSON.stringify({ findings: report.findings, scopes: report.scopes, diagnostics, ...(report.wrote === undefined ? {} : { wrote: report.wrote }) }, null, 2));
       } else {
+        if (report.wrote !== undefined) log(`wrote ${report.wrote}`);
         for (const finding of report.findings) log(`${finding.severity} ${finding.id}: ${finding.message}`);
         for (const diagnostic of diagnostics) error(`${NAME}: ${diagnostic.id}: ${diagnostic.message}`);
       }
