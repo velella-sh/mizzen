@@ -43,6 +43,7 @@ collections:
 | `evidence` | string | | Top-level field that maps a record's fields to the claims that back them. Each claim has an `id`, `title`, and `url`, and the page JSON publishes the same claims. |
 | `onInvalid` | `error` or `skip` | `error` | What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. |
 | `onRemoved` | `error`, `gone`, or `{redirect}` | `error` once `urls.lock.json` exists | What a record that was published and is no longer in the collection does. See [Stable URLs](/data/urls/). |
+| `lifecycle` | object | | A record's state and what retirement does: `lifecycle.field` (default `state`), `lifecycle.states`, `lifecycle.retired`, `lifecycle.replacement`, `lifecycle.url` (`retain` or `redirect`), and `lifecycle.machine`. Unset, every record is published. |
 | `limits` | object | | Limits on the source: `limits.bytes` (default 2097152), `limits.records` (default 10000), and `limits.field` (default 100000 characters). |
 | `views` | object | `{}` | Extra named pages built from every record, each with its own `template`, `permalink`, and optional `layout`. |
 | `search` | object | | How record pages take part in search. See [Search](/data/search/). |
