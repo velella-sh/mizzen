@@ -16,11 +16,12 @@ import { rewriteLinks } from "../import/links.ts";
 import { mkdocsImporter } from "../import/mkdocs/index.ts";
 import { plainImporter } from "../import/plain.ts";
 import { docusaurusImporter } from "../import/docusaurus/index.ts";
+import { starlightImporter } from "../import/starlight/importer.ts";
 import { inventoryOf } from "../import/inventory.ts";
 import { readImportSource } from "../import/source.ts";
 
 /** The importers `mizzen import <name>` can select. */
-export const IMPORTERS: readonly Importer[] = [plainImporter, mkdocsImporter, docusaurusImporter];
+export const IMPORTERS: readonly Importer[] = [plainImporter, mkdocsImporter, starlightImporter, docusaurusImporter];
 
 /** What the command prints to. */
 export interface ImportIo {
