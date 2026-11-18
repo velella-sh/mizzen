@@ -36,6 +36,11 @@ export interface DataFetchOptions {
   readonly check?: boolean;
   /** The fetcher; defaults to the runtime's global `fetch`. Tests pass one that talks to a local server. */
   readonly fetch?: FetchLike;
+  /**
+   * Fetch only these collections. Every other source and snapshot stays in the lock exactly as it was, so two
+   * filtered runs update different parts of one lock without dropping each other's work.
+   */
+  readonly collections?: readonly string[];
 }
 
 /** What {@link dataFetch} did, ready for the CLI to print. */
@@ -158,8 +163,19 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
   if (errors.length > 0) return { code: 1, messages, errors };
 
   const config = loaded.config;
+  const requested = options.collections;
+  if (requested !== undefined) {
+    for (const name of requested) {
+      if (config.collections[name] === undefined) errors.push(`No collection named "${name}" in mizzen.yml.`);
+    }
+  }
+  if (errors.length > 0) return { code: 2, messages, errors };
+
+  const only = requested !== undefined;
   const compiled = compileSchemas(root, config, {}, []);
-  const names = Object.keys(config.collections).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const names = Object.keys(config.collections)
+    .filter((name) => requested === undefined || requested.includes(name))
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   const pinned = await readLock(root);
   for (const diagnostic of pinned.diagnostics) {
     if (diagnostic.severity === "error") errors.push(diagnostic.message);
@@ -168,7 +184,8 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
 
   const fetcher: FetchLike = options.fetch ?? ((url, init) => globalThis.fetch(url, init));
   const current = new Map<string, Current>();
-  const next = new Map<string, LockedSource>();
+  // A filtered run starts from the pinned lock, so an unselected source survives the write.
+  const next = new Map<string, LockedSource>(only ? Object.entries(pinned.lock.sources) : []);
   const remote = new Map<string, string>();
   const manifests = new Map<string, readonly ApiPage[]>();
   let changed = false;
@@ -275,17 +292,20 @@ export async function dataFetch(options: DataFetchOptions): Promise<DataFetchRes
     }
   }
 
-  // A source the config no longer declares leaves the lock, so the file describes exactly this site.
-  for (const address of Object.keys(pinned.lock.sources)) {
-    if (!next.has(address)) {
-      changed = true;
-      messages.push(`removed ${address}`);
+  // A source the config no longer declares leaves the lock, so the file describes exactly this site. A filtered run
+  // never removes anything: it does not read the other collections and cannot say they are gone.
+  if (!only) {
+    for (const address of Object.keys(pinned.lock.sources)) {
+      if (!next.has(address)) {
+        changed = true;
+        messages.push(`removed ${address}`);
+      }
     }
   }
 
   // Each package or URL collection gets its snapshot from what the lock now holds; a file collection keeps the one
   // `mizzen data snapshot` wrote, and a collection the config no longer declares loses its entry.
-  const snapshots: Record<string, CollectionSnapshot> = {};
+  const snapshots: Record<string, CollectionSnapshot> = only ? { ...(pinned.lock.snapshots ?? {}) } : {};
   for (const name of names) {
     const address = remote.get(name);
     const locked = address === undefined ? undefined : next.get(address);

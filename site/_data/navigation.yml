@@ -81,5 +81,7 @@ main:
         url: /data/feeds/
       - title: Recorded snapshots
         url: /data/snapshots/
+      - title: Refreshing data in CI
+        url: /data/refresh/
       - title: A versioned data API
         url: /data/api/

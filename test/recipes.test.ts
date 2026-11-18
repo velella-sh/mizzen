@@ -10,7 +10,12 @@ import { runNetwork } from "../src/cli/network.ts";
 const DIR = new URL("../docs/recipes/", import.meta.url);
 
 interface Step { readonly run?: string; readonly uses?: string; readonly if?: string }
-interface Workflow { readonly on: Record<string, unknown>; readonly permissions: Record<string, string>; readonly jobs: Record<string, { steps: Step[] }> }
+interface Workflow {
+  readonly on: Record<string, unknown>;
+  readonly permissions: Record<string, string>;
+  readonly concurrency?: { readonly group: string; readonly "cancel-in-progress": boolean };
+  readonly jobs: Record<string, { readonly needs?: string | string[]; readonly permissions?: Record<string, string>; readonly steps: Step[] }>;
+}
 
 test("every recipe is valid YAML with a trigger and jobs", () => {
   const files = readdirSync(DIR).filter((f) => f.endsWith(".yml"));
@@ -55,6 +60,39 @@ test("the recipe's update command writes a lock in a fixture, and the lock then 
   assert.equal(await runNetwork([...args.slice(1), site], io), 0, out.join("\n"));
   assert.ok(out.some((l) => l.includes("wrote network.lock.json")));
   assert.equal(await runNetwork([...args.slice(1), site, "--check"], io), 0);
+});
+
+test("the refresh recipe separates read and write jobs, serializes runs, and creates one review pull request", () => {
+  const text = readFileSync(new URL("refresh-data.yml", DIR), "utf8");
+  const workflow = parse(text) as Workflow;
+  assert.ok("schedule" in workflow.on);
+  assert.ok("workflow_dispatch" in workflow.on);
+  assert.match(text, /inputs\.collections/, "the manual filter is passed to the command");
+  assert.ok(workflow.concurrency);
+  assert.match(workflow.concurrency.group, /\$\{\{ github\.repository \}\}/);
+  assert.equal(workflow.concurrency["cancel-in-progress"], false);
+  assert.deepEqual(workflow.jobs.refresh!.permissions, { contents: "read" });
+  assert.deepEqual(workflow.jobs.build!.permissions, { contents: "read" });
+  assert.deepEqual(workflow.jobs.propose!.permissions, { contents: "write", "pull-requests": "write" });
+
+  const refreshRuns = workflow.jobs.refresh!.steps.map((step) => step.run ?? "");
+  assert.ok(refreshRuns.some((run) => run.includes("mizzen data refresh") && run.includes("--collections")));
+  assert.ok(refreshRuns.some((run) => run.includes("mizzen inputs export")));
+  assert.ok(workflow.jobs.refresh!.steps.some((step) => step.uses?.includes("upload-artifact") && step.if === "always()"));
+
+  const buildRuns = workflow.jobs.build!.steps.map((step) => step.run ?? "");
+  assert.ok(buildRuns.some((run) => run.includes("mizzen build")));
+  assert.ok(buildRuns.some((run) => run.includes("mizzen inputs import")));
+  assert.ok(buildRuns.some((run) => run.includes("mizzen diff")));
+
+  const proposeRuns = workflow.jobs.propose!.steps.map((step) => step.run ?? "");
+  assert.ok(proposeRuns.some((run) => run.includes("git add -- mizzen.lock.json") && run.includes(".mizzen/data")));
+  assert.ok(proposeRuns.some((run) => run.includes("gh pr create") && run.includes("gh pr edit")));
+  for (const run of proposeRuns) {
+    for (const line of run.split("\n").filter((entry) => entry.includes("git push"))) {
+      assert.doesNotMatch(line, /\b(main|master)\b/, line);
+    }
+  }
 });
 
 test("the rebuild-daily recipe is scheduled, builds as of today, and publishes only a new hash", () => {

@@ -1,0 +1,237 @@
+# Refreshes locked data on a schedule or by hand, validates it, builds the proposal offline, and opens one review pull
+# request. Copy this file to .github/workflows/refresh-data.yml.
+#
+# The jobs are split so only the last one can write to GitHub:
+#   - `refresh` has `contents: read`: it fetches and validates, and uploads the report and input package.
+#   - `build` has `contents: read`: it builds the base and the refreshed site from the package, with no source service.
+#   - `propose` has `contents: write` and `pull-requests: write`: it downloads the package, commits only the lock and
+#     `.mizzen/data`, and creates or updates one pull request.
+#
+# `concurrency` serializes every run for this repository, so two runs cannot update the same lock or branch at once.
+# A run with no changed lock makes no commit and no pull request. Change SITE to your site folder.
+name: refresh-data
+
+on:
+  schedule:
+    - cron: "43 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      collections:
+        description: Comma-separated collections to refresh; empty refreshes every collection
+        required: false
+        default: ""
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: refresh-data-${{ github.repository }}
+  cancel-in-progress: false
+
+env:
+  SITE: site
+  TARGET_BRANCH: main
+  BRANCH: mizzen/refresh-data
+  MIZZEN_VERSION: latest
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.refresh.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Mizzen and the theme
+        run: npm install --no-save --no-audit --no-fund "@velella/mizzen@${MIZZEN_VERSION}"
+      - name: Refresh, validate, and write the report
+        id: refresh
+        env:
+          COLLECTIONS: ${{ inputs.collections }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${COLLECTIONS:-}" ]; then args+=(--collections "$COLLECTIONS"); fi
+          npx mizzen data refresh "$SITE" --report "$RUNNER_TEMP/refresh-report.json" "${args[@]}"
+          node -e '
+            const report = require(process.argv[1]);
+            require("node:fs").appendFileSync(process.env.GITHUB_OUTPUT,
+              `changed=${report.status === "changed"}\nstage=${report.stage}\n`);
+          ' "$RUNNER_TEMP/refresh-report.json"
+      - name: Export the locked inputs for the offline build and the proposal
+        if: steps.refresh.outputs.changed == 'true'
+        env:
+          COLLECTIONS: ${{ inputs.collections }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${COLLECTIONS:-}" ]; then args+=(--collections "$COLLECTIONS"); fi
+          npx mizzen inputs export "$SITE" "${args[@]}" --out "$RUNNER_TEMP/refresh.mizzenpack"
+      - name: Record the run id, stage, and report
+        if: always()
+        env:
+          STAGE: ${{ steps.refresh.outputs.stage }}
+        run: |
+          {
+            echo "### Refresh evidence"
+            echo "Run: ${{ github.run_id }}"
+            echo "Stage: ${STAGE:-unknown}"
+            echo "Report: refresh-report-${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: refresh-report-${{ github.run_id }}
+          path: ${{ runner.temp }}/refresh-report.json
+          if-no-files-found: warn
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: steps.refresh.outputs.changed == 'true'
+        with:
+          name: refresh-inputs-${{ github.run_id }}
+          path: ${{ runner.temp }}/refresh.mizzenpack
+          if-no-files-found: error
+          retention-days: 14
+
+  build:
+    needs: refresh
+    if: needs.refresh.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Mizzen and the theme
+        run: npm install --no-save --no-audit --no-fund "@velella/mizzen@${MIZZEN_VERSION}"
+      - uses: actions/download-artifact@v4
+        with:
+          name: refresh-inputs-${{ github.run_id }}
+          path: ${{ runner.temp }}/inputs
+      - name: Build the base site from the committed lock
+        run: npx mizzen build "$SITE" --out "$RUNNER_TEMP/base"
+      - name: Verify and import the refreshed inputs
+        run: |
+          npx mizzen inputs verify "$RUNNER_TEMP/inputs/refresh.mizzenpack"
+          npx mizzen inputs import "$RUNNER_TEMP/inputs/refresh.mizzenpack" "$SITE"
+      - name: Build offline and write the output impact
+        run: |
+          set -euo pipefail
+          npx mizzen build "$SITE" --out "$RUNNER_TEMP/head"
+          npx mizzen diff "$RUNNER_TEMP/base" "$RUNNER_TEMP/head" --format markdown > "$RUNNER_TEMP/output-impact.md"
+          npx mizzen diff "$RUNNER_TEMP/base" "$RUNNER_TEMP/head" --format json > "$RUNNER_TEMP/output-impact.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: refresh-output-impact-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/output-impact.md
+            ${{ runner.temp }}/output-impact.json
+          retention-days: 14
+
+  propose:
+    needs: [refresh, build]
+    if: needs.refresh.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install Mizzen and the theme
+        run: npm install --no-save --no-audit --no-fund "@velella/mizzen@${MIZZEN_VERSION}"
+      - uses: actions/download-artifact@v4
+        with:
+          name: refresh-inputs-${{ github.run_id }}
+          path: ${{ runner.temp }}/inputs
+      - uses: actions/download-artifact@v4
+        with:
+          name: refresh-report-${{ github.run_id }}
+          path: ${{ runner.temp }}/report
+      - uses: actions/download-artifact@v4
+        with:
+          name: refresh-output-impact-${{ github.run_id }}
+          path: ${{ runner.temp }}/impact
+      - name: Import the proposed lock and store
+        run: npx mizzen inputs import "$RUNNER_TEMP/inputs/refresh.mizzenpack" "$SITE"
+      - name: Commit only the lock and its store
+        id: commit
+        run: |
+          set -euo pipefail
+          echo "committed=false" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- mizzen.lock.json
+          if [ -d .mizzen/data ]; then git add -- .mizzen/data; fi
+          unexpected=$(git diff --cached --name-only | grep -vE '^(mizzen\.lock\.json|\.mizzen/data/)' || true)
+          if [ -n "$unexpected" ]; then
+            echo "Refusing to commit files outside the allowed set:"
+            echo "$unexpected"
+            exit 1
+          fi
+          if git diff --cached --quiet; then
+            echo "The lock is unchanged; no commit or pull request."
+            exit 0
+          fi
+          git switch -C "$BRANCH"
+          git commit -m "chore(data): refresh locked sources"
+          git push --force origin "$BRANCH"
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+      - name: Write the review body from the engine reports
+        env:
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          {
+            echo "<!-- mizzen-refresh -->"
+            echo "Run $RUN_ID refreshed the locked data. Review the counts and the output impact below."
+            echo ""
+            echo "## Data changes"
+            node -e '
+              const report = require(process.argv[1]);
+              const totals = report.changes.totals;
+              console.log("| Collection | Before | After | Added | Removed | Changed |");
+              console.log("| --- | ---: | ---: | ---: | ---: | ---: |");
+              for (const entry of report.changes.collections) {
+                console.log(`| ${entry.name} | ${entry.before} | ${entry.after} | ${entry.added.length} | ${entry.removed.length} | ${entry.changed.length} |`);
+              }
+              console.log(`| **Total** | **${totals.before}** | **${totals.after}** | **${totals.added}** | **${totals.removed}** | **${totals.changed}** |`);
+            ' "$RUNNER_TEMP/report/refresh-report.json"
+            echo ""
+            echo "## Output impact"
+            cat "$RUNNER_TEMP/impact/output-impact.md" 2>/dev/null || echo "No output impact report."
+          } > "$RUNNER_TEMP/pr-body.md"
+      - name: Create or update the one review pull request
+        if: steps.commit.outputs.committed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          existing=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --body-file "$RUNNER_TEMP/pr-body.md"
+          else
+            gh pr create --base "$TARGET_BRANCH" --head "$BRANCH" \
+              --title "chore(data): refresh locked sources" \
+              --body-file "$RUNNER_TEMP/pr-body.md"
+          fi

@@ -13,6 +13,7 @@ import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.
 import { doctor } from "./doctor.ts";
 import { dataFetch, dataSnapshot, dataTransform } from "./data.ts";
 import { diffRuleVersions } from "../data/rule-diff.ts";
+import { dataRefresh } from "./refresh.ts";
 import { dataSchema } from "../data/schema-evolution.ts";
 import { dataMigrate } from "../data/schema-migrate.ts";
 import { verifyData } from "../data/verify.ts";
@@ -85,6 +86,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
+  data refresh [dir]        Fetch selected sources, validate, and write a review report (--collections, --report)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
   data verify [dir]         Compare the lock's record of each collection with its data; read-only
   data quality [dir]        Report records that fail the config's quality rules (--json, --write, --as-of)
@@ -139,11 +141,12 @@ Options:
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
-  --json               For data quality: print the findings and scopes as JSON; for inputs inspect: print the report as JSON
+  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for inputs inspect: print the report as JSON
   --limit <n>          For data transform: records to show per collection (default: 5)
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --report             For build: print why each page was rebuilt after a warm build
+  --report <file>      For data refresh: write the structured report here
   --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --topic <name>       Topic for pack (default: the site's only topic); not with --request
@@ -163,7 +166,7 @@ Options:
   --allow-edits        For mcp: also offer apply_edit, which writes a patch to source with a proof
   --print-config <c>   For mcp: print the configuration for claude-code, claude-desktop, cursor, or vscode, and exit
   --starter <name>     For init: the theme starter to copy into the folder (default folder: .)
-  --collections <a,b>  For inputs export: collections to carry; their references targets are added (default: every collection)
+  --collections <a,b>  For inputs export: collections to carry; their references targets are added. For data refresh: collections to fetch (default: every collection)
   --collection <name>  For data transform-diff: the collection to compare when both configs declare several
   --accept <ids|all>   For inputs import: inputs whose differing destination files or lock entries may be replaced
   --list               For init: print the theme's starters with their titles and descriptions
@@ -263,6 +266,14 @@ type DataFetchOpts = {
   readonly command: "data-fetch";
   readonly root: string;
   readonly check: boolean;
+};
+
+type DataRefreshOpts = {
+  readonly command: "data-refresh";
+  readonly root: string;
+  readonly collections?: readonly string[];
+  readonly report: string;
+  readonly json: boolean;
 };
 
 type DataSnapshotOpts = {
@@ -432,6 +443,7 @@ type Parsed =
         | VerifyOpts
         | WatchOpts
         | DataFetchOpts
+        | DataRefreshOpts
         | DataSnapshotOpts
         | DataVerifyOpts
         | DataSchemaOpts
@@ -778,6 +790,44 @@ function parseData(args: readonly string[]): Parsed {
       else return { error: `unexpected argument: ${arg}` };
     }
     return { options: { command: "data-quality", root: root ?? ".", json, write, ...(asOf === undefined ? {} : { asOf }) } };
+  }
+  if (subcommand === "refresh") {
+    let root: string | undefined;
+    let report: string | undefined;
+    let json = false;
+    const collections: string[] = [];
+    for (let i = 0; i < rest.length; i++) {
+      const arg = rest[i]!;
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--json") json = true;
+      else if (arg === "--collections" || arg === "--report") {
+        const value = rest[++i];
+        if (value === undefined || value.startsWith("-") || value.trim() === "") {
+          return { error: `${arg} needs a value` };
+        }
+        if (arg === "--report") report = value;
+        else {
+          for (const name of value.split(",").map((part) => part.trim()).filter((part) => part !== "")) {
+            if (!collections.includes(name)) collections.push(name);
+          }
+        }
+      } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      else if (root === undefined) root = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    }
+    if (report === undefined) return { error: "data refresh needs --report <file>" };
+    if (rest.includes("--collections") && collections.length === 0) {
+      return { error: "--collections needs at least one collection name" };
+    }
+    return {
+      options: {
+        command: "data-refresh",
+        root: root ?? ".",
+        ...(collections.length === 0 ? {} : { collections }),
+        report,
+        json,
+      },
+    };
   }
   if (subcommand !== "fetch") return { error: `unknown data subcommand: ${subcommand}` };
 
@@ -1612,6 +1662,23 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     try {
       const result = await dataFetch({ root, ...(options.check ? { check: true } : {}) });
       for (const message of result.messages) log(message);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-refresh") {
+    try {
+      const result = await dataRefresh({
+        root,
+        report: resolve(options.report),
+        ...(options.collections === undefined ? {} : { collections: options.collections }),
+      });
+      if (options.json) write(JSON.stringify(result.report, null, 2));
+      else for (const message of result.messages) log(message);
       for (const message of result.errors) error(`${NAME}: ${message}`);
       return result.code;
     } catch (err) {
