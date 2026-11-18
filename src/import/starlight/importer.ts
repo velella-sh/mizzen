@@ -1,15 +1,40 @@
 /**
  * The Astro Starlight importer: reads `astro.config.*` as text, never runs it, and takes the content root from
- * `srcDir`. Pages keep their text for now; a later step converts their components.
+ * `srcDir`. A page keeps its title and description, and a `draft` becomes Mizzen's `published: false`; the configured
+ * `sidebar` becomes the generated `docs` navigation list. Components are converted separately.
  */
 import { basename, extname } from "node:path";
+import { stringify } from "yaml";
 import type { Diagnostic } from "../../contracts/index.ts";
+import { parseFrontMatter } from "../../content/frontmatter.ts";
+import { permalink } from "../../content/permalink.ts";
 import type { ImportedAsset, ImportedConfig, ImportedPage, ImportFile, Importer } from "../contract.ts";
 import { ASSET_EXTENSIONS } from "../plain.ts";
 
 const CONFIGS = ["astro.config.mjs", "astro.config.js", "astro.config.ts"];
 const CONTENT = /\.(?:md|mdx|mdoc)$/i;
 const DOCS = "content/docs";
+
+/** A JavaScript literal the importer can read without running it. */
+type JsValue = string | number | boolean | null | readonly JsValue[] | JsObject;
+
+/** A JavaScript object literal, keyed by its property names. */
+interface JsObject {
+  readonly [key: string]: JsValue;
+}
+
+/** One generated navigation entry: a link when `url` is set, a group when `children` is. */
+interface NavEntry {
+  readonly title: string;
+  readonly url?: string;
+  readonly children?: readonly NavEntry[];
+}
+
+/** A converted page, as the navigation needs to see it. */
+interface NavPage {
+  readonly destination: string;
+  readonly title: string;
+}
 
 /** One error with the first character of `file` as its position. */
 function error(id: string, message: string, file?: string): Diagnostic {
@@ -47,6 +72,220 @@ function quoted(text: string, name: string): string | undefined {
   return match?.[1] ?? match?.[2];
 }
 
+/** True for an object literal, never an array. */
+function isObject(value: JsValue | undefined): value is JsObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Parses one JavaScript literal — string, number, boolean, `null`, array, or object — at the start of `text`, skipping
+ * whitespace and comments. A template interpolation, a call, or a name other than a keyword fails the whole parse.
+ */
+function parseLiteral(text: string): JsValue | undefined {
+  let at = 0;
+
+  const skip = (): void => {
+    for (;;) {
+      const char = text[at];
+      if (char === undefined) return;
+      if (/\s/.test(char)) {
+        at++;
+      } else if (char === "/" && text[at + 1] === "/") {
+        const end = text.indexOf("\n", at + 2);
+        at = end === -1 ? text.length : end + 1;
+      } else if (char === "/" && text[at + 1] === "*") {
+        const end = text.indexOf("*/", at + 2);
+        at = end === -1 ? text.length : end + 2;
+      } else {
+        return;
+      }
+    }
+  };
+
+  const string = (): string | undefined => {
+    const quote = text[at];
+    if (quote !== '"' && quote !== "'" && quote !== "`") return undefined;
+    at++;
+    let out = "";
+    while (at < text.length) {
+      const char = text[at]!;
+      if (char === quote) {
+        at++;
+        return out;
+      }
+      if (quote === "`" && char === "$" && text[at + 1] === "{") return undefined;
+      if (char === "\\") {
+        const next = text[at + 1];
+        at += 2;
+        if (next === undefined) return undefined;
+        out += next === "n" ? "\n" : next === "t" ? "\t" : next === "r" ? "\r" : next;
+      } else {
+        out += char;
+        at++;
+      }
+    }
+    return undefined;
+  };
+
+  const array = (): readonly JsValue[] | undefined => {
+    at++;
+    const out: JsValue[] = [];
+    for (;;) {
+      skip();
+      if (text[at] === "]") {
+        at++;
+        return out;
+      }
+      if (text[at] === ",") {
+        at++;
+        continue;
+      }
+      const item = value();
+      if (item === undefined) return undefined;
+      out.push(item);
+      skip();
+      if (text[at] === ",") at++;
+    }
+  };
+
+  const object = (): JsObject | undefined => {
+    at++;
+    const out: Record<string, JsValue> = {};
+    for (;;) {
+      skip();
+      if (text[at] === "}") {
+        at++;
+        return out;
+      }
+      if (text[at] === ",") {
+        at++;
+        continue;
+      }
+      let key: string | undefined;
+      if (text[at] === '"' || text[at] === "'" || text[at] === "`") {
+        key = string();
+      } else {
+        key = /^[A-Za-z_$][\w$]*/.exec(text.slice(at))?.[0];
+        if (key !== undefined) at += key.length;
+      }
+      if (key === undefined) return undefined;
+      skip();
+      if (text[at] !== ":") return undefined;
+      at++;
+      skip();
+      const item = value();
+      if (item === undefined) return undefined;
+      out[key] = item;
+      skip();
+      if (text[at] === ",") at++;
+    }
+  };
+
+  const value = (): JsValue | undefined => {
+    skip();
+    const char = text[at];
+    if (char === "[" || char === "{") return char === "[" ? array() : object();
+    if (char === '"' || char === "'" || char === "`") return string();
+    const number = /^-?\d+(?:\.\d+)?/.exec(text.slice(at));
+    if (number !== null) {
+      at += number[0].length;
+      return Number(number[0]);
+    }
+    const name = /^[A-Za-z_$][\w$]*/.exec(text.slice(at))?.[0];
+    if (name === "true" || name === "false") {
+      at += name.length;
+      return name === "true";
+    }
+    if (name === "null") {
+      at += name.length;
+      return null;
+    }
+    return undefined;
+  };
+
+  return value();
+}
+
+/** The literal list of a `sidebar: [...]` in the integration block, or `undefined` when it is absent or not one. */
+function sidebar(block: string): readonly JsValue[] | undefined {
+  const match = /\bsidebar\s*:/.exec(block);
+  if (match === null) return undefined;
+  const value = parseLiteral(block.slice(match.index + match[0].length));
+  return Array.isArray(value) ? value : undefined;
+}
+
+/** A page's text with its front matter mapped, and the title the navigation reads. */
+function convertPage(text: string, file: string, diagnostics: Diagnostic[]): { contents: string; title: string } {
+  const frontMatter = parseFrontMatter(text, file);
+  diagnostics.push(...frontMatter.diagnostics);
+  const mapped: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(frontMatter.data)) {
+    if (key === "draft") {
+      if (value === true) mapped.published = false;
+      continue;
+    }
+    mapped[key] = value;
+  }
+  const title =
+    typeof mapped.title === "string" && mapped.title.trim() !== ""
+      ? mapped.title
+      : basename(file).replace(/\.[^.]+$/, "");
+  const front = Object.keys(mapped).length === 0 ? "" : `---\n${stringify(mapped)}---\n`;
+  return { contents: front + frontMatter.body, title };
+}
+
+/** The URL of a `link`: an external or site path as written, a relative path from the site root. */
+function linkUrl(link: string): string {
+  return /^(?:[a-z][a-z\d+.-]*:|\/\/|\/)/i.test(link) ? link : `/${link}`;
+}
+
+/** The page a `slug` names, or a page derived from it when the import has none. */
+function slugEntry(slug: string, pages: readonly NavPage[]): NavEntry | undefined {
+  const path = slug.replace(/^\/+|\/+$/g, "");
+  if (path === "") return undefined;
+  const page = pages.find((candidate) => candidate.destination.replace(/\.md$/, "") === path);
+  if (page !== undefined) return { title: page.title, url: permalink(page.destination) };
+  return { title: basename(path), url: permalink(`${path}.md`) };
+}
+
+/** The pages an `autogenerate: { directory }` covers, in import order. */
+function autogenerated(directory: string, pages: readonly NavPage[]): readonly NavEntry[] {
+  const prefix = directory.replace(/^\.?\/+|\/+$/g, "");
+  return pages
+    .filter((page) => prefix === "" || page.destination.startsWith(`${prefix}/`))
+    .map((page) => ({ title: page.title, url: permalink(page.destination) }));
+}
+
+/** Every link in an entry, flattening a nested group because a navigation group holds links only. */
+function flattened(entry: NavEntry): readonly NavEntry[] {
+  return entry.children === undefined ? [entry] : entry.children.flatMap(flattened);
+}
+
+/** One sidebar entry as a navigation item, or `undefined` when it names no page, link, or group. */
+function navEntry(value: JsValue, pages: readonly NavPage[]): NavEntry | undefined {
+  if (typeof value === "string") return slugEntry(value, pages);
+  if (!isObject(value)) return undefined;
+  const label = typeof value.label === "string" ? value.label : undefined;
+  if (typeof value.link === "string") return { title: label ?? basename(value.link), url: linkUrl(value.link) };
+  if (typeof value.slug === "string") {
+    const entry = slugEntry(value.slug, pages);
+    if (entry === undefined) return undefined;
+    return label === undefined ? entry : { ...entry, title: label };
+  }
+  if (Array.isArray(value.items)) {
+    const children = value.items.flatMap((item) => {
+      const entry = navEntry(item, pages);
+      return entry === undefined ? [] : flattened(entry);
+    });
+    return label === undefined || children.length === 0 ? undefined : { title: label, children };
+  }
+  if (isObject(value.autogenerate) && typeof value.autogenerate.directory === "string") {
+    const children = autogenerated(value.autogenerate.directory, pages);
+    return label === undefined || children.length === 0 ? undefined : { title: label, children };
+  }
+  return undefined;
+}
+
 /** A source path relative to the content root, with only its last separator removed. */
 function relativeTo(root: string, path: string): string {
   return path.startsWith(`${root}/`) ? path.slice(root.length + 1) : path;
@@ -59,6 +298,7 @@ export const starlightImporter: Importer = {
     const files: ImportFile[] = [];
     const pages: ImportedPage[] = [];
     const assets: ImportedAsset[] = [];
+    const navPages: NavPage[] = [];
     const diagnostics: Diagnostic[] = [];
 
     const configPath = CONFIGS.find((name) => source.files.includes(name));
@@ -92,8 +332,11 @@ export const starlightImporter: Importer = {
       if (!under(path)) continue;
       const relative = relativeTo(root, path);
       if (CONTENT.test(relative)) {
+        const destination = relative.replace(/\.(?:mdx|mdoc)$/i, ".md");
+        const page = convertPage(source.read(path), path, diagnostics);
         files.push({ path, kind: "content" });
-        pages.push({ source: path, destination: relative.replace(/\.(?:mdx|mdoc)$/i, ".md"), contents: source.read(path) });
+        pages.push({ source: path, destination, contents: page.contents });
+        navPages.push({ destination, title: page.title });
       } else if (ASSET_EXTENSIONS.has(extname(relative).toLowerCase())) {
         files.push({ path, kind: "asset" });
         assets.push({ source: path, destination: relative });
@@ -102,6 +345,20 @@ export const starlightImporter: Importer = {
       }
     }
 
-    return { files, pages, assets, config, diagnostics };
+    const items = block === undefined ? undefined : sidebar(block);
+    const navigation: ImportedConfig | undefined =
+      items === undefined
+        ? undefined
+        : {
+            ...(configPath === undefined ? {} : { source: configPath }),
+            contents: stringify({
+              main: items.flatMap((item) => {
+                const entry = navEntry(item, navPages);
+                return entry === undefined ? [] : [entry];
+              }),
+            }),
+          };
+
+    return { files, pages, assets, config, ...(navigation === undefined ? {} : { navigation }), diagnostics };
   },
 };
