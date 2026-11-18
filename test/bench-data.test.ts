@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { CASES, median } from "../scripts/bench-data.ts";
@@ -22,9 +25,14 @@ test("the benchmark prints one measurement per record count and case, as JSON", 
     report.measurements.map((m: { records: number; case: string }) => [m.records, m.case]),
     [30, 60].flatMap((records) => CASES.map((name) => [records, name])),
   );
+  const fields = ["cachedPages", "case", "indexKb", "ms", "peakMb", "records", "renderedPages"];
   for (const m of report.measurements) {
-    assert.deepEqual(Object.keys(m).sort(), ["cachedPages", "case", "indexKb", "ms", "peakMb", "records", "renderedPages"]);
+    const ran = m.case === "cold" || m.case === "one-record";
+    assert.deepEqual(Object.keys(m).sort(), ran ? [...fields, "timings"].sort() : fields);
     assert.ok(m.ms > 0 && m.peakMb > 0);
+    if (!ran) continue;
+    assert.deepEqual(Object.keys(m.timings).sort(), ["dataMs", "outputsMs", "renderMs", "writeMs"]);
+    for (const ms of Object.values(m.timings)) assert.ok(Number.isFinite(ms) && (ms as number) >= 0, `${m.case} stage time`);
   }
   const one = report.measurements.find((m: { case: string; records: number }) => m.case === "one-record" && m.records === 60);
   assert.ok(one.renderedPages >= 1);
@@ -49,6 +57,32 @@ test("checkBudget pairs each measurement with its budget and flags the ones over
     [["cold", "ms", false], ["cold", "peakMb", true], ["warm", "ms", true], ["warm", "peakMb", true]],
   );
   assert.match(budgetTable(rows), /\*\*over budget\*\*/);
+});
+
+test("a saved report is checked against its budget, and one measurement over it exits 1", () => {
+  const parent = mkdtempSync(join(tmpdir(), "bench-budget-"));
+  const budgetFile = join(parent, "budget.json");
+  writeFileSync(budgetFile, JSON.stringify({ budgets: { "10": { cold: { ms: 90, peakMb: 60 } } } }));
+  try {
+    for (const [ms, peakMb, status] of [[120, 50, 1], [50, 80, 1], [50, 50, 0]] as const) {
+      const file = join(parent, `report-${ms}-${peakMb}.json`);
+      writeFileSync(
+        file,
+        JSON.stringify({
+          node: "v0",
+          platform: "x",
+          arch: "y",
+          runs: 1,
+          measurements: [{ records: 10, case: "cold", ms, peakMb, renderedPages: 1, cachedPages: 0, indexKb: 0 }],
+        }),
+      );
+      const run = spawnSync(process.execPath, ["--no-warnings", script, "--report", file, "--check", budgetFile], { encoding: "utf8" });
+      assert.equal(run.status, status, `${ms} ms and ${peakMb} MB: ${run.stderr}`);
+      assert.equal(run.stderr.includes("**over budget**"), status === 1, `${ms} ms and ${peakMb} MB name the over-budget row`);
+    }
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
 });
 
 test("the committed budget file covers every case of 1,000 and 10,000 records", async () => {
