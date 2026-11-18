@@ -83,11 +83,11 @@ test("import fails on an unresolved manual item only with --fail-on-manual, and 
 test("import with an unknown importer exits 2", async () => {
   const root = tree({ "index.md": "# Home\n" });
   const { logs, errors, io } = capture();
-  const status = await main(["import", "docusaurus", root], io);
+  const status = await main(["import", "hugo", root], io);
   assert.equal(status, 2);
   assert.deepEqual(logs, []);
   assert.equal(errors.length, 1);
-  assert.match(errors[0]!, /unknown importer: docusaurus; choose plain, mkdocs/);
+  assert.match(errors[0]!, /unknown importer: hugo; choose plain, mkdocs, starlight, docusaurus/);
 });
 
 test("import usage errors exit 2 and print the help", async () => {
