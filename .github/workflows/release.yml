@@ -136,6 +136,25 @@ jobs:
           --candidate "$RUNNER_TEMP"/dist/velella-mizzen-*.tgz
           --theme "$RUNNER_TEMP"/theme/velella-lateen-*.tgz
           --report "$RUNNER_TEMP"/release-evidence/compat-report.json
+      - name: Install the tested tarball in a clean project
+        if: steps.meta.outputs.published != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/acceptance"
+          cd "$RUNNER_TEMP/acceptance"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/dist/velella-mizzen-*.tgz
+      - name: Run the release acceptance cases from the tarball
+        if: steps.meta.outputs.published != 'true'
+        working-directory: mizzen
+        run: |
+          set -euo pipefail
+          tarball="$(ls "$RUNNER_TEMP"/dist/velella-mizzen-*.tgz)"
+          digest="$(sha256sum "$tarball" | cut -d' ' -f1)"
+          node scripts/acceptance.ts \
+            --mizzen "$RUNNER_TEMP/acceptance/node_modules/.bin/mizzen" \
+            --release --candidate "$GITHUB_SHA" --digest "$digest" --tarball "$tarball" \
+            --summary "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: steps.meta.outputs.published != 'true'
         with:
@@ -193,6 +212,43 @@ jobs:
           npm install --global --silent npm@^11.5.1
           npm publish ./*.tgz --access public --provenance --tag "$DIST_TAG"
           echo "Published ${{ needs.verify.outputs.version }} to \`$DIST_TAG\` from $(cat SHA256SUMS)" >> "$GITHUB_STEP_SUMMARY"
+
+  # Installs the exact version npm now serves and runs the shipped cases again. A failure fails the release run, so
+  # the release epic stays open until a post-publish run passes.
+  acceptance-published:
+    needs: [verify, publish]
+    if: needs.verify.outputs.published != 'true' && needs.publish.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Install the published version from npm
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/published"
+          cd "$RUNNER_TEMP/published"
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund "@velella/mizzen@$VERSION"
+          npm pack "@velella/mizzen@$VERSION" --pack-destination "$RUNNER_TEMP/published" >/dev/null
+      - name: Run the shipped cases against the npm package
+        run: |
+          set -euo pipefail
+          tarball="$(ls "$RUNNER_TEMP"/published/velella-mizzen-*.tgz)"
+          digest="$(sha256sum "$tarball" | cut -d' ' -f1)"
+          node scripts/acceptance.ts \
+            --mizzen "$RUNNER_TEMP/published/node_modules/.bin/mizzen" \
+            --release --candidate "$GITHUB_SHA" --digest "$digest" --tarball "$tarball" \
+            --summary "$GITHUB_STEP_SUMMARY"
 
   github-release:
     needs: [verify, publish]
