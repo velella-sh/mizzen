@@ -348,3 +348,46 @@ test("a site change refuses a pinned session until it resumes on the fresh snaps
     await snap.close();
   }
 });
+
+test("search and graph cursors resume in their snapshot and are refused across one", async () => {
+  const snap = await harness(copyFixture("docs-site"));
+  const session = "cursors";
+  const call = async (name: string, args: Record<string, unknown>) => {
+    const response = (await snap.rpc("tools/call", { name, arguments: args, _meta: meta(session) })).result as any;
+    return response.structuredContent ?? JSON.parse(response.content?.[0]?.text ?? "{}");
+  };
+  const init = async () =>
+    (await snap.rpc("initialize", { protocolVersion: "2025-06-18", clientInfo: { name: "cursors", version: "1" }, _meta: meta(session) })).result as any;
+  try {
+    await init();
+    const first = await call("search_docs", { query: "beacon", limit: 2 });
+    assert.ok(first.total > 2);
+    assert.equal(first.results.length, 2);
+    assert.ok(first.nextCursor);
+    const second = await call("search_docs", { query: "beacon", limit: 2, cursor: first.nextCursor });
+    assert.equal(second.results.length, 2);
+    const seen = new Set(first.results.map((hit: { url: string }) => hit.url));
+    assert.ok(second.results.every((hit: { url: string }) => !seen.has(hit.url)));
+    const otherRequest = await call("search_docs", { query: "beacon", limit: 3, cursor: first.nextCursor });
+    assert.equal(otherRequest.code, "bad-cursor");
+
+    const graph = await call("query_graph", { from: "page:install.md", nodes: 1 });
+    assert.equal(graph.partial, true);
+    await call("query_graph", { from: "page:install.md", nodes: 1, cursor: graph.cursor });
+    const missing = await call("query_graph", { snapshot: "snap:other", from: "page:install.md" });
+    assert.equal(missing.code, "stale-snapshot");
+
+    writeFileSync(join(snap.root, "extra.md"), "---\ntitle: Extra\n---\n# Extra\n\nSee [install](install.md).\n", "utf8");
+    assert.equal((await init()).snapshotChanged, true);
+
+    const staleSearch = await call("search_docs", { query: "beacon", limit: 2, cursor: first.nextCursor });
+    assert.equal(staleSearch.code, "stale-cursor");
+    assert.equal(staleSearch.retryable, true);
+    assert.match(staleSearch.message, /snapshot/);
+
+    const staleGraph = await call("query_graph", { from: "page:install.md", nodes: 1, cursor: graph.cursor });
+    assert.equal(staleGraph.code, "stale-cursor");
+  } finally {
+    await snap.close();
+  }
+});
