@@ -13,3 +13,4 @@ export type { ContextConstraints, ContextRequest, ContextRequestProblem, Context
 export type { EditAuditCheck, EditAuditCheckStatus, EditAuditOutcome, EditAuditPlan, EditAuditRecord, EditAuditSpan, EditAuditVerification, EditAuditVersion } from "./edit-audit.ts";
 export type { NetworkProject, SiteNetwork } from "./network.ts";
 export type { Graph, GraphArchive, GraphBuildResult, GraphClaimInput, GraphCodeRefInput, GraphEdge, GraphEdgeKind, GraphFormat, GraphIncludeInput, GraphInput, GraphLinkInput, GraphNode, GraphNodeKind, GraphProblem, GraphSnapshot, GraphSymbolInput, GraphValue } from "./graph.ts";
+export type { TaskAcceptanceCriterion, TaskBudget, TaskBudgetStop, TaskBudgetStopStatus, TaskContract, TaskCriterionEvidence, TaskCriterionOutcome, TaskDocument, TaskEvent, TaskParseResult, TaskPermissions, TaskProblem, TaskRelatedKind, TaskRelatedMatch, TaskRelatedQuery, TaskRelatedReason, TaskScope, TaskSnapshot, TaskStatus, TaskUsage } from "./task.ts";

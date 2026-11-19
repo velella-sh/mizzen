@@ -1,0 +1,342 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/task.schema.json",
+  "title": "Mizzen task document",
+  "description": "A registered task: the versioned contract, its deterministic task and request ids, the current state, and the ordered transition events. The same document is written by `registerTask` and moved by `transitionTask` in `src/tasks/`; every event names the task, snapshot, reason, and result reference, so the document replays to the same state in the same order.",
+  "type": "object",
+  "required": [
+    "version",
+    "id",
+    "requestId",
+    "idempotencyKey",
+    "goal",
+    "scope",
+    "snapshot",
+    "budget",
+    "acceptance",
+    "state",
+    "events"
+  ],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The document and contract version. Only 1 exists."
+    },
+    "id": {
+      "$ref": "#/$defs/hash",
+      "description": "The deterministic task id: SHA-256 of the idempotency key. Independent of time and local paths."
+    },
+    "requestId": {
+      "$ref": "#/$defs/hash",
+      "description": "The deterministic request id: SHA-256 of the normalized contract. Re-registering the same content gives the same id."
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "\\S",
+      "description": "The caller's key for one registration."
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "\\S",
+      "description": "The task in one sentence."
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "snapshot": {
+      "$ref": "#/$defs/snapshot"
+    },
+    "budget": {
+      "$ref": "#/$defs/budget"
+    },
+    "permissions": {
+      "$ref": "#/$defs/permissions"
+    },
+    "acceptance": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/criterion"
+      }
+    },
+    "state": {
+      "$ref": "#/$defs/state",
+      "description": "The state after the last recorded event."
+    },
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/event"
+      },
+      "description": "The ordered transitions, starting with registration. Never rewritten."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "state": {
+      "enum": [
+        "draft",
+        "ready",
+        "waiting",
+        "running",
+        "blocked",
+        "verify",
+        "done",
+        "failed",
+        "canceled",
+        "expired"
+      ],
+      "description": "One task state. `done`, `failed`, `canceled`, and `expired` are terminal."
+    },
+    "event": {
+      "type": "object",
+      "required": ["sequence", "taskId", "snapshot", "from", "to", "reason", "result"],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based position in the task's event list."
+        },
+        "taskId": {
+          "$ref": "#/$defs/hash",
+          "description": "The task the transition belongs to."
+        },
+        "snapshot": {
+          "$ref": "#/$defs/hash",
+          "description": "The input snapshot id the transition ran against."
+        },
+        "from": {
+          "enum": [
+            null,
+            "draft",
+            "ready",
+            "waiting",
+            "running",
+            "blocked",
+            "verify",
+            "done",
+            "failed",
+            "canceled",
+            "expired"
+          ],
+          "description": "The state before the transition; null for registration."
+        },
+        "to": {
+          "$ref": "#/$defs/state",
+          "description": "The state after the transition."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "\\S",
+          "description": "Why the transition happened."
+        },
+        "result": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "A reference to the result the transition produced, or null when it produced none."
+        }
+      },
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "pages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reference"
+          },
+          "uniqueItems": true
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          },
+          "uniqueItems": true
+        },
+        "collections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/collection"
+          },
+          "uniqueItems": true
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          },
+          "uniqueItems": true
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "required": ["content", "data", "config", "tooling", "id"],
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/hash"
+        },
+        "data": {
+          "$ref": "#/$defs/hash"
+        },
+        "config": {
+          "$ref": "#/$defs/hash"
+        },
+        "tooling": {
+          "$ref": "#/$defs/hash"
+        },
+        "id": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "additionalProperties": false
+    },
+    "budget": {
+      "type": "object",
+      "required": ["contextTokens", "toolCalls", "timeMs"],
+      "properties": {
+        "contextTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "toolCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "read": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/principal"
+          },
+          "uniqueItems": true
+        },
+        "write": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/principal"
+          },
+          "uniqueItems": true
+        },
+        "check": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/principal"
+          },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "criterion": {
+      "type": "object",
+      "required": ["id", "statement"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "\\S"
+        },
+        "check": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S"
+        },
+        "review": {
+          "const": true
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["check"],
+          "properties": {
+            "check": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "review": false
+          }
+        },
+        {
+          "required": ["review"],
+          "properties": {
+            "check": false,
+            "review": {
+              "const": true
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "reference": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "block": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "collection": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "symbol": {
+      "type": "string",
+      "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*$"
+    },
+    "principal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "\\S"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "^([a-zA-Z]:)?[\\\\/]|(^|/)\\.\\.(/|$)|\\\\"
+      }
+    }
+  }
+}
