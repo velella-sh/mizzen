@@ -80,3 +80,15 @@ test("a malformed suite is a usage error and a failing gate exits 1", async () =
   assert.equal(await main(["eval", SUITE, "--format", "yaml"], bad.io), 2);
   assert.match(bad.errors.join(""), /text or json/);
 });
+
+test("mizzen eval records a build pin and refuses a malformed one", async () => {
+  const build = "a".repeat(64);
+  const { logs, errors, io } = capture();
+  assert.equal(await main(["eval", SUITE, "--format", "json", "--build", build], io), 0, errors.join("\n"));
+  const report = JSON.parse(logs.join("")) as EvalReport;
+  assert.equal(report.pins.build, build);
+
+  const bad = capture();
+  assert.equal(await main(["eval", SUITE, "--build", "nope"], bad.io), 2);
+  assert.match(bad.errors.join(""), /--build must be 64 lowercase hexadecimal characters/);
+});

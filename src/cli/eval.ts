@@ -28,6 +28,7 @@ Runs the evaluation suite in [suite] (default: evals) and prints its report.
   --out <file>        Write the report to this file instead of stdout
   --baseline <file>   Compare with a recorded baseline report
   --package <pin>     Package pin to record (default: source)
+  --build <sha256>    The built folder this run scores, recorded as a pin
 `;
 
 /** One parsed invocation. */
@@ -37,6 +38,7 @@ interface EvalArgs {
   readonly out?: string;
   readonly baseline?: string;
   readonly package?: string;
+  readonly build?: string;
 }
 
 /** Parses the arguments, or throws the sentence a person can act on. */
@@ -46,6 +48,7 @@ function parseEvalArgs(args: readonly string[]): EvalArgs {
   let out: string | undefined;
   let baseline: string | undefined;
   let packagePin: string | undefined;
+  let build: string | undefined;
   let positional = false;
   let index = 0;
   while (index < args.length) {
@@ -62,7 +65,11 @@ function parseEvalArgs(args: readonly string[]): EvalArgs {
     } else if (arg === "--out") out = value();
     else if (arg === "--baseline") baseline = value();
     else if (arg === "--package") packagePin = value();
-    else if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
+    else if (arg === "--build") {
+      const raw = value();
+      if (!/^[0-9a-f]{64}$/.test(raw)) throw new Error(`--build must be 64 lowercase hexadecimal characters, not ${raw}`);
+      build = raw;
+    } else if (arg.startsWith("-")) throw new Error(`unknown option: ${arg}`);
     else if (!positional) {
       suite = arg;
       positional = true;
@@ -75,6 +82,7 @@ function parseEvalArgs(args: readonly string[]): EvalArgs {
     ...(out === undefined ? {} : { out }),
     ...(baseline === undefined ? {} : { baseline }),
     ...(packagePin === undefined ? {} : { package: packagePin }),
+    ...(build === undefined ? {} : { build }),
   };
 }
 
@@ -119,6 +127,7 @@ export async function runEval(args: readonly string[], io: EvalIo): Promise<numb
     const { report } = await runEvalSuite({
       suite: resolve(parsed.suite),
       ...(parsed.package === undefined ? {} : { package: parsed.package }),
+      ...(parsed.build === undefined ? {} : { build: parsed.build }),
       ...(baseline === undefined ? {} : { baseline }),
     });
     const text = parsed.format === "json" ? `${JSON.stringify(report, null, 2)}\n` : formatEvalText(report);

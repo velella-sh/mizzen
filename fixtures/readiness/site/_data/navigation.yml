@@ -1,0 +1,5 @@
+main:
+  - title: Guide
+    url: /guide/
+  - title: Reference
+    url: /reference/

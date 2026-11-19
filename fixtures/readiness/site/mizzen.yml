@@ -1,0 +1,10 @@
+title: Readiness fixture
+description: A small site that exercises the readiness rules.
+url: https://example.test
+repository:
+  url: https://github.com/example/readiness
+  dir: .
+defaults:
+  - path: ""
+    values:
+      layout: doc

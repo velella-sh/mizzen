@@ -350,6 +350,8 @@ export interface EvalCasePins {
 export interface EvalRunPins {
   readonly mizzen: string;
   readonly package: string;
+  /** SHA-256 of the built folder this run was paired with, when the suite scores one. */
+  readonly build?: string;
   readonly tools: readonly EvalToolPin[];
 }
 
@@ -510,6 +512,8 @@ export interface EvalRunOptions {
   readonly suite: string;
   /** The package pin to record; `source` when running from a checkout. */
   readonly package?: string;
+  /** The build hash this run scores; recorded as a pin so a readiness report can bind to it. */
+  readonly build?: string;
   /** A recorded baseline to compare with. */
   readonly baseline?: EvalBaseline;
   /** A comparison that cannot find a pinned match is an error, not a warning. */

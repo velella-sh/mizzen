@@ -1,0 +1,399 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/readiness-report.schema.json",
+  "title": "Mizzen readiness report",
+  "description": "A versioned documentation readiness report: the rubric, build snapshot, per-dimension scores, rule results, located findings with remediation, unknowns, evaluation state, and a SHA-256 digest over everything but the digest.",
+  "type": "object",
+  "required": [
+    "version",
+    "schema",
+    "rubric",
+    "engine",
+    "build",
+    "status",
+    "dimensions",
+    "rules",
+    "findings",
+    "unknowns",
+    "evaluations",
+    "privacy",
+    "digest"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The report format version. Only 1 exists."
+    },
+    "schema": {
+      "const": "https://github.com/velella-sh/mizzen/schema/readiness-report.schema.json"
+    },
+    "rubric": {
+      "type": "object",
+      "required": [
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "engine": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The Mizzen version that wrote the report."
+    },
+    "build": {
+      "type": "object",
+      "required": [
+        "hash",
+        "pages",
+        "files"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "pages": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "files": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "status": {
+      "$ref": "#/$defs/status"
+    },
+    "overall": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Weighted score over known dimensions; absent when nothing is known."
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "dimension",
+          "weight",
+          "status",
+          "passed",
+          "failed",
+          "unknown"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "dimension": {
+            "$ref": "#/$defs/dimension"
+          },
+          "weight": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "score": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "status": {
+            "$ref": "#/$defs/status"
+          },
+          "passed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "unknown": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "dimension",
+          "weight",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dimension": {
+            "$ref": "#/$defs/dimension"
+          },
+          "weight": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/$defs/status"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/finding"
+      }
+    },
+    "unknowns": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "dimension",
+          "weight",
+          "status"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1
+          },
+          "dimension": {
+            "$ref": "#/$defs/dimension"
+          },
+          "weight": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": {
+            "const": "unknown"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evaluations": {
+      "type": "object",
+      "required": [
+        "status",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "suite": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "snapshot": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "evidence": {
+      "type": "string",
+      "description": "Public CI evidence for this exact build."
+    },
+    "privacy": {
+      "type": "object",
+      "required": [
+        "public",
+        "redacted"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "public": {
+          "type": "boolean"
+        },
+        "redacted": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 over the canonical report with this field left out."
+    }
+  },
+  "$defs": {
+    "status": {
+      "enum": [
+        "pass",
+        "fail",
+        "unknown"
+      ]
+    },
+    "dimension": {
+      "enum": [
+        "structure",
+        "navigation",
+        "context",
+        "examples",
+        "verification",
+        "permissions",
+        "maintenance"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "required": [
+        "kind",
+        "systemic"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "site",
+            "page",
+            "block",
+            "collection",
+            "symbol"
+          ]
+        },
+        "page": {
+          "type": "string",
+          "description": "Output URL without the site base."
+        },
+        "block": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+        },
+        "collection": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "systemic": {
+          "type": "boolean"
+        }
+      }
+    },
+    "pos": {
+      "type": "object",
+      "required": [
+        "file",
+        "line",
+        "column",
+        "endLine",
+        "endColumn"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string",
+          "minLength": 1
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endColumn": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "code",
+        "dimension",
+        "severity",
+        "scope",
+        "evidence",
+        "message",
+        "remediation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dimension": {
+          "$ref": "#/$defs/dimension"
+        },
+        "severity": {
+          "enum": [
+            "error",
+            "warning",
+            "info"
+          ]
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "pos": {
+          "$ref": "#/$defs/pos"
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        },
+        "remediation": {
+          "type": "object",
+          "required": [
+            "action",
+            "link"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "type": "string",
+              "minLength": 1
+            },
+            "link": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}

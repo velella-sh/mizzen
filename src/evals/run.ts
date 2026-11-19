@@ -188,6 +188,7 @@ export async function runEvalSuite(options: EvalRunOptions, runner: EvalRunner =
   const globalPins = {
     mizzen: version,
     package: packagePin,
+    ...(options.build === undefined ? {} : { build: options.build }),
     tools: [...runner.tools].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
   };
   const pinFindings = suitePinFindings(suite.pins, runner, packagePin);
