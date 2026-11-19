@@ -9,6 +9,7 @@
  * reached past the cap is a scope omission rather than silent content.
  */
 import type { Graph, GraphEdge, GraphNode, Site, TaskContract } from "../contracts/index.ts";
+import { isPublicReference } from "../data/public.ts";
 import { buildGraph, pageNodeId } from "../graph/build.ts";
 import { collectGraphInput } from "../graph/collect.ts";
 import { queryGraph } from "../graph/query.ts";
@@ -90,6 +91,14 @@ function reasonOf(edge: string): string {
 /** A graph node's pack kind, or `undefined` when it is structure a fragment already carries. */
 export function entryKindOf(node: GraphNode): ContextEntryKind | undefined {
   return CONTENT_KINDS[node.kind];
+}
+
+/** Whether a node may be selected: a field or claim outside the collection's public allowlist stays unseen. */
+function visible(site: Site, node: GraphNode): boolean {
+  const collection = node.data?.["collection"];
+  const field = node.data?.["field"] ?? (node.kind === "derived" ? node.data?.["rule"] : undefined);
+  if (typeof collection !== "string" || typeof field !== "string") return true;
+  return isPublicReference(site.config.collections[collection]?.public, field);
 }
 
 /** The graph the selection reads: the caller's, a collected one when a root is known, else the structural one. */
@@ -174,7 +183,7 @@ function entriesOf(graph: Graph, site: Site, task: TaskContract, omitted: Contex
   const entries: ContextEntry[] = [];
   const seen = new Set<string>();
   const add = (node: GraphNode, reason: string): void => {
-    if (seen.has(node.id)) return;
+    if (seen.has(node.id) || !visible(site, node)) return;
     seen.add(node.id);
     entries.push(entryOf(node, reason));
   };
@@ -340,6 +349,8 @@ export function selectFromGraph(
     const node = graph.nodes.find((candidate) => candidate.id === entry.id);
     if (node === undefined) continue;
     for (const reached of neighborsOf(graph, node, options, maxNodes - selected.size)) {
+      const fromNode = graph.nodes.find((candidate) => candidate.id === reached.edge.from);
+      if (!visible(site, reached.node) || (fromNode !== undefined && !visible(site, fromNode))) continue;
       const kind = entryKindOf(reached.node);
       const edgeKey = `${reached.edge.from}\u0000${reached.edge.to}\u0000${reached.edge.kind}`;
       const dependency: ContextDependency = {

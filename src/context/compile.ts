@@ -224,10 +224,10 @@ function requestsOf(
         action: `Add \`${omission.ref}\` to the site or the task scope, then register the task against the new snapshot.`,
       });
     }
-    if (omission.reason === "budget" && answerability.shortages.includes(omission.ref)) {
+    if (omission.reason === "budget" && (omission.answers ?? []).some((ref) => answerability.shortages.includes(ref))) {
       add({
         kind: "approval",
-        ref: omission.ref,
+        ref: (omission.answers ?? []).find((ref) => answerability.shortages.includes(ref)) ?? omission.ref,
         detail: omission.detail,
         action: `Approve more context tokens for this task, or narrow the task so \`${omission.ref}\` fits.`,
       });

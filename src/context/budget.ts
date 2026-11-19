@@ -86,6 +86,7 @@ export function packContext(goal: string, fragments: readonly ContextFragment[],
         detail:
           `\`${fragment.title}\` needs ${fragment.tokens} tokens; admitting it would bring the pack to ` +
           `${estimate.used} with its margin, ${estimate.used - maxTokens} over the ${maxTokens}-token budget.`,
+        answers: fragment.refs,
       });
       continue;
     }

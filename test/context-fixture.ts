@@ -1,4 +1,4 @@
-import type { Collection, Page, Site, SiteConfig, TaskContract } from "../src/contracts/index.ts";
+import type { Collection, Heading, Page, Site, SiteConfig, TaskContract } from "../src/contracts/index.ts";
 import { snapshotIdOf } from "../src/tasks/snapshot.ts";
 
 /** A site config with the defaults a build fills in, plus the given overrides. */
@@ -26,7 +26,7 @@ export function config(overrides: Partial<SiteConfig> = {}): SiteConfig {
 
 /** A heading parsed from Markdown, with the position a build would give it. */
 function headingsOf(markdown: string, file: string): Page["headings"] {
-  const headings: Page["headings"] = [];
+  const headings: Heading[] = [];
   for (const [index, line] of markdown.split("\n").entries()) {
     const match = /^(#{1,6})[ \t]+(.+)$/.exec(line);
     if (match === null) continue;

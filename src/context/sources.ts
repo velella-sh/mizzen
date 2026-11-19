@@ -70,6 +70,16 @@ function pageRefs(page: Page, extra: readonly string[]): readonly string[] {
   return [...new Set([page.url, source, ...extra])].sort();
 }
 
+/** Whether an entry may become a fragment: a field outside the collection's public allowlist never does. */
+function visible(site: Site, selection: ContextSelection, entry: ContextEntry): boolean {
+  if (entry.kind !== "field") return true;
+  const data = selection.graph.nodes.find((node) => node.id === entry.id)?.data;
+  const collection = data?.["collection"];
+  const field = data?.["field"];
+  if (typeof collection !== "string" || typeof field !== "string") return false;
+  return isPublicReference(site.config.collections[collection]?.public, field);
+}
+
 /** One fragment for each page section, plus the lead when it has text. */
 function pageDrafts(
   page: Page,
@@ -277,6 +287,7 @@ export async function fragmentsOf(
   };
 
   for (const entry of selection.entries) {
+    if (!visible(site, selection, entry)) continue;
     const via = viaOf(selection, entry);
     const entryRefs = refsForEntry(site, task, selection, entry);
     const page = pageOfEntry(site, entry);
@@ -295,8 +306,10 @@ export async function fragmentsOf(
       if (holder !== undefined) {
         const split = trimmed.get(holder.url);
         if (split !== undefined) {
-          for (const draft of pageDrafts(holder, split, build, pageRefs(holder, [id, ...entryRefs]), entry.reason, via)) {
-            if (draft.source.block === id) merge({ ...draft, refs: [...new Set([...draft.refs, id])].sort() });
+          const drafts = pageDrafts(holder, split, build, pageRefs(holder, [id, ...entryRefs]), entry.reason, via);
+          const matching = drafts.filter((draft) => draft.source.block === id);
+          for (const draft of matching.length > 0 ? matching : drafts.slice(0, 1)) {
+            merge({ ...draft, refs: [...new Set([...draft.refs, id])].sort() });
           }
         }
       }

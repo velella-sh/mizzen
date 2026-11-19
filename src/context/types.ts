@@ -62,6 +62,8 @@ export interface ContextOmission {
   readonly reason: ContextOmissionReason;
   /** One sentence naming what happened and what would change it. */
   readonly detail: string;
+  /** The references the omitted fragment would have answered, so a gap can be tied to a criterion. */
+  readonly answers?: readonly string[];
 }
 
 /** The precise origin of one fragment: the same text the build wrote, at the same place. */
