@@ -141,16 +141,24 @@ export function writeScopeWithin(
   wanted: AccessWriteScope,
   path: string,
 ): boolean {
-  if (!referencesWithin(granted.files, wanted.files)) return false;
-  if (wanted.files.length > 0 && !granted.files.some((pattern) => pathMatches(pattern, path))) return false;
+  let covered = false;
+
+  if (granted.files.length > 0) {
+    if (!referencesWithin(granted.files, wanted.files)) return false;
+    if (wanted.files.length > 0 && !granted.files.some((pattern) => pathMatches(pattern, path))) return false;
+    if (wanted.files.length > 0) covered = true;
+  }
+
   for (const key of ["pages", "blocks", "collections"] as const) {
-    if (wanted[key].length > 0 && !referencesWithin(granted[key], wanted[key])) return false;
+    if (wanted[key].length === 0) continue;
+    if (granted[key].length === 0) continue;
+    if (!referencesWithin(granted[key], wanted[key])) return false;
+    covered = true;
   }
-  // A scope that names only files is complete when the file list covers the path; any other entry must be covered.
-  if (wanted.files.length === 0 && wanted.pages.length === 0 && wanted.blocks.length === 0 && wanted.collections.length === 0) {
-    return false;
-  }
-  return true;
+
+  // A caller that supplies only files is covered by a file grant; with no file grant it needs a semantic category.
+  if (wanted.files.length > 0 && granted.files.length === 0) covered = false;
+  return covered;
 }
 
 /** Whether a named runner is granted, and whether its inputs and resources are inside the grant. */

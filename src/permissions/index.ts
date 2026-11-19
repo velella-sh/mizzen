@@ -52,4 +52,6 @@ export {
   redactAccessText,
   redactFields,
 } from "./redact.ts";
+export { audiencesOf, pageResource, readablePage } from "./read.ts";
 export { auditLedger, auditLine } from "./audit.ts";
+export { readAccessPolicyFile, type AccessPolicyFileResult } from "./file.ts";

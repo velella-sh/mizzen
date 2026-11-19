@@ -35,6 +35,7 @@ import { init } from "./init.ts";
 import { diffCommand, parseChangeType, parseFailOn, type ChangeType, type FailKind } from "./diff.ts";
 import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
+import { readAccessPolicyFile } from "../permissions/file.ts";
 import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-verify.ts";
 import { clientConfig, isClient, serveMcp, CLIENTS } from "./mcp.ts";
 import { pack } from "./pack.ts";
@@ -421,6 +422,7 @@ type EditApplyOpts = {
   readonly dryRun: boolean;
   readonly allowUnchecked?: boolean;
   readonly proof?: string;
+  readonly policy?: string;
   readonly format: EditFormat;
 };
 
@@ -582,6 +584,7 @@ function parseEditApply(args: readonly string[]): Parsed {
   let patch: string | undefined;
   let root: string | undefined;
   let proof: string | undefined;
+  let policy: string | undefined;
   let dryRun = false;
   let allowUnchecked = false;
   let format: EditFormat = "text";
@@ -597,6 +600,7 @@ function parseEditApply(args: readonly string[]): Parsed {
       if (arg === "--dry-run") dryRun = true;
       else if (arg === "--allow-unchecked") allowUnchecked = true;
       else if (arg === "--proof") proof = value();
+      else if (arg === "--policy") policy = value();
       else if (arg === "--format") {
         const raw = value();
         const parsed = editFormat(raw);
@@ -621,6 +625,7 @@ function parseEditApply(args: readonly string[]): Parsed {
       format,
       ...(allowUnchecked ? { allowUnchecked: true } : {}),
       ...(proof === undefined ? {} : { proof }),
+      ...(policy === undefined ? {} : { policy }),
     },
   };
 }
@@ -1794,6 +1799,11 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   }
 
   if (options.command === "edit-apply") {
+    const loaded = options.policy === undefined ? undefined : await readAccessPolicyFile(options.policy);
+    if (loaded !== undefined && loaded.policy === undefined) {
+      for (const problem of loaded.problems) error(`${NAME}: ${problem}`);
+      return 2;
+    }
     try {
       const result = await editApply({
         siteRoot: options.root,
@@ -1801,6 +1811,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.proof === undefined ? {} : { proof: options.proof }),
         ...(options.dryRun ? { dryRun: true } : {}),
         ...(options.allowUnchecked === true ? { allowUnchecked: true } : {}),
+        ...(loaded?.policy === undefined ? {} : { access: loaded.policy }),
       });
       if (options.format === "json") {
         log(formatEditApplyJson(result, 0).replace(/\n$/, ""));
