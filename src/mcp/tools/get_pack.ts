@@ -18,6 +18,7 @@ interface Input {
 export const tool: Tool<Input> = {
   name: "get_pack",
   description: `Compile a context pack for a task: the best pages, trimmed to \`maxTokens\` (at most ${MAX_PACK_TOKENS}). Returns the Markdown pack with its selection, omissions, and token accounting.`,
+  stage: "context",
   inputSchema: {
     type: "object",
     properties: {

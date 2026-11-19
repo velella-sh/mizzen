@@ -54,6 +54,9 @@ export async function harness(root: string, options: { allowEdits?: boolean; lim
       }
       return { data, text, isError: result?.isError === true };
     },
-    close: () => site.close(),
+    close: async () => {
+      await server.close();
+      await site.close();
+    },
   };
 }
