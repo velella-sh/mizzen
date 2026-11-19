@@ -8,9 +8,9 @@
  * rendered Mermaid diagram.
  *
  * Usage:
- *   node scripts/release-compat.ts --candidate <tarball> [--baseline @velella/mizzen@0.2.4]
- *     [--theme @velella/lateen@0.2.2] [--report compat-report.json] [--skip-theme]
- *   node scripts/release-compat.ts --write-baseline fixtures/compat-0.2.4/baseline.json
+ *   node scripts/release-compat.ts --candidate <tarball> [--baseline @velella/mizzen@0.2.5]
+ *     [--theme @velella/lateen@0.2.3] [--report compat-report.json] [--skip-theme]
+ *   node scripts/release-compat.ts --write-baseline fixtures/compat-0.2.5/baseline.json
  *
  * `--write-baseline` only builds the baseline package and records its snapshot. Do not regenerate
  * the committed baseline to make the test pass: review the difference and record it in the fixture
@@ -164,8 +164,8 @@ function parseArgs(argv: readonly string[]): {
   fixture: string;
 } {
   const options: { baseline: string; candidate?: string; theme: string; report?: string; writeBaseline?: string; skipTheme: boolean; fixture: string } = {
-    baseline: "@velella/mizzen@0.2.4",
-    theme: "@velella/lateen@0.2.2",
+    baseline: "@velella/mizzen@0.2.5",
+    theme: "@velella/lateen@0.2.3",
     skipTheme: false,
     fixture: DEFAULT_FIXTURE,
   };

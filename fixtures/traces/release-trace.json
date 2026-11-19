@@ -1,0 +1,153 @@
+{
+  "version": 1,
+  "id": "c4ae852d0cc56120645f6b977d7a8d8ab813841b8b72eaa451e3241a6e97bfa2",
+  "task": {
+    "id": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "goal": "Update the install guide"
+  },
+  "snapshot": {
+    "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "data": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "config": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "tooling": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "id": "b57c9a8375ec215bec29b2ea7e96c0b7b5dffc36812812d8ccce77794a49d1ea"
+  },
+  "events": [
+    {
+      "sequence": 0,
+      "parent": null,
+      "stage": "context",
+      "kind": "context",
+      "capability": "pack",
+      "status": "ok",
+      "inputHash": "9ecd959016759f2225eddc4290dcef6048936fe89f0dfb79f711595134e8714f",
+      "result": "pack/install.json",
+      "subtask": "research",
+      "links": {
+        "pack": "fba3787d6cec565cf0dead65db04da6bdd1a50f768a0b2cd04ce3fe96df78e27"
+      },
+      "cost": {
+        "contextTokens": 100,
+        "refillTokens": 20,
+        "toolCalls": 1
+      },
+      "at": "2026-03-01T10:00:00Z",
+      "durationMs": 10
+    },
+    {
+      "sequence": 1,
+      "parent": 0,
+      "stage": "decision",
+      "kind": "decision",
+      "capability": "pack",
+      "status": "ok",
+      "inputHash": "9ecd959016759f2225eddc4290dcef6048936fe89f0dfb79f711595134e8714f",
+      "result": null,
+      "subtask": "research",
+      "reason": "The install page is the source of truth.",
+      "policy": "policy.context-source",
+      "cost": {
+        "contextTokens": 0,
+        "refillTokens": 0,
+        "toolCalls": 1
+      },
+      "at": "2026-03-01T10:00:00Z"
+    },
+    {
+      "sequence": 2,
+      "parent": 1,
+      "stage": "edit",
+      "kind": "edit",
+      "capability": "edit.apply",
+      "status": "ok",
+      "inputHash": "033a5d08c20e992dae7dbc6118ddd8ebb4b4cbef34a58a084d6b4f0ad14cd3f0",
+      "result": "install.proof.json",
+      "file": "docs/install.md",
+      "subtask": "write",
+      "links": {
+        "patch": "2222222222222222222222222222222222222222222222222222222222222222",
+        "span": {
+          "line": 4,
+          "column": 1,
+          "endLine": 4,
+          "endColumn": 9
+        },
+        "transaction": "3333333333333333333333333333333333333333333333333333333333333333",
+        "diff": "4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      "cost": {
+        "contextTokens": 50,
+        "refillTokens": 0,
+        "toolCalls": 1
+      },
+      "at": "2026-03-01T10:00:00Z",
+      "durationMs": 25
+    },
+    {
+      "sequence": 3,
+      "parent": 2,
+      "stage": "verify",
+      "kind": "verify",
+      "capability": "edit.verify",
+      "status": "failed",
+      "inputHash": "ef59429b53ee05b5b6864841ffae7bd5d5a83501798778015cd23b3585efc354",
+      "result": "install.proof.json",
+      "file": "docs/install.md",
+      "subtask": "verify",
+      "reason": "The doctor found one error.",
+      "cost": {
+        "contextTokens": 10,
+        "refillTokens": 5,
+        "toolCalls": 1
+      },
+      "at": "2026-03-01T10:00:00Z",
+      "durationMs": 8
+    },
+    {
+      "sequence": 4,
+      "parent": 3,
+      "stage": "decision",
+      "kind": "approval",
+      "capability": "edit.verify",
+      "status": "ok",
+      "inputHash": "ef59429b53ee05b5b6864841ffae7bd5d5a83501798778015cd23b3585efc354",
+      "result": null,
+      "subtask": "verify",
+      "reason": "The proof matches the source after the fix.",
+      "policy": "policy.proof-required",
+      "cost": {
+        "contextTokens": 0,
+        "refillTokens": 0,
+        "toolCalls": 1
+      },
+      "at": "2026-03-01T10:00:00Z"
+    }
+  ],
+  "receipts": [
+    {
+      "id": "10600fec5deea3cb1356f828744b52c29fc30099220a7e37952ecd0f84587569",
+      "kind": "pack",
+      "reference": "pack/install.json"
+    },
+    {
+      "id": "9ee166821ff58629bc90cef20b00140122ac3e3cd9254d9f83d51f6ea2c22009",
+      "kind": "proof",
+      "reference": "install.proof.json"
+    },
+    {
+      "id": "032d2a76d82c51d7b03de0430109bc9d37219c97bb8e39a11a00dc6a0ab971be",
+      "kind": "verification",
+      "reference": "install.proof.json"
+    }
+  ],
+  "nondeterministic": [
+    "/events/0/at",
+    "/events/0/durationMs",
+    "/events/1/at",
+    "/events/2/at",
+    "/events/2/durationMs",
+    "/events/3/at",
+    "/events/3/durationMs",
+    "/events/4/at"
+  ]
+}

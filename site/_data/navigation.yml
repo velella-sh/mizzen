@@ -6,7 +6,7 @@ main:
         url: /
       - title: Install and quickstart
         url: /install/
-      - title: Upgrade to 0.2.5
+      - title: Upgrade to 0.2.6
         url: /upgrade/
   - title: First project
     children:

@@ -1,185 +1,1808 @@
 {
-  "version": "0.2.5",
+  "version": "0.2.6",
   "features": [
+    {
+      "id": "discover-installed-capabilities",
+      "title": "Discover installed capabilities",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1089,
+      "case": "tasks"
+    },
+    {
+      "id": "expose-command-and-input-schemas",
+      "title": "Expose command and input schemas",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1090
+    },
+    {
+      "id": "register-a-task-from-a-file-or-stdin",
+      "title": "Register a task from a file or stdin",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1091,
+      "case": "tasks"
+    },
+    {
+      "id": "execute-tasks-idempotently",
+      "title": "Execute tasks idempotently",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1092,
+      "case": "tasks"
+    },
+    {
+      "id": "emit-structured-progress-events",
+      "title": "Emit structured progress events",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1093,
+      "case": "tasks"
+    },
+    {
+      "id": "separate-results-from-diagnostics",
+      "title": "Separate results from diagnostics",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1094,
+      "case": "tasks"
+    },
+    {
+      "id": "preview-effects-without-writing",
+      "title": "Preview effects without writing",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1095,
+      "case": "tasks"
+    },
+    {
+      "id": "resume-and-cancel-tasks-from-the-cli",
+      "title": "Resume and cancel tasks from the CLI",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1096,
+      "case": "tasks"
+    },
+    {
+      "id": "report-cost-and-budget-limits",
+      "title": "Report cost and budget limits",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1097,
+      "case": "tasks"
+    },
+    {
+      "id": "test-the-installed-cli-package",
+      "title": "Test the installed CLI package",
+      "status": "shipped",
+      "test": "test/cli-agent.test.ts",
+      "epic": 1073,
+      "issue": 1098
+    },
+    {
+      "id": "ask-focused-clarification-questions",
+      "title": "Ask focused clarification questions",
+      "status": "shipped",
+      "test": "test/interaction-clarify.test.ts",
+      "epic": 1074,
+      "issue": 1099
+    },
+    {
+      "id": "suggest-safe-defaults",
+      "title": "Suggest safe defaults",
+      "status": "shipped",
+      "test": "test/interaction-defaults.test.ts",
+      "epic": 1074,
+      "issue": 1100
+    },
+    {
+      "id": "request-approval-for-a-specific-scope",
+      "title": "Request approval for a specific scope",
+      "status": "shipped",
+      "test": "test/interaction-approvals.test.ts",
+      "epic": 1074,
+      "issue": 1101
+    },
+    {
+      "id": "explain-refusals-and-recovery-steps",
+      "title": "Explain refusals and recovery steps",
+      "status": "shipped",
+      "test": "test/interaction-refusals.test.ts",
+      "epic": 1074,
+      "issue": 1102
+    },
+    {
+      "id": "support-resumable-pauses",
+      "title": "Support resumable pauses",
+      "status": "shipped",
+      "test": "test/interaction-checkpoint.test.ts",
+      "epic": 1074,
+      "issue": 1103,
+      "case": "tasks"
+    },
+    {
+      "id": "hand-work-off-to-a-human",
+      "title": "Hand work off to a human",
+      "status": "shipped",
+      "test": "test/interaction-handoff-human.test.ts",
+      "epic": 1074,
+      "issue": 1104
+    },
+    {
+      "id": "hand-work-off-to-another-agent",
+      "title": "Hand work off to another agent",
+      "status": "shipped",
+      "test": "test/interaction-handoff-agent.test.ts",
+      "epic": 1074,
+      "issue": 1105
+    },
+    {
+      "id": "record-feedback-on-task-results",
+      "title": "Record feedback on task results",
+      "status": "shipped",
+      "test": "test/interaction-feedback.test.ts",
+      "epic": 1074,
+      "issue": 1106
+    },
+    {
+      "id": "expire-approvals-and-handoffs",
+      "title": "Expire approvals and handoffs",
+      "status": "shipped",
+      "test": "test/interaction-expiry.test.ts",
+      "epic": 1074,
+      "issue": 1107
+    },
+    {
+      "id": "test-pausing-and-resuming-with-two-consumers",
+      "title": "Test pausing and resuming with two consumers",
+      "status": "shipped",
+      "test": "test/interaction-e2e.test.ts",
+      "epic": 1074,
+      "issue": 1108
+    },
+    {
+      "id": "define-a-versioned-task-schema",
+      "title": "Define a versioned task schema",
+      "status": "shipped",
+      "test": "test/tasks-contract.test.ts",
+      "epic": 1075,
+      "issue": 1109,
+      "case": "tasks"
+    },
+    {
+      "id": "assign-task-and-request-identities",
+      "title": "Assign task and request identities",
+      "status": "shipped",
+      "test": "test/tasks-contract.test.ts",
+      "epic": 1075,
+      "issue": 1110
+    },
+    {
+      "id": "pin-the-task-input-snapshot",
+      "title": "Pin the task input snapshot",
+      "status": "shipped",
+      "test": "test/tasks-snapshot.test.ts",
+      "epic": 1075,
+      "issue": 1111,
+      "case": "tasks"
+    },
+    {
+      "id": "express-semantic-task-scope",
+      "title": "Express semantic task scope",
+      "status": "shipped",
+      "test": "test/tasks-scope.test.ts",
+      "epic": 1075,
+      "issue": 1112,
+      "case": "tasks"
+    },
+    {
+      "id": "define-executable-acceptance-criteria",
+      "title": "Define executable acceptance criteria",
+      "status": "shipped",
+      "test": "test/tasks-acceptance.test.ts",
+      "epic": 1075,
+      "issue": 1113,
+      "case": "tasks"
+    },
+    {
+      "id": "set-budgets-and-stop-conditions",
+      "title": "Set budgets and stop conditions",
+      "status": "shipped",
+      "test": "test/tasks-budget.test.ts",
+      "epic": 1075,
+      "issue": 1114
+    },
+    {
+      "id": "model-task-states-and-transitions",
+      "title": "Model task states and transitions",
+      "status": "shipped",
+      "test": "test/tasks-lifecycle.test.ts",
+      "epic": 1075,
+      "issue": 1115,
+      "case": "tasks"
+    },
+    {
+      "id": "record-state-transition-events",
+      "title": "Record state transition events",
+      "status": "shipped",
+      "test": "test/tasks-lifecycle.test.ts",
+      "epic": 1075,
+      "issue": 1116,
+      "case": "tasks"
+    },
+    {
+      "id": "expire-and-revoke-tasks",
+      "title": "Expire and revoke tasks",
+      "status": "shipped",
+      "test": "test/tasks-revocation.test.ts",
+      "epic": 1075,
+      "issue": 1117,
+      "case": "tasks"
+    },
+    {
+      "id": "migrate-older-task-documents",
+      "title": "Migrate older task documents",
+      "status": "shipped",
+      "test": "test/tasks-migrate.test.ts",
+      "epic": 1075,
+      "issue": 1118,
+      "case": "tasks"
+    },
+    {
+      "id": "discover-related-tasks",
+      "title": "Discover related tasks",
+      "status": "shipped",
+      "test": "test/tasks-related.test.ts",
+      "epic": 1075,
+      "issue": 1119,
+      "case": "tasks"
+    },
+    {
+      "id": "test-the-task-lifecycle-end-to-end",
+      "title": "Test the task lifecycle end to end",
+      "status": "shipped",
+      "test": "test/tasks-e2e.test.ts",
+      "epic": 1075,
+      "issue": 1120,
+      "case": "tasks"
+    },
+    {
+      "id": "convert-a-task-into-a-context-request",
+      "title": "Convert a task into a context request",
+      "status": "shipped",
+      "test": "test/context-request.test.ts",
+      "epic": 1076,
+      "issue": 1121,
+      "case": "packs"
+    },
+    {
+      "id": "select-relevant-entry-points",
+      "title": "Select relevant entry points",
+      "status": "shipped",
+      "test": "test/context-select.test.ts",
+      "epic": 1076,
+      "issue": 1122,
+      "case": "packs"
+    },
+    {
+      "id": "resolve-required-transitive-dependencies",
+      "title": "Resolve required transitive dependencies",
+      "status": "shipped",
+      "test": "test/context-sources.test.ts",
+      "epic": 1076,
+      "issue": 1123,
+      "case": "packs"
+    },
+    {
+      "id": "preserve-precise-sources-for-context-fragments",
+      "title": "Preserve precise sources for context fragments",
+      "status": "shipped",
+      "test": "test/context-sources.test.ts",
+      "epic": 1076,
+      "issue": 1124,
+      "case": "packs"
+    },
+    {
+      "id": "include-relevant-field-lineage",
+      "title": "Include relevant field lineage",
+      "status": "shipped",
+      "test": "test/context-sources.test.ts",
+      "epic": 1076,
+      "issue": 1125
+    },
+    {
+      "id": "resolve-stable-references",
+      "title": "Resolve stable references",
+      "status": "shipped",
+      "test": "test/context-select.test.ts",
+      "epic": 1076,
+      "issue": 1126
+    },
+    {
+      "id": "pack-context-within-a-fixed-budget",
+      "title": "Pack context within a fixed budget",
+      "status": "shipped",
+      "test": "test/context-budget.test.ts",
+      "epic": 1076,
+      "issue": 1127,
+      "case": "packs"
+    },
+    {
+      "id": "make-token-accounting-transparent",
+      "title": "Make token accounting transparent",
+      "status": "shipped",
+      "test": "test/context-budget.test.ts",
+      "epic": 1076,
+      "issue": 1128,
+      "case": "packs"
+    },
+    {
+      "id": "explain-why-inputs-were-omitted",
+      "title": "Explain why inputs were omitted",
+      "status": "shipped",
+      "test": "test/context-answerability.test.ts",
+      "epic": 1076,
+      "issue": 1129
+    },
+    {
+      "id": "assess-whether-the-pack-can-answer-the-task",
+      "title": "Assess whether the pack can answer the task",
+      "status": "shipped",
+      "test": "test/context-answerability.test.ts",
+      "epic": 1076,
+      "issue": 1130,
+      "case": "packs"
+    },
+    {
+      "id": "request-missing-inputs",
+      "title": "Request missing inputs",
+      "status": "shipped",
+      "test": "test/context-answerability.test.ts",
+      "epic": 1076,
+      "issue": 1131,
+      "case": "packs"
+    },
+    {
+      "id": "refill-context-incrementally",
+      "title": "Refill context incrementally",
+      "status": "shipped",
+      "test": "test/context-refill-cache.test.ts",
+      "epic": 1076,
+      "issue": 1132
+    },
+    {
+      "id": "compare-two-context-packs",
+      "title": "Compare two context packs",
+      "status": "shipped",
+      "test": "test/context-refill-cache.test.ts",
+      "epic": 1076,
+      "issue": 1133,
+      "case": "packs"
+    },
+    {
+      "id": "cache-and-refresh-packs-deterministically",
+      "title": "Cache and refresh packs deterministically",
+      "status": "shipped",
+      "test": "test/context-refill-cache.test.ts",
+      "epic": 1076,
+      "issue": 1134
+    },
+    {
+      "id": "apply-public-and-private-field-policies",
+      "title": "Apply public and private field policies",
+      "status": "shipped",
+      "test": "test/context-privacy.test.ts",
+      "epic": 1076,
+      "issue": 1135
+    },
+    {
+      "id": "test-real-task-context-from-the-installed-package",
+      "title": "Test real-task context from the installed package",
+      "status": "shipped",
+      "test": "test/context-e2e.test.ts",
+      "epic": 1076,
+      "issue": 1136
+    },
+    {
+      "id": "define-the-node-and-edge-contract",
+      "title": "Define the node and edge contract",
+      "status": "shipped",
+      "test": "test/graph-contract.test.ts",
+      "epic": 1077,
+      "issue": 1137
+    },
+    {
+      "id": "link-pages-and-blocks",
+      "title": "Link pages and blocks",
+      "status": "shipped",
+      "test": "test/graph-pages.test.ts",
+      "epic": 1077,
+      "issue": 1138
+    },
+    {
+      "id": "link-symbols-and-code-examples",
+      "title": "Link symbols and code examples",
+      "status": "shipped",
+      "test": "test/graph-symbols.test.ts",
+      "epic": 1077,
+      "issue": 1139
+    },
+    {
+      "id": "link-records-and-derived-values",
+      "title": "Link records and derived values",
+      "status": "shipped",
+      "test": "test/graph-data.test.ts",
+      "epic": 1077,
+      "issue": 1140
+    },
+    {
+      "id": "link-claims-to-evidence",
+      "title": "Link claims to evidence",
+      "status": "shipped",
+      "test": "test/graph-evidence.test.ts",
+      "epic": 1077,
+      "issue": 1141
+    },
+    {
+      "id": "preserve-node-identity-across-edits",
+      "title": "Preserve node identity across edits",
+      "status": "shipped",
+      "test": "test/graph-identity.test.ts",
+      "epic": 1077,
+      "issue": 1142
+    },
+    {
+      "id": "version-the-graph-by-snapshot",
+      "title": "Version the graph by snapshot",
+      "status": "shipped",
+      "test": "test/graph-snapshots.test.ts",
+      "epic": 1077,
+      "issue": 1143
+    },
+    {
+      "id": "query-neighbors-and-evidence-paths",
+      "title": "Query neighbors and evidence paths",
+      "status": "shipped",
+      "test": "test/graph-query.test.ts",
+      "epic": 1077,
+      "issue": 1144,
+      "case": "graph"
+    },
+    {
+      "id": "bound-graph-traversal-depth-and-size",
+      "title": "Bound graph traversal depth and size",
+      "status": "shipped",
+      "test": "test/graph-bounds.test.ts",
+      "epic": 1077,
+      "issue": 1145,
+      "case": "graph"
+    },
+    {
+      "id": "refresh-the-graph-incrementally",
+      "title": "Refresh the graph incrementally",
+      "status": "shipped",
+      "test": "test/graph-incremental.test.ts",
+      "epic": 1077,
+      "issue": 1146
+    },
+    {
+      "id": "enforce-graph-permissions-and-redaction",
+      "title": "Enforce graph permissions and redaction",
+      "status": "shipped",
+      "test": "test/graph-permissions.test.ts",
+      "epic": 1077,
+      "issue": 1147
+    },
+    {
+      "id": "test-graph-queries-through-mcp-and-the-cli",
+      "title": "Test graph queries through MCP and the CLI",
+      "status": "shipped",
+      "test": "test/graph-surfaces.test.ts",
+      "epic": 1077,
+      "issue": 1148,
+      "case": "graph"
+    },
+    {
+      "id": "negotiate-capabilities-and-versions",
+      "title": "Negotiate capabilities and versions",
+      "status": "shipped",
+      "test": "test/mcp-server.test.ts",
+      "epic": 1078,
+      "issue": 1149,
+      "case": "mcp"
+    },
+    {
+      "id": "start-long-running-operations-asynchronously",
+      "title": "Start long-running operations asynchronously",
+      "status": "shipped",
+      "test": "test/mcp-runtime.test.ts",
+      "epic": 1078,
+      "issue": 1150
+    },
+    {
+      "id": "report-meaningful-operation-progress",
+      "title": "Report meaningful operation progress",
+      "status": "shipped",
+      "test": "test/mcp-runtime.test.ts",
+      "epic": 1078,
+      "issue": 1151
+    },
+    {
+      "id": "cancel-operations-at-safe-boundaries",
+      "title": "Cancel operations at safe boundaries",
+      "status": "shipped",
+      "test": "test/mcp-runtime.test.ts",
+      "epic": 1078,
+      "issue": 1152
+    },
+    {
+      "id": "paginate-large-results",
+      "title": "Paginate large results",
+      "status": "shipped",
+      "test": "test/mcp-runtime.test.ts",
+      "epic": 1078,
+      "issue": 1153,
+      "case": "mcp"
+    },
+    {
+      "id": "recover-after-disconnection",
+      "title": "Recover after disconnection",
+      "status": "shipped",
+      "test": "test/mcp-reconnect.test.ts",
+      "epic": 1078,
+      "issue": 1154
+    },
+    {
+      "id": "make-side-effecting-tools-idempotent",
+      "title": "Make side-effecting tools idempotent",
+      "status": "shipped",
+      "test": "test/mcp-idempotency.test.ts",
+      "epic": 1078,
+      "issue": 1155
+    },
+    {
+      "id": "apply-backpressure-and-bound-queues",
+      "title": "Apply backpressure and bound queues",
+      "status": "shipped",
+      "test": "test/mcp-runtime.test.ts",
+      "epic": 1078,
+      "issue": 1156
+    },
+    {
+      "id": "apply-separate-timeouts-for-each-stage",
+      "title": "Apply separate timeouts for each stage",
+      "status": "shipped",
+      "test": "test/mcp-runtime.test.ts",
+      "epic": 1078,
+      "issue": 1157
+    },
+    {
+      "id": "return-recoverable-machine-readable-errors",
+      "title": "Return recoverable machine-readable errors",
+      "status": "shipped",
+      "test": "test/mcp-security.test.ts",
+      "epic": 1078,
+      "issue": 1158
+    },
+    {
+      "id": "limit-and-redact-response-content",
+      "title": "Limit and redact response content",
+      "status": "shipped",
+      "test": "test/mcp-security.test.ts",
+      "epic": 1078,
+      "issue": 1159
+    },
+    {
+      "id": "pin-the-snapshot-within-a-session",
+      "title": "Pin the snapshot within a session",
+      "status": "shipped",
+      "test": "test/mcp-stale.test.ts",
+      "epic": 1078,
+      "issue": 1160,
+      "case": "mcp"
+    },
+    {
+      "id": "isolate-concurrent-sessions",
+      "title": "Isolate concurrent sessions",
+      "status": "shipped",
+      "test": "test/mcp-server.test.ts",
+      "epic": 1078,
+      "issue": 1161
+    },
+    {
+      "id": "test-disconnection-and-reconnection",
+      "title": "Test disconnection and reconnection",
+      "status": "shipped",
+      "test": "test/mcp-reconnect.test.ts",
+      "epic": 1078,
+      "issue": 1162
+    },
+    {
+      "id": "define-the-edit-transaction-contract",
+      "title": "Define the edit transaction contract",
+      "status": "shipped",
+      "test": "test/edits-transaction.test.ts",
+      "epic": 1079,
+      "issue": 1163,
+      "case": "edits"
+    },
+    {
+      "id": "combine-multiple-block-edits",
+      "title": "Combine multiple block edits",
+      "status": "shipped",
+      "test": "test/edits-transaction.test.ts",
+      "epic": 1079,
+      "issue": 1164,
+      "case": "edits"
+    },
+    {
+      "id": "apply-multi-file-changes-atomically",
+      "title": "Apply multi-file changes atomically",
+      "status": "shipped",
+      "test": "test/cli-edit-transaction-multi.test.ts",
+      "epic": 1079,
+      "issue": 1165,
+      "case": "edits"
+    },
+    {
+      "id": "enforce-snapshot-and-beforehash-preconditions",
+      "title": "Enforce snapshot and beforeHash preconditions",
+      "status": "shipped",
+      "test": "test/edits-transaction.test.ts",
+      "epic": 1079,
+      "issue": 1166,
+      "case": "edits"
+    },
+    {
+      "id": "support-optimistic-concurrency",
+      "title": "Support optimistic concurrency",
+      "status": "shipped",
+      "test": "test/edits-audit-concurrency.test.ts",
+      "epic": 1079,
+      "issue": 1167,
+      "case": "edits"
+    },
+    {
+      "id": "lock-edit-intent-by-semantic-scope",
+      "title": "Lock edit intent by semantic scope",
+      "status": "shipped",
+      "test": "test/edits-target-plans.test.ts",
+      "epic": 1079,
+      "issue": 1168
+    },
+    {
+      "id": "enforce-edit-scope-and-filesystem-boundaries",
+      "title": "Enforce edit scope and filesystem boundaries",
+      "status": "shipped",
+      "test": "test/edits-patch-symlink.test.ts",
+      "epic": 1079,
+      "issue": 1169,
+      "case": "edits"
+    },
+    {
+      "id": "run-custom-transaction-invariants",
+      "title": "Run custom transaction invariants",
+      "status": "shipped",
+      "test": "test/edits-transaction.test.ts",
+      "epic": 1079,
+      "issue": 1170
+    },
+    {
+      "id": "validate-edited-content",
+      "title": "Validate edited content",
+      "status": "shipped",
+      "test": "test/cli-edit-transaction.test.ts",
+      "epic": 1079,
+      "issue": 1171,
+      "case": "edits"
+    },
+    {
+      "id": "preview-transactions",
+      "title": "Preview transactions",
+      "status": "shipped",
+      "test": "test/cli-edit-transaction-multi.test.ts",
+      "epic": 1079,
+      "issue": 1172,
+      "case": "edits"
+    },
+    {
+      "id": "report-actionable-conflicts",
+      "title": "Report actionable conflicts",
+      "status": "shipped",
+      "test": "test/edits-plan.test.ts",
+      "epic": 1079,
+      "issue": 1173,
+      "case": "edits"
+    },
+    {
+      "id": "rebase-onto-a-new-snapshot",
+      "title": "Rebase onto a new snapshot",
+      "status": "shipped",
+      "test": "test/edits-transaction.test.ts",
+      "epic": 1079,
+      "issue": 1174,
+      "case": "edits"
+    },
+    {
+      "id": "roll-back-edits-using-a-receipt",
+      "title": "Roll back edits using a receipt",
+      "status": "shipped",
+      "test": "test/cli-edit-transaction-multi.test.ts",
+      "epic": 1079,
+      "issue": 1175,
+      "case": "edits"
+    },
+    {
+      "id": "link-transactions-to-proof-and-audit-records",
+      "title": "Link transactions to proof and audit records",
+      "status": "shipped",
+      "test": "test/edits-audit.test.ts",
+      "epic": 1079,
+      "issue": 1176,
+      "case": "edits"
+    },
+    {
+      "id": "refresh-the-graph-and-build-incrementally",
+      "title": "Refresh the graph and build incrementally",
+      "status": "shipped",
+      "test": "test/edits-transaction-invalidation.test.ts",
+      "epic": 1079,
+      "issue": 1177
+    },
+    {
+      "id": "test-atomic-editing-with-the-installed-package",
+      "title": "Test atomic editing with the installed package",
+      "status": "shipped",
+      "test": "test/cli-edit-transaction-multi.test.ts",
+      "epic": 1079,
+      "issue": 1178,
+      "case": "edits"
+    },
+    {
+      "id": "build-a-verification-plan-from-the-task",
+      "title": "Build a verification plan from the task",
+      "status": "shipped",
+      "test": "test/verification-proof.test.ts",
+      "epic": 1080,
+      "issue": 1179,
+      "case": "edits"
+    },
+    {
+      "id": "tie-result-claims-to-evidence",
+      "title": "Tie result claims to evidence",
+      "status": "shipped",
+      "test": "test/verification-evidence.test.ts",
+      "epic": 1080,
+      "issue": 1180
+    },
+    {
+      "id": "run-checks-with-bounded-resources",
+      "title": "Run checks with bounded resources",
+      "status": "shipped",
+      "test": "test/edits-audit-verify-limits.test.ts",
+      "epic": 1080,
+      "issue": 1181
+    },
+    {
+      "id": "reproduce-the-build-from-the-task-snapshot",
+      "title": "Reproduce the build from the task snapshot",
+      "status": "shipped",
+      "test": "test/verification-reproduce.test.ts",
+      "epic": 1080,
+      "issue": 1182
+    },
+    {
+      "id": "prove-that-changes-stayed-in-scope",
+      "title": "Prove that changes stayed in scope",
+      "status": "shipped",
+      "test": "test/verification-proof.test.ts",
+      "epic": 1080,
+      "issue": 1183,
+      "case": "edits"
+    },
+    {
+      "id": "verify-code-snippets-and-examples",
+      "title": "Verify code snippets and examples",
+      "status": "shipped",
+      "test": "test/verification-examples.test.ts",
+      "epic": 1080,
+      "issue": 1184
+    },
+    {
+      "id": "verify-links-and-stable-references",
+      "title": "Verify links and stable references",
+      "status": "shipped",
+      "test": "test/verification-references.test.ts",
+      "epic": 1080,
+      "issue": 1185
+    },
+    {
+      "id": "verify-results-independently-of-the-original-agent",
+      "title": "Verify results independently of the original agent",
+      "status": "shipped",
+      "test": "test/verification-receipt.test.ts",
+      "epic": 1080,
+      "issue": 1186
+    },
+    {
+      "id": "detect-unproved-completion-claims",
+      "title": "Detect unproved completion claims",
+      "status": "shipped",
+      "test": "test/verification-evidence.test.ts",
+      "epic": 1080,
+      "issue": 1187
+    },
+    {
+      "id": "withhold-successful-proof-when-a-check-fails",
+      "title": "Withhold successful proof when a check fails",
+      "status": "shipped",
+      "test": "test/verification-proof.test.ts",
+      "epic": 1080,
+      "issue": 1188
+    },
+    {
+      "id": "define-a-versioned-proof-contract",
+      "title": "Define a versioned proof contract",
+      "status": "shipped",
+      "test": "test/verification-proof.test.ts",
+      "epic": 1080,
+      "issue": 1189,
+      "case": "edits"
+    },
+    {
+      "id": "make-proofs-deterministic-and-portable",
+      "title": "Make proofs deterministic and portable",
+      "status": "shipped",
+      "test": "test/verification-proof.test.ts",
+      "epic": 1080,
+      "issue": 1190,
+      "case": "edits"
+    },
+    {
+      "id": "validate-receipt-signatures-and-the-release-package",
+      "title": "Validate receipt signatures and the release package",
+      "status": "shipped",
+      "test": "test/verification-receipt.test.ts",
+      "epic": 1080,
+      "issue": 1191
+    },
+    {
+      "id": "test-the-demo-s-deliberate-verification-failure",
+      "title": "Test the demo's deliberate verification failure",
+      "status": "shipped",
+      "test": "test/verification-demo.test.ts",
+      "epic": 1080,
+      "issue": 1192
+    },
+    {
+      "id": "split-tasks-into-owned-subtasks",
+      "title": "Split tasks into owned subtasks",
+      "status": "shipped",
+      "test": "test/coordination-split.test.ts",
+      "epic": 1081,
+      "issue": 1193
+    },
+    {
+      "id": "assign-ownership-by-semantic-scope",
+      "title": "Assign ownership by semantic scope",
+      "status": "shipped",
+      "test": "test/coordination-split.test.ts",
+      "epic": 1081,
+      "issue": 1194
+    },
+    {
+      "id": "define-the-lease-lifecycle",
+      "title": "Define the lease lifecycle",
+      "status": "shipped",
+      "test": "test/coordination-lease.test.ts",
+      "epic": 1081,
+      "issue": 1195
+    },
+    {
+      "id": "recover-leases-after-owner-loss",
+      "title": "Recover leases after owner loss",
+      "status": "shipped",
+      "test": "test/coordination-lease.test.ts",
+      "epic": 1081,
+      "issue": 1196
+    },
+    {
+      "id": "schedule-subtask-dependencies",
+      "title": "Schedule subtask dependencies",
+      "status": "shipped",
+      "test": "test/coordination-schedule.test.ts",
+      "epic": 1081,
+      "issue": 1197
+    },
+    {
+      "id": "detect-duplicate-work",
+      "title": "Detect duplicate work",
+      "status": "shipped",
+      "test": "test/coordination-schedule.test.ts",
+      "epic": 1081,
+      "issue": 1198
+    },
+    {
+      "id": "aggregate-subtask-context-and-evidence",
+      "title": "Aggregate subtask context and evidence",
+      "status": "shipped",
+      "test": "test/coordination-evidence.test.ts",
+      "epic": 1081,
+      "issue": 1199
+    },
+    {
+      "id": "combine-subtask-results-deterministically",
+      "title": "Combine subtask results deterministically",
+      "status": "shipped",
+      "test": "test/coordination-merge.test.ts",
+      "epic": 1081,
+      "issue": 1200
+    },
+    {
+      "id": "escalate-conflicts-that-agents-cannot-resolve",
+      "title": "Escalate conflicts that agents cannot resolve",
+      "status": "shipped",
+      "test": "test/coordination-merge.test.ts",
+      "epic": 1081,
+      "issue": 1201
+    },
+    {
+      "id": "hand-off-a-subtask-to-a-replacement-agent",
+      "title": "Hand off a subtask to a replacement agent",
+      "status": "shipped",
+      "test": "test/coordination-handoff-budget.test.ts",
+      "epic": 1081,
+      "issue": 1202
+    },
+    {
+      "id": "track-shared-budgets-and-per-agent-costs",
+      "title": "Track shared budgets and per-agent costs",
+      "status": "shipped",
+      "test": "test/coordination-handoff-budget.test.ts",
+      "epic": 1081,
+      "issue": 1203
+    },
+    {
+      "id": "test-the-demo-with-two-agents",
+      "title": "Test the demo with two agents",
+      "status": "shipped",
+      "test": "test/coordination-demo.test.ts",
+      "epic": 1081,
+      "issue": 1204
+    },
+    {
+      "id": "define-a-versioned-access-policy-schema",
+      "title": "Define a versioned access policy schema",
+      "status": "shipped",
+      "test": "test/permissions-policy.test.ts",
+      "epic": 1082,
+      "issue": 1205
+    },
+    {
+      "id": "default-tasks-to-least-privilege",
+      "title": "Default tasks to least privilege",
+      "status": "shipped",
+      "test": "test/permissions-policy.test.ts",
+      "epic": 1082,
+      "issue": 1206
+    },
+    {
+      "id": "enforce-semantic-read-restrictions",
+      "title": "Enforce semantic read restrictions",
+      "status": "shipped",
+      "test": "test/permissions-read.test.ts",
+      "epic": 1082,
+      "issue": 1207,
+      "case": "permissions"
+    },
+    {
+      "id": "restrict-writes-by-scope-and-resolved-path",
+      "title": "Restrict writes by scope and resolved path",
+      "status": "shipped",
+      "test": "test/permissions-write.test.ts",
+      "epic": 1082,
+      "issue": 1208,
+      "case": "permissions"
+    },
+    {
+      "id": "grant-permission-for-specific-check-runners",
+      "title": "Grant permission for specific check runners",
+      "status": "shipped",
+      "test": "test/permissions-approvals.test.ts",
+      "epic": 1082,
+      "issue": 1209
+    },
+    {
+      "id": "deny-network-access-by-default",
+      "title": "Deny network access by default",
+      "status": "shipped",
+      "test": "test/permissions-network.test.ts",
+      "epic": 1082,
+      "issue": 1210
+    },
+    {
+      "id": "separate-approvals-by-capability",
+      "title": "Separate approvals by capability",
+      "status": "shipped",
+      "test": "test/permissions-approvals.test.ts",
+      "epic": 1082,
+      "issue": 1211
+    },
+    {
+      "id": "limit-permissions-delegated-to-subtasks",
+      "title": "Limit permissions delegated to subtasks",
+      "status": "shipped",
+      "test": "test/permissions-delegation.test.ts",
+      "epic": 1082,
+      "issue": 1212
+    },
+    {
+      "id": "reevaluate-permissions-after-snapshot-or-policy-changes",
+      "title": "Reevaluate permissions after snapshot or policy changes",
+      "status": "shipped",
+      "test": "test/permissions-bypass.test.ts",
+      "epic": 1082,
+      "issue": 1213
+    },
+    {
+      "id": "redact-sensitive-values-across-outputs",
+      "title": "Redact sensitive values across outputs",
+      "status": "shipped",
+      "test": "test/permissions-redact-audit.test.ts",
+      "epic": 1082,
+      "issue": 1214
+    },
+    {
+      "id": "audit-permission-decisions",
+      "title": "Audit permission decisions",
+      "status": "shipped",
+      "test": "test/permissions-redact-audit.test.ts",
+      "epic": 1082,
+      "issue": 1215
+    },
+    {
+      "id": "test-enforcement-across-public-entry-points",
+      "title": "Test enforcement across public entry points",
+      "status": "shipped",
+      "test": "test/permissions-bypass.test.ts",
+      "epic": 1082,
+      "issue": 1216,
+      "case": "permissions"
+    },
+    {
+      "id": "define-a-versioned-trace-schema",
+      "title": "Define a versioned trace schema",
+      "status": "shipped",
+      "test": "test/trace-schema.test.ts",
+      "epic": 1083,
+      "issue": 1217
+    },
+    {
+      "id": "record-tool-calls-and-results",
+      "title": "Record tool calls and results",
+      "status": "shipped",
+      "test": "test/trace-query.test.ts",
+      "epic": 1083,
+      "issue": 1218
+    },
+    {
+      "id": "link-trace-events-to-sources-and-transactions",
+      "title": "Link trace events to sources and transactions",
+      "status": "shipped",
+      "test": "test/trace-handoff.test.ts",
+      "epic": 1083,
+      "issue": 1219
+    },
+    {
+      "id": "account-for-tokens-and-operation-cost",
+      "title": "Account for tokens and operation cost",
+      "status": "shipped",
+      "test": "test/trace-cost.test.ts",
+      "epic": 1083,
+      "issue": 1220,
+      "case": "traces"
+    },
+    {
+      "id": "record-decisions-refusals-and-approvals",
+      "title": "Record decisions, refusals, and approvals",
+      "status": "shipped",
+      "test": "test/trace-query.test.ts",
+      "epic": 1083,
+      "issue": 1221
+    },
+    {
+      "id": "separate-timing-measurements-from-deterministic-replay",
+      "title": "Separate timing measurements from deterministic replay",
+      "status": "shipped",
+      "test": "test/trace-replay.test.ts",
+      "epic": 1083,
+      "issue": 1222
+    },
+    {
+      "id": "search-and-summarize-traces",
+      "title": "Search and summarize traces",
+      "status": "shipped",
+      "test": "test/trace-query.test.ts",
+      "epic": 1083,
+      "issue": 1223
+    },
+    {
+      "id": "export-only-authorized-trace-fields",
+      "title": "Export only authorized trace fields",
+      "status": "shipped",
+      "test": "test/trace-export.test.ts",
+      "epic": 1083,
+      "issue": 1224,
+      "case": "traces"
+    },
+    {
+      "id": "bound-trace-size-and-retention",
+      "title": "Bound trace size and retention",
+      "status": "shipped",
+      "test": "test/trace-retain.test.ts",
+      "epic": 1083,
+      "issue": 1225
+    },
+    {
+      "id": "replay-a-snapshot-in-read-only-mode",
+      "title": "Replay a snapshot in read-only mode",
+      "status": "shipped",
+      "test": "test/trace-clean-replay.test.ts",
+      "epic": 1083,
+      "issue": 1226,
+      "case": "traces"
+    },
+    {
+      "id": "hand-off-work-from-a-trace",
+      "title": "Hand off work from a trace",
+      "status": "shipped",
+      "test": "test/trace-handoff.test.ts",
+      "epic": 1083,
+      "issue": 1227,
+      "case": "traces"
+    },
+    {
+      "id": "test-replay-in-a-clean-environment",
+      "title": "Test replay in a clean environment",
+      "status": "shipped",
+      "test": "test/trace-cli.test.ts",
+      "epic": 1083,
+      "issue": 1228,
+      "case": "traces"
+    },
+    {
+      "id": "define-maintenance-triggers",
+      "title": "Define maintenance triggers",
+      "status": "shipped",
+      "test": "test/maintenance-triggers.test.ts",
+      "epic": 1084,
+      "issue": 1229
+    },
+    {
+      "id": "propose-tasks-from-documentation-drift",
+      "title": "Propose tasks from documentation drift",
+      "status": "shipped",
+      "test": "test/maintenance-triggers.test.ts",
+      "epic": 1084,
+      "issue": 1230
+    },
+    {
+      "id": "decide-whether-maintenance-needs-an-agent",
+      "title": "Decide whether maintenance needs an agent",
+      "status": "shipped",
+      "test": "test/maintenance-proposals.test.ts",
+      "epic": 1084,
+      "issue": 1231
+    },
+    {
+      "id": "constrain-proposed-task-scope",
+      "title": "Constrain proposed task scope",
+      "status": "shipped",
+      "test": "test/maintenance-proposals.test.ts",
+      "epic": 1084,
+      "issue": 1232
+    },
+    {
+      "id": "compile-maintenance-context",
+      "title": "Compile maintenance context",
+      "status": "shipped",
+      "test": "test/maintenance-context.test.ts",
+      "epic": 1084,
+      "issue": 1233
+    },
+    {
+      "id": "accept-patches-from-an-external-client",
+      "title": "Accept patches from an external client",
+      "status": "shipped",
+      "test": "test/maintenance-patches.test.ts",
+      "epic": 1084,
+      "issue": 1234
+    },
+    {
+      "id": "preview-proposals-without-changing-source",
+      "title": "Preview proposals without changing source",
+      "status": "shipped",
+      "test": "test/maintenance-preview.test.ts",
+      "epic": 1084,
+      "issue": 1235
+    },
+    {
+      "id": "verify-maintenance-proposals",
+      "title": "Verify maintenance proposals",
+      "status": "shipped",
+      "test": "test/maintenance-verify.test.ts",
+      "epic": 1084,
+      "issue": 1236
+    },
+    {
+      "id": "stop-stale-patches-when-drift-changes",
+      "title": "Stop stale patches when drift changes",
+      "status": "shipped",
+      "test": "test/maintenance-patches.test.ts",
+      "epic": 1084,
+      "issue": 1237
+    },
+    {
+      "id": "provide-a-recipe-for-proposed-pull-requests",
+      "title": "Provide a recipe for proposed pull requests",
+      "status": "shipped",
+      "test": "test/maintenance-recipe-state.test.ts",
+      "epic": 1084,
+      "issue": 1238
+    },
+    {
+      "id": "update-an-existing-proposed-pull-request",
+      "title": "Update an existing proposed pull request",
+      "status": "shipped",
+      "test": "test/maintenance-recipe-state.test.ts",
+      "epic": 1084,
+      "issue": 1239
+    },
+    {
+      "id": "detect-no-ops-and-already-resolved-drift",
+      "title": "Detect no-ops and already-resolved drift",
+      "status": "shipped",
+      "test": "test/maintenance-patches.test.ts",
+      "epic": 1084,
+      "issue": 1240
+    },
+    {
+      "id": "record-failures-and-preserve-the-last-good-state",
+      "title": "Record failures and preserve the last good state",
+      "status": "shipped",
+      "test": "test/maintenance-recipe-state.test.ts",
+      "epic": 1084,
+      "issue": 1241
+    },
+    {
+      "id": "test-api-drift-through-a-proposed-pull-request",
+      "title": "Test API drift through a proposed pull request",
+      "status": "shipped",
+      "test": "test/maintenance-e2e.test.ts",
+      "epic": 1084,
+      "issue": 1242
+    },
+    {
+      "id": "define-evaluation-suite-and-case-formats",
+      "title": "Define evaluation suite and case formats",
+      "status": "shipped",
+      "test": "test/evals-suite.test.ts",
+      "epic": 1085,
+      "issue": 1243,
+      "case": "evals"
+    },
+    {
+      "id": "evaluate-discovery-and-answers",
+      "title": "Evaluate discovery and answers",
+      "status": "shipped",
+      "test": "test/evals-case.test.ts",
+      "epic": 1085,
+      "issue": 1244
+    },
+    {
+      "id": "evaluate-context-sufficiency",
+      "title": "Evaluate context sufficiency",
+      "status": "shipped",
+      "test": "test/evals-case.test.ts",
+      "epic": 1085,
+      "issue": 1245
+    },
+    {
+      "id": "evaluate-targeted-edits",
+      "title": "Evaluate targeted edits",
+      "status": "shipped",
+      "test": "test/evals-case.test.ts",
+      "epic": 1085,
+      "issue": 1246
+    },
+    {
+      "id": "evaluate-multi-file-transactions",
+      "title": "Evaluate multi-file transactions",
+      "status": "shipped",
+      "test": "test/evals-case.test.ts",
+      "epic": 1085,
+      "issue": 1247
+    },
+    {
+      "id": "evaluate-independent-verification",
+      "title": "Evaluate independent verification",
+      "status": "shipped",
+      "test": "test/evals-case.test.ts",
+      "epic": 1085,
+      "issue": 1248
+    },
+    {
+      "id": "evaluate-handoff-and-resumption",
+      "title": "Evaluate handoff and resumption",
+      "status": "shipped",
+      "test": "test/evals-case.test.ts",
+      "epic": 1085,
+      "issue": 1249
+    },
+    {
+      "id": "evaluate-multi-agent-conflicts",
+      "title": "Evaluate multi-agent conflicts",
+      "status": "shipped",
+      "test": "test/evals-case.test.ts",
+      "epic": 1085,
+      "issue": 1250
+    },
+    {
+      "id": "evaluate-permission-boundaries",
+      "title": "Evaluate permission boundaries",
+      "status": "shipped",
+      "test": "test/evals-case.test.ts",
+      "epic": 1085,
+      "issue": 1251
+    },
+    {
+      "id": "pin-evaluation-snapshots-and-tools",
+      "title": "Pin evaluation snapshots and tools",
+      "status": "shipped",
+      "test": "test/evals-suite.test.ts",
+      "epic": 1085,
+      "issue": 1252,
+      "case": "evals"
+    },
+    {
+      "id": "publish-an-auditable-scoring-rubric-and-weights",
+      "title": "Publish an auditable scoring rubric and weights",
+      "status": "shipped",
+      "test": "test/evals-score.test.ts",
+      "epic": 1085,
+      "issue": 1253,
+      "case": "evals"
+    },
+    {
+      "id": "measure-tokens-and-tool-calls",
+      "title": "Measure tokens and tool calls",
+      "status": "shipped",
+      "test": "test/evals-score.test.ts",
+      "epic": 1085,
+      "issue": 1254
+    },
+    {
+      "id": "compare-results-with-a-baseline",
+      "title": "Compare results with a baseline",
+      "status": "shipped",
+      "test": "test/evals-baseline.test.ts",
+      "epic": 1085,
+      "issue": 1255,
+      "case": "evals"
+    },
+    {
+      "id": "keep-the-model-runner-outside-the-engine",
+      "title": "Keep the model runner outside the engine",
+      "status": "shipped",
+      "test": "test/evals-live.test.ts",
+      "epic": 1085,
+      "issue": 1256
+    },
+    {
+      "id": "gate-ci-deterministically-and-schedule-live-model-runs-separately",
+      "title": "Gate CI deterministically and schedule live model runs separately",
+      "status": "shipped",
+      "test": "test/evals-cli.test.ts",
+      "epic": 1085,
+      "issue": 1257,
+      "case": "evals"
+    },
+    {
+      "id": "run-the-reference-suite-from-the-tarball",
+      "title": "Run the reference suite from the tarball",
+      "status": "shipped",
+      "test": "test/evals-tarball.test.ts",
+      "epic": 1085,
+      "issue": 1258
+    },
+    {
+      "id": "define-a-public-readiness-rubric",
+      "title": "Define a public readiness rubric",
+      "status": "shipped",
+      "test": "test/readiness-rubric-scan.test.ts",
+      "epic": 1086,
+      "issue": 1259,
+      "case": "readiness"
+    },
+    {
+      "id": "validate-structural-contracts-against-a-real-build",
+      "title": "Validate structural contracts against a real build",
+      "status": "shipped",
+      "test": "test/readiness-rubric-scan.test.ts",
+      "epic": 1086,
+      "issue": 1260
+    },
+    {
+      "id": "tie-readiness-scores-to-evaluation-results",
+      "title": "Tie readiness scores to evaluation results",
+      "status": "shipped",
+      "test": "test/readiness-regression.test.ts",
+      "epic": 1086,
+      "issue": 1261
+    },
+    {
+      "id": "report-findings-by-page-and-scope",
+      "title": "Report findings by page and scope",
+      "status": "shipped",
+      "test": "test/readiness-report-gate.test.ts",
+      "epic": 1086,
+      "issue": 1262
+    },
+    {
+      "id": "provide-remediation-for-each-finding",
+      "title": "Provide remediation for each finding",
+      "status": "shipped",
+      "test": "test/readiness-report-gate.test.ts",
+      "epic": 1086,
+      "issue": 1263
+    },
+    {
+      "id": "emit-text-and-versioned-json-reports",
+      "title": "Emit text and versioned JSON reports",
+      "status": "shipped",
+      "test": "test/readiness-cli.test.ts",
+      "epic": 1086,
+      "issue": 1264,
+      "case": "readiness"
+    },
+    {
+      "id": "enforce-readiness-thresholds-in-ci",
+      "title": "Enforce readiness thresholds in CI",
+      "status": "shipped",
+      "test": "test/readiness-cli.test.ts",
+      "epic": 1086,
+      "issue": 1265,
+      "case": "readiness"
+    },
+    {
+      "id": "compare-readiness-across-two-builds",
+      "title": "Compare readiness across two builds",
+      "status": "shipped",
+      "test": "test/readiness-compare-badge.test.ts",
+      "epic": 1086,
+      "issue": 1266
+    },
+    {
+      "id": "generate-a-badge-from-a-verified-report",
+      "title": "Generate a badge from a verified report",
+      "status": "shipped",
+      "test": "test/readiness-compare-badge.test.ts",
+      "epic": 1086,
+      "issue": 1267,
+      "case": "readiness"
+    },
+    {
+      "id": "protect-privacy-in-public-readiness-reports",
+      "title": "Protect privacy in public readiness reports",
+      "status": "shipped",
+      "test": "test/readiness-privacy.test.ts",
+      "epic": 1086,
+      "issue": 1268
+    },
+    {
+      "id": "measure-regressions-against-a-fixture",
+      "title": "Measure regressions against a fixture",
+      "status": "shipped",
+      "test": "test/readiness-regression.test.ts",
+      "epic": 1086,
+      "issue": 1269
+    },
+    {
+      "id": "test-readiness-from-the-published-package",
+      "title": "Test readiness from the published package",
+      "status": "shipped",
+      "test": "test/readiness-package.test.ts",
+      "epic": 1086,
+      "issue": 1270,
+      "case": "readiness"
+    },
+    {
+      "id": "define-the-client-adapter-contract",
+      "title": "Define the client adapter contract",
+      "status": "shipped",
+      "test": "test/clients-contract.test.ts",
+      "epic": 1087,
+      "issue": 1271
+    },
+    {
+      "id": "detect-client-capabilities-before-starting",
+      "title": "Detect client capabilities before starting",
+      "status": "shipped",
+      "test": "test/clients-profiles.test.ts",
+      "epic": 1087,
+      "issue": 1272,
+      "case": "mcp"
+    },
+    {
+      "id": "ship-an-installable-skill",
+      "title": "Ship an installable skill",
+      "status": "shipped",
+      "test": "test/skill.test.ts",
+      "epic": 1087,
+      "issue": 1273
+    },
+    {
+      "id": "generate-configuration-for-supported-clients",
+      "title": "Generate configuration for supported clients",
+      "status": "shipped",
+      "test": "test/cli-mcp-config.test.ts",
+      "epic": 1087,
+      "issue": 1274,
+      "case": "mcp"
+    },
+    {
+      "id": "provide-fallbacks-for-limited-clients",
+      "title": "Provide fallbacks for limited clients",
+      "status": "shipped",
+      "test": "test/clients-profiles.test.ts",
+      "epic": 1087,
+      "issue": 1275,
+      "case": "mcp"
+    },
+    {
+      "id": "handle-version-compatibility-and-migration",
+      "title": "Handle version compatibility and migration",
+      "status": "shipped",
+      "test": "test/clients-contract.test.ts",
+      "epic": 1087,
+      "issue": 1276
+    },
+    {
+      "id": "keep-client-configuration-secrets-private",
+      "title": "Keep client configuration secrets private",
+      "status": "shipped",
+      "test": "test/clients-contract.test.ts",
+      "epic": 1087,
+      "issue": 1277
+    },
+    {
+      "id": "test-two-real-clients",
+      "title": "Test two real clients",
+      "status": "shipped",
+      "test": "test/clients-profiles.test.ts",
+      "epic": 1087,
+      "issue": 1278,
+      "case": "mcp"
+    },
     {
       "id": "import-docusaurus",
       "title": "Docusaurus migration",
       "status": "shipped",
-      "case": "imports"
+      "case": "imports",
+      "release": "0.2.5"
     },
     {
       "id": "import-mkdocs",
       "title": "MkDocs and Material migration",
       "status": "shipped",
-      "case": "imports"
+      "case": "imports",
+      "release": "0.2.5"
     },
     {
       "id": "import-starlight",
       "title": "Starlight migration",
       "status": "shipped",
-      "case": "imports"
+      "case": "imports",
+      "release": "0.2.5"
     },
     {
       "id": "import-vitepress",
       "title": "VitePress migration",
       "status": "shipped",
-      "case": "imports"
+      "case": "imports",
+      "release": "0.2.5"
     },
     {
       "id": "semantic-diff",
       "title": "Semantic change review",
       "status": "shipped",
-      "case": "diff"
+      "case": "diff",
+      "release": "0.2.5"
     },
     {
       "id": "reference-lifecycle",
       "title": "References that survive renames and moves",
       "status": "shipped",
-      "case": "references"
+      "case": "references",
+      "release": "0.2.5"
     },
     {
       "id": "block-ids",
       "title": "Stable block ids",
       "status": "shipped",
-      "case": "blocks"
+      "case": "blocks",
+      "release": "0.2.5"
     },
     {
       "id": "build-performance",
       "title": "Measured build performance",
       "status": "shipped",
-      "case": "performance"
+      "case": "performance",
+      "release": "0.2.5"
     },
     {
       "id": "blog",
       "title": "Blog routes and Atom output",
       "status": "shipped",
-      "case": "blog"
+      "case": "blog",
+      "release": "0.2.5"
     },
     {
       "id": "api-reference",
       "title": "OpenAPI reference routes and navigation",
       "status": "shipped",
-      "case": "api-reference"
+      "case": "api-reference",
+      "release": "0.2.5"
     },
     {
       "id": "annotations",
       "title": "Code annotation data and diagnostics",
       "status": "shipped",
-      "case": "annotations"
+      "case": "annotations",
+      "release": "0.2.5"
     },
     {
       "id": "versions",
       "title": "Selected docs version at the canonical URL",
       "status": "shipped",
-      "case": "versions"
+      "case": "versions",
+      "release": "0.2.5"
     },
     {
       "id": "data-schema-evolution",
       "title": "Collection schema versions and upgrades",
       "status": "shipped",
-      "case": "schema"
+      "case": "schema",
+      "release": "0.2.5"
     },
     {
       "id": "data-quality",
       "title": "Data quality rules and snapshots",
       "status": "shipped",
-      "case": "quality"
+      "case": "quality",
+      "release": "0.2.5"
     },
     {
       "id": "record-lifecycle",
       "title": "Record retirement, replacement, and restore",
       "status": "shipped",
-      "case": "lifecycle"
+      "case": "lifecycle",
+      "release": "0.2.5"
     },
     {
       "id": "data-impact",
       "title": "Data change impact review",
       "status": "shipped",
-      "case": "records"
+      "case": "records",
+      "release": "0.2.5"
     },
     {
       "id": "publish-preview",
       "title": "Pull request previews and rollback",
       "status": "shipped",
-      "case": "preview"
+      "case": "preview",
+      "release": "0.2.5"
     },
     {
       "id": "first-project",
       "title": "First project samples and guides",
       "status": "shipped",
-      "case": "starters"
+      "case": "starters",
+      "release": "0.2.5"
     },
     {
       "id": "text-directives",
       "title": "Inline directives as theme components",
       "status": "shipped",
-      "case": "theme-hooks"
+      "case": "theme-hooks",
+      "release": "0.2.5"
     },
     {
       "id": "theme-overrides",
       "title": "Site modules that replace theme units",
       "status": "shipped",
-      "case": "theme-hooks"
+      "case": "theme-hooks",
+      "release": "0.2.5"
     },
     {
       "id": "api-fetch",
       "title": "Paginated API collection sources",
       "status": "shipped",
-      "case": "api-fetch"
+      "case": "api-fetch",
+      "release": "0.2.5"
     },
     {
       "id": "db-input",
       "title": "SQLite and NDJSON collection inputs",
       "status": "shipped",
-      "case": "db-input"
+      "case": "db-input",
+      "release": "0.2.5"
     },
     {
       "id": "transform",
       "title": "Configured collection transforms",
       "status": "shipped",
-      "case": "transform-lineage"
+      "case": "transform-lineage",
+      "release": "0.2.5"
     },
     {
       "id": "join",
       "title": "Joining collections",
       "status": "shipped",
-      "case": "collections"
+      "case": "collections",
+      "release": "0.2.5"
     },
     {
       "id": "aggregate",
       "title": "Aggregate collections",
       "status": "shipped",
-      "case": "collections"
+      "case": "collections",
+      "release": "0.2.5"
     },
     {
       "id": "public-fields",
       "title": "Public-field policies",
       "status": "shipped",
-      "case": "collections"
+      "case": "collections",
+      "release": "0.2.5"
     },
     {
       "id": "lineage",
       "title": "Field lineage reports",
       "status": "shipped",
-      "case": "transform-lineage"
+      "case": "transform-lineage",
+      "release": "0.2.5"
     },
     {
       "id": "rule-diff",
       "title": "Transformation rule diff",
       "status": "shipped",
-      "case": "transform-lineage"
+      "case": "transform-lineage",
+      "release": "0.2.5"
     },
     {
       "id": "refresh",
       "title": "Scheduled data refresh",
       "status": "shipped",
-      "case": "refresh"
+      "case": "refresh",
+      "release": "0.2.5"
     },
     {
       "id": "reproduce",
       "title": "Diagnose and reproduce builds",
       "status": "shipped",
-      "case": "transform-lineage"
+      "case": "transform-lineage",
+      "release": "0.2.5"
     }
   ]
 }

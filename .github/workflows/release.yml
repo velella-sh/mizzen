@@ -34,7 +34,7 @@ env:
   TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
   # The published theme this release is verified with. Bump it when the theme ships a matching release; a moving
   # main branch could hide an engine regression behind a simultaneous theme change.
-  LATEEN_VERSION: "0.2.2"
+  LATEEN_VERSION: "0.2.3"
 
 jobs:
   verify:
@@ -128,7 +128,7 @@ jobs:
           scripts/smoke-package.sh ../mizzen ../lateen
           --mizzen-tarball "$RUNNER_TEMP"/dist/velella-mizzen-*.tgz
           --lateen-tarball "$RUNNER_TEMP"/theme/velella-lateen-*.tgz
-      - name: Compare with the published 0.2.4 package and 0.2.2 theme
+      - name: Compare with the published 0.2.5 package and 0.2.3 theme
         if: steps.meta.outputs.published != 'true'
         working-directory: mizzen
         run: >-

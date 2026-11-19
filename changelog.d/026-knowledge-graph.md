@@ -1,3 +1,0 @@
-- Add a versioned source and documentation knowledge graph: nodes and edges for pages, blocks, headings, links, includes, API operations, code symbols, snippets, collections, records, fields, transforms, joins, derived values, claims, evidence, checks, and lineage, each with its source span and stable identity.
-- Add bounded graph queries for neighbors and the shortest evidence path, with snapshots, resumable partial results, audience redaction, and incremental refresh over page and collection units.
-- Add `mizzen graph` and the `query_graph` MCP tool, which answer with the same schema and node ids.

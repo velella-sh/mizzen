@@ -5,9 +5,11 @@
  * comes from npm.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { dirname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** Runs one CLI command and returns its exit status and output. */
 export interface RunResult {
@@ -19,7 +21,7 @@ export interface RunResult {
 /** What a case may use: its own temporary folder and the CLI under test. */
 export interface CaseContext {
   readonly dir: string;
-  readonly mizzen: (args: readonly string[], cwd?: string) => RunResult;
+  readonly mizzen: (args: readonly string[], cwd?: string, input?: string) => RunResult;
 }
 
 /** One stable acceptance case. The id is written in the release scope and never renamed. */
@@ -45,6 +47,12 @@ function check(condition: unknown, message: string): asserts condition {
 /** Fails unless the command succeeded, quoting what it printed. */
 function ok(result: RunResult, what: string): void {
   check(result.status === 0, `${what} exited ${result.status}\n${result.stdout}${result.stderr}`);
+}
+
+/** Runs a command that must succeed and returns its stdout. */
+function output(result: RunResult, what: string): string {
+  ok(result, what);
+  return result.stdout;
 }
 
 /** Reads a built file as UTF-8, failing the case when it is missing. */
@@ -820,6 +828,314 @@ const themeHooks: AcceptanceCase = {
   },
 };
 
+
+const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const TRACE_FIXTURE = join(ROOT, "fixtures/traces/release-trace.json");
+const EVAL_SUITE = join(ROOT, "fixtures/evals");
+const CONTEXT_FIXTURE = join(ROOT, "fixtures/context-compiler");
+const READINESS_SITE = join(ROOT, "fixtures/readiness/site");
+const READINESS_THEME = join(ROOT, "fixtures/readiness/theme");
+
+/** A SHA-256, as the edit transaction contract writes it. */
+function sha(text: string): string {
+  return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+/** Writes one version 1 transaction whose patches replace the whole of each named line. */
+function transaction(
+  root: string,
+  name: string,
+  entries: readonly { readonly file: string; readonly line: number; readonly expected: string; readonly replacement: string }[],
+): string {
+  const files: Record<string, string> = {};
+  for (const entry of entries) files[entry.file] = sha(read(root, entry.file));
+  const path = join(root, name);
+  writeFileSync(
+    path,
+    `${JSON.stringify({
+      version: 1,
+      task: { id: "release-acceptance" },
+      snapshot: { files },
+      patches: entries.map((entry) => ({
+        file: entry.file,
+        patches: [{
+          span: { line: entry.line, column: 3, endLine: entry.line, endColumn: 3 },
+          expected: entry.expected,
+          replacement: entry.replacement,
+          beforeHash: files[entry.file],
+        }],
+      })),
+      preconditions: { requireBeforeHash: true, validateContent: true },
+    }, null, 2)}\n`,
+  );
+  return path;
+}
+
+const tasks: AcceptanceCase = {
+  id: "tasks",
+  title: "Agent tasks register, preview, run, and cancel through the public CLI",
+  run: (ctx) => {
+    const site = join(ctx.dir, "tasks-site");
+    tree(site, {
+      "mizzen.yml": "title: Tasks\n",
+      "index.md": "# Home\n\nWelcome to the task demo.\n",
+      "guide/install.md": "# Install\n\nRun the installer.\n",
+    });
+    const capabilities = JSON.parse(output(ctx.mizzen(["agent", "capabilities"], ctx.dir), "agent capabilities")) as {
+      version?: number;
+      commands?: unknown;
+    };
+    check(capabilities.version === 1, "agent capabilities is not version 1");
+    const contract = {
+      version: 1,
+      idempotencyKey: "release-task",
+      goal: "Update the install guide",
+      scope: { pages: ["/guide/install/"], blocks: [], collections: [], symbols: [], files: ["guide/install.md"] },
+      snapshot: { content: "a".repeat(64), data: "b".repeat(64), config: "c".repeat(64), tooling: "d".repeat(64) },
+      budget: { contextTokens: 6000, toolCalls: 20, timeMs: 60000 },
+      permissions: { read: ["*"], write: ["agent"], check: ["agent"] },
+      acceptance: [
+        { id: "doctor", statement: "The doctor passes", check: "doctor" },
+        { id: "review", statement: "A person reviewed the wording", review: true },
+      ],
+    };
+    const registered = JSON.parse(
+      output(ctx.mizzen(["agent", "task", "register", site, "--stdin"], ctx.dir, `${JSON.stringify(contract)}\n`), "agent task register"),
+    ) as { created: boolean; taskId: string; task: { state: string; budget: { contextTokens: number } } };
+    check(registered.created === true, "register did not create the task");
+    check(registered.task.state === "draft", "a new task is not a draft");
+    check(registered.task.budget.contextTokens === 6000, "the task budget was not kept");
+    const status = JSON.parse(
+      output(ctx.mizzen(["agent", "task", "status", registered.taskId, site], ctx.dir), "agent task status"),
+    ) as { task: { state: string } };
+    check(status.task.state === "draft", "status does not name the draft task");
+    const preview = JSON.parse(
+      output(ctx.mizzen(["agent", "task", "run", registered.taskId, site, "--dry-run"], ctx.dir), "agent task dry run"),
+    ) as { ok: boolean; dryRun: boolean; outcome: string };
+    check(preview.ok === true, "the dry run failed");
+    check(preview.dryRun === true, "the dry run did not report a preview");
+    const cancel = JSON.parse(
+      output(ctx.mizzen(["agent", "task", "cancel", registered.taskId, site, "--reason", "release check"], ctx.dir), "agent task cancel"),
+    ) as { task: { state: string } };
+    check(cancel.task.state === "canceled", "cancel did not record the canceled state");
+  },
+};
+
+const packs: AcceptanceCase = {
+  id: "packs",
+  title: "A task contract compiles a sourced context pack within its budget",
+  run: (ctx) => {
+    const site = join(ctx.dir, "context-site");
+    cpSync(CONTEXT_FIXTURE, site, { recursive: true });
+    const text = output(ctx.mizzen(["pack", site, "--task", join(site, "task.json"), "--format", "json"], ctx.dir), "pack --task");
+    const pack = JSON.parse(text) as {
+      accounting: { used: number; remaining: number; requested: number };
+      answerability: { complete: boolean; shortages: readonly string[] };
+      fragments: readonly { source: { block?: string; file: string; span: string } }[];
+      omitted: readonly unknown[];
+    };
+    check(pack.accounting.used > 0 && pack.accounting.used <= pack.accounting.requested, "the pack accounting is wrong");
+    check(pack.answerability.complete === true, "the fixture task is not answerable");
+    check(pack.answerability.shortages.length === 0, "an answerable pack reports shortages");
+    check(pack.fragments.some((fragment) => fragment.source.block === "install-steps"), "the install-steps block is missing");
+    check(pack.fragments.every((fragment) => fragment.source.file !== "" && fragment.source.span !== ""), "a fragment has no source");
+    check(!text.includes(ctx.dir), "the pack leaks an absolute path");
+  },
+};
+
+const edits: AcceptanceCase = {
+  id: "edits",
+  title: "An edit transaction previews, applies atomically, proves, and rolls back",
+  run: (ctx) => {
+    const site = join(ctx.dir, "edits-site");
+    tree(site, { "docs/a.md": "# A\n", "docs/b.md": "# B\n" });
+    const tx = transaction(site, "tx.json", [
+      { file: "docs/a.md", line: 1, expected: "A", replacement: "AA" },
+      { file: "docs/b.md", line: 1, expected: "B", replacement: "BB" },
+    ]);
+    const preview = JSON.parse(
+      output(ctx.mizzen(["edit", "transaction", tx, site, "--dry-run", "--format", "json"], ctx.dir), "edit transaction --dry-run"),
+    ) as { applied: boolean; dryRun: boolean; diff: string };
+    check(preview.applied === false && preview.dryRun === true, "the preview applied the transaction");
+    check(preview.diff.includes("docs/a.md") && preview.diff.includes("docs/b.md"), "the preview diff is incomplete");
+    check(read(site, "docs/a.md") === "# A\n", "the preview wrote a.md");
+    const applied = JSON.parse(
+      output(ctx.mizzen(["edit", "transaction", tx, site, "--format", "json"], ctx.dir), "edit transaction"),
+    ) as { applied: boolean; files: readonly { file: string; afterHash: string }[] };
+    check(applied.applied === true && applied.files.length === 2, "the transaction did not apply both files");
+    check(read(site, "docs/a.md") === "# AA\n" && read(site, "docs/b.md") === "# BB\n", "the transaction bytes are wrong");
+    const proof = `${tx}.receipt.json.proof.json`;
+    check(existsSync(proof), "the transaction wrote no proof");
+    ok(ctx.mizzen(["edit", "verify", proof], site), "edit verify");
+    const rollback = JSON.parse(
+      output(ctx.mizzen(["edit", "rollback", `${tx}.receipt.json`, site, "--format", "json"], ctx.dir), "edit rollback"),
+    ) as { restored: readonly string[] };
+    check(rollback.restored.length === 2, "rollback did not restore both files");
+    check(read(site, "docs/a.md") === "# A\n" && read(site, "docs/b.md") === "# B\n", "rollback left edited bytes");
+  },
+};
+
+const graph: AcceptanceCase = {
+  id: "graph",
+  title: "The knowledge graph answers a stable path through the public CLI",
+  run: (ctx) => {
+    const site = join(ctx.dir, "graph-site");
+    tree(site, {
+      "mizzen.yml": "title: Graph\n",
+      "index.md": "# Home\n\nSee [install](guide/install.md).\n",
+      "guide/install.md": "# Install\n\nRun the installer.\n",
+    });
+    const args = ["graph", site, "--from", "page:index.md", "--to", "page:guide/install.md", "--json"];
+    const first = JSON.parse(output(ctx.mizzen(args, ctx.dir), "graph")) as { snapshot: string; path?: readonly { node: { id: string } }[] };
+    const second = JSON.parse(output(ctx.mizzen(args, ctx.dir), "graph again")) as { snapshot: string; path?: readonly { node: { id: string } }[] };
+    check(typeof first.snapshot === "string" && first.snapshot.startsWith("graph:"), "the graph has no snapshot");
+    check(first.path !== undefined && first.path.length >= 2, "the graph found no path");
+    check(first.path[0]?.node.id === "page:index.md", "the path does not start at the requested page");
+    check(first.path.at(-1)?.node.id === "page:guide/install.md", "the path does not end at the requested page");
+    check(JSON.stringify(first) === JSON.stringify(second), "two graph queries differ");
+  },
+};
+
+const mcp: AcceptanceCase = {
+  id: "mcp",
+  title: "The MCP handshake, tool list, search, and client report work over stdio",
+  run: (ctx) => {
+    const site = join(ctx.dir, "mcp-site");
+    const themeRoot = theme(site);
+    tree(site, {
+      "mizzen.yml": "title: MCP\n",
+      "index.md": "# Home\n\nInstall the engine with Node 24.\n",
+      "guide/install.md": "# Install\n\nRun npm install @velella/mizzen.\n",
+    });
+    const messages = [
+      { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "claude-desktop", version: "1" } } },
+      { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+      { jsonrpc: "2.0", id: 3, method: "tools/call", params: { name: "search_docs", arguments: { query: "install" } } },
+    ].map((message) => JSON.stringify(message)).join("\n");
+    const run = ctx.mizzen(["mcp", site, "--theme", themeRoot], ctx.dir, `${messages}\n`);
+    ok(run, "mcp");
+    const answers = new Map<number, any>();
+    for (const line of run.stdout.split("\n").filter(Boolean)) {
+      const value = JSON.parse(line) as { id?: number };
+      if (typeof value.id === "number") answers.set(value.id, value);
+    }
+    const hello = answers.get(1);
+    check(hello?.result?.capabilities?.experimental?.mizzen?.contractVersion === 1, "the handshake announces no contract version");
+    check(hello?.result?.capabilities?.experimental?.mizzen?.tasks?.async === true, "the handshake omits the task capabilities");
+    const tools = answers.get(2)?.result?.tools as readonly { name: string }[] | undefined;
+    check(tools !== undefined && tools.some((tool) => tool.name === "search_docs"), "tools/list omits search_docs");
+    const search = answers.get(3)?.result;
+    check(search?.isError !== true, "search_docs failed");
+    check(`${JSON.stringify(search)}`.includes("install"), "search_docs found no install text");
+    check(!run.stdout.includes(ctx.dir), "the MCP answer leaks an absolute path");
+    const config = JSON.parse(output(ctx.mizzen(["mcp", site, "--print-config", "cursor"], ctx.dir), "--print-config")) as {
+      mcpServers?: { mizzen?: { command: string; args: readonly string[] } };
+    };
+    check(config.mcpServers?.mizzen?.command === "npx", "the client config starts no npx server");
+    for (const name of ["claude-code", "claude-desktop", "cursor", "vscode"]) {
+      ok(ctx.mizzen(["mcp", site, "--print-config", name], ctx.dir), `--print-config ${name}`);
+    }
+  },
+};
+
+const traces: AcceptanceCase = {
+  id: "traces",
+  title: "A recorded trace replays read-only, exports only safe fields, and hands off",
+  run: (ctx) => {
+    check(existsSync(TRACE_FIXTURE), "the trace fixture is missing");
+    const replay = output(ctx.mizzen(["trace", "replay", TRACE_FIXTURE], ctx.dir), "trace replay");
+    check(replay.includes("replay ok"), "trace replay did not pass");
+    check(filesUnder(ctx.dir).length === 0, "trace replay wrote a file");
+    const exported = join(ctx.dir, "export");
+    ok(ctx.mizzen(["trace", "export", TRACE_FIXTURE, "--out", exported], ctx.dir), "trace export");
+    const files = filesUnder(exported);
+    check(files.length === 1, "trace export wrote more than one file");
+    const text = read(exported, files[0]!);
+    check(!text.includes(ctx.dir), "the exported trace leaks an absolute path");
+    const handoff = output(ctx.mizzen(["trace", "handoff", TRACE_FIXTURE], ctx.dir), "trace handoff");
+    check(handoff.trim() !== "", "trace handoff is empty");
+  },
+};
+
+const permissions: AcceptanceCase = {
+  id: "permissions",
+  title: "An access policy refuses a write outside its capability and scope",
+  run: (ctx) => {
+    const site = join(ctx.dir, "policy-site");
+    tree(site, { "docs/a.md": "# A\n" });
+    const tx = transaction(site, "tx.json", [{ file: "docs/a.md", line: 1, expected: "A", replacement: "AA" }]);
+    const policy = join(ctx.dir, "policy.json");
+    writeFileSync(policy, `${JSON.stringify({ version: 1, capabilities: { write: false } }, null, 2)}\n`);
+    const refused = ctx.mizzen(["edit", "transaction", tx, site, "--policy", policy, "--format", "json"], ctx.dir);
+    check(refused.status !== 0, "a policy without write applied the transaction");
+    check(read(site, "docs/a.md") === "# A\n", "a denied write changed the source");
+    check(!existsSync(`${tx}.receipt.json`), "a denied write wrote a receipt");
+    writeFileSync(
+      policy,
+      `${JSON.stringify({ version: 1, approvals: { write: false }, capabilities: { write: true }, write: { paths: ["docs/**"], scope: { pages: ["/guide/"] } } }, null, 2)}\n`,
+    );
+    const outside = ctx.mizzen(["edit", "transaction", tx, site, "--policy", policy, "--format", "json"], ctx.dir);
+    check(outside.status !== 0, "a write outside the policy scope applied");
+    check(read(site, "docs/a.md") === "# A\n", "an out-of-scope write changed the source");
+  },
+};
+
+const evals: AcceptanceCase = {
+  id: "evals",
+  title: "The reference evaluation suite runs offline and reports a deterministic gate",
+  run: (ctx) => {
+    const text = output(ctx.mizzen(["eval", EVAL_SUITE, "--format", "json"], ctx.dir), "eval");
+    const report = JSON.parse(text) as {
+      version: number;
+      run: { id: string; runner: { id: string } };
+      cases: readonly { status: string }[];
+      gate: { passed: boolean };
+    };
+    check(report.version === 1, "the eval report is not version 1");
+    check(report.run.runner.id === "reference", "the eval did not use the offline reference runner");
+    check(/^[0-9a-f]{64}$/.test(report.run.id), "the eval run id is not deterministic");
+    check(report.cases.length === 10, "the reference suite has 10 cases");
+    check(report.gate.passed === true, "the reference suite gate failed");
+    check(!text.includes(ctx.dir), "the eval report leaks an absolute path");
+  },
+};
+
+const readiness: AcceptanceCase = {
+  id: "readiness",
+  title: "A real build scores, gates, and badges against the public readiness rubric",
+  run: (ctx) => {
+    const site = join(ctx.dir, "readiness-site");
+    cpSync(READINESS_SITE, site, { recursive: true });
+    const out = build(ctx, site, READINESS_THEME);
+    const reportPath = join(ctx.dir, "readiness.json");
+    const badgePath = join(ctx.dir, "readiness.svg");
+    ok(
+      ctx.mizzen(["readiness", out, "--report", reportPath, "--badge", badgePath, "--min-overall", "90"], ctx.dir),
+      "readiness",
+    );
+    const report = JSON.parse(read(ctx.dir, "readiness.json")) as {
+      version: number;
+      rubric: { version: string };
+      status: string;
+      overall: number;
+      digest: string;
+    };
+    check(report.version === 1, "the readiness report is not version 1");
+    check(report.rubric.version === "1.0.0", "the readiness rubric is not 1.0.0");
+    check(report.status === "pass" && report.overall >= 90, "the readiness fixture did not pass");
+    check(/^[0-9a-f]{64}$/.test(report.digest), "the readiness report has no digest");
+    const badge = read(ctx.dir, "readiness.svg");
+    check(badge.startsWith("<svg ") && badge.includes("readiness v1.0.0"), "the badge is not a readiness SVG");
+    for (const text of [JSON.stringify(report), badge]) {
+      check(!text.includes(ctx.dir), "a readiness artifact leaks an absolute path");
+      check(!text.includes("PRIVATE_READINESS_SENTINEL"), "a readiness artifact leaks a private sentinel");
+    }
+    for (const file of filesUnder(out)) {
+      check(!file.includes("private"), `the build published a private file: ${file}`);
+    }
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   blog,
@@ -843,4 +1159,13 @@ export const CASES: readonly AcceptanceCase[] = [
   blocks,
   references,
   performance,
+  tasks,
+  packs,
+  edits,
+  graph,
+  mcp,
+  traces,
+  permissions,
+  evals,
+  readiness,
 ];
