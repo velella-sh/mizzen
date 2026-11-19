@@ -9,6 +9,8 @@ import type {
 } from "../src/contracts/verification.ts";
 import { sha256 } from "../src/data/lock.ts";
 import { planVerification, type VerificationCheckSpec } from "../src/verification/plan.ts";
+import { createVerificationProof, type VerificationProofInput } from "../src/verification/proof.ts";
+import { changeOf } from "../src/verification/scope.ts";
 import { registerTask } from "../src/tasks/register.ts";
 
 /** A minimal valid registered task with the criteria a test names. */
@@ -105,3 +107,27 @@ export const NO_REFERENCES: VerificationReferences = {
   invalid: [],
   issues: [],
 };
+
+/** The default proof input for the single-check task. */
+export function proofInput(overrides: Partial<VerificationProofInput> = {}): VerificationProofInput {
+  const task = verificationTask();
+  return {
+    task,
+    plan: verificationPlan(task),
+    commit: "abc1234",
+    base: "def5678",
+    files: [changeOf("docs/install.md", "before\n", "after\n")],
+    allowed: ["docs/install.md"],
+    expected: ["docs/install.md"],
+    checks: [passedCheck(task, "doctor")],
+    outputs: matchingOutputs(),
+    references: NO_REFERENCES,
+    humanReview: NO_REVIEW,
+    ...overrides,
+  };
+}
+
+/** A proved proof for the single-check task. */
+export function provedProof(overrides: Partial<VerificationProofInput> = {}) {
+  return createVerificationProof(proofInput(overrides));
+}
