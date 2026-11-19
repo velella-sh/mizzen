@@ -15,6 +15,7 @@ import { applyDataDirectives } from "../data/directives.ts";
 import { buildRecordPages, aliasUrlsOf } from "../data/pages.ts";
 import { buildListPages, keyPositionOf } from "../data/lists.ts";
 import { localizeFields, prefixOfLang } from "../data/record-context.ts";
+import { publicFields } from "../data/public.ts";
 import { planUrls, readUrlsLock, urlKey, type PublishedUrl, type UrlsPlan } from "../data/urls-lock.ts";
 import { loadTemplates } from "../data/template.ts";
 import { discover, type DiscoveredFile } from "../content/discover.ts";
@@ -740,7 +741,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     list.push({
       title: page.title,
       url: page.url,
-      fields: record === undefined ? {} : localizeFields(record.fields, page.lang, config.lang).fields,
+      fields: record === undefined ? {} : publicFields(localizeFields(record.fields, page.lang, config.lang).fields, config.collections[page.record.collection]?.public),
     });
     byCollection[page.record.collection] = list;
     collections[page.lang] = byCollection;

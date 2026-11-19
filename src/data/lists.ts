@@ -32,6 +32,7 @@ import { filterRows, parseQuery, sortRows, type Row } from "./query.ts";
 import { referenceDateOf } from "./reference-date.ts";
 import { fieldsWithDerived } from "./derived.ts";
 import { withoutEvidence } from "./evidence/public.ts";
+import { publicFields } from "./public.ts";
 import { relatedProps } from "./relations/query.ts";
 
 /** How one page declares its list. */
@@ -333,7 +334,10 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
   const rows: RowRecord[] = collection.records.map((record) => {
     const localized = localizeFields(record.fields, page.lang, config.lang);
     const idFields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
-    const fields = fieldsWithDerived({ fields: withoutEvidence(idFields, entry?.evidence), derived: record.derived });
+    const fields = publicFields(
+      fieldsWithDerived({ fields: withoutEvidence(idFields, entry?.evidence), derived: record.derived }),
+      entry?.public,
+    );
     return {
       record,
       fields,
@@ -407,7 +411,7 @@ export function buildListPages(options: ListPagesOptions): ListPagesResult {
       fields: picked,
       links,
       ...relatedProps(collections, config, spec.collection, row.fields, page.lang),
-      ...(row.record.derived === undefined ? {} : { derived: row.record.derived }),
+      ...(row.record.derived === undefined ? {} : { derived: publicFields(row.record.derived, entry?.public) }),
     };
     props.set(row.id, record);
     return record;

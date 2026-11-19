@@ -57,6 +57,7 @@ collections:
 | `join` | object | | Enrich each record from secondary collections: `sources`, `type` (`inner` or `left`), key fields, field mapping, `onMissingKey`, `onConflict`, `onNull`, and `many`. See [Joining data](https://github.com/velella-sh/mizzen/blob/main/docs/join.md). |
 | `aggregate` | object | | Build the collection by grouping another collection's records: `source` names it, `by` lists the grouping fields (a date may use `period: month` or `year` and a `timezone`), `metrics` names the values computed per group, and `where`, `missing`, and `empty` shape the input and the result. See [Aggregating data](https://github.com/velella-sh/mizzen/blob/main/docs/aggregate.md). |
 | `raw` | `false` or object | `{}` | The raw data written as `data/<name>.raw.json`, `.csv`, and `.sha256`; `raw.private` lists fields left out; `false` writes none. |
+| `public` | list of string | every field | Fields every public output may publish, as dot paths such as `author.name`. A field not listed is left out of pages, search, feeds, downloads, and the API while the record keeps it internally; `id` is always public. See [Public fields](/data/public-fields/). |
 | `index` | object | | A compact JSON index for the theme: `index.fields` and `index.bytes`. See [Feeds and machine output](/data/feeds/). |
 
 The same keys, with their types, are in the published

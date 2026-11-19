@@ -56,7 +56,8 @@ async function hasFrontMatter(file: string): Promise<boolean> {
  *
  * `_templates` files are `template`: kept apart so no template is ever built as a page or copied as an asset.
  *
- * Skipped: folders starting with `_` (except `_data` and `_templates`), names starting with `.`, `node_modules`, and paths in `exclude`.
+ * Skipped: folders starting with `_` (except `_data` and `_templates`), the site-root `data-changes` folder (the raw
+ * change history, read by the engine and never copied), names starting with `.`, `node_modules`, and paths in `exclude`.
  * A path in `include` is kept even when a rule above would skip it. A folder whose `index.html` has no front matter is an
  * app page: every file in it, at any depth, is listed as `app` and passed through untouched.
  */
@@ -82,6 +83,8 @@ export async function discover(source: string, options: DiscoverOptions = {}): P
       const kept = covers(include, path);
       if (!kept) {
         if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+        // The change history is raw input: a public build reads it, never copies it as an asset.
+        if (entry.isDirectory() && rel === "" && entry.name === "data-changes") continue;
         if (entry.isDirectory() && entry.name.startsWith("_") && !(rel === "" && (entry.name === "_data" || entry.name === "_templates"))) continue;
       }
       if (entry.isDirectory()) {

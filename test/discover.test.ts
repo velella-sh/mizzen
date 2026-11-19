@@ -26,6 +26,22 @@ test("the dashboard folder of fixtures/docs-site is an app page", async () => {
   assert.deepEqual(files.map((f) => f.path), files.map((f) => f.path).sort());
 });
 
+test("it skips the change history at the site root, which is read but never copied", async () => {
+  const root = tree({
+    "index.md": "# Home",
+    "data-changes/people.jsonl": '{"id":"0123456789abcdef"}\n',
+    "docs/data-changes/nested.jsonl": "{}\n",
+  });
+  try {
+    const files = await discover(root);
+    assert.equal(files.some((file) => file.path.startsWith("data-changes/")), false);
+    assert.equal(files.some((file) => file.path === "docs/data-changes/nested.jsonl"), true);
+    assert.ok(files.some((file) => file.path === "index.md"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("it skips underscore folders (except _data), dotfiles, node_modules, and excluded paths", async () => {
   const root = tree({
     "a.md": "# A",

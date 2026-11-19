@@ -46,6 +46,8 @@ main:
         url: /data/quick-start/
       - title: Collections
         url: /data/collections/
+      - title: Public fields
+        url: /data/public-fields/
       - title: Templates
         url: /data/templates/
       - title: Lists

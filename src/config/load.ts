@@ -65,6 +65,7 @@ import type {
   ThemeConfig,
 } from "../contracts/index.ts";
 import type { ApiAuthConfig, CollectionTransformConfig, PaginationConfig, PaginationMode, PaginationStop, TransformCastTarget, TransformStepConfig } from "../contracts/config.ts";
+import { publicReferenceDiagnostics, publicReferencesIn } from "../data/public.ts";
 
 /** The site config file name. */
 export const CONFIG_FILE = "mizzen.yml";
@@ -215,6 +216,7 @@ export function loadConfigText(source: string, file: string, folderTitle: string
 
   diagnostics.push(...calendarDiagnostics(raw, collections, file, doc, lineCounter));
   diagnostics.push(...derivedDiagnostics(raw, collections, file, doc, lineCounter));
+  diagnostics.push(...publicDiagnostics(raw, collections, apiConfig, file, doc, lineCounter));
   diagnostics.push(...apiFetchDiagnostics(raw, collections, file, doc, lineCounter));
   diagnostics.push(...joinDiagnostics(collections, file, doc, lineCounter));
 
@@ -422,6 +424,88 @@ function derivedDiagnostics(
       });
     }
   }
+  return found;
+}
+
+/** Every string in a JSON-LD mapping, so a placeholder in a nested value is read too. */
+function jsonLdTexts(value: unknown): string[] {
+  if (typeof value === "string") return [value];
+  if (Array.isArray(value)) return value.flatMap(jsonLdTexts);
+  if (isPlainObject(value)) return Object.values(value).flatMap(jsonLdTexts);
+  return [];
+}
+
+/**
+ * Findings for public settings that name fields the collection's `public` policy does not allow: a permalink, a view
+ * URL, an SEO field or JSON-LD placeholder, a search filter or sort, a page-JSON or index field, an API field, or a feed
+ * field. They are reported before the build writes anything, so a private value never reaches an address or a tag.
+ */
+function publicDiagnostics(
+  raw: Record<string, unknown>,
+  collections: Readonly<Record<string, CollectionConfig>>,
+  apiConfig: ApiConfig | undefined,
+  file: string,
+  doc: Document.Parsed,
+  lineCounter: LineCounter,
+): Diagnostic[] {
+  const found: Diagnostic[] = [];
+  const at = (path: (string | number)[]) => {
+    const node = doc.getIn(path, true);
+    return posFromNode(file, lineCounter, isNode(node) ? node : doc.contents);
+  };
+  const check = (name: string, path: (string | number)[], references: Iterable<string>, where: string): void => {
+    const policy = collections[name]?.public;
+    if (policy === undefined) return;
+    found.push(...publicReferenceDiagnostics(name, policy, references, where, at(path)));
+  };
+  const one = (name: string, path: (string | number)[], field: string | undefined, where: string): void => {
+    if (field !== undefined) check(name, path, [field], where);
+  };
+
+  for (const [name, entry] of Object.entries(collections)) {
+    const base = ["collections", name];
+    if (entry.permalink !== undefined) check(name, [...base, "permalink"], publicReferencesIn(entry.permalink), "`permalink`");
+    for (const [view, config] of Object.entries(entry.views ?? {})) {
+      check(name, [...base, "views", view, "permalink"], publicReferencesIn(config.permalink), `\`views.${view}.permalink\``);
+    }
+    one(name, [...base, "disambiguate"], entry.disambiguate, "`disambiguate`");
+    one(name, [...base, "aliases"], entry.aliases, "`aliases`");
+    one(name, [...base, "seo", "canonical"], entry.seo?.canonical, "`seo.canonical`");
+    one(name, [...base, "seo", "noindex"], entry.seo?.noindex, "`seo.noindex`");
+    one(name, [...base, "seo", "lastmod"], entry.seo?.lastmod, "`seo.lastmod`");
+    if (entry.seo?.jsonLd !== undefined) {
+      check(name, [...base, "seo", "jsonLd"], jsonLdTexts(entry.seo.jsonLd).flatMap(publicReferencesIn), "`seo.jsonLd`");
+    }
+    for (const key of ["filters", "sort", "meta"] as const) {
+      check(name, [...base, "search", key], entry.search?.[key] ?? [], `\`search.${key}\``);
+    }
+    one(name, [...base, "search", "aliases"], entry.search?.aliases, "`search.aliases`");
+    check(name, [...base, "json", "fields"], entry.json?.fields ?? [], "`json.fields`");
+    check(name, [...base, "index", "fields"], entry.index?.fields ?? [], "`index.fields`");
+  }
+
+  for (const [name, published] of Object.entries(apiConfig?.collections ?? {})) {
+    check(name, ["api", "collections", name, "fields"], published.fields, `\`api.collections.${name}.fields\``);
+  }
+  for (const [version, config] of Object.entries(apiConfig?.versions ?? {})) {
+    for (const [name, published] of Object.entries(config.collections)) {
+      check(
+        name,
+        ["api", "versions", version, "collections", name, "fields"],
+        published.fields,
+        `\`api.versions.${version}.collections.${name}.fields\``,
+      );
+    }
+  }
+
+  for (const [feed, config] of Object.entries(feedsFrom(raw.feeds))) {
+    const name = config.collection;
+    check(name, ["feeds", feed, "fields"], config.fields ?? [], `\`feeds.${feed}.fields\``);
+    check(name, ["feeds", feed, "where"], Object.keys(config.where ?? {}), `\`feeds.${feed}.where\``);
+    one(name, ["feeds", feed, "date"], config.date, `\`feeds.${feed}.date\``);
+    one(name, ["feeds", feed, "idField"], config.idField, `\`feeds.${feed}.idField\``);
+  }
+
   return found;
 }
 
@@ -824,6 +908,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const lifecycle = lifecycleFrom(entry.lifecycle);
     const json = collectionJsonFrom(entry.json);
     const raw = collectionRawFrom(entry.raw);
+    const publicFields = fieldsFrom(entry.public);
     const changelog = collectionChangelogFrom(entry.changelog);
     const transform = collectionTransformFrom(entry.transform);
     const join = joinFrom(entry.join);
@@ -862,6 +947,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(seo === undefined ? {} : { seo }),
       ...(index === undefined ? {} : { index }),
       ...(raw === undefined ? {} : { raw }),
+      ...(publicFields === undefined ? {} : { public: publicFields }),
       ...(changelog === undefined ? {} : { changelog }),
       ...(transform === undefined ? {} : { transform }),
       ...(join === undefined ? {} : { join }),

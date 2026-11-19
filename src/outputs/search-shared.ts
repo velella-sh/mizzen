@@ -11,7 +11,7 @@ import type {
   Site,
 } from "../contracts/index.ts";
 import { localizeFields } from "../data/record-context.ts";
-import { fieldsWithDerived } from "../data/derived.ts";
+import { isPublicReference, publicFieldsOf } from "../data/public.ts";
 
 /** A filter with more distinct values than this is free text, not a facet. */
 export const MAX_FILTER_VALUES = 100;
@@ -69,10 +69,13 @@ function recordOf(site: Site, page: Page): SearchableRecord | undefined {
     page,
     record,
     collection: identity.collection,
-    fields: fieldsWithDerived({
-      fields: localizeFields(record.fields, page.lang, site.config.lang).fields,
-      derived: record.derived,
-    }),
+    fields: publicFieldsOf(
+      {
+        fields: localizeFields(record.fields, page.lang, site.config.lang).fields,
+        derived: record.derived,
+      },
+      site.config.collections[identity.collection]?.public,
+    ),
     config: site.config.collections[identity.collection]?.search ?? {},
   };
 }
@@ -167,7 +170,9 @@ export function filterPlan(
   for (const name of Object.keys(site.collections)) {
     const ofCollection = records.filter((record) => record.collection === name);
     if (ofCollection.length === 0) continue;
-    const declared = [...(site.config.collections[name]?.search?.filters ?? [])].sort(byCodePoint);
+    const declared = [...(site.config.collections[name]?.search?.filters ?? [])]
+      .filter((field) => isPublicReference(site.config.collections[name]?.public, field))
+      .sort(byCodePoint);
     const leftOut: string[] = [];
     for (const field of declared) {
       const values = countValues(ofCollection, field);
@@ -219,7 +224,9 @@ export function sortPlan(
     const ofCollection = records.filter((record) => record.collection === name);
     if (ofCollection.length === 0) continue;
     const entry: CollectionConfig | undefined = site.config.collections[name];
-    const declared = [...(entry?.search?.sort ?? [])].sort(byCodePoint);
+    const declared = [...(entry?.search?.sort ?? [])]
+      .filter((field) => isPublicReference(entry?.public, field))
+      .sort(byCodePoint);
     const kinds: Record<string, SortKind> = {};
     for (const field of declared) {
       const values = ofCollection.flatMap((record) => valuesOf(record.fields[field]));

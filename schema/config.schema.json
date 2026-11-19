@@ -1378,6 +1378,15 @@
           "$ref": "#/$defs/aggregate",
           "description": "Build this collection by grouping another collection's records. `source` names the collection to read; the summary is published like any other collection."
         },
+        "public": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The record fields every public output may publish, as dot paths such as `author.name`. A field not listed is left out of pages, search, feeds, downloads, and the API; the record keeps it internally. Absent publishes every field, and `id` is always public. Default: every field."
+        },
         "raw": {
           "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",
           "oneOf": [

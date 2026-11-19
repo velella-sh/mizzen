@@ -22,6 +22,7 @@ import { fieldsWithDerived } from "./derived.ts";
 import { withoutEvidence } from "./evidence/public.ts";
 import type { EvidenceClaims } from "./evidence/validate.ts";
 import { recordUrlsOf, type RecordUrlMap } from "./permalink.ts";
+import { publicFields, type PublicPolicy } from "./public.ts";
 import { relatedProps } from "./relations/query.ts";
 
 /** What one record page's directives read. */
@@ -48,6 +49,8 @@ export interface RecordScope {
   readonly derivedFields?: ReadonlySet<string>;
   /** The public claims that back this record's fields, when its collection names an evidence field. */
   readonly evidence?: EvidenceClaims;
+  /** Each collection's public-field policy, so a record selected from another collection is projected too. */
+  readonly publicPolicies?: Readonly<Record<string, PublicPolicy>>;
   /** The calendar dates are written in. */
   readonly calendar: Calendar;
   /** The page's language. */
@@ -287,7 +290,10 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
   const config = site.config.collections[record.collection];
   const localized = localizeFields(source.fields, page.lang, site.config.lang);
   const idFields = localized.fields["id"] === undefined ? { ...localized.fields, id: record.id } : localized.fields;
-  const fields = fieldsWithDerived({ fields: withoutEvidence(idFields, config?.evidence), derived: source.derived });
+  const fields = publicFields(
+    fieldsWithDerived({ fields: withoutEvidence(idFields, config?.evidence), derived: source.derived }),
+    config?.public,
+  );
   const prefix = prefixOfLang(site.config, page.lang);
   const links: Record<string, string> = {};
   for (const [field, collection] of Object.entries(referenceTargets(config))) {
@@ -312,7 +318,7 @@ export function recordPropsOf(site: Site, page: { readonly record?: PageRecord; 
     fields,
     links,
     ...relatedProps(site.collections, site.config, record.collection, fields, page.lang),
-    ...(source.derived === undefined ? {} : { derived: source.derived }),
+    ...(source.derived === undefined ? {} : { derived: publicFields(source.derived, config?.public) }),
     ...(record.views === undefined ? {} : { views: record.views }),
     ...(record.changes === undefined ? {} : { changes: record.changes }),
   };

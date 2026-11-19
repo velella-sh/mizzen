@@ -201,6 +201,7 @@ its help names the two accepted formats.
 | `data.seo-duplicate-description` | Record pages of one language share a description. The finding names five URLs and the count of the rest. | Build the description from a field that tells the records apart. |
 | `data.json-ld-type` | A collection's `seo.jsonLd` mapping has no `@type`, so its record pages get no structured data. | Add an `@type` such as `Product` to the mapping. |
 | `data.history-line` | A line in a collection's `data-changes/<name>.jsonl` cannot be read as a change event. | Fix the line, or run `mizzen data changes` to append the events again. |
+| `data.public-reference` | A published template, URL, SEO, search, index, API, or feed setting names a field the collection's `public` allowlist excludes. | Add the field to `public`, or stop referencing it in public output. |
 | `data.evidence-shape` | The `evidence` field is not a mapping of field names to claims, or a field's value is neither a claim nor a list of claims. | Write `evidence: <field>` and one claim mapping or a list of them. |
 | `data.evidence-field` | An evidence key names no top-level field of the record. | Use a field the record has. |
 | `data.evidence-claim` | A claim is not a mapping, or is missing a non-empty string `id`, `title`, or `url`. | Write all three as non-empty strings. |

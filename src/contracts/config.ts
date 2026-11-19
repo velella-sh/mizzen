@@ -654,6 +654,12 @@ export interface CollectionConfig {
   readonly index?: CollectionIndexConfig;
   /** The raw data published as JSON and CSV with a checksum file; `false` writes none. Default: written, every field. */
   readonly raw?: false | CollectionRawConfig;
+  /**
+   * The record fields every public output may publish, as dot paths such as `author.name`. A field not listed is left
+   * out of pages, search, feeds, downloads, and the API; the record keeps it internally. Absent publishes every field,
+   * and `id` is always public. Default: every field.
+   */
+  readonly public?: readonly string[];
   /** The change history of the collection's data, written by `mizzen data changes`. Default: none. */
   readonly changelog?: CollectionChangelogConfig;
   /**
