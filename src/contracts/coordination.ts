@@ -308,11 +308,13 @@ export interface CoordinationSubtaskResult {
   readonly transactions: readonly string[];
   /** Evidence references that support the result. */
   readonly evidence: readonly string[];
+  /** The unified diff for this subtask, or a reference when a caller keeps the diff elsewhere. */
+  readonly diff: string;
 }
 
 /** Why two results cannot be combined without a person or the parent deciding. */
 export interface CoordinationMergeConflict {
-  readonly kind: "same-file" | "stale-before" | "snapshot" | "missing-result" | "unknown-result";
+  readonly kind: "same-file" | "stale-before" | "snapshot" | "missing-result" | "unknown-result" | "duplicate-result";
   /** The subtask ids on both sides, sorted; one id for a missing or unknown result. */
   readonly subtasks: readonly string[];
   readonly file?: string;
