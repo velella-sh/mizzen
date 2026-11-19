@@ -1,5 +1,7 @@
 /** The contract of one MCP tool. A tool is one file in `src/mcp/tools/`; its name is the file name. */
 import type { ClientProfile } from "../contracts/clients.ts";
+import type { Stage } from "./runtime/errors.ts";
+import type { Runtime, Session } from "./runtime/operations.ts";
 import type { SiteState } from "./site.ts";
 
 /** A JSON Schema object describing a tool's input. */
@@ -24,6 +26,11 @@ export interface ToolContext {
   readonly signal: AbortSignal;
   /** The client detected from `initialize`, before this call ran; absent before a handshake. */
   readonly client?: ClientProfile;
+  /** Operations, sessions, and receipts this call belongs to. */
+  readonly runtime: Runtime;
+  readonly session: Session;
+  /** The client's progress token for this call, when it sent one. */
+  readonly progressToken?: string | number;
 }
 
 /** A tool's answer: text for the agent, optionally the same data as a structured value. */
@@ -41,7 +48,11 @@ export interface Tool<Input = Record<string, unknown>> {
   readonly inputSchema: InputSchema;
   /** Return false to leave the tool out of this server; absent means always registered. */
   readonly enabled?: (setup: ToolSetup) => boolean;
-  /** Longest this tool may run, in milliseconds, when the default call limit is too short (a tool that rebuilds the site). */
+  /** The stage this tool works in; its deadline is the stage's own, and it labels every failure. */
+  readonly stage?: Stage;
+  /** True when the tool reads session or operation state, so a changed site does not block it. */
+  readonly snapshotFree?: boolean;
+  /** Longest this tool may run, in milliseconds, when the stage limit is too short. */
   readonly timeoutMs?: number;
   readonly handler: (input: Input, ctx: ToolContext) => Promise<ToolResult>;
 }

@@ -1,4 +1,5 @@
 /** `search_docs`: ranked search over the built site's page text; returns pointers, never whole pages. */
+import { decodeCursor, encodeCursor } from "../runtime/cursors.ts";
 import { words } from "../pages.ts";
 import { json, type Tool } from "../tool.ts";
 
@@ -7,6 +8,7 @@ interface Input {
   readonly limit?: number;
   readonly language?: string;
   readonly version?: string;
+  readonly cursor?: string;
 }
 
 const EXCERPT = 200;
@@ -36,7 +38,7 @@ function excerptOf(text: string, terms: readonly string[]): string {
 export const tool: Tool<Input> = {
   name: "search_docs",
   description:
-    "Search the docs. Returns up to `limit` results with title, URL, an excerpt, and the source path; an empty list when nothing matches. Use get_page to read a result.",
+    "Search the docs. Returns up to `limit` results with title, URL, an excerpt, and the source path; an empty list when nothing matches. Use get_page to read a result. A bounded answer carries `nextCursor`; the cursor is only valid in the snapshot it was made in.",
   inputSchema: {
     type: "object",
     properties: {
@@ -44,13 +46,16 @@ export const tool: Tool<Input> = {
       limit: { type: "integer", minimum: 1, maximum: 50, description: "Most results to return (default 10)." },
       language: { type: "string", description: "Only pages in this language, such as `en` or `fa`." },
       version: { type: "string", description: "Only pages of this version folder, such as `v2`." },
+      cursor: { type: "string", description: "The `nextCursor` of the previous answer; it names the snapshot it was made in." },
     },
     required: ["query"],
     additionalProperties: false,
   },
-  async handler(input, { site }) {
+  async handler(input, { site, session }) {
     const terms = [...new Set(words(input.query))];
     const limit = input.limit ?? 10;
+    const key = [input.query, limit, input.language ?? "", input.version ?? ""];
+    const offset = input.cursor === undefined ? 0 : decodeCursor(input.cursor, session.snapshot, key);
     const base = site.site.config.base;
     const hits: { score: number; url: string; title: string; excerpt: string; source: string; lang: string }[] = [];
     if (terms.length > 0) {
@@ -80,7 +85,14 @@ export const tool: Tool<Input> = {
       }
     }
     hits.sort((a, b) => b.score - a.score || (a.url < b.url ? -1 : 1));
-    const results = hits.slice(0, limit).map(({ score: _score, ...rest }) => rest);
-    return json({ query: input.query, total: hits.length, results });
+    const slice = hits.slice(offset, offset + limit);
+    const results = slice.map(({ score: _score, ...rest }) => rest);
+    const next = offset + limit;
+    return json({
+      query: input.query,
+      total: hits.length,
+      results,
+      ...(next < hits.length ? { nextCursor: encodeCursor(session.snapshot, next, key) } : {}),
+    });
   },
 };
