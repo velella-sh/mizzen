@@ -124,10 +124,10 @@ Commands:
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   trace show <trace.json>   Print a recorded agent trace: task, snapshot, stages, and evidence
-  trace search <trace.json> Filter events by --stage, --file, --task, or --status
-  trace replay <trace.json> Check the recorded order, input hashes, and results; writes nothing
-  trace export <trace.json> Write or print only the authorized fields (--out <dir>)
-  trace handoff <trace.json> Print the state, changes, decisions, and remaining work
+  trace search <trace.json>  Filter events by --stage, --file, --task, or --status
+  trace replay <trace.json>  Check the recorded order, input hashes, and results; writes nothing
+  trace export <trace.json>  Write or print only the authorized fields (--out <dir>)
+  trace handoff <trace.json>  Print the state, changes, decisions, and remaining work
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   versions snapshot <vN> [dir]
