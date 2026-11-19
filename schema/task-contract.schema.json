@@ -1,0 +1,282 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/task-contract.schema.json",
+  "title": "Mizzen task contract",
+  "description": "A versioned task contract: the goal, the semantic scope, the input snapshot, the budget, the permissions, and the acceptance criteria. `parseTaskContract` in `src/tasks/contract.ts` validates against this schema, fills the defaults, and computes the snapshot id. Unknown versions and unknown fields are refused with their JSON Pointer. Parsing is local: no network, no model, no clock, no site read.",
+  "type": "object",
+  "required": [
+    "version",
+    "idempotencyKey",
+    "goal",
+    "scope",
+    "snapshot",
+    "budget",
+    "acceptance"
+  ],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The contract version. Only 1 exists."
+    },
+    "idempotencyKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "\\S",
+      "description": "The caller's key for one registration. Repeating it with the same content resolves to the same task; repeating it with different content is a conflict."
+    },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "\\S",
+      "description": "The task in one sentence. Surrounding whitespace is removed when parsed."
+    },
+    "scope": {
+      "$ref": "#/$defs/scope",
+      "description": "The pages, blocks, collections, symbols, and files the task may touch."
+    },
+    "snapshot": {
+      "$ref": "#/$defs/snapshot",
+      "description": "SHA-256 hashes of the effective content, data, config, and tooling. The snapshot id is derived from them."
+    },
+    "budget": {
+      "$ref": "#/$defs/budget",
+      "description": "Independent limits for context tokens, tool calls, and time."
+    },
+    "permissions": {
+      "$ref": "#/$defs/permissions",
+      "description": "Principals allowed to read, write, or run checks. Omitted means public read and no writes or checks."
+    },
+    "acceptance": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "$ref": "#/$defs/criterion"
+      },
+      "description": "Executable criteria: each names an existing check or explicitly requires human review."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "scope": {
+      "type": "object",
+      "description": "Semantic references the task may touch. At least one entry across the five lists is required.",
+      "properties": {
+        "pages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reference"
+          },
+          "uniqueItems": true,
+          "description": "Page URLs, source paths, or page ids."
+        },
+        "blocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/block"
+          },
+          "uniqueItems": true,
+          "description": "Block ids, such as `install-steps`."
+        },
+        "collections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/collection"
+          },
+          "uniqueItems": true,
+          "description": "Collection names, such as `blog`."
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/symbol"
+          },
+          "uniqueItems": true,
+          "description": "Exported symbol names, such as `build` or `Site.page`."
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/path"
+          },
+          "uniqueItems": true,
+          "description": "Files relative to the site root, with forward slashes."
+        }
+      },
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "required": ["content", "data", "config", "tooling"],
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/hash",
+          "description": "SHA-256 of the effective page content after includes and overrides."
+        },
+        "data": {
+          "$ref": "#/$defs/hash",
+          "description": "SHA-256 of the effective data the task may read."
+        },
+        "config": {
+          "$ref": "#/$defs/hash",
+          "description": "SHA-256 of the effective site configuration."
+        },
+        "tooling": {
+          "$ref": "#/$defs/hash",
+          "description": "SHA-256 of the engine and tool versions the task was planned with."
+        },
+        "id": {
+          "$ref": "#/$defs/hash",
+          "description": "SHA-256 over the four hashes. Omitted on input; the parser computes and verifies it."
+        }
+      },
+      "additionalProperties": false
+    },
+    "budget": {
+      "type": "object",
+      "required": ["contextTokens", "toolCalls", "timeMs"],
+      "properties": {
+        "contextTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Most estimated context tokens the task may use."
+        },
+        "toolCalls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Most tool calls the task may make."
+        },
+        "timeMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Most milliseconds the task may run."
+        }
+      },
+      "additionalProperties": false
+    },
+    "permissions": {
+      "type": "object",
+      "properties": {
+        "read": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/principal"
+          },
+          "uniqueItems": true,
+          "description": "Principals allowed to read the task; `*` means any. Default `[\"*\"]`."
+        },
+        "write": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/principal"
+          },
+          "uniqueItems": true,
+          "description": "Principals allowed to request writes for the task; `*` means any. Default `[]`."
+        },
+        "check": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/principal"
+          },
+          "uniqueItems": true,
+          "description": "Principals allowed to request checks for the task; `*` means any. Default `[]`."
+        }
+      },
+      "additionalProperties": false
+    },
+    "criterion": {
+      "type": "object",
+      "required": ["id", "statement"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+          "description": "Stable criterion id, unique in the task."
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "\\S",
+          "description": "What must be true. Surrounding whitespace is removed when parsed."
+        },
+        "check": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "\\S",
+          "description": "The id of an existing check that proves the criterion."
+        },
+        "review": {
+          "const": true,
+          "description": "Explicitly requires human review; the criterion is never proved automatically."
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["check"],
+          "properties": {
+            "check": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "review": false
+          }
+        },
+        {
+          "required": ["review"],
+          "properties": {
+            "check": false,
+            "review": {
+              "const": true
+            }
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "reference": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S",
+      "description": "A page URL, source path, or page id."
+    },
+    "block": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "A block id."
+    },
+    "collection": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "description": "A collection name."
+    },
+    "symbol": {
+      "type": "string",
+      "pattern": "^[A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*$",
+      "description": "An exported symbol name, optionally dotted."
+    },
+    "principal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "\\S",
+      "description": "A reader, writer, or checker identity; `*` means any."
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A SHA-256 digest as 64 lowercase hexadecimal characters."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "not": {
+        "pattern": "^([a-zA-Z]:)?[\\\\/]|(^|/)\\.\\.(/|$)|\\\\"
+      },
+      "description": "A relative path with forward slashes: no leading slash, drive letter, backslash, or `..` segment."
+    }
+  }
+}
