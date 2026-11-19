@@ -24,6 +24,8 @@ Commands:
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   data schema [dir]          Report the fields each schema added or removed since its recorded baseline
   data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
+  data explain <collection> <id> [dir]
+                            Explain one field's lineage (--field <path>, --json, --public)
   data transform [name] [dir]  Preview the records a collection's transform rules produce (--limit, --json)
   data transform-diff <baseline> <proposed> [dir]
                             Compare two rule versions on one input (--collection, --format, --check)
@@ -74,7 +76,9 @@ Options:
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure; for reproduce: preflight only
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
-  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for inputs inspect: print the report as JSON
+  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for data explain: print the versioned lineage report; for inputs inspect: print the report as JSON
+  --field <path>       For data explain: the field to trace, such as title or author.name
+  --public             For data explain: print only permitted metadata, with no values or internal paths
   --limit <n>          For data transform: records to show per collection (default: 5)
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
@@ -130,6 +134,7 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen data snapshot <name> [dir] --allow-dirty` | Records the last commit that touched a file collection, and its commit date, under `snapshots` in `mizzen.lock.json`; refuses a file with uncommitted changes unless `--allow-dirty`. See [Recorded snapshots](/data/snapshots/). |
 | `mizzen data schema [dir] --format text\|json` | Compares each collection's schema with the one its snapshot recorded in `mizzen.lock.json` and names the top-level fields it added or removed, with both versions and the schema file; a collection with no recorded schema is skipped. Read-only; exits `1` on a config, lock, or schema error. See [Recorded snapshots](/data/snapshots/). |
 | `mizzen data migrate [name] [dir]` | Previews moving each record to the current schema: it applies the collection's `schemaRenames`, validates every record, and prints a sample of the migrated records and each rejected one with its source line. Writes nothing; exits `1` on a config, schema, or source error. See [Recorded snapshots](/data/snapshots/). |
+| `mizzen data explain <collection> <id> [dir] --field <path> --json --public` | Explains one field: its versioned (`format: 1`) chain from the input hash and row, through schema renames, transform rules, joins, and aggregates, to the page URL and static API path. `--field` is required; a missing collection, record, or field exits `2` with a message. `--public` prints only permitted metadata and never a raw value, secret, or internal path, and is refused for a field the collection's `public` policy does not allow. Writes nothing. See [Field lineage](https://github.com/velella-sh/mizzen/blob/main/docs/lineage.md). |
 | `mizzen data transform [name] [dir] --limit <n> --json` | Previews the records each collection's `transform` rules produce: a sample per collection, every finding with its source line, and with `--json` the field-change events. It loads the site as a build does and writes nothing. Without a name it previews every collection that declares rules; `--limit` defaults to 5. Exits `1` on an error. See [Transforming data](https://github.com/velella-sh/mizzen/blob/main/docs/transform.md). |
 | `mizzen data transform-diff <baseline> <proposed> [dir] --collection <name> --format text\|json --check` | Runs two configs over the same collection input and reports records added, removed, or changed by id. Each field shows both values, with missing kept apart from null and type changes marked, and the step that last wrote it on each side or why none could be named. Transform and validation failures name their side and stage and mark the result incomplete; affected outputs come from the dependency graph. Both configs and the input are hashed, and unequal input hashes are a target error. Writes nothing. Exits `0` unchanged, `1` a change under `--check`, `2` an invalid target or failure. See [Transforming data](https://github.com/velella-sh/mizzen/blob/main/docs/transform.md). |
 | `mizzen data verify [dir]` | Compares each collection with the lock and prints the first differing record with its source position; exits `1` on a difference and never writes. |
