@@ -254,7 +254,7 @@ function pageVersionsOf(site: Site): ReadonlyMap<Page, string | null> {
 }
 
 /** The documentation build a pack was compiled from: engine version plus a hash over every doc page. */
-function buildIdentityOf(site: Site): PackBuild {
+export function buildIdentityOf(site: Site): PackBuild {
   const sources: Record<string, string> = {};
   for (const page of site.pages) {
     if (page.kind !== "doc") continue;

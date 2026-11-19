@@ -122,12 +122,19 @@ test("parseArgs: --request, pack formats, and conflicting options", () => {
 
   assert.equal("error" in parseArgs(["pack", "--request", "req.json", "--topic", "Install"]), true);
   assert.equal("error" in parseArgs(["pack", "--request", "req.json", "--budget", "6000"]), true);
+  assert.deepEqual(parseArgs(["pack", "site", "--task", "task.json"]), {
+    options: { command: "pack", root: "site", task: "task.json" },
+  });
+  assert.equal("error" in parseArgs(["pack", "--task", "task.json", "--request", "req.json"]), true);
+  assert.equal("error" in parseArgs(["pack", "--task", "task.json", "--topic", "Install"]), true);
+  assert.equal("error" in parseArgs(["build", "--task", "task.json"]), true);
   assert.equal("error" in parseArgs(["pack", "--format", "yaml"]), true);
   assert.equal("error" in parseArgs(["pack", "--format", "sarif"]), true);
   assert.equal("error" in parseArgs(["build", "--request", "req.json"]), true);
   assert.equal("error" in parseArgs(["pack", "--request"]), true);
 
   assert.ok(usage.includes("--request <file|->"), "the usage string documents --request");
+  assert.ok(usage.includes("--task <file>"), "the usage string documents --task");
   assert.ok(usage.includes("markdown or json for pack"), "the usage string documents the pack formats");
 });
 

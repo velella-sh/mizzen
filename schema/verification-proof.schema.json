@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mizzen verification proof",
+  "description": "One version 2 verification proof: task, snapshot, transaction, checks, outputs, human review, claims, scope, and references. No timestamps, local paths, or process ids.",
+  "type": "object",
+  "required": [
+    "claims",
+    "checks",
+    "humanReview",
+    "outputs",
+    "proofHash",
+    "references",
+    "scope",
+    "snapshot",
+    "task",
+    "transaction",
+    "verdict",
+    "version"
+  ],
+  "properties": {
+    "version": { "const": 2, "description": "The proof format. Version 1 is the edit proof." },
+    "task": { "$ref": "#/$defs/task" },
+    "snapshot": { "$ref": "#/$defs/snapshot" },
+    "transaction": { "$ref": "#/$defs/transaction" },
+    "checks": {
+      "type": "array",
+      "description": "Every bounded check, sorted by id; a planned check that did not run is present as `unrun`.",
+      "items": { "$ref": "#/$defs/check" }
+    },
+    "outputs": { "$ref": "#/$defs/outputs" },
+    "humanReview": { "$ref": "#/$defs/humanReview" },
+    "claims": {
+      "type": "array",
+      "description": "One claim per acceptance criterion, in criterion order.",
+      "items": { "$ref": "#/$defs/claim" }
+    },
+    "scope": { "$ref": "#/$defs/scope" },
+    "references": { "$ref": "#/$defs/references" },
+    "package": { "$ref": "#/$defs/package" },
+    "verdict": {
+      "enum": ["proved", "incomplete", "failed"],
+      "description": "What the evidence supports; never replaced by a success result."
+    },
+    "proofHash": {
+      "$ref": "#/$defs/hash",
+      "description": "SHA-256 of the canonical record without this field."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "A lowercase SHA-256."
+    },
+    "nullableHash": {
+      "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }],
+      "description": "A SHA-256, or null when the file was absent on that side."
+    },
+    "span": {
+      "type": "object",
+      "required": ["column", "endColumn", "endLine", "line"],
+      "properties": {
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endColumn": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "spanWithFile": {
+      "type": "object",
+      "required": ["column", "endColumn", "endLine", "file", "line"],
+      "properties": {
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endColumn": { "type": "integer", "minimum": 1 },
+        "file": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "planEntry": {
+      "type": "object",
+      "required": ["criterion", "expected", "fixture", "mode", "statement"],
+      "properties": {
+        "criterion": { "type": "string", "minLength": 1 },
+        "statement": { "type": "string", "minLength": 1 },
+        "mode": { "enum": ["check", "human"] },
+        "check": { "type": "string", "minLength": 1 },
+        "fixture": { "type": "string", "minLength": 1 },
+        "expected": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "task": {
+      "type": "object",
+      "required": ["criteria", "goal", "id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/hash" },
+        "goal": { "type": "string", "minLength": 1 },
+        "criteria": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/planEntry" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "required": ["config", "content", "data", "id", "tooling"],
+      "properties": {
+        "content": { "$ref": "#/$defs/hash" },
+        "data": { "$ref": "#/$defs/hash" },
+        "config": { "$ref": "#/$defs/hash" },
+        "tooling": { "$ref": "#/$defs/hash" },
+        "id": { "$ref": "#/$defs/hash" }
+      },
+      "additionalProperties": false
+    },
+    "change": {
+      "type": "object",
+      "required": ["after", "before", "path"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "before": { "$ref": "#/$defs/nullableHash" },
+        "after": { "$ref": "#/$defs/nullableHash" }
+      },
+      "additionalProperties": false
+    },
+    "transaction": {
+      "type": "object",
+      "required": ["base", "commit", "files", "id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/hash" },
+        "commit": { "type": "string", "minLength": 1 },
+        "base": { "type": "string", "minLength": 1 },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/change" } }
+      },
+      "additionalProperties": false
+    },
+    "limits": {
+      "type": "object",
+      "required": ["memoryMb", "network", "paths", "timeoutMs"],
+      "properties": {
+        "timeoutMs": { "type": "integer", "minimum": 0 },
+        "memoryMb": { "type": "integer", "minimum": 0 },
+        "network": { "enum": ["allow", "deny"] },
+        "paths": { "const": "sandbox" }
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "required": ["command", "commit", "criterion", "id", "limits", "outputHash", "snapshot", "status", "task"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "criterion": { "type": "string", "minLength": 1 },
+        "task": { "$ref": "#/$defs/hash" },
+        "snapshot": { "$ref": "#/$defs/hash" },
+        "commit": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["passed", "failed", "timed-out", "rejected", "unrun"] },
+        "command": { "type": "array", "items": { "type": "string" } },
+        "outputHash": { "$ref": "#/$defs/hash" },
+        "expectedHash": { "$ref": "#/$defs/hash" },
+        "limits": { "$ref": "#/$defs/limits" },
+        "span": { "$ref": "#/$defs/spanWithFile" },
+        "detail": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "difference": {
+      "type": "object",
+      "required": ["category", "path"],
+      "properties": {
+        "category": { "enum": ["inputs", "config", "tools", "environment", "outputs"] },
+        "path": { "type": "string" },
+        "before": { "type": "string" },
+        "after": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "outputs": {
+      "type": "object",
+      "required": ["actualHash", "expectedHash", "explained", "inputHash", "match", "tool", "unexplained"],
+      "properties": {
+        "inputHash": { "$ref": "#/$defs/hash" },
+        "tool": {
+          "type": "object",
+          "required": ["actual", "expected"],
+          "properties": {
+            "expected": { "type": "string" },
+            "actual": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "expectedHash": { "$ref": "#/$defs/hash" },
+        "actualHash": { "$ref": "#/$defs/hash" },
+        "match": { "type": "boolean" },
+        "explained": { "type": "array", "items": { "$ref": "#/$defs/difference" } },
+        "unexplained": { "type": "array", "items": { "$ref": "#/$defs/difference" } }
+      },
+      "additionalProperties": false
+    },
+    "humanReview": {
+      "type": "object",
+      "required": ["criteria", "status"],
+      "properties": {
+        "status": { "enum": ["not-required", "pending", "approved", "rejected"] },
+        "criteria": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "reviewer": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["hash", "kind", "path"],
+          "properties": {
+            "kind": { "const": "file" },
+            "path": { "type": "string", "minLength": 1 },
+            "hash": { "$ref": "#/$defs/hash" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["hash", "kind", "path"],
+          "properties": {
+            "kind": { "const": "record" },
+            "path": { "type": "string", "minLength": 1 },
+            "hash": { "$ref": "#/$defs/hash" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["hash", "kind", "path", "span"],
+          "properties": {
+            "kind": { "const": "span" },
+            "path": { "type": "string", "minLength": 1 },
+            "hash": { "$ref": "#/$defs/hash" },
+            "span": { "$ref": "#/$defs/span" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["id", "kind", "outputHash", "status"],
+          "properties": {
+            "kind": { "const": "check" },
+            "id": { "type": "string", "minLength": 1 },
+            "status": { "enum": ["passed", "failed", "timed-out", "rejected", "unrun"] },
+            "outputHash": { "$ref": "#/$defs/hash" }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["criterion", "kind", "status"],
+          "properties": {
+            "kind": { "const": "human" },
+            "criterion": { "type": "string", "minLength": 1 },
+            "status": { "enum": ["not-required", "pending", "approved", "rejected"] },
+            "reviewer": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "claim": {
+      "type": "object",
+      "required": ["criterion", "evidence", "id", "missing", "statement", "status"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "criterion": { "type": "string", "minLength": 1 },
+        "statement": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["proved", "failed", "unproven", "needs-review"] },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "missing": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "additionalProperties": false
+    },
+    "scope": {
+      "type": "object",
+      "required": ["allowed", "changes", "expected", "ok", "outOfScope", "unexpected"],
+      "properties": {
+        "allowed": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "expected": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "changes": { "type": "array", "items": { "$ref": "#/$defs/change" } },
+        "outOfScope": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "unexpected": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "ok": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "referenceIssue": {
+      "type": "object",
+      "required": ["code", "kind", "message", "ref"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["url", "block", "redirect"] },
+        "ref": { "type": "string", "minLength": 1 },
+        "message": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "references": {
+      "type": "object",
+      "required": ["changed", "invalid", "issues", "ok", "removed"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "removed": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "changed": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "invalid": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "issues": { "type": "array", "items": { "$ref": "#/$defs/referenceIssue" } }
+      },
+      "additionalProperties": false
+    },
+    "package": {
+      "type": "object",
+      "required": ["ci", "commit", "tarballSha256"],
+      "properties": {
+        "commit": { "type": "string", "minLength": 1 },
+        "tarballSha256": { "$ref": "#/$defs/hash" },
+        "ci": { "enum": ["passed", "failed", "unknown"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}
