@@ -255,11 +255,13 @@ function neighborsOf(graph: Graph, start: GraphNode, options: SelectOptions, nod
   return reached;
 }
 
-/** Every cycle in the selected subgraph, found by a three-colour depth-first walk. */
-function cyclesOf(ids: ReadonlySet<string>, edges: readonly ContextDependency[]): readonly (readonly string[])[] {
+/** Every cycle in the dependency walk, found by a three-colour depth-first walk. */
+function cyclesOf(edges: readonly ContextDependency[]): readonly (readonly string[])[] {
   const out = new Map<string, string[]>();
+  const ids = new Set<string>();
   for (const edge of edges) {
-    if (!ids.has(edge.from) || !ids.has(edge.to)) continue;
+    ids.add(edge.from);
+    ids.add(edge.to);
     out.set(edge.from, [...(out.get(edge.from) ?? []), edge.to]);
   }
   const colour = new Map<string, 0 | 1 | 2>();
@@ -312,11 +314,20 @@ export function selectFromGraph(
   const omitted: ContextOmission[] = [];
   const entries = entriesOf(graph, site, task, omitted);
   const maxNodes = Math.max(1, Math.floor(options.maxNodes ?? DEFAULT_CONTEXT_NODES));
-  const selected = new Map<string, ContextEntry>(entries.map((entry) => [entry.id, entry]));
+  const admitted = entries.slice(0, maxNodes);
+  for (const entry of entries.slice(maxNodes)) {
+    omitted.push({
+      ref: entry.id,
+      kind: entry.kind,
+      reason: "scope",
+      detail: `The closure stops at ${maxNodes} nodes; widen the task, or raise the closure cap to include \`${entry.label}\`.`,
+    });
+  }
+  const selected = new Map<string, ContextEntry>(admitted.map((entry) => [entry.id, entry]));
   const dependencies: ContextDependency[] = [];
   const edgesSeen = new Set<string>();
 
-  for (const entry of entries) {
+  for (const entry of admitted) {
     if (selected.size >= maxNodes) {
       omitted.push({
         ref: entry.id,
@@ -331,9 +342,17 @@ export function selectFromGraph(
     for (const reached of neighborsOf(graph, node, options, maxNodes - selected.size)) {
       const kind = entryKindOf(reached.node);
       const edgeKey = `${reached.edge.from}\u0000${reached.edge.to}\u0000${reached.edge.kind}`;
+      const dependency: ContextDependency = {
+        from: reached.edge.from,
+        to: reached.edge.to,
+        edge: reached.edge.kind,
+        reason: reasonOf(reached.edge.kind),
+        ...(reached.edge.pos === undefined ? {} : { pos: reached.edge.pos }),
+      };
       if (kind === undefined) {
         if (reached.edge.kind !== "contains" && !edgesSeen.has(edgeKey)) {
           edgesSeen.add(edgeKey);
+          dependencies.push(dependency);
           omitted.push({
             ref: reached.node.id,
             kind: "fragment",
@@ -343,13 +362,6 @@ export function selectFromGraph(
         }
         continue;
       }
-      const dependency: ContextDependency = {
-        from: reached.edge.from,
-        to: reached.edge.to,
-        edge: reached.edge.kind,
-        reason: reasonOf(reached.edge.kind),
-        ...(reached.edge.pos === undefined ? {} : { pos: reached.edge.pos }),
-      };
       if (!selected.has(reached.node.id)) {
         if (selected.size >= maxNodes) {
           omitted.push({
@@ -369,7 +381,7 @@ export function selectFromGraph(
     }
   }
 
-  const cycles = cyclesOf(new Set(selected.keys()), dependencies);
+  const cycles = cyclesOf(dependencies);
   for (const cycle of cycles) {
     omitted.push({
       ref: cycle.join(" -> "),
