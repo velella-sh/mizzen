@@ -16,7 +16,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
-import { sha256, storedPath, writeLock, type DataLock } from "../src/data/lock.ts";
+import { sha256, storedPath, writeLock, type DataLock, type LockedSource } from "../src/data/lock.ts";
 import { importInputs } from "../src/inputs/install.ts";
 import { manifestText, type PackManifest } from "../src/inputs/manifest.ts";
 import { packBytes, readPackage } from "../src/inputs/pack.ts";
@@ -100,6 +100,16 @@ test("a lock conflict names each input and changes nothing until it is accepted"
     const file = join(parent, "feed.mizzenpack");
     assert.equal((await exportTo(source, file)).code, 0);
     const destination = await pinnedSite(parent, "destination", "id,name\n2,Beta\n");
+    const destinationLock = JSON.parse(readFileSync(join(destination, "mizzen.lock.json"), "utf8")) as DataLock;
+    const extraction = {
+      source: "_data/products.ndjson",
+      query: "ndjson",
+      querySha256: sha256("ndjson"),
+      bytes: 0,
+      sha256: sha256(""),
+      records: 0,
+    };
+    await writeLock(destination, { ...destinationLock, extractions: { products: extraction } });
     const lockBefore = readFileSync(join(destination, "mizzen.lock.json"), "utf8");
     const newHash = sha256("id,name\n1,Alpha\n");
 
@@ -114,6 +124,7 @@ test("a lock conflict names each input and changes nothing until it is accepted"
     const accepted = await importInputs({ root: destination, file, accept: ["feed"] });
     assert.equal(accepted.code, 0, accepted.diagnostics.map((diagnostic) => diagnostic.message).join("\n"));
     assert.deepEqual(JSON.parse(readFileSync(join(destination, "mizzen.lock.json"), "utf8")).sources[FEED].sha256, newHash);
+    assert.deepEqual(JSON.parse(readFileSync(join(destination, "mizzen.lock.json"), "utf8")).extractions, { products: extraction });
     assert.equal(readFileSync(storedPath(destination, newHash), "utf8"), "id,name\n1,Alpha\n");
     assert.equal((await importInputs({ root: destination, file })).changed.length, 0);
   } finally {
@@ -252,6 +263,57 @@ test("a failure while activating the second input restores the first and leaves 
     } catch {
       // The folder was never created when the export failed first.
     }
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+
+test("import invalidates only extractions whose local source changed, including file-only packages", async () => {
+  const parent = scratch();
+  try {
+    for (const mixed of [false, true]) {
+      const root = join(parent, mixed ? "mixed" : "file-only");
+      const local = Buffer.from('{"id":"new"}\n');
+      const remote = Buffer.from("id,name\n1,Alpha\n");
+      const localHash = sha256(local);
+      const remoteHash = sha256(remote);
+      const inputs = [{ id: "items", source: "_data/items.ndjson", bytes: local.length, sha256: localHash }];
+      const blobs = new Map([[localHash, local]]);
+      const lockSources: Record<string, LockedSource> = {};
+      if (mixed) {
+        inputs.push({ id: "feed", source: FEED, bytes: remote.length, sha256: remoteHash });
+        blobs.set(remoteHash, remote);
+        lockSources[FEED] = { address: FEED, bytes: remote.length, sha256: remoteHash };
+      }
+      const manifest: PackManifest = {
+        format: 1,
+        inputs,
+        blobs: [...blobs].map(([digest, content]) => ({ sha256: digest, bytes: content.length })),
+        lock: { version: 1, sources: lockSources },
+      };
+      const file = join(parent, `${mixed ? "mixed" : "file-only"}.mizzenpack`);
+      writeFileSync(file, packBytes(manifest, blobs));
+
+      writeFiles(root, { "mizzen.yml": "collections: {}\n", "_data/items.ndjson": "old\n" });
+      const affected = {
+        source: "./_data/items.ndjson",
+        query: "ndjson",
+        querySha256: sha256("items-query"),
+        bytes: 0,
+        sha256: sha256(""),
+        records: 0,
+      };
+      const unrelated = { ...affected, source: "_data/other.ndjson", querySha256: sha256("other-query") };
+      await writeLock(root, { version: 1, sources: {}, extractions: { items: affected, other: unrelated } });
+
+      const result = await importInputs({ root, file, accept: ["items"] });
+      assert.equal(result.code, 0, result.diagnostics.map((diagnostic) => diagnostic.message).join("\n"));
+      assert.ok(result.changed.includes("mizzen.lock.json"), mixed ? "mixed import" : "file-only import");
+      const installed = JSON.parse(readFileSync(join(root, "mizzen.lock.json"), "utf8")) as DataLock;
+      assert.deepEqual(installed.extractions, { other: unrelated });
+      assert.equal(readFileSync(join(root, "_data/items.ndjson"), "utf8"), local.toString());
+    }
+  } finally {
     rmSync(parent, { recursive: true, force: true });
   }
 });

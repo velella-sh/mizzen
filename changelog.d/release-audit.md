@@ -1,0 +1,1 @@
+- Harden 0.2.5 data inputs and build reports: invalidate extraction locks for replaced sources while preserving unrelated entries, enforce stored API byte limits, prevent aggregate key collisions, accept valid SQL quoting, and fingerprint config rule values.

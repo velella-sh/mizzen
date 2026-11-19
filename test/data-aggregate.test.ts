@@ -339,6 +339,24 @@ test("#984 an aggregate record depends on its source collection and on the recor
   );
 });
 
+test("group keys cannot collide when a string contains the key separator", async () => {
+  await withSite(
+    {
+      "mizzen.yml":
+        "collections:\n  sales:\n    source: _data/sales.json\n  summary:\n    source: sales\n    aggregate:\n      by: [a, b]\n      metrics:\n        orders: { op: count }\n",
+      "_data/sales.json": JSON.stringify([
+        { id: "one", a: "x", b: "y\u0000s:z" },
+        { id: "two", a: "x\u0000s:y", b: "z" },
+      ]),
+    },
+    (_root, result) => {
+      assert.deepEqual(result.diagnostics, []);
+      assert.equal(rows(result).length, 2);
+      assert.deepEqual(rows(result).map((row) => row.fields["orders"]), [1, 1]);
+    },
+  );
+});
+
 test("#985 a list page and the static API publish the same summary counts", async () => {
   await withSite(
     {
@@ -361,5 +379,60 @@ test("#985 a list page and the static API publish the same summary counts", asyn
       );
       const eu = body.records.find((record) => record.id === "eu-web");
       assert.deepEqual({ region: eu?.["region"], channel: eu?.["channel"], orders: eu?.["orders"] }, { region: "eu", channel: "web", orders: 2 });    },
+  );
+});
+
+
+test("invalid group and metric values name their diagnostics instead of publishing a partial summary", async () => {
+  await withSite(
+    {
+      "mizzen.yml":
+        "collections:\n  sales:\n    source: _data/sales.json\n  summary:\n    source: sales\n    aggregate:\n      by: [group]\n      metrics:\n        total: { op: sum, field: amount }\n        distinct: { op: count-distinct, field: bad }\n        first: { op: min, field: amount }\n",
+      "_data/sales.json": JSON.stringify([
+        { id: "a", group: { nested: true }, amount: 1 },
+        { id: "b", group: "ok", amount: "not-a-number", bad: { nested: true } },
+        { id: "c", group: "ok", amount: 2 },
+      ]),
+    },
+    (_root, result) => {
+      assert.ok(errorIds(result.diagnostics).includes("data.aggregate-key"));
+      assert.ok(errorIds(result.diagnostics).includes("data.aggregate-number"));
+      assert.ok(errorIds(result.diagnostics).includes("data.aggregate-distinct"));
+      assert.ok(errorIds(result.diagnostics).includes("data.aggregate-bound"));
+      assert.equal(result.site.collections["summary"], undefined);
+    },
+  );
+
+  await withSite(
+    {
+      "mizzen.yml":
+        "collections:\n  events:\n    source: _data/events.json\n  summary:\n    source: events\n    aggregate:\n      by:\n        - { field: at, period: month, timezone: UTC }\n      metrics:\n        count: { op: count }\n",
+      "_data/events.json": JSON.stringify([{ id: "a", at: 42 }, { id: "b", at: "not-a-date" }]),
+    },
+    (_root, result) => {
+      assert.deepEqual(errorIds(result.diagnostics), ["data.aggregate-period", "data.aggregate-period"]);
+    },
+  );
+});
+
+test("contradictory aggregate rules and a missing filter reference date are rejected", async () => {
+  await withSite(
+    {
+      "mizzen.yml":
+        "collections:\n  sales:\n    source: _data/sales.yml\n  summary:\n    source: sales\n    id: region\n    aggregate:\n      by:\n        - { field: region, period: month, timezone: Mars/Olympus }\n        - region\n      metrics:\n        region: { op: count }\n        bad: { op: sum }\n",
+      "_data/sales.yml": SALES,
+    },
+    (_root, result) => {
+      for (const id of ["data.aggregate-id-field", "data.aggregate-by", "data.aggregate-timezone", "data.aggregate-metric-name", "data.aggregate-metric-field"]) {
+        assert.ok(errorIds(result.diagnostics).includes(id), id);
+      }
+    },
+  );
+
+  await withSite(
+    site("      by: [region]\n      where: { date: { before: reference } }\n      metrics:\n        orders: { op: count }\n"),
+    (_root, result) => {
+      assert.ok(errorIds(result.diagnostics).includes("data.aggregate-reference"));
+    },
   );
 });

@@ -55,7 +55,7 @@
     },
     "config": {
       "type": "object",
-      "description": "The effective configuration: one hash of every resolved value, the reference date, and the rules that shape output. No config value is written.",
+      "description": "The effective configuration: one hash of every resolved value, the reference date, output switches, and SHA-256 fingerprints of the rules that shape output. No rule value is written.",
       "required": ["sha256", "rules"],
       "additionalProperties": false,
       "properties": {
@@ -67,7 +67,7 @@
         },
         "rules": {
           "type": "object",
-          "description": "The rule-bearing configuration: defaults, redirects, output switches, collection transforms and derived rules, quality rules, feeds, and calendars. It never holds a token or credential.",
+          "description": "Rule-bearing configuration with sensitive values removed: defaults name only their keys; collection and quality rules and redirect destinations are SHA-256 fingerprints. Output switches and feed and calendar names are listed.",
           "required": ["defaults", "redirects", "outputs", "collections", "feeds", "calendars"],
           "additionalProperties": false,
           "properties": {
@@ -86,8 +86,8 @@
             },
             "redirects": {
               "type": "object",
-              "description": "Redirect map from an old path to its destination.",
-              "additionalProperties": { "type": "string" }
+              "description": "Redirect map from an old path to the SHA-256 fingerprint of its destination.",
+              "additionalProperties": { "$ref": "#/$defs/hash" }
             },
             "outputs": {
               "type": "object",
@@ -96,16 +96,23 @@
             },
             "collections": {
               "type": "object",
-              "description": "Per-collection rules that change records: transforms, derived values, and the configured reference date.",
+              "description": "Per-collection SHA-256 fingerprints of transforms and derived rules, plus the configured reference date.",
               "additionalProperties": {
                 "type": "object",
-                "additionalProperties": true
+                "additionalProperties": false,
+                "properties": {
+                  "transform": { "$ref": "#/$defs/fingerprint" },
+                  "derived": {
+                    "type": "object",
+                    "additionalProperties": { "$ref": "#/$defs/hash" }
+                  },
+                  "referenceDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                }
               }
             },
             "quality": {
-              "type": "object",
-              "description": "The configured data-quality rules, exceptions, and policy, when the site declares them.",
-              "additionalProperties": true
+              "$ref": "#/$defs/fingerprint",
+              "description": "The SHA-256 fingerprint of the configured data-quality rules, exceptions, and policy, when the site declares them."
             },
             "feeds": {
               "type": "array",
@@ -169,6 +176,14 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
       "description": "SHA-256 of the bytes, as 64 lowercase hexadecimal characters."
+    },
+    "fingerprint": {
+      "type": "object",
+      "required": ["sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "sha256": { "$ref": "#/$defs/hash" }
+      }
     },
     "fileMap": {
       "type": "object",

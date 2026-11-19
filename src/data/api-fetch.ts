@@ -417,8 +417,12 @@ export async function fetchApiSource(options: ApiFetchOptions): Promise<ApiFetch
   }
 
   const text = `${JSON.stringify(records, null, 2)}\n`;
+  const bytes = new TextEncoder().encode(text);
+  if (bytes.byteLength > options.limits.bytes) {
+    return failure("data.api-source-too-large", `Collection "${options.collection}" stores ${bytes.byteLength} bytes; the limit is ${options.limits.bytes}.`, `Raise collections.${options.collection}.limits.bytes, or split the API.`);
+  }
   return {
-    bytes: new TextEncoder().encode(text),
+    bytes,
     pages,
     records: records.length,
     ...(fetchedAt === undefined ? {} : { fetchedAt }),

@@ -173,7 +173,7 @@ function keyText(part: KeyPart): string {
   if (part.kind === "missing") return "null";
   if (typeof part.value === "number") return `n:${String(part.value)}`;
   if (typeof part.value === "boolean") return `b:${String(part.value)}`;
-  return `s:${part.value}`;
+  return `s:${JSON.stringify(part.value)}`;
 }
 
 /** The readable part of an aggregate id. */
