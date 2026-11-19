@@ -146,7 +146,7 @@ export function createServer(options: ServerOptions): Server {
       readonly extra?: Record<string, unknown>;
     } = {},
   ): unknown {
-    const text = scrub(message, siteFolders());
+    const text = publicMessage(message, siteFolders());
     const failure = failureOf(code, text, {
       stage: options.stage ?? "read",
       ...(options.retryable === undefined ? {} : { retryable: options.retryable }),

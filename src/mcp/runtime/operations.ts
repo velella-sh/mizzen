@@ -153,6 +153,7 @@ export class Session {
     this.id = internal.file.id;
     this.token = token;
     this.protocolVersion = protocolVersion;
+    this.modern = protocolVersion >= "2025-06-18";
   }
 
   /** The MCP protocol version this session negotiated. */

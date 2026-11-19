@@ -24,7 +24,7 @@ export interface Harness {
   readonly site: SiteState;
   readonly server: Server;
   /** Calls a tool and returns its decoded JSON answer (or the raw text when it is not JSON) with the error flag. */
-  call(name: string, args?: Record<string, unknown>): Promise<{ data: any; text: string; isError: boolean }>;
+  call(name: string, args?: Record<string, unknown>, meta?: Record<string, unknown>): Promise<{ data: any; text: string; isError: boolean }>;
   /** Sends one JSON-RPC request and returns its response. */
   rpc(method: string, params?: Record<string, unknown>): Promise<any>;
   close(): Promise<void>;
@@ -42,8 +42,8 @@ export async function harness(root: string, options: { allowEdits?: boolean; lim
     site,
     server,
     rpc,
-    async call(name, args = {}) {
-      const response: any = await rpc("tools/call", { name, arguments: args });
+    async call(name, args = {}, meta) {
+      const response: any = await rpc("tools/call", { name, arguments: args, ...(meta === undefined ? {} : { _meta: meta }) });
       const result = response.result;
       const text: string = result?.content?.[0]?.text ?? "";
       let data: unknown = text;
