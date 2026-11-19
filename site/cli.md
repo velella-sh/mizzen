@@ -11,6 +11,14 @@ Mizzen installs one command, `mizzen`.
 Usage: mizzen <command> [dir] [options]
 
 Commands:
+  agent capabilities        Print versioned JSON capabilities: task, pack, edit, verify, replay, eval
+  agent schema [name]       Print a command's input schema, output schema, and exit codes
+  agent task register [dir]  Register a task from --file <path> or --stdin
+  agent task preview [dir]  Show proposed changes, required checks, and affected outputs; writes nothing
+  agent task run <id> [dir]  Compile a task; --dry-run previews, --events <file> writes JSON Lines
+  agent task status <id> [dir]  Print a task, its last run, and its approvals
+  agent task resume <id> [dir]  Resume a waiting or blocked task; --approve <ids|all>
+  agent task cancel <id> [dir]  Cancel a task; --reason <text>
   api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
@@ -140,6 +148,14 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 
 | Command | What it does |
 | --- | --- |
+| `mizzen agent capabilities` | Prints one versioned (`1`) JSON document listing `task`, `pack`, `edit`, `verify`, `replay`, and `eval`. An available capability names its public commands; an unavailable one (`eval`) names a fallback instead of pretending. Writes nothing. |
+| `mizzen agent schema [name]` | Prints a command's public CLI shape, its draft 2020-12 input and output schemas, and exit codes. Without a name it lists every documented command; an unknown name exits `2`. Writes nothing. |
+| `mizzen agent task register [dir] --file <path>\|--stdin` | Reads a versioned task contract from exactly one source and writes `.mizzen/agent/tasks/<id>.json`, where the id is the SHA-256 of the contract's `idempotencyKey`. The same key and content return the existing task without writing; the same key with different content is a conflict (exit `1`); an invalid field is named by JSON Pointer and nothing is written (exit `2`). |
+| `mizzen agent task preview [dir] --file <path>\|--stdin` | Compiles the contract's context and prints the scope references it may change, the checks and reviews its acceptance criteria require, the affected output URLs, and the token estimate. Writes no state and changes no project file. |
+| `mizzen agent task run <id> [dir] --dry-run --format json\|text\|ndjson --events <file>` | Compiles the registered task's context, records its cost and budget, emits ordered versioned events (`start`, `progress`, `approval-required`, `finish`, `failure`), and moves it to `waiting` for unapproved review or `verify` when prepared. A repeated run returns the recorded result; `--dry-run` writes nothing; `--events` writes the events as JSON Lines. |
+| `mizzen agent task status <id> [dir]` | Prints the task document, its last run result, and its recorded approvals as one JSON document. A missing id exits `1`; nothing is written. |
+| `mizzen agent task resume <id> [dir] --approve <ids\|all>` | Moves a `waiting` or `blocked` task back to `ready`, optionally recording human-review approvals. A finished task refuses with the same `task.transition` problem every time (exit `1`). |
+| `mizzen agent task cancel <id> [dir] --reason <text>` | Moves a task to `canceled` and keeps its events; a repeated cancel on a finished task returns the same conflict (exit `1`). |
 | `mizzen api check [dir] --against <folder\|ref>` | Builds the site and compares its data API with the one at `--against`, a built folder or a git ref; exits `1` when a collection, a field, or a version is gone or a field changed type, and prints the file, the field, and a fix. Added fields pass. |
 | `mizzen build [dir] --out <dir> --theme <dir>` | Builds `dir` (default `.`) into `--out` (default `dist`). Prints diagnostics as text. A build with an error still writes the site and exits `1`. |
 | `mizzen build [dir] --diagnose` | Writes `.mizzen/build-report.json`: a versioned record of the lock, data, and content inputs, the effective config hash, rules, and reference date, the Mizzen, Node, and theme versions, the time zone and locale, and every publishable output file with its relative path and SHA-256. Moving the checkout changes nothing. See [Diagnose and reproduce builds](https://github.com/velella-sh/mizzen/blob/main/docs/reproduce.md). |

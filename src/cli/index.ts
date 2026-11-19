@@ -53,6 +53,7 @@ import { compareReports, reproduce } from "./reproduce.ts";
 import { BUILD_REPORT_PATH, buildReportOf, writeBuildReport } from "../reproduce/manifest.ts";
 import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 import { traceEditApply, traceVerification } from "../trace/instrument.ts";
+import { runAgent } from "../agent-cli/index.ts";
 import { readinessCommand, type ReadinessCommandOptions } from "./readiness.ts";
 import { formatReadiness, formatReadinessJson, readinessReport } from "../readiness/report.ts";
 import { scanBuild } from "../readiness/scan.ts";
@@ -63,7 +64,7 @@ import type { ReadinessDimension } from "../contracts/readiness.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -101,6 +102,14 @@ const SIBLING_THEME = siblingThemeRoot(import.meta.url);
 export const usage = `Usage: ${NAME} <command> [dir] [options]
 
 Commands:
+  agent capabilities        Print versioned JSON capabilities: task, pack, edit, verify, replay, eval
+  agent schema [name]       Print a command's input schema, output schema, and exit codes
+  agent task register [dir]  Register a task from --file <path> or --stdin
+  agent task preview [dir]  Show proposed changes, required checks, and affected outputs; writes nothing
+  agent task run <id> [dir]  Compile a task; --dry-run previews, --events <file> writes JSON Lines
+  agent task status <id> [dir]  Print a task, its last run, and its approvals
+  agent task resume <id> [dir]  Resume a waiting or blocked task; --approve <ids|all>
+  agent task cancel <id> [dir]  Cancel a task; --reason <text>
   api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
@@ -452,6 +461,11 @@ type TraceOpts = {
   readonly args: readonly string[];
 };
 
+type AgentOpts = {
+  readonly command: "agent";
+  readonly args: readonly string[];
+};
+
 type GraphOpts = {
   readonly command: "graph";
   readonly args: readonly string[];
@@ -592,6 +606,7 @@ type Parsed =
         | GraphOpts
         | StaleOpts
         | TraceOpts
+        | AgentOpts
         | VersionsOpts;
     };
 
@@ -1529,6 +1544,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "trace", args: rest } };
   }
+  if (command === "agent") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "agent", args: rest } };
+  }
   if (command === "graph") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "graph", args: rest } };
@@ -1937,6 +1956,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "trace") {
     try {
       return await runTrace(options.args, { write, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "agent") {
+    try {
+      return await runAgent(options.args, { log, write, error, ...(io.readStdin === undefined ? {} : { readStdin: io.readStdin }) });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
