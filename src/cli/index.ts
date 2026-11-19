@@ -164,7 +164,7 @@ Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
   --diagnose           For build: write .mizzen/build-report.json after the build
-  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for compare, reproduce, data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for compare, reproduce, readiness, data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
   --domain <host>      The one host published-site check may request (default: the sitemap's host)
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
@@ -185,7 +185,7 @@ Options:
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
   --report             For build: print why each page was rebuilt after a warm build
-  --report <file>      For data refresh: write the structured report here
+  --report <file>      For data refresh: write the structured report here; for readiness: write the versioned JSON report
   --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --task <file>        JSON task contract for pack; compiles task-aware context against the site
