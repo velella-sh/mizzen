@@ -98,6 +98,8 @@ export interface EvalCaseInputs {
   readonly input?: string;
   /** A public handoff document, relative to the suite. */
   readonly handoff?: string;
+  /** The parent split request a coordination case hands to the splitter, relative to the suite. */
+  readonly split?: string;
 }
 
 /** One recorded edit: the span the agent chose, the text it expected, and its replacement. */

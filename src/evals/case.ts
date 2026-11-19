@@ -205,6 +205,13 @@ export function parseEvalCase(value: unknown): EvalCaseParseResult {
         message: "A `verification` case needs `inputs.proof` and the verifier's `inputs.input`.",
       });
     }
+    if (parsed.capability === "conflict" && parsed.inputs?.split === undefined) {
+      problems.push({
+        path: "/inputs/split",
+        code: "eval.missing-input",
+        message: "A `conflict` case needs the overlapping subtasks to split in `inputs.split`.",
+      });
+    }
     if (parsed.capability === "handoff" && parsed.inputs?.handoff === undefined) {
       problems.push({
         path: "/inputs/handoff",

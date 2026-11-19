@@ -58,9 +58,9 @@ test("the built package runs the reference suite offline and writes no fixture",
     assert.equal(run.status, 0, run.stderr);
     const report = JSON.parse(run.stdout) as EvalReport;
     assert.equal(report.totals.cases, 10);
-    assert.equal(report.totals.passed, 9);
+    assert.equal(report.totals.passed, 10);
     assert.equal(report.totals.invalid, 0);
-    assert.equal(report.totals.unavailable, 1);
+    assert.equal(report.totals.unavailable, 0);
     assert.equal(report.gate.passed, true);
     assert.deepEqual(hashes(checkout), before, "the suite wrote no file and no receipt");
 

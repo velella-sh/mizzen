@@ -22,15 +22,11 @@
         "version": "1"
       },
       {
+        "name": "coordination",
+        "version": "1"
+      },
+      {
         "name": "edit",
-        "version": "1"
-      },
-      {
-        "name": "transaction",
-        "version": "1"
-      },
-      {
-        "name": "verification",
         "version": "1"
       },
       {
@@ -39,6 +35,14 @@
       },
       {
         "name": "permission",
+        "version": "1"
+      },
+      {
+        "name": "transaction",
+        "version": "1"
+      },
+      {
+        "name": "verification",
         "version": "1"
       }
     ]

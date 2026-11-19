@@ -4,36 +4,117 @@
   "title": "Mizzen evaluation case",
   "description": "One versioned agent evaluation case: its goal, fixture, snapshot, permissions, budget, criteria, pinned tools, and the outcome a correct agent produces. `parseEvalCase` in `src/evals/case.ts` validates against this schema, checks the cross-field rules, and reports every problem with a JSON Pointer. A case that names no expected outcome must give an `unavailable` reason instead.",
   "type": "object",
-  "required": ["version", "id", "title", "capability", "goal", "fixture", "snapshot", "permissions", "budget", "criteria", "tools"],
+  "required": [
+    "version",
+    "id",
+    "title",
+    "capability",
+    "goal",
+    "fixture",
+    "snapshot",
+    "permissions",
+    "budget",
+    "criteria",
+    "tools"
+  ],
   "additionalProperties": false,
   "properties": {
-    "version": { "const": 1, "description": "The case format version. Only 1 exists." },
-    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$", "maxLength": 120, "description": "Stable id, unique in the suite." },
-    "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "version": {
+      "const": 1,
+      "description": "The case format version. Only 1 exists."
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "maxLength": 120,
+      "description": "Stable id, unique in the suite."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
     "capability": {
-      "enum": ["discovery", "answer", "context", "edit", "transaction", "verification", "handoff", "conflict", "permission"],
+      "enum": [
+        "discovery",
+        "answer",
+        "context",
+        "edit",
+        "transaction",
+        "verification",
+        "handoff",
+        "conflict",
+        "permission"
+      ],
       "description": "The capability this case measures; it must equal `expected.kind`."
     },
-    "goal": { "type": "string", "minLength": 1, "maxLength": 1000, "description": "What the agent is asked to do, in one sentence." },
-    "fixture": { "$ref": "#/$defs/relativePath", "description": "The site fixture folder, relative to the suite." },
-    "snapshot": { "type": "string", "minLength": 1, "maxLength": 120, "description": "The fixture snapshot label this case was written for." },
+    "goal": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "description": "What the agent is asked to do, in one sentence."
+    },
+    "fixture": {
+      "$ref": "#/$defs/relativePath",
+      "description": "The site fixture folder, relative to the suite."
+    },
+    "snapshot": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "The fixture snapshot label this case was written for."
+    },
     "permissions": {
       "type": "object",
-      "required": ["read", "write", "check"],
+      "required": [
+        "read",
+        "write",
+        "check"
+      ],
       "additionalProperties": false,
       "properties": {
-        "read": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-        "write": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-        "check": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+        "read": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "write": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "check": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
       }
     },
     "budget": {
       "type": "object",
-      "required": ["maxTokens", "maxToolCalls"],
+      "required": [
+        "maxTokens",
+        "maxToolCalls"
+      ],
       "additionalProperties": false,
       "properties": {
-        "maxTokens": { "type": "integer", "minimum": 1 },
-        "maxToolCalls": { "type": "integer", "minimum": 1 }
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxToolCalls": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "criteria": {
@@ -42,11 +123,21 @@
       "maxItems": 4,
       "items": {
         "type": "object",
-        "required": ["id", "statement"],
+        "required": [
+          "id",
+          "statement"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$" },
-          "statement": { "type": "string", "minLength": 1, "maxLength": 500 }
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+          },
+          "statement": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
         }
       }
     },
@@ -54,11 +145,20 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["name", "version"],
+        "required": [
+          "name",
+          "version"
+        ],
         "additionalProperties": false,
         "properties": {
-          "name": { "type": "string", "minLength": 1 },
-          "version": { "type": "string", "minLength": 1 }
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "version": {
+            "type": "string",
+            "minLength": 1
+          }
         }
       }
     },
@@ -66,25 +166,67 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "agent": { "$ref": "#/$defs/relativePath" },
-        "policy": { "$ref": "#/$defs/relativePath" },
-        "transaction": { "$ref": "#/$defs/relativePath" },
-        "proof": { "$ref": "#/$defs/relativePath" },
-        "input": { "$ref": "#/$defs/relativePath" },
-        "handoff": { "$ref": "#/$defs/relativePath" }
+        "agent": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "policy": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "transaction": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "proof": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "input": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "handoff": {
+          "$ref": "#/$defs/relativePath"
+        },
+        "split": {
+          "$ref": "#/$defs/relativePath"
+        }
       }
     },
-    "expected": { "$ref": "#/$defs/expectation" },
-    "unavailable": { "type": "string", "minLength": 1, "maxLength": 500, "description": "Why the capability cannot be evaluated yet. A case with a reason is never scored as a pass." }
+    "expected": {
+      "$ref": "#/$defs/expectation"
+    },
+    "unavailable": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "description": "Why the capability cannot be evaluated yet. A case with a reason is never scored as a pass."
+    }
   },
   "allOf": [
     {
-      "if": { "required": ["unavailable"] },
-      "then": { "not": { "required": ["expected"] } }
+      "if": {
+        "required": [
+          "unavailable"
+        ]
+      },
+      "then": {
+        "not": {
+          "required": [
+            "expected"
+          ]
+        }
+      }
     },
     {
-      "if": { "not": { "required": ["unavailable"] } },
-      "then": { "required": ["expected"] }
+      "if": {
+        "not": {
+          "required": [
+            "unavailable"
+          ]
+        }
+      },
+      "then": {
+        "required": [
+          "expected"
+        ]
+      }
     }
   ],
   "$defs": {
@@ -95,67 +237,181 @@
     },
     "span": {
       "type": "object",
-      "required": ["line", "column", "endLine", "endColumn"],
+      "required": [
+        "line",
+        "column",
+        "endLine",
+        "endColumn"
+      ],
       "additionalProperties": false,
       "properties": {
-        "line": { "type": "integer", "minimum": 1 },
-        "column": { "type": "integer", "minimum": 1 },
-        "endLine": { "type": "integer", "minimum": 1 },
-        "endColumn": { "type": "integer", "minimum": 1 }
+        "line": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "column": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endColumn": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "expectation": {
       "oneOf": [
         {
           "type": "object",
-          "required": ["kind", "pages", "symbols"],
+          "required": [
+            "kind",
+            "pages",
+            "symbols"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "discovery" },
-            "pages": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            "symbols": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+            "kind": {
+              "const": "discovery"
+            },
+            "pages": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "symbols": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
           }
         },
         {
           "type": "object",
-          "required": ["kind", "answer", "citations", "forbidden"],
+          "required": [
+            "kind",
+            "answer",
+            "citations",
+            "forbidden"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "answer" },
-            "answer": { "type": "string", "minLength": 1 },
-            "citations": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            "forbidden": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+            "kind": {
+              "const": "answer"
+            },
+            "answer": {
+              "type": "string",
+              "minLength": 1
+            },
+            "citations": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "forbidden": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
           }
         },
         {
           "type": "object",
-          "required": ["kind", "evidence", "pages", "maxPages"],
+          "required": [
+            "kind",
+            "evidence",
+            "pages",
+            "maxPages"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "context" },
-            "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            "pages": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            "maxPages": { "type": "integer", "minimum": 1 }
+            "kind": {
+              "const": "context"
+            },
+            "evidence": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "pages": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "maxPages": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         },
         {
           "type": "object",
-          "required": ["kind", "path", "spans", "after", "unchanged"],
+          "required": [
+            "kind",
+            "path",
+            "spans",
+            "after",
+            "unchanged"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "edit" },
-            "path": { "$ref": "#/$defs/relativePath" },
-            "spans": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/span" } },
-            "after": { "type": "string" },
+            "kind": {
+              "const": "edit"
+            },
+            "path": {
+              "$ref": "#/$defs/relativePath"
+            },
+            "spans": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/span"
+              }
+            },
+            "after": {
+              "type": "string"
+            },
             "unchanged": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["path", "text"],
+                "required": [
+                  "path",
+                  "text"
+                ],
                 "additionalProperties": false,
                 "properties": {
-                  "path": { "$ref": "#/$defs/relativePath" },
-                  "text": { "type": "string", "minLength": 1 }
+                  "path": {
+                    "$ref": "#/$defs/relativePath"
+                  },
+                  "text": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 }
               }
             }
@@ -163,63 +419,171 @@
         },
         {
           "type": "object",
-          "required": ["kind", "outcome", "invariant", "attempted", "changed"],
+          "required": [
+            "kind",
+            "outcome",
+            "invariant",
+            "attempted",
+            "changed"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "transaction" },
-            "outcome": { "enum": ["applied", "rejected"] },
-            "invariant": { "type": ["string", "null"] },
-            "attempted": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            "changed": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+            "kind": {
+              "const": "transaction"
+            },
+            "outcome": {
+              "enum": [
+                "applied",
+                "rejected"
+              ]
+            },
+            "invariant": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "attempted": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "changed": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
           }
         },
         {
           "type": "object",
-          "required": ["kind", "verdict"],
+          "required": [
+            "kind",
+            "verdict"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "verification" },
-            "verdict": { "enum": ["proved", "failed"] }
+            "kind": {
+              "const": "verification"
+            },
+            "verdict": {
+              "enum": [
+                "proved",
+                "failed"
+              ]
+            }
           }
         },
         {
           "type": "object",
-          "required": ["kind", "nextAction", "applied", "remaining", "duplicateRefused"],
+          "required": [
+            "kind",
+            "nextAction",
+            "applied",
+            "remaining",
+            "duplicateRefused"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "handoff" },
-            "nextAction": { "type": "string", "minLength": 1 },
-            "applied": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            "remaining": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            "duplicateRefused": { "type": "boolean" }
+            "kind": {
+              "const": "handoff"
+            },
+            "nextAction": {
+              "type": "string",
+              "minLength": 1
+            },
+            "applied": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "remaining": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "duplicateRefused": {
+              "type": "boolean"
+            }
           }
         },
         {
           "type": "object",
-          "required": ["kind", "overlap", "resolution"],
+          "required": [
+            "kind",
+            "overlap",
+            "resolution"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "conflict" },
-            "overlap": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
-            "resolution": { "enum": ["rejected", "approved"] }
+            "kind": {
+              "const": "conflict"
+            },
+            "overlap": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            },
+            "resolution": {
+              "enum": [
+                "rejected",
+                "approved"
+              ]
+            }
           }
         },
         {
           "type": "object",
-          "required": ["kind", "attempts"],
+          "required": [
+            "kind",
+            "attempts"
+          ],
           "additionalProperties": false,
           "properties": {
-            "kind": { "const": "permission" },
+            "kind": {
+              "const": "permission"
+            },
             "attempts": {
               "type": "array",
               "minItems": 1,
               "items": {
                 "type": "object",
-                "required": ["capability", "target"],
+                "required": [
+                  "capability",
+                  "target"
+                ],
                 "additionalProperties": false,
                 "properties": {
-                  "capability": { "enum": ["read", "write", "execute", "network", "publish"] },
-                  "target": { "type": "string", "minLength": 1 }
+                  "capability": {
+                    "enum": [
+                      "read",
+                      "write",
+                      "execute",
+                      "network",
+                      "publish"
+                    ]
+                  },
+                  "target": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 }
               }
             }

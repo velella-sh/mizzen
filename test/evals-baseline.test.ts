@@ -18,8 +18,8 @@ test("a report compared with itself has no changes", async () => {
   assert.equal(comparison.comparable, true);
   assert.deepEqual(comparison.reasons, []);
   assert.deepEqual(comparison.regressed, []);
-  assert.ok(comparison.cases.filter((item) => item.status === "unchanged").length >= 9);
-  assert.ok(comparison.cases.some((item) => item.status === "incomparable" && item.id === "conflict.overlap"));
+  assert.equal(comparison.cases.filter((item) => item.status === "unchanged").length, 10);
+  assert.ok(comparison.cases.every((item) => item.status !== "incomparable"));
 });
 
 test("a lower score regresses and a higher score improves, per case", async () => {

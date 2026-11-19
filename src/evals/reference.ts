@@ -20,7 +20,9 @@ import type {
   EvalVerificationOutput,
 } from "../contracts/evals.ts";
 import type { InteractionSession } from "../contracts/interaction.ts";
-import { caseFacts, casePath } from "./pins.ts";
+import { splitSubtasks } from "../coordination/index.ts";
+import { registerTask } from "../tasks/register.ts";
+import { caseFacts, casePath, evalTask } from "./pins.ts";
 import { applyEditTransaction, parseEditTransaction, EditTransactionError } from "../edits/edit-transaction.ts";
 import { resumeHandoff, applyInteractionEdit } from "../interaction/index.ts";
 import { independentlyVerify } from "../verification/verify.ts";
@@ -229,12 +231,56 @@ async function permissionOutput(input: EvalRunnerInput): Promise<EvalAgentOutput
   return { ...output, permission: output.permission ?? { attempts: [] as EvalAccessAttempt[] } };
 }
 
+/** Splits two agents' overlapping claims and reports whether the split refused the overlap. */
+async function conflictOutput(input: EvalRunnerInput): Promise<EvalAgentOutput> {
+  const file = casePath(input.suiteRoot, input.case.inputs?.split ?? "");
+  const document = JSON.parse(await readFile(file, "utf8")) as { subtasks?: unknown };
+  const subtasks = Array.isArray(document.subtasks) ? document.subtasks : [];
+  const facts = await caseFacts(input.case, input.suiteRoot);
+  const registered = registerTask(evalTask(input.case, facts.pins.fixture, facts.pins.config));
+  if (registered.task === undefined) {
+    throw new Error(registered.problems.map((problem) => problem.message).join(" "));
+  }
+  const result = splitSubtasks(registered.task, subtasks);
+
+  const owners = new Map<string, Set<string>>();
+  for (const [index, value] of subtasks.entries()) {
+    if (typeof value !== "object" || value === null) continue;
+    const record = value as Record<string, unknown>;
+    const owner = String(record.owner ?? index);
+    const scope = record.scope as Record<string, unknown> | undefined;
+    for (const kind of ["pages", "blocks", "symbols", "records", "files"] as const) {
+      const refs = Array.isArray(scope?.[kind]) ? (scope?.[kind] as unknown[]) : [];
+      for (const ref of refs) {
+        const key = String(ref);
+        const holders = owners.get(key) ?? new Set<string>();
+        holders.add(owner);
+        owners.set(key, holders);
+      }
+    }
+  }
+  const overlap = [...owners].filter(([, holders]) => holders.size > 1).map(([ref]) => ref).sort();
+  const rejected = result.plan === undefined && result.problems.some((problem) => problem.code === "coordination.scope-duplicate");
+  const output = emptyOutput(estimate(JSON.stringify(document)), estimate(JSON.stringify(overlap)));
+  return {
+    ...output,
+    conflict: {
+      detected: overlap.length > 0 && rejected,
+      overlap,
+      resolution: rejected ? "rejected" : result.plan === undefined ? "none" : "approved",
+    },
+    toolCalls: [call("coordination", true)],
+    trace: { toolCalls: 1, inputTokens: output.usage.inputTokens, outputTokens: output.usage.outputTokens },
+  };
+}
+
 /** The reference adapter. */
 export const referenceRunner: EvalRunner = {
   id: "reference",
   version: "1",
   tools: [
     { name: "context", version: TOOL_VERSION },
+    { name: "coordination", version: TOOL_VERSION },
     { name: "edit", version: TOOL_VERSION },
     { name: "transaction", version: TOOL_VERSION },
     { name: "verification", version: TOOL_VERSION },
@@ -254,7 +300,7 @@ export const referenceRunner: EvalRunner = {
       case "permission":
         return permissionOutput(input);
       case "conflict":
-        throw new Error("a conflict case is unavailable without a coordination module");
+        return conflictOutput(input);
       default:
         return recorded(casePath(input.suiteRoot, input.case.inputs?.agent ?? ""));
     }

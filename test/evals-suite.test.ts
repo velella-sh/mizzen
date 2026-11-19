@@ -15,13 +15,16 @@ test("the reference suite is deterministic and green except its recorded gap", a
   const second = await runEvalSuite({ suite: SUITE });
 
   assert.equal(first.report.totals.cases, 10);
-  assert.equal(first.report.totals.passed, 9);
+  assert.equal(first.report.totals.passed, 10);
   assert.equal(first.report.totals.failed, 0);
   assert.equal(first.report.totals.invalid, 0);
-  assert.equal(first.report.totals.unavailable, 1);
+  assert.equal(first.report.totals.unavailable, 0);
   assert.equal(first.report.gate.passed, true);
-  assert.deepEqual(first.report.gate.unavailable, ["conflict.overlap"]);
-  assert.equal(first.report.cases.find((item) => item.id === "conflict.overlap")?.unavailable?.includes("coordination"), true);
+  assert.deepEqual(first.report.gate.unavailable, []);
+  const conflict = first.report.cases.find((item) => item.id === "conflict.overlap");
+  assert.equal(conflict?.status, "passed");
+  assert.equal(conflict?.components.success, 1);
+  assert.equal(conflict?.unavailable, undefined);
 
   assert.deepEqual(second.report, first.report, "two runs on the same pins give the same bytes");
   assert.equal(JSON.stringify(first.report), JSON.stringify(second.report));

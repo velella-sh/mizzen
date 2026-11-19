@@ -65,6 +65,8 @@ function scopePagesOf(value: EvalCase): readonly string[] {
       return [expected.path];
     case "transaction":
       return expected.attempted;
+    case "conflict":
+      return expected.overlap;
     default:
       return [];
   }
