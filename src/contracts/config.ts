@@ -541,6 +541,23 @@ export interface JoinConfig {
   readonly many?: JoinMany;
 }
 
+/** How a local SQLite source is read. `docs/db-input.md` states every default and diagnostic. */
+export interface SqliteSourceConfig {
+  /** A read-only query whose rows become the collection's records. */
+  readonly query: string;
+  /** Identifier the lock records for the query. Default: the collection name. */
+  readonly id?: string;
+  /** Fixed values bound to the query's `?` placeholders, in order. */
+  readonly params?: readonly (string | number | null)[];
+  /** Column that holds each row's id. Default: the collection's `id`, else `id`. */
+  readonly key?: string;
+  /** Further columns that order the rows, ascending. Ties fall back to the key. Default `[]`. */
+  readonly order?: readonly string[];
+  /** What to do with a binary (BLOB) value: write base64, or reject it with the column name. Default `base64`. */
+  readonly binary?: "base64" | "error";
+
+}
+
 /** One data collection: where its records come from, and how its pages are built. */
 /** How an aggregate groups one field: by value, or by the month or year of a date. */
 export interface AggregateGroupConfig {
@@ -582,6 +599,8 @@ export interface AggregateConfig {
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root; the source collection's name on an aggregate. */
   readonly source: string;
+  /** How a `.sqlite`, `.sqlite3`, or `.db` source is queried. */
+  readonly sqlite?: SqliteSourceConfig;
   /**
    * Dot path to the record array inside a JSON API response, such as `data.items`. Setting it marks the source as a
    * JSON API: `mizzen data fetch` stores the records as one list, and a build reads that list. Default: the source is

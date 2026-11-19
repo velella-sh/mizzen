@@ -30,9 +30,57 @@
       "additionalProperties": {
         "$ref": "#/$defs/snapshot"
       }
+    },
+    "extractions": {
+      "type": "object",
+      "description": "Locked SQLite and NDJSON results, keyed by collection name. A build reads the stored result, never the source.",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/extraction"
+      }
     }
   },
   "$defs": {
+    "extraction": {
+      "type": "object",
+      "description": "One locked extraction: the query id and the hash of the result a build reads.",
+      "required": ["source", "query", "querySha256", "bytes", "sha256", "records"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The collection's source as the config writes it."
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The query id: `sqlite.id` for SQLite, `ndjson` for NDJSON."
+        },
+        "querySha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the query and its fixed parameters."
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Byte size of the stored result."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "SHA-256 of the stored result."
+        },
+        "records": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of records in the result."
+        }
+      }
+    },
     "snapshot": {
       "type": "object",
       "description": "Where a collection was recorded from. Nothing in it is read from the build clock.",

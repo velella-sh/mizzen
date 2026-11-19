@@ -1,0 +1,8 @@
+title: SQLite catalog
+collections:
+  products:
+    source: _data/products.sqlite
+    id: sku
+    sqlite:
+      query: SELECT sku, name, price, released FROM products
+      id: catalog-products

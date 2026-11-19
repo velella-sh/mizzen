@@ -63,6 +63,7 @@ Commands:
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   compare <a> <b>           Compare two build diagnostic reports
+  data extract [dir]        Lock local SQLite and NDJSON collection results (--check verifies only)
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data refresh [dir]        Fetch selected sources, validate, and write a review report (--collections, --report)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
@@ -170,6 +171,7 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen reproduce <report> [dir] --check --out <dir> --theme <dir>` | Checks the report's inputs and tool versions before building; a missing input or incompatible Mizzen, Node, or theme version stops with the reason. Then builds without the cache, writes a fresh report to `.mizzen/build-report.json`, and compares it with the recorded one. `--check` stops after preflight; exits `1` when the output hashes differ. |
 | `mizzen check [dir] --format text\|json\|sarif --theme <dir>` | Builds into a temporary folder, prints only the diagnostics in the chosen format, and removes the folder. Exits `1` on an error. |
 | `mizzen data changes [name] [dir] --write --check` | Lists what changed in a collection since the state in `data-changes/`; `--write` appends the events, and `--check` fails when the data changed without an entry. |
+| `mizzen data extract [dir] --check` | Extracts every local SQLite query and NDJSON collection, stores the result under `.mizzen/data/`, and records its hash in `mizzen.lock.json`; `--check` verifies without writing. A missing or stale extraction is reported at build time. |
 | `mizzen data fetch [dir] --check` | Fetches every `https:` collection source, stores it under `.mizzen/data/`, and writes `mizzen.lock.json`; `--check` compares without writing. |
 | `mizzen data refresh [dir] --collections <a,b> --report <file>` | Fetches the selected sources, validates them, and writes a `mizzen-refresh/1` report with counts, changed record ids, and the failed stage. |
 | `mizzen data quality [dir] --json --write` | Checks the config's `quality` rules against the collections: a record missing a field, a field's coverage dropping more than `maxDrop` percentage points, or a collection losing more than `maxDrop` records since `data-quality.json`. `--write` records the current data as that baseline; `--json` prints every finding grouped by collection and rule kind. Exits `1` on a diagnostic or a finding marked as an error by its rule's `severity` or the policy. |

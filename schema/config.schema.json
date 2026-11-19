@@ -998,6 +998,10 @@
           "minLength": 1,
           "description": "Data file the records are read from, relative to the site root; on an aggregate collection, the name of the collection it summarizes."
         },
+        "sqlite": {
+          "$ref": "#/$defs/sqlite",
+          "description": "How a .sqlite, .sqlite3, or .db source is queried. See docs/db-input.md."
+        },
         "records": {
           "type": "string",
           "pattern": "^[^\\s.]+(?:\\.[^\\s.]+)*$",
@@ -1437,7 +1441,108 @@
           },
           "description": "A compact JSON index of the collection's records for the theme, written under data/."
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["source"],
+            "properties": {
+              "source": {
+                "type": "string",
+                "pattern": "\\.(?:sqlite|sqlite3|db)$",
+                "description": "A local SQLite database file."
+              }
+            }
+          },
+          "then": {
+            "required": ["sqlite"],
+            "properties": {
+              "sqlite": {
+                "$ref": "#/$defs/sqlite",
+                "description": "Query settings for a SQLite source."
+              },
+              "records": { "description": "Not supported for a SQLite source." },
+              "pagination": { "description": "Not supported for a SQLite source." }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["source"],
+            "properties": {
+              "source": {
+                "type": "string",
+                "pattern": "\\.(?:ndjson|jsonl)$",
+                "description": "A local newline-delimited JSON file."
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "sqlite": { "description": "Not supported for an NDJSON source." },
+              "records": { "description": "Not supported for an NDJSON source." },
+              "pagination": { "description": "Not supported for an NDJSON source." }
+            }
+          }
+        },
+        {
+          "if": { "required": ["sqlite"] },
+          "then": {
+            "properties": {
+              "source": {
+                "type": "string",
+                "pattern": "\\.(?:sqlite|sqlite3|db)$",
+                "description": "A local SQLite database file."
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sqlite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["query"],
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A read-only SQL statement whose rows become the collection's records. A write statement is refused."
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier the lock records for the query. Default: the collection name."
+        },
+        "params": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              { "type": "string" },
+              { "type": "number" },
+              { "type": "null" }
+            ]
+          },
+          "description": "Fixed values bound to the query's ? placeholders, in order. Default []."
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Column that holds each row's id. Default: collections.<name>.id, else id."
+        },
+        "order": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Further columns that order the rows, ascending; ties fall back to the key. Default []."
+        },
+        "binary": {
+          "enum": ["base64", "error"],
+          "default": "base64",
+          "description": "Write a BLOB as base64, or reject it with the column name. Default base64."
+        }
+      },
+      "description": "How a local SQLite source is read: the query, its fixed parameters, and the row's identity and order."
     },
     "aggregate": {
       "description": "Build this collection by grouping another collection's records. `source` names the collection to read; the summary is published like any other collection.",

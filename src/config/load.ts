@@ -4,6 +4,7 @@ import { basename, join, relative, resolve } from "node:path";
 import type { ErrorObject } from "ajv";
 import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
 import { checkAsOf } from "../dates/as-of.ts";
+import { readQueryProblem } from "../data/sqlite-query.ts";
 import {
   isMap,
   isScalar,
@@ -64,7 +65,7 @@ import type {
   SourcePos,
   ThemeConfig,
 } from "../contracts/index.ts";
-import type { ApiAuthConfig, CollectionTransformConfig, PaginationConfig, PaginationMode, PaginationStop, TransformCastTarget, TransformStepConfig } from "../contracts/config.ts";
+import type { ApiAuthConfig, CollectionTransformConfig, PaginationConfig, PaginationMode, PaginationStop, SqliteSourceConfig, TransformCastTarget, TransformStepConfig } from "../contracts/config.ts";
 import { publicReferenceDiagnostics, publicReferencesIn } from "../data/public.ts";
 
 /** The site config file name. */
@@ -219,6 +220,7 @@ export function loadConfigText(source: string, file: string, folderTitle: string
   diagnostics.push(...publicDiagnostics(raw, collections, apiConfig, file, doc, lineCounter));
   diagnostics.push(...apiFetchDiagnostics(raw, collections, file, doc, lineCounter));
   diagnostics.push(...joinDiagnostics(collections, file, doc, lineCounter));
+  diagnostics.push(...sqliteDiagnostics(raw, collections, file, doc, lineCounter));
 
   return { config: applyDefaults(raw, folderTitle), diagnostics };
 }
@@ -595,6 +597,33 @@ function apiFetchDiagnostics(
   return found;
 }
 
+/** Findings about a `sqlite` block the schema cannot see: whether its query is one read statement. */
+function sqliteDiagnostics(
+  raw: Record<string, unknown>,
+  collections: Readonly<Record<string, CollectionConfig>>,
+  file: string,
+  doc: Document.Parsed,
+  lineCounter: LineCounter,
+): Diagnostic[] {
+  const found: Diagnostic[] = [];
+  for (const [name, entry] of Object.entries(raw.collections ?? {})) {
+    if (!isPlainObject(entry) || !isPlainObject(entry.sqlite)) continue;
+    const sqlite = collections[name]?.sqlite;
+    if (sqlite === undefined) continue;
+    const problem = readQueryProblem(sqlite.query);
+    if (problem === undefined) continue;
+    const pair = getMapPair(doc, ["collections", name, "sqlite", "query"]);
+    found.push({
+      id: "config.sqlite-query",
+      severity: "error",
+      message: `Collection "${name}" names a SQLite query that is not one read statement: ${problem}.`,
+      pos: posFromNode(file, lineCounter, isNode(pair?.value) ? pair.value : doc.contents),
+      help: "Write one SELECT (or WITH … SELECT) statement; a read-only extraction refuses writes.",
+    });
+  }
+  return found;
+}
+
 function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteConfig {
   const lang = typeof raw.lang === "string" && raw.lang.length >= 2 ? raw.lang : "en";
   const dir: Direction =
@@ -915,8 +944,10 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
     const derived = derivedFrom(entry.derived);
     const aggregate = aggregateFrom(entry.aggregate);
     const pagination = paginationFrom(entry.pagination);
+    const sqlite = sqliteFrom(entry.sqlite);
     collections[name] = {
       source: entry.source,
+      ...(sqlite === undefined ? {} : { sqlite }),
       ...(typeof entry.records === "string" && entry.records !== "" ? { records: entry.records } : {}),
       ...(pagination === undefined ? {} : { pagination }),
       ...(typeof entry.id === "string" ? { id: entry.id } : {}),
@@ -1454,6 +1485,26 @@ function authFrom(value: unknown): ApiAuthConfig | undefined {
     env: value.env,
     ...(typeof value.header === "string" && value.header !== "" ? { header: value.header } : {}),
     ...(typeof value.prefix === "string" ? { prefix: value.prefix } : {}),
+  };
+}
+
+/** A collection's `sqlite` block as the contract holds it; `undefined` when it declares none. */
+function sqliteFrom(value: unknown): SqliteSourceConfig | undefined {
+  if (!isPlainObject(value) || typeof value.query !== "string" || value.query === "") return undefined;
+  const params = Array.isArray(value.params)
+    ? value.params.filter((param): param is string | number | null =>
+        param === null || typeof param === "string" || (typeof param === "number" && Number.isFinite(param)))
+    : undefined;
+  const order = Array.isArray(value.order)
+    ? value.order.filter((field): field is string => typeof field === "string" && field !== "")
+    : undefined;
+  return {
+    query: value.query,
+    ...(typeof value.id === "string" && value.id !== "" ? { id: value.id } : {}),
+    ...(params === undefined ? {} : { params }),
+    ...(typeof value.key === "string" && value.key !== "" ? { key: value.key } : {}),
+    ...(order === undefined || order.length === 0 ? {} : { order }),
+    ...(value.binary === "base64" || value.binary === "error" ? { binary: value.binary } : {}),
   };
 }
 
