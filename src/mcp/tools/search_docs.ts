@@ -54,7 +54,7 @@ export const tool: Tool<Input> = {
     const base = site.site.config.base;
     const hits: { score: number; url: string; title: string; excerpt: string; source: string; lang: string }[] = [];
     if (terms.length > 0) {
-      for (const info of site.pages) {
+      for (const info of site.readablePages) {
         const { page } = info;
         if (input.language !== undefined && page.lang.toLowerCase() !== input.language.toLowerCase()) continue;
         if (input.version !== undefined) {

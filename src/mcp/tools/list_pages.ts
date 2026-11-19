@@ -37,7 +37,7 @@ export const tool: Tool<Input> = {
     const limit = input.limit ?? 50;
     const offset = input.cursor === undefined ? 0 : Number(input.cursor);
     if (!Number.isInteger(offset) || offset < 0) throw new McpError("bad-cursor", "The cursor is not one this server gave.");
-    const byUrl = new Map(site.pages.map((info) => [info.page.url, info] as const));
+    const byUrl = new Map(site.readablePages.map((info) => [info.page.url, info] as const));
     let entries: Entry[];
     if (input.view === "nav") {
       entries = [];
@@ -56,7 +56,7 @@ export const tool: Tool<Input> = {
       };
       for (const name of Object.keys(site.site.nav).sort()) walk(site.site.nav[name]!, 0);
     } else {
-      entries = site.pages.map((info) => ({ url: info.page.url, title: info.page.title, source: info.source }));
+      entries = site.readablePages.map((info) => ({ url: info.page.url, title: info.page.title, source: info.source }));
     }
     if (input.prefix !== undefined) entries = entries.filter((e) => e.url.startsWith(input.prefix!));
     if (input.language !== undefined) {

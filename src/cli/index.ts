@@ -468,6 +468,7 @@ type McpOpts = {
   readonly theme?: string;
   readonly allowEdits: boolean;
   readonly printConfig?: string;
+  readonly policy?: string;
 };
 
 type ImportOpts = {
@@ -1171,11 +1172,16 @@ function parseMcp(args: readonly string[]): Parsed {
   let theme: string | undefined;
   let allowEdits = false;
   let printConfig: string | undefined;
+  let policy: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "-h" || arg === "--help") return { help: true };
     if (arg === "--allow-edits") allowEdits = true;
-    else if (arg === "--theme" || arg === "--print-config") {
+    else if (arg === "--policy") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--policy needs a file" };
+      policy = next;
+    } else if (arg === "--theme" || arg === "--print-config") {
       const next = args[++i];
       if (next === undefined || next.startsWith("-")) return { error: `${arg} needs a value` };
       if (arg === "--theme") theme = next;
@@ -1187,7 +1193,7 @@ function parseMcp(args: readonly string[]): Parsed {
     else if (root === undefined) root = arg;
     else return { error: `unexpected argument: ${arg}` };
   }
-  return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
+  return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }), ...(policy === undefined ? {} : { policy }) } };
 }
 
 /** Parses `import <name> [dir] [--out <dir>] [--fail-on-manual] [--allow <ids>]`. */
@@ -1602,7 +1608,22 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         error(`${NAME}: no theme found; set theme.name in the config or pass --theme`);
         return 2;
       }
-      return await serveMcp({ root, themeRoot, allowEdits: options.allowEdits, version, defaultLayout: DEFAULT_LAYOUT }, (message) => process.stderr.write(`${message}\n`));
+      const loaded = options.policy === undefined ? undefined : await readAccessPolicyFile(options.policy);
+      if (loaded !== undefined && loaded.policy === undefined) {
+        for (const problem of loaded.problems) error(`${NAME}: ${problem}`);
+        return 2;
+      }
+      return await serveMcp(
+        {
+          root,
+          themeRoot,
+          allowEdits: options.allowEdits,
+          version,
+          defaultLayout: DEFAULT_LAYOUT,
+          ...(loaded?.policy === undefined ? {} : { access: loaded.policy }),
+        },
+        (message) => process.stderr.write(`${message}\n`),
+      );
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;

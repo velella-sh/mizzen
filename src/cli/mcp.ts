@@ -1,5 +1,6 @@
 /** `mizzen mcp`: serve one site to an AI client over MCP on stdio, or print the client's configuration for it. */
 import { fileURLToPath } from "node:url";
+import type { AccessPolicy } from "../contracts/permissions.ts";
 import { createServer } from "../mcp/server.ts";
 import { loadTools } from "../mcp/registry.ts";
 import { declaresCollections, SiteState } from "../mcp/site.ts";
@@ -33,6 +34,8 @@ export interface McpOptions {
   readonly allowEdits: boolean;
   readonly version: string;
   readonly defaultLayout?: string;
+  /** The access policy every tool call is held to; absent means public read only. */
+  readonly access?: AccessPolicy;
 }
 
 /** Serves the site on stdin and stdout until stdin ends. Logs go to `log` (stderr), never to stdout. */
@@ -43,6 +46,7 @@ export async function serveMcp(options: McpOptions, log: (message: string) => vo
     root: options.root,
     themeRoot: options.themeRoot,
     ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
+    ...(options.access === undefined ? {} : { access: options.access }),
   });
   try {
     log(`mizzen mcp: serving ${registry.tools.length} tools${options.allowEdits ? " (edits allowed)" : " (read-only)"}`);
