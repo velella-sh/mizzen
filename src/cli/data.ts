@@ -13,6 +13,7 @@ import { fetchApiSource, isFetchableUrl, type ApiPage } from "../data/api-fetch.
 import { loadCollections } from "../data/collections.ts";
 import { extractSite } from "../data/extract.ts";
 import { dataLimitsOf } from "../data/limits.ts";
+import { explain, LINEAGE_FORMAT, type LineageReport } from "../data/lineage.ts";
 import { LOCK_FILE, canonicalJson, readLock, sha256, storedPath, writeLock, type DataLock, type LockedExtraction, type LockedSource } from "../data/lock.ts";
 import { resolveNpmSource } from "../data/package-source.ts";
 import { compileSchemas, schemaSnapshotOf, type CompiledSchemas } from "../data/schema.ts";
@@ -511,6 +512,107 @@ export interface DataTransformResult {
   readonly output: string;
   /** Problems, printed to stderr. */
   readonly errors: readonly string[];
+}
+
+/** Options of {@link dataExplain}. */
+export interface DataExplainOptions {
+  /** The site root: the folder that holds `mizzen.yml`. */
+  readonly root: string;
+  /** The collection to explain. */
+  readonly collection: string;
+  /** The record id. */
+  readonly id: string;
+  /** The field path, such as `title` or `author.name`. */
+  readonly field: string;
+  /** Print the versioned report as JSON. */
+  readonly json?: boolean;
+  /** Print only permitted metadata: no values, secrets, or internal paths. */
+  readonly public?: boolean;
+}
+
+/** What {@link dataExplain} found, ready for the CLI to print. */
+export interface DataExplainResult {
+  /** 0 when the target was found, 1 for a config or load error, 2 for a missing target. */
+  readonly code: number;
+  /** The readable report or the JSON document. */
+  readonly output: string;
+  /** Problems, printed to stderr. */
+  readonly errors: readonly string[];
+}
+
+/** The source an event read, as a person reads it; a public report leaves the internal path out. */
+function lineageInputText(event: { readonly input: { readonly collection: string; readonly source?: string; readonly row?: number; readonly page?: number; readonly sha256?: string } }, isPublic: boolean): string {
+  const parts = [event.input.collection];
+  if (!isPublic && event.input.source !== undefined) parts[0] = `${event.input.collection} ${event.input.source}`;
+  if (event.input.row !== undefined) parts.push(`row ${event.input.row}`);
+  if (event.input.page !== undefined) parts.push(`page ${event.input.page}`);
+  if (event.input.sha256 !== undefined) parts.push(`sha256 ${event.input.sha256.slice(0, 12)}`);
+  return parts.join(", ");
+}
+
+/** One report as readable lines, without values when it is public. */
+function lineageText(report: LineageReport, isPublic: boolean): string {
+  const lines = [`lineage ${report.collection}/${report.record} ${report.field} (format ${LINEAGE_FORMAT})`];
+  if (!isPublic) lines.push(`value: ${JSON.stringify(report.value)}`);
+  if (report.generated) lines.push("generated: yes");
+  if (report.snapshot?.ref !== undefined) lines.push(`snapshot: ${report.snapshot.ref}`);
+  report.chain.forEach((event, index) => {
+    const extra: string[] = [];
+    if (event.reason !== undefined) extra.push(event.reason);
+    if (event.contributors !== undefined) extra.push(`${event.contributors} input${event.contributors === 1 ? "" : "s"}`);
+    if (event.rule !== undefined) extra.push(`rule ${event.rule}`);
+    if (event.output !== undefined) extra.push(`${event.output.kind} ${event.output.path}`);
+    lines.push(
+      `${index + 1}. ${event.stage} ${event.op} ${event.field}${event.from === undefined ? "" : ` <- ${event.from}`} [${lineageInputText(event, isPublic)}]${extra.length === 0 ? "" : ` (${extra.join("; ")})`}`,
+    );
+  });
+  if (report.summarized) lines.push(`summarized: ${report.omitted} earlier stage${report.omitted === 1 ? "" : "s"} omitted`);
+  if (report.outputs.length === 0) lines.push("outputs: none");
+  return `${lines.join("\n")}\n`;
+}
+
+/**
+ * Explains one published field: its versioned chain from the raw source to the page and API paths. It loads the site
+ * as a build does and writes nothing; a missing collection, record, or field is reported by name.
+ */
+export async function dataExplain(options: DataExplainOptions): Promise<DataExplainResult> {
+  const { config, diagnostics: configDiagnostics } = loadConfig(options.root);
+  const configErrors = configDiagnostics.filter((finding) => finding.severity === "error");
+  if (configErrors.length > 0) {
+    return { code: 1, output: "", errors: configErrors.map(previewLine) };
+  }
+  if (config.collections[options.collection] === undefined) {
+    return { code: 2, output: "", errors: [`the site has no collection "${options.collection}"`] };
+  }
+  const events: TransformEvent[] = [];
+  const loaded = await loadCollections({
+    root: options.root,
+    config,
+    onTransformEvent: (event) => events.push(event),
+  });
+  const collection = loaded.collections[options.collection];
+  if (collection === undefined) {
+    const failures = loaded.diagnostics.filter((finding) => finding.severity === "error").map(previewLine);
+    return {
+      code: 2,
+      output: "",
+      errors: [`collection "${options.collection}" did not load`, ...failures],
+    };
+  }
+  const pinned = await readLock(options.root);
+  const result = await explain(collection, options.id, options.field, {
+    root: options.root,
+    config,
+    collections: loaded.collections,
+    transformEvents: events,
+    lock: pinned.lock,
+    ...(options.public === true ? { public: true } : {}),
+  });
+  if (!result.ok) return { code: 2, output: "", errors: [result.error] };
+  const output = options.json === true
+    ? `${JSON.stringify(result.report, null, 2)}\n`
+    : lineageText(result.report, options.public === true);
+  return { code: 0, output, errors: [] };
 }
 
 /** One collection's preview. */

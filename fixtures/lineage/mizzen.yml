@@ -1,0 +1,25 @@
+title: Lineage sample
+collections:
+  catalog:
+    source: _data/catalog.yml
+    id: sku
+    template: _templates/catalog.md
+    permalink: /catalog/{sku}/
+    public: [sku, title, price, stock]
+    schemaRenames:
+      title: name
+    transform:
+      steps:
+        - id: cents
+          op: unit
+          field: price
+          factor: 100
+    join:
+      type: left
+      key: sku
+      sources:
+        - collection: inventory
+          fields: {stock: stock}
+  inventory:
+    source: _data/inventory.yml
+    id: sku

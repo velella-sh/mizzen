@@ -11,7 +11,7 @@ import { build } from "../pipeline/build.ts";
 import { formatJson, formatSarif, formatText } from "../pipeline/diagnostics.ts";
 import { DEFAULT_DEV_HOST, DEFAULT_DEV_OUT, DEFAULT_DEV_PORT, dev } from "./dev.ts";
 import { doctor } from "./doctor.ts";
-import { dataExtract, dataFetch, dataSnapshot, dataTransform } from "./data.ts";
+import { dataExplain, dataExtract, dataFetch, dataSnapshot, dataTransform } from "./data.ts";
 import { diffRuleVersions } from "../data/rule-diff.ts";
 import { dataRefresh } from "./refresh.ts";
 import { dataSchema } from "../data/schema-evolution.ts";
@@ -97,6 +97,8 @@ Commands:
   data snapshot <name> [dir]  Record the last commit and date of a file collection in the lock
   data schema [dir]          Report the fields each schema added or removed since its recorded baseline
   data migrate [name] [dir]  Preview the records a schema's renames would migrate; read-only
+  data explain <collection> <id> [dir]
+                            Explain one field's lineage (--field <path>, --json, --public)
   data transform [name] [dir]  Preview the records a collection's transform rules produce (--limit, --json)
   data transform-diff <baseline> <proposed> [dir]
                             Compare two rule versions on one input (--collection, --format, --check)
@@ -147,7 +149,9 @@ Options:
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure; for reproduce: preflight only
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
-  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for inputs inspect: print the report as JSON
+  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for data explain: print the versioned lineage report; for inputs inspect: print the report as JSON
+  --field <path>       For data explain: the field to trace, such as title or author.name
+  --public             For data explain: print only permitted metadata, with no values or internal paths
   --limit <n>          For data transform: records to show per collection (default: 5)
   --write              For data quality: record the current data as data-quality.json
   --update-urls        For build: accept changed record URLs and write urls.lock.json
@@ -322,6 +326,16 @@ type DataMigrateOpts = {
   readonly name?: string;
 };
 
+type DataExplainOpts = {
+  readonly command: "data-explain";
+  readonly root: string;
+  readonly collection: string;
+  readonly id: string;
+  readonly field: string;
+  readonly json: boolean;
+  readonly public: boolean;
+};
+
 type DataTransformOpts = {
   readonly command: "data-transform";
   readonly root: string;
@@ -481,6 +495,7 @@ type Parsed =
         | DataVerifyOpts
         | DataSchemaOpts
         | DataMigrateOpts
+        | DataExplainOpts
         | DataTransformOpts
         | DataTransformDiffOpts
         | DataQualityOpts
@@ -712,6 +727,41 @@ function parseDataMigrate(rest: readonly string[]): Parsed {
   return { options: { command: "data-migrate", root: root ?? ".", ...(name === undefined ? {} : { name }) } };
 }
 
+/** Parses `data explain <collection> <id> [dir] --field <path> [--json] [--public]`. */
+function parseDataExplain(rest: readonly string[]): Parsed {
+  const positional: string[] = [];
+  let field: string | undefined;
+  let json = false;
+  let publicReport = false;
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    if (arg === "-h" || arg === "--help") return { help: true };
+    if (arg === "--json") json = true;
+    else if (arg === "--public") publicReport = true;
+    else if (arg === "--field") {
+      const next = rest[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--field needs a field path" };
+      field = next;
+    } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+    else positional.push(arg);
+  }
+  if (positional.length < 2) return { error: "data explain needs a collection and a record id: data explain <collection> <id> [dir] --field <path>" };
+  if (positional.length > 3) return { error: `unexpected argument: ${positional[3]}` };
+  if (field === undefined) return { error: "data explain needs --field <path>" };
+  const [collection, id, root] = positional;
+  return {
+    options: {
+      command: "data-explain",
+      root: root ?? ".",
+      collection: collection!,
+      id: id!,
+      field,
+      json,
+      public: publicReport,
+    },
+  };
+}
+
 /** Parses `data transform [name] [dir] [--limit <n>] [--json]`. */
 function parseDataTransform(rest: readonly string[]): Parsed {
   let name: string | undefined;
@@ -787,6 +837,7 @@ function parseData(args: readonly string[]): Parsed {
   if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
   if (subcommand === "schema") return parseDataSchema(rest);
   if (subcommand === "migrate") return parseDataMigrate(rest);
+  if (subcommand === "explain") return parseDataExplain(rest);
   if (subcommand === "transform") return parseDataTransform(rest);
   if (subcommand === "transform-diff") return parseDataTransformDiff(rest);
   if (subcommand === "snapshot") return parseDataSnapshot(rest);
@@ -1907,6 +1958,25 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.collection === undefined ? {} : { collection: options.collection }),
         format: options.format,
         check: options.check,
+      });
+      if (result.output !== "") write(result.output);
+      for (const message of result.errors) error(`${NAME}: ${message}`);
+      return result.code;
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "data-explain") {
+    try {
+      const result = await dataExplain({
+        root,
+        collection: options.collection,
+        id: options.id,
+        field: options.field,
+        json: options.json,
+        public: options.public,
       });
       if (result.output !== "") write(result.output);
       for (const message of result.errors) error(`${NAME}: ${message}`);
