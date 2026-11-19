@@ -120,6 +120,7 @@ function choose<T extends CoordinationPack | CoordinationProof>(
   const matching = rows.filter((row) => row.snapshot === snapshot).sort(
     (a, b) => byCodePoint(referenceOf(a), referenceOf(b)),
   );
+  if (rows.length === 0) return undefined;
   for (const row of rows) {
     if (row.snapshot === snapshot) continue;
     problems.push({
