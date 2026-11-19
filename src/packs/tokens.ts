@@ -133,3 +133,48 @@ export function estimateTokens(text: string): TokenEstimate {
   }
   return { tokens, method: TOKEN_METHOD, margin: TOKEN_ERROR_MARGIN, upper: Math.ceil(tokens * (1 + TOKEN_ERROR_MARGIN)) };
 }
+
+/** The cost split of one assembled pack, with the margin visible as its own line. */
+export interface PackEstimate {
+  /** The sum of the fragment estimates, in pack order. */
+  readonly fragments: number;
+  /** The title, every section header, and the separators, measured with empty bodies. */
+  readonly template: number;
+  /** The estimator margin plus any serialization rounding the separate parts miss. */
+  readonly safety: number;
+  /** `fragments + template + safety`: the number a client reports as its context usage. */
+  readonly used: number;
+  /** The planning bound; {@link used} already contains the margin, so this equals it. */
+  readonly upper: number;
+  readonly method: string;
+  readonly margin: number;
+}
+
+/**
+ * Splits an assembled pack into fragment, template, and safety costs.
+ *
+ * The fragment and template numbers are measured separately, so their sum can differ from the whole
+ * by a token or two: a serialization merges runs across a boundary. `safety` closes that gap and
+ * adds {@link TOKEN_ERROR_MARGIN}, so `used` is a bound on the exact Markov estimate rather than a
+ * point estimate, and `fragments + template + safety` is exactly `used` by construction.
+ */
+export function estimatePack(
+  serialization: string,
+  fragmentTexts: readonly string[],
+  template: string,
+): PackEstimate {
+  const fragments = fragmentTexts.reduce((sum, text) => sum + estimateTokens(text).tokens, 0);
+  const templateTokens = estimateTokens(template).tokens;
+  const actual = estimateTokens(serialization);
+  const rounding = Math.max(0, actual.tokens - fragments - templateTokens);
+  const safety = rounding + Math.ceil(actual.tokens * actual.margin);
+  return {
+    fragments,
+    template: templateTokens,
+    safety,
+    used: fragments + templateTokens + safety,
+    upper: fragments + templateTokens + safety,
+    method: actual.method,
+    margin: actual.margin,
+  };
+}
