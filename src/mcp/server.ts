@@ -9,6 +9,8 @@
  */
 import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
+import type { ClientHello, ClientProfile } from "../contracts/clients.ts";
+import { detectClient } from "../clients/detect.ts";
 import { DEFAULT_LIMITS, MAX_PACK_TOKENS, McpError, capAnswer, scrub, timeoutFor, type Limits } from "./limits.ts";
 import type { Registry } from "./registry.ts";
 import { listResources, readResource } from "./resources.ts";
@@ -33,6 +35,8 @@ export interface ServerOptions {
   readonly info: ServerInfo;
   readonly limits?: Partial<Limits>;
   readonly log?: (message: string) => void;
+  /** Called once the `initialize` hello is read, before any tool runs. */
+  readonly onClient?: (profile: ClientProfile) => void;
 }
 
 type Id = string | number | null;
@@ -71,6 +75,7 @@ export function createServer(options: ServerOptions): Server {
   let client: { name: string; version: string } | undefined;
   let protocolVersion: string = SUPPORTED_VERSIONS[0];
   let inFlight = 0;
+  let profile: ClientProfile | undefined;
   const controllers = new Map<string, AbortController>();
 
   const fail = (id: Id, code: number, message: string, stage: Stage = "protocol"): Response => {
@@ -98,10 +103,10 @@ export function createServer(options: ServerOptions): Server {
     return { session, previous };
   }
 
-  function capabilities(session: Session) {
+  function capabilities(session: Session, resources: boolean) {
     return {
       tools: { listChanged: false },
-      resources: { listChanged: false, subscribe: false },
+      ...(resources ? { resources: { listChanged: false, subscribe: false } } : {}),
       experimental: {
         mizzen: {
           contractVersion: CONTRACT_VERSION,
@@ -172,6 +177,13 @@ export function createServer(options: ServerOptions): Server {
     if (typeof name !== "string") throw new McpError("invalid-params", "tools/call needs a tool name.", { stage: "protocol" });
     const tool = options.registry.get(name);
     if (tool === undefined) return errorResult(`Unknown tool: ${name}`, "unknown-tool", { stage: toolStage(tool) });
+    if (name === "apply_edit" && profile?.capabilities.editing === false) {
+      return errorResult(
+        "This client declared that it cannot apply an edit safely; call propose_edit and hand the patch to a person.",
+        "client-editing-unavailable",
+        { stage: "edit" },
+      );
+    }
     const input = params.arguments ?? {};
     const problems = options.registry.validate(name, input);
     if (problems.length > 0) return errorResult(`Invalid input for ${name}: ${problems.join("; ")}`, "invalid-input", { stage: toolStage(tool) });
@@ -227,6 +239,7 @@ export function createServer(options: ServerOptions): Server {
       signal,
       runtime,
       session,
+      ...(profile === undefined ? {} : { client: profile }),
       ...(progressToken === undefined ? {} : { progressToken }),
     });
     run.catch(() => undefined); // a handler that outlives a cancel or timeout must not become an unhandled rejection
@@ -316,6 +329,8 @@ export function createServer(options: ServerOptions): Server {
       case "initialize": {
         const asked = params.protocolVersion;
         const version = (SUPPORTED_VERSIONS as readonly unknown[]).includes(asked) ? (asked as string) : SUPPORTED_VERSIONS[0];
+        profile = detectClient(params as unknown as ClientHello, { protocolVersions: SUPPORTED_VERSIONS });
+        options.onClient?.(profile);
         protocolVersion = version;
         if (typeof params.clientInfo === "object" && params.clientInfo !== null) {
           const info = params.clientInfo as Record<string, unknown>;
@@ -329,9 +344,10 @@ export function createServer(options: ServerOptions): Server {
         session.modern = version >= "2025-06-18";
         return {
           protocolVersion: version,
-          capabilities: capabilities(session),
+          capabilities: capabilities(session, profile.capabilities.resources),
           serverInfo: options.info,
           ...(previous === session.snapshot ? {} : { snapshotChanged: true, previousSnapshot: previous }),
+          _meta: { mizzen: profile },
         };
       }
       case "ping":
