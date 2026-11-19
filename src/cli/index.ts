@@ -22,6 +22,7 @@ import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
+import { runGraph } from "./graph.ts";
 import { referencesUsage, runReferences } from "./references.ts";
 import { runDocsVersion } from "./docs-version.ts";
 import { runImport } from "./import.ts";
@@ -54,7 +55,7 @@ import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -120,6 +121,7 @@ Commands:
   edit rollback <receipt.json> [dir]
                             Restore only the files a transaction receipt names
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
@@ -414,6 +416,11 @@ type ReferencesOpts = {
   readonly args: readonly string[];
 };
 
+type GraphOpts = {
+  readonly command: "graph";
+  readonly args: readonly string[];
+};
+
 type VersionsOpts = {
   readonly command: "versions";
   readonly args: readonly string[];
@@ -542,6 +549,7 @@ type Parsed =
         | NetworkOpts
         | PublishedSiteOpts
         | ReferencesOpts
+        | GraphOpts
         | StaleOpts
         | VersionsOpts;
     };
@@ -1378,6 +1386,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "references", args: rest } };
   }
+  if (command === "graph") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "graph", args: rest } };
+  }
   if (command === "versions") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "versions", args: rest } };
@@ -1737,6 +1749,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "references") {
     try {
       return await runReferences(options.args, { write, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "graph") {
+    try {
+      return await runGraph(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
