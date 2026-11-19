@@ -1,0 +1,35 @@
+{
+  "pages": [
+    "guide/install.md"
+  ],
+  "symbols": [],
+  "edits": [
+    {
+      "path": "guide/install.md",
+      "span": {
+        "line": 9,
+        "column": 17,
+        "endLine": 9,
+        "endColumn": 23
+      },
+      "expected": "Node 24",
+      "replacement": "Node 26"
+    }
+  ],
+  "toolCalls": [
+    {
+      "name": "edit",
+      "version": "1",
+      "ok": true
+    }
+  ],
+  "usage": {
+    "inputTokens": 500,
+    "outputTokens": 40
+  },
+  "trace": {
+    "toolCalls": 1,
+    "inputTokens": 500,
+    "outputTokens": 40
+  }
+}

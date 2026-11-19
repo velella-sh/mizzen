@@ -1,0 +1,122 @@
+{
+  "version": 2,
+  "task": {
+    "id": "41a7dfb7f9aeb76fc291622479c79c3ce53ebbf6bedd6db0b7b126ce26856052",
+    "goal": "Verify the install guide",
+    "criteria": [
+      {
+        "criterion": "doctor",
+        "statement": "The doctor passes.",
+        "mode": "check",
+        "check": "doctor",
+        "fixture": "docs/install.md",
+        "expected": "Check \"doctor\" passes and the fixture matches."
+      }
+    ]
+  },
+  "snapshot": {
+    "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "data": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "config": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "tooling": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "id": "b57c9a8375ec215bec29b2ea7e96c0b7b5dffc36812812d8ccce77794a49d1ea"
+  },
+  "transaction": {
+    "id": "e281cb857d131ce89ba7ec4ff2c2095ec6a6bf8ea8bcb6432189b15ebfe88228",
+    "commit": "abc1234",
+    "base": "def5678",
+    "files": [
+      {
+        "path": "docs/install.md",
+        "before": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb",
+        "after": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      }
+    ]
+  },
+  "checks": [
+    {
+      "id": "doctor",
+      "criterion": "doctor",
+      "task": "41a7dfb7f9aeb76fc291622479c79c3ce53ebbf6bedd6db0b7b126ce26856052",
+      "snapshot": "b57c9a8375ec215bec29b2ea7e96c0b7b5dffc36812812d8ccce77794a49d1ea",
+      "commit": "abc1234",
+      "status": "unrun",
+      "command": [],
+      "outputHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "limits": {
+        "timeoutMs": 0,
+        "memoryMb": 0,
+        "network": "deny",
+        "paths": "sandbox"
+      },
+      "detail": "The check did not run."
+    }
+  ],
+  "outputs": {
+    "inputHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "tool": {
+      "expected": "0.2.6",
+      "actual": "0.2.6"
+    },
+    "expectedHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "actualHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "match": true,
+    "explained": [],
+    "unexplained": []
+  },
+  "humanReview": {
+    "status": "not-required",
+    "criteria": []
+  },
+  "claims": [
+    {
+      "id": "doctor",
+      "criterion": "doctor",
+      "statement": "The doctor passes.",
+      "status": "unproven",
+      "evidence": [
+        {
+          "kind": "check",
+          "id": "doctor",
+          "status": "unrun",
+          "outputHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "kind": "file",
+          "path": "docs/install.md",
+          "hash": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+        }
+      ],
+      "missing": [
+        "check \"doctor\" did not run"
+      ]
+    }
+  ],
+  "scope": {
+    "allowed": [
+      "docs/install.md"
+    ],
+    "expected": [
+      "docs/install.md"
+    ],
+    "changes": [
+      {
+        "path": "docs/install.md",
+        "before": "9160d4be34c8695bd172a76c7c7966587ea5a4d991ad22c87b2b91af54aa9ebb",
+        "after": "7b9a72466d3960eb2aacccfc848939453490db0678bd4725def3f789b891c919"
+      }
+    ],
+    "outOfScope": [],
+    "unexpected": [],
+    "ok": true
+  },
+  "references": {
+    "ok": true,
+    "removed": [],
+    "changed": [],
+    "invalid": [],
+    "issues": []
+  },
+  "verdict": "proved",
+  "proofHash": "6bd2ea23fca3dc653dea408aadbae3c8cc063cc9a80338c7a6fd4b06681705b2"
+}

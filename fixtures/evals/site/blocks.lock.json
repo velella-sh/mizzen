@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "pages": {
+    "guide/deploy.md": {
+      "deploy-rollback": 9
+    },
+    "guide/install.md": {
+      "install-download": 11,
+      "install-steps": 15,
+      "install-trouble": 19
+    },
+    "reference/configuration.md": {
+      "configuration-base": 9
+    }
+  }
+}

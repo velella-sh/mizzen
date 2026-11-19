@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "task": {
+    "id": "eval-transaction-atomic"
+  },
+  "snapshot": {
+    "files": {
+      "guide/install.md": "078bfeb583ad6772e36b38e8e6c80c44c5775535448478538ce1fe3065692b13",
+      "_data/products.yml": "25dc8124efdd9631dbd563057bf7479ed13a7d5a3dc4b5f7288e72e8eb98ef86",
+      "examples/hello.ts": "0b26eeb0449337856835ba66be5be5327b016226a2b9d5b994f04fa088c579f9"
+    }
+  },
+  "patches": [
+    {
+      "file": "guide/install.md",
+      "patches": [
+        {
+          "span": {
+            "line": 9,
+            "column": 17,
+            "endLine": 9,
+            "endColumn": 23
+          },
+          "expected": "Node 24",
+          "replacement": "Node 26",
+          "beforeHash": "078bfeb583ad6772e36b38e8e6c80c44c5775535448478538ce1fe3065692b13"
+        }
+      ]
+    },
+    {
+      "file": "_data/products.yml",
+      "patches": [
+        {
+          "span": {
+            "line": 2,
+            "column": 8,
+            "endLine": 2,
+            "endColumn": 9
+          },
+          "expected": "10",
+          "replacement": "12",
+          "beforeHash": "25dc8124efdd9631dbd563057bf7479ed13a7d5a3dc4b5f7288e72e8eb98ef86"
+        }
+      ]
+    },
+    {
+      "file": "examples/hello.ts",
+      "patches": [
+        {
+          "span": {
+            "line": 1,
+            "column": 26,
+            "endLine": 1,
+            "endColumn": 30
+          },
+          "expected": "hello",
+          "replacement": "hello, world",
+          "beforeHash": "0b26eeb0449337856835ba66be5be5327b016226a2b9d5b994f04fa088c579f9"
+        }
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "price-reviewed",
+      "kind": "contains",
+      "file": "_data/products.yml",
+      "text": "price: 10"
+    }
+  ],
+  "preconditions": {
+    "requireBeforeHash": true,
+    "validateContent": false
+  },
+  "scope": {
+    "pages": [
+      "/guide/install/"
+    ],
+    "blocks": [],
+    "symbols": [],
+    "records": [],
+    "files": [
+      "guide/install.md",
+      "_data/products.yml",
+      "examples/hello.ts"
+    ]
+  }
+}

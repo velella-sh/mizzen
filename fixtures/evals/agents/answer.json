@@ -1,0 +1,28 @@
+{
+  "pages": [
+    "guide/install.md"
+  ],
+  "symbols": [],
+  "answer": {
+    "text": "Mizzen requires Node 24 or later.",
+    "citations": [
+      "guide/install.md:9"
+    ]
+  },
+  "toolCalls": [
+    {
+      "name": "context",
+      "version": "1",
+      "ok": true
+    }
+  ],
+  "usage": {
+    "inputTokens": 700,
+    "outputTokens": 30
+  },
+  "trace": {
+    "toolCalls": 1,
+    "inputTokens": 700,
+    "outputTokens": 30
+  }
+}

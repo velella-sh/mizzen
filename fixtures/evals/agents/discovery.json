@@ -1,0 +1,22 @@
+{
+  "pages": [
+    "guide/install.md"
+  ],
+  "symbols": [],
+  "toolCalls": [
+    {
+      "name": "context",
+      "version": "1",
+      "ok": true
+    }
+  ],
+  "usage": {
+    "inputTokens": 620,
+    "outputTokens": 20
+  },
+  "trace": {
+    "toolCalls": 1,
+    "inputTokens": 620,
+    "outputTokens": 20
+  }
+}

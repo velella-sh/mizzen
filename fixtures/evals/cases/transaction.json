@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "id": "transaction.atomic",
+  "title": "Reject a multi-file transaction atomically",
+  "capability": "transaction",
+  "goal": "Update the page, the product data, and the example together.",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [
+      "guide/**",
+      "_data/**",
+      "examples/**"
+    ],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "atomic",
+      "statement": "The failing invariant rejects the whole transaction."
+    },
+    {
+      "id": "intact",
+      "statement": "No file keeps a partial edit."
+    }
+  ],
+  "tools": [
+    {
+      "name": "transaction",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "transaction": "site/transactions/atomic.json"
+  },
+  "expected": {
+    "kind": "transaction",
+    "outcome": "rejected",
+    "invariant": "price-reviewed",
+    "attempted": [
+      "guide/install.md",
+      "_data/products.yml",
+      "examples/hello.ts"
+    ],
+    "changed": []
+  }
+}

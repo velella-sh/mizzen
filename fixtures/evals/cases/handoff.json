@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "id": "handoff.resume",
+  "title": "Resume a handoff without repeating an edit",
+  "capability": "handoff",
+  "goal": "Continue the install review from the public handoff.",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "continue",
+      "statement": "The next agent continues from the document alone."
+    },
+    {
+      "id": "no-repeat",
+      "statement": "The applied edit is never repeated."
+    }
+  ],
+  "tools": [
+    {
+      "name": "interaction",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "handoff": "handoffs/agent.json"
+  },
+  "expected": {
+    "kind": "handoff",
+    "nextAction": "Verify the install links.",
+    "applied": [
+      "edit-1"
+    ],
+    "remaining": [
+      "review"
+    ],
+    "duplicateRefused": true
+  }
+}

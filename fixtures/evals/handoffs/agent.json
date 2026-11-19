@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "to": "agent",
+  "taskId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "snapshot": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "policy": "policy-v1",
+  "goal": "Update the install guide",
+  "decisions": [
+    {
+      "subject": "approval:edit",
+      "choice": "approved",
+      "reason": "The scope is reviewable."
+    }
+  ],
+  "diff": "--- a/guide/install.md\n+++ b/guide/install.md\n",
+  "checks": [
+    {
+      "id": "doctor",
+      "status": "passed",
+      "evidence": "proof-1"
+    }
+  ],
+  "questions": [
+    {
+      "field": "review",
+      "question": "Did you review the new install links?",
+      "detail": "The links must stay on the release page.",
+      "choices": []
+    }
+  ],
+  "nextAction": "Verify the install links.",
+  "applied": [
+    "edit-1"
+  ],
+  "result": null
+}

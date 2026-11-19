@@ -1,0 +1,20 @@
+{
+  "subtasks": [
+    {
+      "key": "install-copy",
+      "owner": "agent-guide",
+      "goal": "Rewrite the install steps for the new release.",
+      "scope": { "pages": ["guide/install.md"] },
+      "acceptance": [{ "id": "guide-review", "statement": "A person reviewed the install steps.", "review": true }],
+      "budget": { "contextTokens": 1000, "toolCalls": 3, "timeMs": 60000 }
+    },
+    {
+      "key": "install-links",
+      "owner": "agent-links",
+      "goal": "Update the links on the same install page.",
+      "scope": { "pages": ["guide/install.md"] },
+      "acceptance": [{ "id": "links-review", "statement": "A person reviewed the links.", "review": true }],
+      "budget": { "contextTokens": 800, "toolCalls": 2, "timeMs": 60000 }
+    }
+  ]
+}

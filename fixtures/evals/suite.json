@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "id": "reference-agent-suite",
+  "cases": [
+    "cases/discovery.json",
+    "cases/answer.json",
+    "cases/context.json",
+    "cases/edit.json",
+    "cases/transaction.json",
+    "cases/verification-proved.json",
+    "cases/verification-fabricated.json",
+    "cases/handoff.json",
+    "cases/permission.json",
+    "cases/conflict.json"
+  ],
+  "pins": {
+    "mizzen": "0.2.5",
+    "package": "source",
+    "tools": [
+      {
+        "name": "context",
+        "version": "1"
+      },
+      {
+        "name": "coordination",
+        "version": "1"
+      },
+      {
+        "name": "edit",
+        "version": "1"
+      },
+      {
+        "name": "interaction",
+        "version": "1"
+      },
+      {
+        "name": "permission",
+        "version": "1"
+      },
+      {
+        "name": "transaction",
+        "version": "1"
+      },
+      {
+        "name": "verification",
+        "version": "1"
+      }
+    ]
+  }
+}
