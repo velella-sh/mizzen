@@ -96,7 +96,8 @@ Options:
   --report <file>      For data refresh: write the structured report here
   --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
-  --topic <name>       Topic for pack (default: the site's only topic); not with --request
+  --task <file>        JSON task contract for pack; compiles task-aware context against the site
+  --topic <name>       Topic for pack (default: the site's only topic); not with --request or --task
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
