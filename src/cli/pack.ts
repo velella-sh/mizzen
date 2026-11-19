@@ -46,6 +46,7 @@ import {
 } from "../outputs/context-pack.ts";
 import { formatText } from "../pipeline/diagnostics.ts";
 import { readContextRequest, readStandardInput } from "./pack-request.ts";
+import { tracePack } from "../trace/instrument.ts";
 
 /** What `--format` prints: the Markdown pack, or its structured evidence. */
 export type PackFormat = "markdown" | "json";
@@ -238,6 +239,10 @@ export async function pack(options: PackOptions, io: PackIo): Promise<number> {
       return 1;
     }
     await emit(compiled.markdown, compiled.evidence, options, io);
+    await tracePack(
+      { markdown: compiled.markdown, evidence: compiled.evidence },
+      { ...(options.out === undefined ? {} : { out: options.out }), root: options.root },
+    );
     return 0;
   }
 
@@ -297,5 +302,9 @@ export async function pack(options: PackOptions, io: PackIo): Promise<number> {
   reportDiagnostics(diagnostics, io.error);
 
   await emit(built.contents, built.evidence, options, io);
+  await tracePack(
+    { markdown: built.contents, evidence: built.evidence },
+    { ...(options.out === undefined ? {} : { out: options.out }), root: options.root },
+  );
   return 0;
 }
