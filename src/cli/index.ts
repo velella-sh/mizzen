@@ -23,6 +23,7 @@ import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
 import { referencesUsage, runReferences } from "./references.ts";
+import { runTrace, traceUsage } from "./trace.ts";
 import { runDocsVersion } from "./docs-version.ts";
 import { runImport } from "./import.ts";
 import { runInputs } from "./inputs.ts";
@@ -47,7 +48,7 @@ import { traceEditApply, traceVerification } from "../trace/instrument.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -122,6 +123,11 @@ Commands:
   reproduce <report> [dir]  Preflight a recorded build, rebuild it, and compare the reports (--check: preflight only)
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
+  trace show <trace.json>   Print a recorded agent trace: task, snapshot, stages, and evidence
+  trace search <trace.json> Filter events by --stage, --file, --task, or --status
+  trace replay <trace.json> Check the recorded order, input hashes, and results; writes nothing
+  trace export <trace.json> Write or print only the authorized fields (--out <dir>)
+  trace handoff <trace.json> Print the state, changes, decisions, and remaining work
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   versions snapshot <vN> [dir]
@@ -403,6 +409,11 @@ type ReferencesOpts = {
   readonly args: readonly string[];
 };
 
+type TraceOpts = {
+  readonly command: "trace";
+  readonly args: readonly string[];
+};
+
 type VersionsOpts = {
   readonly command: "versions";
   readonly args: readonly string[];
@@ -510,6 +521,7 @@ type Parsed =
         | PublishedSiteOpts
         | ReferencesOpts
         | StaleOpts
+        | TraceOpts
         | VersionsOpts;
     };
 
@@ -1246,6 +1258,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "references", args: rest } };
   }
+  if (command === "trace") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "trace", args: rest } };
+  }
   if (command === "versions") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "versions", args: rest } };
@@ -1605,6 +1621,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "references") {
     try {
       return await runReferences(options.args, { write, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "trace") {
+    try {
+      return await runTrace(options.args, { write, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
