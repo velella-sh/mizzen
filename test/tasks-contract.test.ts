@@ -84,7 +84,7 @@ test("a full contract round-trips through the schema and the parser unchanged", 
   assert.match(contract.snapshot.id, /^[0-9a-f]{64}$/);
   assert.deepEqual(contract.permissions, { read: ["alice", "bob"], write: ["alice"], check: ["*"] });
 
-  assert.equal(validate(contract), true, validate.errors?.map((error) => `${error.instancePath} ${error.message}`).join("; "));
+  assert.equal(validate(contract), true, validate.errors?.map((error) => `${error.instancePath} ${error.message}`).join("; ") ?? "");
   const encoded = JSON.stringify(contract);
   assert.deepEqual(JSON.parse(encoded), contract);
   assert.equal(JSON.stringify(parsed(JSON.parse(encoded))), encoded);

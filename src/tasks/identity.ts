@@ -13,9 +13,22 @@ export function taskIdOf(idempotencyKey: string): string {
   return sha256(`mizzen-task\0${idempotencyKey}`);
 }
 
-/** The request id: the whole normalized contract, so the same content always has the same identity. */
+/**
+ * The request id: the normalized content without the idempotency key, so the same content with a
+ * different key still names the same request while the task id follows the key.
+ */
 export function requestIdOf(contract: TaskContract): string {
-  return sha256(`mizzen-task-request\0${canonicalJson(contract)}`);
+  return sha256(
+    `mizzen-task-request\0${canonicalJson({
+      version: contract.version,
+      goal: contract.goal,
+      scope: contract.scope,
+      snapshot: contract.snapshot,
+      budget: contract.budget,
+      permissions: contract.permissions,
+      acceptance: contract.acceptance,
+    })}`,
+  );
 }
 
 /** The snapshot id: the four effective-input hashes, in canonical key order. */
