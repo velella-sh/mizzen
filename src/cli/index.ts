@@ -107,7 +107,7 @@ Commands:
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
-  edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  edit verify <proof.json>  Check an edit proof or a verification proof (--input <file> for public evidence)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
@@ -263,6 +263,7 @@ type EditVerifyOpts = {
   readonly site: string;
   readonly doctor: boolean;
   readonly format: EditFormat;
+  readonly input?: string;
 };
 
 type WatchOpts = {
@@ -628,6 +629,7 @@ function parseEditVerify(args: readonly string[]): Parsed {
   let site = ".";
   let doctor = false;
   let format: EditFormat = "text";
+  let input: string | undefined;
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
     const value = (): string => {
@@ -639,6 +641,7 @@ function parseEditVerify(args: readonly string[]): Parsed {
       if (arg === "-h" || arg === "--help") return { help: true };
       if (arg === "--site") site = value();
       else if (arg === "--doctor") doctor = true;
+      else if (arg === "--input") input = value();
       else if (arg === "--format") {
         const raw = value();
         const parsed = editFormat(raw);
@@ -653,7 +656,7 @@ function parseEditVerify(args: readonly string[]): Parsed {
   }
 
   if (proof === undefined) return { error: `edit verify needs a proof file: ${NAME} edit verify <proof.json>` };
-  return { options: { command: "edit-verify", proof, site, doctor, format } };
+  return { options: { command: "edit-verify", proof, site, doctor, format, ...(input === undefined ? {} : { input }) } };
 }
 
 /** Parses `data snapshot <name> [dir] [--allow-dirty]`. */
@@ -1810,10 +1813,11 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       proof: options.proof,
       siteRoot: options.site,
       doctor: options.doctor,
+      ...(options.input === undefined ? {} : { input: options.input }),
     });
     const exitCode = result.ok
       ? 0
-      : result.failure?.kind === "proof" || result.failure?.kind === "doctor-unavailable"
+      : result.failure?.kind === "proof" || result.failure?.kind === "doctor-unavailable" || result.failure?.kind === "input"
         ? 2
         : 1;
     if (options.format === "json") {

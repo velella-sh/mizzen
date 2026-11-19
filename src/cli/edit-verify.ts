@@ -33,6 +33,9 @@ import {
 } from "../edits/proof-verifier.ts";
 import { formatPatchSpan } from "../edits/patch.ts";
 import type { ProofLevel, ProofSpan } from "../edits/proof.ts";
+import { parseVerificationProof, proofVersionOf } from "../verification/proof.ts";
+import { independentlyVerify } from "../verification/verify.ts";
+import type { IndependentVerification, VerificationPublicInput } from "../contracts/verification.ts";
 
 /** A command that runs the doctor CLI, as an executable and the arguments before `doctor`. */
 export interface DoctorCommand {
@@ -56,6 +59,8 @@ export interface VerifyProofOptions {
   readonly env?: NodeJS.ProcessEnv;
   /** How long the doctor may run, in milliseconds. Default: {@link DOCTOR_TIMEOUT_MS}; tests pass a smaller value. */
   readonly doctorTimeoutMs?: number;
+  /** A JSON public input for a version 2 proof: files, checks, outputs, human review, and package binding. */
+  readonly input?: string;
 }
 
 /** What a recorded file looks like now, compared with the proof's `after` hash. */
@@ -86,6 +91,8 @@ export type VerifyProofFailure =
       readonly found?: { readonly line: number; readonly column: number; readonly endLine: number; readonly endColumn: number };
     }
   | { readonly kind: "escape"; readonly path: string }
+  | { readonly kind: "input"; readonly message: string }
+  | { readonly kind: "verification"; readonly code: string; readonly message: string; readonly path?: string }
   | { readonly kind: "doctor"; readonly recorded: number; readonly actual: number; readonly difference: string }
   | {
       readonly kind: "doctor-unavailable";
@@ -110,6 +117,8 @@ export interface VerifyProofResult {
   readonly failures: readonly VerifyProofFailure[];
   /** The first mismatch, absent when `ok` is true. Kept so a caller that reports one failure still can. */
   readonly failure?: VerifyProofFailure;
+  /** The independent result for a version 2 proof, absent for a version 1 edit proof. */
+  readonly verification?: IndependentVerification;
 }
 
 /** A local doctor checkout beside this package, when there is one. */
@@ -196,6 +205,91 @@ function failureOf(issue: ProofVerifyIssue): VerifyProofFailure {
       };
 }
 
+/** A JSON object, or `undefined`. */
+function objectOf(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+/** Reads the `--input` file as a public verification input, or explains why it cannot be used. */
+async function readPublicInput(file: string): Promise<{ readonly input?: VerificationPublicInput } | { readonly error: string }> {
+  let text: string;
+  try {
+    text = await readFile(file, "utf8");
+  } catch (err) {
+    return { error: `the public input cannot be read: ${readReason(err)}` };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { error: "the public input is not valid JSON" };
+  }
+  const input = objectOf(parsed);
+  if (input === undefined) return { error: "the public input is not a JSON object" };
+  if (input.files !== undefined && objectOf(input.files) === undefined) return { error: "public input `files` is not an object" };
+  if (input.before !== undefined && objectOf(input.before) === undefined) return { error: "public input `before` is not an object" };
+  if (input.checks !== undefined && objectOf(input.checks) === undefined) return { error: "public input `checks` is not an object" };
+  if (input.outputs !== undefined && objectOf(input.outputs) === undefined) return { error: "public input `outputs` is not an object" };
+  if (input.outputHash !== undefined && typeof input.outputHash !== "string") return { error: "public input `outputHash` is not a string" };
+  if (input.commit !== undefined && typeof input.commit !== "string") return { error: "public input `commit` is not a string" };
+  if (input.tarballSha256 !== undefined && typeof input.tarballSha256 !== "string") return { error: "public input `tarballSha256` is not a string" };
+  if (input.ci !== undefined && input.ci !== "passed" && input.ci !== "failed" && input.ci !== "unknown") {
+    return { error: "public input `ci` must be passed, failed, or unknown" };
+  }
+  if (input.humanReview !== undefined && objectOf(input.humanReview) === undefined) return { error: "public input `humanReview` is not an object" };
+  return { input: input as VerificationPublicInput };
+}
+
+/**
+ * Verifies a version 2 proof independently. The public input is optional at the CLI boundary,
+ * but omitting evidence it needs leaves the result incomplete, never `ok`.
+ */
+async function verifyIndependentProof(
+  proof: string,
+  siteRoot: string,
+  text: string,
+  inputFile: string | undefined,
+): Promise<VerifyProofResult> {
+  const base = { proof, siteRoot } as const;
+  let parsed;
+  try {
+    parsed = parseVerificationProof(text);
+  } catch (err) {
+    const failure: VerifyProofFailure = { kind: "proof", message: readReason(err) };
+    return { ...base, ok: false, files: 0, doctor: "not-recorded", failures: [failure], failure };
+  }
+
+  let input: VerificationPublicInput = {};
+  if (inputFile !== undefined) {
+    const read = await readPublicInput(resolve(inputFile));
+    if ("error" in read) {
+      const failure: VerifyProofFailure = { kind: "input", message: read.error ?? "the public input is invalid" };
+      return { ...base, ok: false, files: 0, doctor: "not-recorded", failures: [failure], failure };
+    }
+    input = read.input ?? {};
+  }
+
+  const report = await independentlyVerify(parsed, { siteRoot, input });
+  const failures: VerifyProofFailure[] = report.failures.map((failure) => ({
+    kind: "verification",
+    code: failure.code,
+    message: failure.message,
+    ...(failure.path === undefined ? {} : { path: failure.path }),
+  }));
+  if (failures.length === 0 && !report.ok) {
+    failures.push({ kind: "verification", code: "verification.not-proved", message: `The proof is ${report.verdict}, not proved.` });
+  }
+  return {
+    ...base,
+    ok: report.ok && failures.length === 0,
+    files: report.checked.files,
+    doctor: "not-recorded",
+    failures,
+    ...(failures.length === 0 ? {} : { failure: failures[0]! }),
+    verification: report,
+  };
+}
+
 /**
  * Checks `options.proof` against the working tree under the site root.
  *
@@ -210,9 +304,20 @@ export async function verifyProof(options: VerifyProofOptions): Promise<VerifyPr
   const siteRoot = resolve(options.siteRoot ?? ".");
   const base = { proof, siteRoot } as const;
 
+  let text: string;
+  try {
+    text = await readFile(proof, "utf8");
+  } catch (err) {
+    const failure: VerifyProofFailure = { kind: "proof", message: readReason(err) };
+    return { ...base, ok: false, files: 0, doctor: "not-recorded", failures: [failure], failure };
+  }
+  if (proofVersionOf(text) === 2) {
+    return verifyIndependentProof(proof, siteRoot, text, options.input);
+  }
+
   let parsed: ParsedProof;
   try {
-    parsed = parseProof(await readFile(proof, "utf8"));
+    parsed = parseProof(text);
   } catch (err) {
     const failure: VerifyProofFailure = { kind: "proof", message: readReason(err) };
     return { ...base, ok: false, files: 0, doctor: "not-recorded", failures: [failure], failure };
@@ -279,6 +384,8 @@ function failureMessage(failure: VerifyProofFailure, proof: string): string {
     return `"${failure.path}" is extra: the proof records it absent after the edit.`;
   }
   if (failure.kind === "escape") return `"${failure.path}" resolves outside the site root.`;
+  if (failure.kind === "input") return `the public input is not usable: ${failure.message}.`;
+  if (failure.kind === "verification") return failure.message;
   if (failure.kind === "span") {
     const where = `"${failure.path}" span ${formatPatchSpan(failure.span)}`;
     if (failure.state === "moved") {
@@ -302,6 +409,10 @@ export function verifyProofMessage(result: VerifyProofResult): string {
 
   const count = `${result.files} ${result.files === 1 ? "file" : "files"}`;
   const verb = result.files === 1 ? "matches" : "match";
+  if (result.verification !== undefined) {
+    const { checked, verdict } = result.verification;
+    return `ok: independently verified the proof (${verdict}); ${checked.files} files, ${checked.checks} checks, and the output match.`;
+  }
   if (result.doctor === "matched") return `ok: ${count} ${verb} the proof; the doctor findings match.`;
   if (result.doctor === "not-run") {
     return `ok: ${count} ${verb} the proof. The doctor check was not run; pass --doctor to rerun it.`;
@@ -310,7 +421,7 @@ export function verifyProofMessage(result: VerifyProofResult): string {
 }
 
 /** The check that failed: the proof file, a file's hash, a recorded span, a real path, or the doctor evidence. */
-export type VerifyCheck = "proof" | "hash" | "span" | "path" | "doctor";
+export type VerifyCheck = "proof" | "hash" | "span" | "path" | "doctor" | "input" | "verification";
 
 /** One reason a proof did not verify: the failed check, its location, and any span it named. */
 export interface VerifyDiagnostic {
@@ -325,7 +436,9 @@ export interface VerifyDiagnostic {
     | "verify.span.range"
     | "verify.doctor.mismatch"
     | "verify.doctor.unsupported"
-    | "verify.doctor.unavailable";
+    | "verify.doctor.unavailable"
+    | "verify.input"
+    | "verify.verification.failed";
   readonly check: VerifyCheck;
   /** The failure sentence, the same one the text mode prints. */
   readonly message: string;
@@ -356,6 +469,8 @@ export interface VerifyProofReport {
   readonly files: number;
   readonly doctor: VerifyProofDoctorState;
   readonly diagnostics: readonly VerifyDiagnostic[];
+  /** The independent verification report, present only for a version 2 proof. */
+  readonly verification?: IndependentVerification;
 }
 
 /** The file-state failure codes, one per {@link VerifyProofFileState}. */
@@ -397,6 +512,12 @@ function diagnosticOf(failure: VerifyProofFailure, result: VerifyProofResult): V
       ...base,
     };
   }
+  if (failure.kind === "input") {
+    return { code: "verify.input", check: "input", path: result.proof, ...base };
+  }
+  if (failure.kind === "verification") {
+    return { code: "verify.verification.failed", check: "verification", path: failure.path ?? null, ...base };
+  }
   if (failure.kind === "doctor") {
     return { code: "verify.doctor.mismatch", check: "doctor", path: null, ...base };
   }
@@ -424,6 +545,7 @@ export function formatVerifyProofJson(result: VerifyProofResult, exitCode: numbe
     files: result.files,
     doctor: result.doctor,
     diagnostics: result.failures.map((failure) => diagnosticOf(failure, result)),
+    ...(result.verification === undefined ? {} : { verification: result.verification }),
   };
   return `${JSON.stringify(report, null, 2)}\n`;
 }
