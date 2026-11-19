@@ -4,8 +4,9 @@
  * published tarball. The file imports only `node:` builtins: it must run from a checkout while the binary under test
  * comes from npm.
  */
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
 import { dirname, join, relative } from "node:path";
 
 /** Runs one CLI command and returns its exit status and output. */
@@ -52,6 +53,8 @@ function read(root: string, path: string): string {
   return readFileSync(join(root, path), "utf8");
 }
 
+const PAGE = 'export default (p: any) => `<html><body>${p.page.html}</body></html>`;\n';
+
 /** A minimal theme; each case adds the layouts its pages need. */
 function theme(root: string, layouts: Readonly<Record<string, string>> = {}): string {
   const dir = join(root, "theme");
@@ -87,6 +90,40 @@ function filesUnder(root: string): string[] {
   };
   walk(root);
   return found.sort();
+}
+
+/** A loopback server for the network cases; the script writes its random origin to a file. */
+let nextServer = 0;
+function serve(ctx: CaseContext, script: string): { url: string; stop: () => void } {
+  const dir = join(ctx.dir, `server-${++nextServer}`);
+  const portFile = join(dir, "origin");
+  tree(dir, { "server.mjs": script });
+  const child = spawn(process.execPath, [join(dir, "server.mjs"), portFile], { stdio: "ignore" });
+  const wait = new Int32Array(new SharedArrayBuffer(4));
+  for (let attempt = 0; attempt < 200 && !existsSync(portFile); attempt++) Atomics.wait(wait, 0, 0, 25);
+  check(existsSync(portFile), "the case server did not start");
+  return { url: readFileSync(portFile, "utf8").trim(), stop: () => child.kill("SIGKILL") };
+}
+
+/** A JSON server that answers `pages[page]` at `path` with `{ data: { items: […] } }`. */
+function pageService(pages: Readonly<Record<string, readonly unknown[]>>): string {
+  return `
+import { createServer } from "node:http";
+import { writeFileSync } from "node:fs";
+const pages = ${JSON.stringify(pages)};
+const server = createServer((request, response) => {
+  const url = new URL(request.url ?? "/", "http://127.0.0.1");
+  if (url.pathname === "/items") {
+    const page = url.searchParams.get("page") ?? "1";
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(JSON.stringify({ data: { items: pages[page] ?? [] } }));
+    return;
+  }
+  response.writeHead(404, { "content-type": "application/json" });
+  response.end(JSON.stringify({ error: "not found" }));
+});
+server.listen(0, "127.0.0.1", () => writeFileSync(process.argv[2], \`http://127.0.0.1:\${server.address().port}\`));
+`;
 }
 
 const POST = (title: string, author: string, extra = ""): string =>
@@ -245,6 +282,262 @@ const imports: AcceptanceCase = {
       const markdown = filesUnder(out).filter((path) => path.endsWith(".md"));
       check(markdown.length > 0, `${name} wrote no page`);
       check(markdown.some((path) => read(out, path).includes("Home") || read(out, path).includes("Intro")), `${name} lost the page text`);
+    }
+  },
+};
+
+const apiFetch: AcceptanceCase = {
+  id: "api-fetch",
+  title: "Paginated API fetch, lock, and offline build",
+  run: (ctx) => {
+    const site = join(ctx.dir, "api-fetch-site");
+    const themeRoot = theme(site, { record: PAGE });
+    const service = serve(ctx, pageService({
+      "1": [{ id: "a", name: "Alpha" }, { id: "b", name: "Beta" }],
+      "2": [{ id: "c", name: "Gamma" }],
+    }));
+    try {
+      tree(site, {
+        "mizzen.yml": `title: API
+collections:
+  items:
+    source: ${service.url}/items
+    records: data.items
+    id: id
+    template: _templates/item.md
+    permalink: /items/{id}/
+    pagination:
+      mode: page
+      param: page
+      start: 1
+      pageSize: 2
+      stop: short
+`,
+        "_templates/item.md": "---\ntitle: \"{name}\"\n---\n\n# :field[name]\n",
+      });
+      ok(ctx.mizzen(["data", "fetch", site], ctx.dir), "data fetch");
+      const lock = read(site, "mizzen.lock.json");
+      check(lock.includes("items"), "the lock has no API source");
+      const out = build(ctx, site, themeRoot);
+      for (const id of ["a", "b", "c"]) {
+        check(existsSync(join(out, `items/${id}/index.html`)), `the API record ${id} was not built`);
+      }
+      ok(ctx.mizzen(["data", "fetch", site], ctx.dir), "second data fetch");
+      check(read(site, "mizzen.lock.json") === lock, "a second fetch changed the lock");
+      ok(ctx.mizzen(["data", "fetch", site, "--check"], ctx.dir), "data fetch --check");
+    } finally {
+      service.stop();
+    }
+  },
+};
+
+const dbInput: AcceptanceCase = {
+  id: "db-input",
+  title: "SQLite and NDJSON extraction with a stale-lock failure",
+  run: (ctx) => {
+    const site = join(ctx.dir, "db-site");
+    const themeRoot = theme(site, { record: PAGE });
+    tree(site, {
+      "mizzen.yml": `title: DB
+collections:
+  products:
+    source: _data/products.ndjson
+    id: sku
+    template: _templates/item.md
+    permalink: /products/{sku}/
+  parts:
+    source: _data/parts.sqlite
+    id: sku
+    template: _templates/item.md
+    permalink: /parts/{sku}/
+    sqlite:
+      query: SELECT sku, name FROM parts
+`,
+      "_templates/item.md": "---\ntitle: \"{name}\"\n---\n\n# :field[name]\n",
+      "_data/products.ndjson": '{"sku":"widget","name":"Widget"}\n{"sku":"gadget","name":"Gadget"}\n',
+    });
+    const db = new DatabaseSync(join(site, "_data/parts.sqlite"));
+    db.exec("CREATE TABLE parts (sku TEXT PRIMARY KEY, name TEXT NOT NULL)");
+    db.exec("INSERT INTO parts (sku, name) VALUES ('bolt', 'Bolt'), ('nut', 'Nut')");
+    db.close();
+
+    ok(ctx.mizzen(["data", "extract", site], ctx.dir), "data extract");
+    const out = build(ctx, site, themeRoot);
+    check(read(out, "products/widget/index.html").includes("Widget"), "the NDJSON record was not built");
+    check(read(out, "parts/bolt/index.html").includes("Bolt"), "the SQLite record was not built");
+
+    const changed = new DatabaseSync(join(site, "_data/parts.sqlite"));
+    changed.exec("INSERT INTO parts (sku, name) VALUES ('washer', 'Washer')");
+    changed.close();
+    const stale = ctx.mizzen(["data", "extract", site, "--check"], ctx.dir);
+    check(stale.status !== 0, "a changed SQLite source passed the extraction check");
+    check(`${stale.stdout}${stale.stderr}`.includes("changed parts"), "the changed extraction is not named");
+
+    ok(ctx.mizzen(["data", "extract", site], ctx.dir), "data extract after the source changed");
+    const rebuilt = build(ctx, site, themeRoot);
+    check(existsSync(join(rebuilt, "parts/washer/index.html")), "the new SQLite row was not built");
+  },
+};
+
+const collections: AcceptanceCase = {
+  id: "collections",
+  title: "Joined, aggregated, and public-only collection output",
+  run: (ctx) => {
+    const site = join(ctx.dir, "collections-site");
+    const themeRoot = theme(site, { record: PAGE });
+    tree(site, {
+      "mizzen.yml": `title: Collections
+collections:
+  catalog:
+    source: _data/catalog.yml
+    id: sku
+    template: _templates/catalog.md
+    permalink: /catalog/{sku}/
+    public: [sku, title, price, stock]
+    join:
+      type: left
+      key: sku
+      fields:
+        sku: sku
+        title: name
+        price: price
+        cost: cost
+      sources:
+        - collection: inventory
+          fields:
+            stock: stock
+  inventory:
+    source: _data/inventory.yml
+    id: sku
+  sales:
+    source: _data/sales.yml
+    dates: [date]
+  monthly:
+    source: sales
+    aggregate:
+      by:
+        - { field: date, period: month, timezone: Europe/Berlin }
+      metrics:
+        orders: { op: count }
+        revenue: { op: sum, field: amount, decimals: 2 }
+    template: _templates/month.md
+    permalink: /months/{id}/
+`,
+      "_data/catalog.yml": "- sku: a\n  name: Anvil\n  price: 10\n  cost: 4\n",
+      "_data/inventory.yml": "- sku: a\n  stock: 3\n",
+      "_data/sales.yml": "- id: s1\n  date: 2026-01-05T10:00:00Z\n  amount: 12.5\n- id: s2\n  date: 2026-01-20T10:00:00Z\n  amount: 7.5\n",
+      "_templates/catalog.md": "---\ntitle: \"{title}\"\n---\n\n# :field[title]\n\nStock: :field[stock]\n",
+      "_templates/month.md": "---\ntitle: \"{date}\"\n---\n\n# :field[date]\n\nOrders: :field[orders]\n\nRevenue: :field[revenue]\n",
+    });
+    const out = build(ctx, site, themeRoot);
+    const record = JSON.parse(read(out, "catalog/a/index.json")) as { record?: { fields?: Record<string, unknown> } };
+    check(record.record?.fields?.stock === 3, "the join did not supply the stock");
+    check(record.record?.fields?.cost === undefined, "page JSON published a private field");
+    check(!read(out, "catalog/a/index.html").includes(">4<"), "HTML published a private field");
+    const month = JSON.parse(read(out, "months/2026-01/index.json")) as { record?: { fields?: Record<string, unknown> } };
+    check(month.record?.fields?.orders === 2, "the aggregate lost a count");
+    check(month.record?.fields?.revenue === 20, "the aggregate lost the sum");
+  },
+};
+
+const transformLineage: AcceptanceCase = {
+  id: "transform-lineage",
+  title: "Transform preview, lineage, rule diff, and reproduce",
+  run: (ctx) => {
+    const site = join(ctx.dir, "transform-site");
+    const themeRoot = theme(site, { record: PAGE });
+    const config = (factor: number): string => `title: Transform
+collections:
+  catalog:
+    source: _data/catalog.yml
+    id: sku
+    template: _templates/item.md
+    permalink: /catalog/{sku}/
+    transform:
+      steps:
+        - id: cents
+          op: unit
+          field: price
+          factor: ${factor}
+          round: 0
+`;
+    tree(site, {
+      "mizzen.yml": config(100),
+      "rules/proposed.yml": config(1000),
+      "_data/catalog.yml": "- sku: a\n  name: Anvil\n  price: 10\n",
+      "_templates/item.md": "---\ntitle: \"{name}\"\n---\n\n# :field[name]\n\nPrice: :field[price]\n",
+    });
+    ok(ctx.mizzen(["build", site, "--out", join(ctx.dir, "out-transform"), "--theme", themeRoot, "--diagnose"], ctx.dir), "diagnose build");
+    ok(ctx.mizzen(["data", "transform", "catalog", site, "--json"], ctx.dir), "data transform");
+
+    const explained = ctx.mizzen(["data", "explain", "catalog", "a", site, "--field", "price", "--json"], ctx.dir);
+    ok(explained, "data explain");
+    const lineage = JSON.parse(explained.stdout) as { format?: number; value?: number; chain?: { stage?: string }[] };
+    check(lineage.format === 1, "the lineage report has no format 1");
+    check(lineage.value === 1000, "the lineage value is not the transformed price");
+    check((lineage.chain ?? []).some((event) => event.stage === "transform:cents"), "the lineage chain lost the transform rule");
+
+    const diff = ctx.mizzen(
+      ["data", "transform-diff", "mizzen.yml", "rules/proposed.yml", ".", "--collection", "catalog", "--format", "json", "--check"],
+      site,
+    );
+    check(diff.status === 1, `transform-diff exited ${diff.status}`);
+    const report = JSON.parse(diff.stdout) as {
+      counts?: { changed?: number };
+      records?: { fields?: { path?: string; before?: { value?: number }; after?: { value?: number } }[] }[];
+    };
+    check(report.counts?.changed === 1, "the rule diff missed the changed record");
+    const field = report.records?.[0]?.fields?.[0];
+    check(field?.path === "price" && field.before?.value === 1000 && field.after?.value === 10000, "the rule diff lost the price change");
+
+    ok(
+      ctx.mizzen(
+        ["reproduce", join(site, ".mizzen/build-report.json"), site, "--out", join(ctx.dir, "out-reproduced"), "--theme", themeRoot],
+        ctx.dir,
+      ),
+      "reproduce",
+    );
+  },
+};
+
+const refresh: AcceptanceCase = {
+  id: "refresh",
+  title: "Scheduled refresh report and build",
+  run: (ctx) => {
+    const site = join(ctx.dir, "refresh-site");
+    const themeRoot = theme(site, { record: PAGE });
+    const service = serve(ctx, pageService({ "1": [{ id: "a", name: "Alpha" }] }));
+    try {
+      tree(site, {
+        "mizzen.yml": `title: Refresh
+collections:
+  items:
+    source: ${service.url}/items
+    records: data.items
+    id: id
+    template: _templates/item.md
+    permalink: /items/{id}/
+`,
+        "_templates/item.md": "---\ntitle: \"{name}\"\n---\n\n# :field[name]\n",
+      });
+      const reportFile = join(ctx.dir, "refresh.json");
+      ok(ctx.mizzen(["data", "refresh", site, "--collections", "items", "--report", reportFile], ctx.dir), "data refresh");
+      const report = JSON.parse(readFileSync(reportFile, "utf8")) as {
+        schema?: string;
+        status?: string;
+        changes?: { totals?: { added?: number } };
+      };
+      check(report.schema === "mizzen-refresh/1", "the refresh report has no schema");
+      check(report.status === "changed" && report.changes?.totals?.added === 1, "the first refresh did not report the new record");
+
+      ok(ctx.mizzen(["data", "refresh", site, "--collections", "items", "--report", reportFile], ctx.dir), "second data refresh");
+      const again = JSON.parse(readFileSync(reportFile, "utf8")) as { status?: string };
+      check(again.status === "unchanged", "the second refresh changed the lock");
+
+      const out = build(ctx, site, themeRoot);
+      check(existsSync(join(out, "items/a/index.html")), "the refreshed record was not built");
+    } finally {
+      service.stop();
     }
   },
 };
@@ -534,6 +827,11 @@ export const CASES: readonly AcceptanceCase[] = [
   annotations,
   versions,
   imports,
+  apiFetch,
+  dbInput,
+  collections,
+  transformLineage,
+  refresh,
   diff,
   records,
   themeHooks,

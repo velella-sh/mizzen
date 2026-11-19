@@ -1,5 +1,5 @@
 {
-  "version": "0.2.4",
+  "version": "0.2.5",
   "features": [
     {
       "id": "import-docusaurus",
@@ -120,6 +120,66 @@
       "title": "Site modules that replace theme units",
       "status": "shipped",
       "case": "theme-hooks"
+    },
+    {
+      "id": "api-fetch",
+      "title": "Paginated API collection sources",
+      "status": "shipped",
+      "case": "api-fetch"
+    },
+    {
+      "id": "db-input",
+      "title": "SQLite and NDJSON collection inputs",
+      "status": "shipped",
+      "case": "db-input"
+    },
+    {
+      "id": "transform",
+      "title": "Configured collection transforms",
+      "status": "shipped",
+      "case": "transform-lineage"
+    },
+    {
+      "id": "join",
+      "title": "Joining collections",
+      "status": "shipped",
+      "case": "collections"
+    },
+    {
+      "id": "aggregate",
+      "title": "Aggregate collections",
+      "status": "shipped",
+      "case": "collections"
+    },
+    {
+      "id": "public-fields",
+      "title": "Public-field policies",
+      "status": "shipped",
+      "case": "collections"
+    },
+    {
+      "id": "lineage",
+      "title": "Field lineage reports",
+      "status": "shipped",
+      "case": "transform-lineage"
+    },
+    {
+      "id": "rule-diff",
+      "title": "Transformation rule diff",
+      "status": "shipped",
+      "case": "transform-lineage"
+    },
+    {
+      "id": "refresh",
+      "title": "Scheduled data refresh",
+      "status": "shipped",
+      "case": "refresh"
+    },
+    {
+      "id": "reproduce",
+      "title": "Diagnose and reproduce builds",
+      "status": "shipped",
+      "case": "transform-lineage"
     }
   ]
 }
