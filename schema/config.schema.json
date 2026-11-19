@@ -1446,34 +1446,55 @@
         {
           "if": {
             "required": ["source"],
-            "properties": { "source": { "type": "string", "pattern": "\\.(?:sqlite|sqlite3|db)$" } }
+            "properties": {
+              "source": {
+                "type": "string",
+                "pattern": "\\.(?:sqlite|sqlite3|db)$",
+                "description": "A local SQLite database file."
+              }
+            }
           },
           "then": {
             "required": ["sqlite"],
             "properties": {
-              "sqlite": { "$ref": "#/$defs/sqlite" },
-              "records": false,
-              "pagination": false
+              "sqlite": {
+                "$ref": "#/$defs/sqlite",
+                "description": "Query settings for a SQLite source."
+              },
+              "records": { "description": "Not supported for a SQLite source." },
+              "pagination": { "description": "Not supported for a SQLite source." }
             }
           }
         },
         {
           "if": {
             "required": ["source"],
-            "properties": { "source": { "type": "string", "pattern": "\\.(?:ndjson|jsonl)$" } }
+            "properties": {
+              "source": {
+                "type": "string",
+                "pattern": "\\.(?:ndjson|jsonl)$",
+                "description": "A local newline-delimited JSON file."
+              }
+            }
           },
           "then": {
             "properties": {
-              "sqlite": false,
-              "records": false,
-              "pagination": false
+              "sqlite": { "description": "Not supported for an NDJSON source." },
+              "records": { "description": "Not supported for an NDJSON source." },
+              "pagination": { "description": "Not supported for an NDJSON source." }
             }
           }
         },
         {
           "if": { "required": ["sqlite"] },
           "then": {
-            "properties": { "source": { "type": "string", "pattern": "\\.(?:sqlite|sqlite3|db)$" } }
+            "properties": {
+              "source": {
+                "type": "string",
+                "pattern": "\\.(?:sqlite|sqlite3|db)$",
+                "description": "A local SQLite database file."
+              }
+            }
           }
         }
       ]

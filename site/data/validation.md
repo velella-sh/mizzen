@@ -37,6 +37,19 @@ its help names the two accepted formats.
 | `data.record-not-mapping` | An entry of the source is not a mapping of fields. | Write each record as `field: value` pairs. |
 | `data.record-missing-id` | A record has no scalar field to use as its id. | Add the id field, or set `collections.<name>.id` to another field. |
 
+## SQLite and NDJSON
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.sqlite-query` | A SQLite source query is empty, is not a single read-only statement, or contains a write. | Use one `SELECT` or `WITH` statement; comments are allowed. |
+| `data.sqlite-unavailable` | `node:sqlite` is unavailable, or the database cannot be opened. | Run Node 24 or later, and point the source at a readable local database. |
+| `data.sqlite-column` | A query result has no columns, or the configured key or order column is missing or duplicated. | Alias repeated columns and name columns that `sqlite.key` and `sqlite.order` mention. |
+| `data.sqlite-key` | A row has no value in the key column, or two rows share an id. | Set `sqlite.key` to a unique column, or add `sqlite.order` to make the result deterministic. |
+| `data.sqlite-type` | A column holds a type other than null, number, text, or blob. | Convert the value in the query, or set `sqlite.binary` to `base64` or `error`. |
+| `data.record-duplicate-id` | An extraction produced two records with the same id. | Choose a unique `sqlite.key` or fix the duplicate rows in the source. |
+| `data.extraction-missing` | The build needs an extraction that the lock does not hold. | Run `mizzen data extract`. |
+| `data.extraction-stale` | The lock's extraction no longer matches the source or query. | Run `mizzen data extract` again and commit `mizzen.lock.json`. |
+
 ## API fetch
 
 | ID | Meaning | Fix |
