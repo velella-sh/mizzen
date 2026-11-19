@@ -73,6 +73,31 @@ test("parseArgs: help, build defaults, check format, and usage errors", () => {
   assert.equal("error" in parseArgs(["check", "--format", "yaml"]), true);
 });
 
+test("parseArgs: readiness scans a built folder, compares, badges, and gates", () => {
+  assert.deepEqual(parseArgs(["readiness"]), {
+    options: { command: "readiness", built: "dist", format: "text", min: {}, failOnUnknown: false },
+  });
+  assert.deepEqual(parseArgs(["readiness", "out", "--format", "json", "--min", "structure=80", "--min-overall", "90", "--fail-on-unknown", "--report", "r.json", "--badge", "b.svg", "--compare", "p.json", "--evals", "e.json", "--evidence", "https://ci.example/1"]), {
+    options: {
+      command: "readiness",
+      built: "out",
+      format: "json",
+      min: { structure: 80 },
+      failOnUnknown: true,
+      report: "r.json",
+      badge: "b.svg",
+      compare: "p.json",
+      evals: "e.json",
+      evidence: "https://ci.example/1",
+      minOverall: 90,
+    },
+  });
+  assert.equal("error" in parseArgs(["readiness", "--min", "nope=80"]), true);
+  assert.equal("error" in parseArgs(["readiness", "--min", "structure=101"]), true);
+  assert.equal("error" in parseArgs(["readiness", "--format", "yaml"]), true);
+  assert.equal("error" in parseArgs(["check", "--agents", "--out", "dist"]), true);
+});
+
 test("usage documents the unchecked edit override", () => {
   assert.match(usage, /--allow-unchecked/);
 });
@@ -201,7 +226,7 @@ test("every command usage names is dispatched", async () => {
         .map((line) => line.trim().split(/\s+/)[0]!),
     ),
   ];
-  assert.deepEqual(commands, ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"]);
+  assert.deepEqual(commands, ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"]);
   for (const command of commands) {
     const { errors, io } = capture();
     const status = await main([command, "--help"], io);

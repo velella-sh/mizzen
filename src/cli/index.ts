@@ -1,4 +1,4 @@
-/** `mizzen build`, `mizzen check`, `mizzen dev`, `mizzen doctor`, `mizzen edit apply`, `mizzen edit verify`, `mizzen pack`, `mizzen verify`, and `mizzen watch`: build a site, report diagnostics, serve it while developing, preflight a site, apply or verify an agent patch, print a context pack, check a build, or rebuild on change. */
+/** `mizzen build`, `mizzen check`, `mizzen dev`, `mizzen doctor`, `mizzen edit apply`, `mizzen edit verify`, `mizzen pack`, `mizzen readiness`, `mizzen verify`, and `mizzen watch`: build a site, report diagnostics, serve it while developing, preflight a site, apply or verify an agent patch, print a context pack, score a build for agents, check a build, or rebuild on change. */
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { availableParallelism, tmpdir } from "node:os";
@@ -53,12 +53,17 @@ import { compareReports, reproduce } from "./reproduce.ts";
 import { BUILD_REPORT_PATH, buildReportOf, writeBuildReport } from "../reproduce/manifest.ts";
 import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 import { traceEditApply, traceVerification } from "../trace/instrument.ts";
+import { readinessCommand, type ReadinessCommandOptions } from "./readiness.ts";
+import { formatReadiness, formatReadinessJson, readinessReport } from "../readiness/report.ts";
+import { scanBuild } from "../readiness/scan.ts";
+import { RUBRIC } from "../readiness/rubric.ts";
+import type { ReadinessDimension } from "../contracts/readiness.ts";
 
 /** The command name on the PATH. */
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -133,6 +138,7 @@ Commands:
   network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
   published-site check      Check a published site from --sitemap <url>: status, canonical URL, redirects
+  readiness [built]         Score a built folder against the public readiness rubric (--report, --badge, --compare)
   references check <file|-> [dir]
                             Resolve a JSON array of stored block references: resolved, removed, or unknown
   reproduce <report> [dir]  Preflight a recorded build, rebuild it, and compare the reports (--check: preflight only)
@@ -204,6 +210,13 @@ Options:
   --collection <name>  For data transform-diff: the collection to compare when both configs declare several
   --accept <ids|all>   For inputs import: inputs whose differing destination files or lock entries may be replaced
   --list               For init: print the theme's starters with their titles and descriptions
+  --min <section>=<n>  For readiness: minimum score for one rubric section (repeatable)
+  --min-overall <n>    For readiness: minimum overall score
+  --fail-on-unknown    For readiness: fail when a rule has no evidence
+  --evals <file>       For readiness: an evaluation report whose suite, version, and build snapshot must match
+  --badge <file>       For readiness: write a deterministic SVG badge (.md writes Markdown)
+  --evidence <url>     For readiness: public CI evidence link kept in the report and badge
+  --compare <file>     For readiness: compare this build with an earlier verified report
   --lang <a,b>         For init: keep only these of the starter's optional languages
   --dry-run            For edit apply: print the diff without writing; for versions snapshot: print the files without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
@@ -247,7 +260,13 @@ type CheckOpts = {
   readonly theme?: string;
   readonly workers?: number;
   readonly asOf?: string;
+  /** Also score the staging build against the public readiness rubric. */
+  readonly agents?: boolean;
 };
+
+type ReadinessOpts = {
+  readonly command: "readiness";
+} & ReadinessCommandOptions;
 
 type DoctorOpts = {
   readonly command: "doctor";
@@ -536,6 +555,7 @@ type Parsed =
       readonly options:
         | BuildOpts
         | CheckOpts
+        | ReadinessOpts
         | DevOpts
         | DoctorOpts
         | EditApplyOpts
@@ -1391,6 +1411,91 @@ function parseImport(args: readonly string[]): Parsed {
   };
 }
 
+/** Parses `readiness [built] [--built <dir>] [--format text|json] ...`. */
+function parseReadiness(args: readonly string[]): Parsed {
+  let positional: string | undefined;
+  let built: string | undefined;
+  let format: "text" | "json" = "text";
+  let report: string | undefined;
+  let badge: string | undefined;
+  let compare: string | undefined;
+  let evals: string | undefined;
+  let evidence: string | undefined;
+  let minOverall: number | undefined;
+  let failOnUnknown = false;
+  const min: Partial<Record<ReadinessDimension, number>> = {};
+  const dimensions = new Set(RUBRIC.dimensions.map((dimension) => dimension.id));
+
+  const score = (raw: string, flag: string): number | string => {
+    const value = Number(raw);
+    if (!/^\d+(?:\.\d+)?$/.test(raw) || !Number.isFinite(value) || value < 0 || value > 100) {
+      return `${flag} must be a score from 0 to 100, not ${raw}`;
+    }
+    return value;
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    const value = (): string => {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) throw new Error(`${arg} needs a value`);
+      return next;
+    };
+    try {
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--built") built = value();
+      else if (arg === "--format") {
+        const raw = value();
+        if (raw !== "text" && raw !== "json") return { error: `--format for readiness must be text or json, not ${raw}` };
+        format = raw;
+      } else if (arg === "--report") report = value();
+      else if (arg === "--badge") badge = value();
+      else if (arg === "--compare") compare = value();
+      else if (arg === "--evals") evals = value();
+      else if (arg === "--evidence") evidence = value();
+      else if (arg === "--min-overall") {
+        const parsed = score(value(), arg);
+        if (typeof parsed === "string") return { error: parsed };
+        minOverall = parsed;
+      } else if (arg === "--min") {
+        const raw = value();
+        const at = raw.indexOf("=");
+        if (at < 0) return { error: `--min needs <section>=<score>, not ${raw}` };
+        const section = raw.slice(0, at);
+        if (!dimensions.has(section as ReadinessDimension)) {
+          return { error: `--min names ${section}; use one of ${[...dimensions].join(", ")}` };
+        }
+        const parsed = score(raw.slice(at + 1), arg);
+        if (typeof parsed === "string") return { error: parsed };
+        min[section as ReadinessDimension] = parsed;
+      } else if (arg === "--fail-on-unknown") failOnUnknown = true;
+      else if (arg.startsWith("-")) return { error: `unknown option for readiness: ${arg}` };
+      else if (positional === undefined) positional = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  if (positional !== undefined && built !== undefined && positional !== built) {
+    return { error: "readiness takes one built folder: use the positional path or --built, not both" };
+  }
+  return {
+    options: {
+      command: "readiness",
+      built: built ?? positional ?? "dist",
+      format,
+      min,
+      failOnUnknown,
+      ...(report === undefined ? {} : { report }),
+      ...(badge === undefined ? {} : { badge }),
+      ...(compare === undefined ? {} : { compare }),
+      ...(evals === undefined ? {} : { evals }),
+      ...(evidence === undefined ? {} : { evidence }),
+      ...(minOverall === undefined ? {} : { minOverall }),
+    },
+  };
+}
+
 /** Parses `argv` after the process name. */
 export function parseArgs(args: readonly string[]): Parsed {
   const [command, ...rest] = args;
@@ -1443,6 +1548,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "diff") return parseDiff(rest);
   if (command === "reproduce") return parseReproduce(rest);
   if (command === "compare") return parseCompare(rest);
+  if (command === "readiness") return parseReadiness(rest);
   if (command === "api") return parseApi(rest);
   if (command === "mcp") return parseMcp(rest);
   if (
@@ -1479,6 +1585,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let previewCanonical: string | undefined;
   let baseline: string | undefined;
   let commit: string | undefined;
+  let agents = false;
 
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
@@ -1606,6 +1713,9 @@ export function parseArgs(args: readonly string[]): Parsed {
           return { error: `--budget must be a positive whole number of tokens, not ${raw}` };
         }
         budget = parsed;
+      } else if (arg === "--agents") {
+        if (command !== "check") return { error: "--agents is only valid for check" };
+        agents = true;
       } else if (arg.startsWith("-")) {
         return { error: `unknown option: ${arg}` };
       } else if (root === undefined) {
@@ -1718,6 +1828,7 @@ export function parseArgs(args: readonly string[]): Parsed {
       ...(theme === undefined ? {} : { theme }),
       ...(workers === undefined ? {} : { workers }),
       ...(asOf === undefined ? {} : { asOf }),
+      ...(agents ? { agents: true } : {}),
     },
   };
 }
@@ -1765,6 +1876,10 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     }
     asOf = read.date;
     if (read.today) error(`${NAME}: as-of date ${asOf} (today)`);
+  }
+
+  if (options.command === "readiness") {
+    return await readinessCommand(options, { log, error });
   }
 
   if (options.command === "mcp") {
@@ -2511,6 +2626,11 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     });
     const diagnostics = [...result.diagnostics, ...(await staleDiagnostics(root))];
     printDiagnostics(diagnostics, options.format, log);
+    if (options.agents) {
+      const report = readinessReport(await scanBuild(out));
+      log(options.format === "json" ? formatReadinessJson(report).replace(/\n$/, "") : formatReadiness(report).replace(/\n$/, ""));
+      if (report.status === "fail") return 1;
+    }
     return diagnostics.some((d) => d.severity === "error") ? 1 : 0;
   } catch (err) {
     error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
