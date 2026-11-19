@@ -43,9 +43,10 @@ function stripPaths(text: string, root: string | undefined): Cleaned {
 function stripSecrets(text: string): Cleaned {
   let result = text;
   result = result.replace(
-    /([?&](?:access_token|api[_-]?key|token|secret|password|sig|signature|x-amz-signature)=)[^&\s"'`]+/gi,
+    /([?&](?:access_token|api[_-]?key|key|token|secret|password|sig|signature|x-amz-signature)=)[^&\s"'`]+/gi,
     "$1<redacted>",
   );
+  result = result.replace(/((?:access_token|api[_-]?key|key|token|secret|password)\s*[:=]\s*)[^\s,;"'`]+/gi, "$1<redacted>");
   result = result.replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1<redacted>");
   result = result.replace(/("?(?:access_token|api[_-]?key|token|secret|password)"?\s*:\s*")[^"]+"/gi, "$1<redacted>\"");
   result = result.replace(/(\/\/)[^/@\s]+:[^/@\s]+@/g, "$1<redacted>@");
