@@ -1,4 +1,5 @@
 /** The contract of one MCP tool. A tool is one file in `src/mcp/tools/`; its name is the file name. */
+import type { ClientProfile } from "../contracts/clients.ts";
 import type { Stage } from "./runtime/errors.ts";
 import type { Runtime, Session } from "./runtime/operations.ts";
 import type { SiteState } from "./site.ts";
@@ -23,6 +24,8 @@ export interface ToolSetup {
 export interface ToolContext {
   readonly site: SiteState;
   readonly signal: AbortSignal;
+  /** The client detected from `initialize`, before this call ran; absent before a handshake. */
+  readonly client?: ClientProfile;
   /** Operations, sessions, and receipts this call belongs to. */
   readonly runtime: Runtime;
   readonly session: Session;

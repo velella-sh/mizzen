@@ -33,7 +33,7 @@ export const tool: Tool<Input> = {
     },
     additionalProperties: false,
   },
-  async handler(input, { site }) {
+  async handler(input, { site, client }) {
     const limit = input.limit ?? 50;
     const offset = input.cursor === undefined ? 0 : Number(input.cursor);
     if (!Number.isInteger(offset) || offset < 0) throw new McpError("bad-cursor", "The cursor is not one this server gave.");
@@ -65,6 +65,7 @@ export const tool: Tool<Input> = {
     }
     const slice = entries.slice(offset, offset + limit);
     const next = offset + limit;
-    return json({ total: entries.length, pages: slice, ...(next < entries.length ? { nextCursor: String(next) } : {}) });
+    const more = next < entries.length;
+    return json({ total: entries.length, pages: slice, ...(more && client?.capabilities.cursors === false ? { nextOffset: next } : more ? { nextCursor: String(next) } : {}) });
   },
 };
