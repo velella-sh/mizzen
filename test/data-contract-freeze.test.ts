@@ -153,6 +153,7 @@ const FROZEN: Shape = {
     "records": "readonly RecordProps[]",
     "url": "?string",
     "count": "?number",
+    "calendars": "?readonly CalendarLink[]",
   },
   ListPagination: {
     "page": "number",
@@ -165,6 +166,8 @@ const FROZEN: Shape = {
     "records": "readonly RecordProps[]",
     "groups": "readonly ListGroup[]",
     "pagination": "ListPagination",
+    "calendars": "?readonly CalendarLink[]",
+    "feed": "?string",
   },
 };
 

@@ -44,6 +44,10 @@ The `calendars` output writes `calendars/<name>.ics` for each calendar. With `gr
 `calendars/<name>/<group>.ics` for every value, such as one file per vendor. A calendar with no events writes no file and
 is reported, and a site with calendars but no `url` writes none and reports `calendars.no-url`.
 
+A list layout receives links to its collection's published calendars in `list.calendars`. When the list groups or
+expands by the same field as `groupBy`, `list.groups[].calendars` links to the published calendar for that group.
+Each link has the ordinary `url` and a `webcal` URL for subscribing in a calendar app.
+
 ### Events
 
 One event is built from each record for every entry under `events`.

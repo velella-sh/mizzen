@@ -4,6 +4,7 @@ import type { DataRecord, Page, Site, SiteConfig } from "../src/contracts/index.
 import type { Diagnostic } from "../src/contracts/diagnostic.ts";
 import type { OutputContext } from "../src/contracts/output.ts";
 import { calendars } from "../src/outputs/calendars.ts";
+import { listCalendarsOf } from "../src/calendar/links.ts";
 
 const pos = { file: "_data/runtimes.yml", startLine: 3, startColumn: 1, endLine: 7, endColumn: 1 };
 
@@ -102,6 +103,41 @@ test("groupBy adds one file per group value", async () => {
   assert.deepEqual(files.map((f) => f.path), ["calendars/eol.ics", "calendars/eol/openjs.ics", "calendars/eol/psf.ics"]);
   assert.equal((files[1]!.contents as string).match(/BEGIN:VEVENT/g)?.length, 3);
   assert.equal((files[2]!.contents as string).match(/BEGIN:VEVENT/g)?.length, 1);
+});
+
+test("list subscriptions name only published collection and matching group calendars", async () => {
+  const eol = { ...config().calendars!["eol"]!, groupBy: "vendor" };
+  const empty = { ...eol, where: { vendor: "Nobody" } };
+  const overrides = { base: "/docs", calendars: { eol, empty } };
+  const s = site(overrides, [
+    ...records,
+    record("collision", { vendor: "openjs", eol: "2026-04-30", updated: "2026-03-01" }),
+  ]);
+  const list = {
+    collection: "runtimes",
+    records: [],
+    groups: ["OpenJS", "PSF", "openjs", "Nobody"].map((key) => ({ key, records: [] })),
+    pagination: { page: 1, total: 1 },
+  };
+  const p: Page = { ...page("list"), list, frontMatter: { list: { group: "vendor" } } };
+  const subscriptions = listCalendarsOf(s, p)!;
+  assert.deepEqual(subscriptions.calendars?.map((c) => c.webcal), ["webcal://docs.example.com/docs/calendars/eol.ics"]);
+  assert.deepEqual(subscriptions.groups.map((g) => g.calendars?.[0]?.url), [
+    "https://docs.example.com/docs/calendars/eol/openjs.ics",
+    "https://docs.example.com/docs/calendars/eol/psf.ics",
+    undefined,
+    undefined,
+  ]);
+  const written = (await calendars.run(s, context().ctx)).map((f) => f.path);
+  for (const c of [...subscriptions.calendars!, ...subscriptions.groups.flatMap((g) => g.calendars ?? [])]) {
+    assert.ok(written.includes(new URL(c.url).pathname.slice("/docs/".length)));
+  }
+  assert.ok(listCalendarsOf(s, { ...p, frontMatter: { list: { group: "other" } } })?.groups.every((g) => g.calendars === undefined));
+  const expanded = { ...list, groups: [{ ...list.groups[0]!, url: "/docs/vendor/openjs/" }] };
+  assert.equal(listCalendarsOf(s, { ...p, list: expanded, frontMatter: { list: { expand: { field: "vendor" } } } })
+    ?.groups[0]?.calendars?.[0]?.url, subscriptions.groups[0]?.calendars?.[0]?.url);
+  assert.equal(listCalendarsOf(site({ ...overrides, outputs: { calendars: false } }), p), list);
+  assert.equal(listCalendarsOf(site({ ...overrides, url: "not a URL" }), p), list);
 });
 
 test("an empty calendar writes no file and is reported", async () => {

@@ -99,7 +99,7 @@ function withDefaults(
 }
 
 /** The site root's folder inside the repository, `/`-separated with no leading `./` or trailing `/`; `""` at the repository root. */
-function repositoryFolder(dir: string | undefined): string {
+export function repositoryFolder(dir: string | undefined): string {
   const folder = (dir ?? "").replace(/\\/g, "/").replace(/^(\.\/)+/, "").replace(/\/+$/, "");
   return folder === "." ? "" : folder;
 }
@@ -633,7 +633,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   // The changelog pages come last: they list the events of every collection whose `changelog.pages` is on, and the
   // feed reads the record pages' URLs. A collection with no history builds nothing.
-  const changelog = buildChangelogPages({ config, collections: allCollections, data: data.data });
+  const changelog = buildChangelogPages({ config, collections: allCollections, data: data.data, pages });
   for (const d of changelog.diagnostics) diagnostics.report(d);
   for (const generated of changelog.pages) {
     const known = seen.get(generated.url);

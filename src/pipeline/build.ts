@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
 import { access, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/load.ts";
 import { normalizeBase } from "../content/permalink.ts";
 import { discover } from "../content/discover.ts";
 import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, PreviewPolicy, Site } from "../contracts/index.ts";
-import { buildModel } from "../model/build.ts";
+import { buildModel, repositoryFolder } from "../model/build.ts";
+import { listCalendarsOf } from "../calendar/links.ts";
 import { writeUrlsLock } from "../data/urls-lock.ts";
 import { writeBlocksLock } from "../blocks/lock.ts";
 import { diffReadBuilds, type SiteDiff } from "../diff/index.ts";
@@ -366,6 +367,8 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // read before the cache key because a covered file or the lock can change while every source file stays the same.
   // It is an enrichment: a build that cannot read it still writes the site.
   const staleBySource = await stalePageStates(root).catch((): Map<string, PageStale> => new Map());
+  const repositoryDir = repositoryFolder(loaded.config.repository?.dir);
+  const staleByRepositorySource = new Map([...staleBySource].map(([file, stale]) => [posix.join(repositoryDir, file), stale]));
 
   // The site's code file is read before the cache: its plugin declarations are part of the key, and a plugin that
   // declares no inputs means the build cannot be cached. Its problems are diagnostics, not a failed build, so they are
@@ -435,16 +438,20 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const versioned = applyVersionRouting(hookedModel.value.pages, hookedModel.value.data.versions, hookedModel.value.config.base);
   for (const d of versioned.diagnostics) diagnostics.report(d);
   const hookedSite: Site = versioned.pages === hookedModel.value.pages ? hookedModel.value : { ...hookedModel.value, pages: versioned.pages };
-  // The stale state is carried on the page, so the layout and the page JSON see what `mizzen stale` reports. A page
-  // without `covers`, or one whose files are current, has none.
+  // Attach the state and subscription links before hashing or handing pages to a render worker.
   const site: Site =
-    staleBySource.size === 0
+    staleByRepositorySource.size === 0 && Object.keys(hookedSite.config.calendars ?? {}).length === 0
       ? hookedSite
       : {
           ...hookedSite,
           pages: hookedSite.pages.map((page) => {
-            const stale = staleBySource.get(page.source.file);
-            return stale === undefined ? page : { ...page, stale };
+            const stale = staleByRepositorySource.get(page.source.file);
+            const list = listCalendarsOf(hookedSite, page);
+            return stale === undefined && list === page.list ? page : {
+              ...page,
+              ...(stale === undefined ? {} : { stale }),
+              ...(list === undefined ? {} : { list }),
+            };
           }),
         };
   for (const d of await placeholderDiagnostics(site)) diagnostics.report(d);
