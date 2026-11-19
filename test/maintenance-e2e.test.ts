@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import type { MaintenanceCheck, MaintenanceObservations } from "../src/contracts/index.ts";
+import type { MaintenanceCheck, MaintenanceObservations, MaintenancePatch } from "../src/contracts/index.ts";
 import { comparePages } from "../src/drift/compare.ts";
 import { hashSource } from "../src/edits/patch.ts";
 import { sha256 } from "../src/data/lock.ts";
@@ -93,7 +93,7 @@ test("API drift becomes a task, a failed proof, a proved proposal, and one local
   assert.match(task.goal, /drift\.missing-symbol/);
 
   const span = spanOf(markdown, "renderResult");
-  const patch = {
+  const patch: MaintenancePatch = {
     version: 1,
     task: task.id,
     snapshot: task.snapshot.id,
