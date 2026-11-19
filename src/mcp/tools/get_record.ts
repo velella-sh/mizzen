@@ -1,4 +1,5 @@
 /** `get_record`: one record's fields, its page URL, and where it sits in the data file. Only on a site with collections. */
+import { closestNames } from "../records.ts";
 import { json, refusal, type Tool } from "../tool.ts";
 
 interface Input {
@@ -26,7 +27,10 @@ export const tool: Tool<Input> = {
       return refusal("unknown-collection", `No collection "${input.collection}".`, { collections });
     }
     const record = collection.records.find((r) => r.id === input.id);
-    if (record === undefined || !site.readableRecord(input.collection, record.id, record.fields)) {
+    if (record === undefined) {
+      return refusal("unknown-record", `No record "${input.id}" in ${input.collection}.`, { closest: closestNames(collection.records.map((r) => r.id), input.id) });
+    }
+    if (!site.readableRecord(input.collection, record.id, record.fields)) {
       return refusal("unknown-record", `No record "${input.id}" in ${input.collection}.`, { closest: [] });
     }
     const page = site.readablePages.find((p) => p.page.record?.collection === input.collection && p.page.record.id === input.id && p.page.record.view === undefined);
