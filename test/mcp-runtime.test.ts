@@ -156,20 +156,27 @@ test("cancelling an operation keeps no partial result", async () => {
 test("operation and event limits refuse or bound work instead of growing", async () => {
   const bounded = await harness(copyFixture("docs-site"), { allowEdits: true, limits: { maxOperations: 1, maxEventsPerOperation: 3, maxOperationRecords: 2 } });
   try {
-    await seedProofs(bounded, 30);
+    // Enough proofs that the first operation is still running when the second is offered: the limit is about
+    // concurrent work, not history, so a short operation would finish before the refusal could be observed.
+    await seedProofs(bounded, 4000);
     const first = await start(bounded, "bounded", "verify", {});
     const busy = await result(bounded, "bounded", "start_operation", { kind: "pack", input: { goal: "install", maxTokens: 500 } });
     assert.equal(busy.isError, true);
     assert.equal(busy.structuredContent.code, "busy");
     assert.equal(busy.structuredContent.retryable, true);
-    const done = await settled(bounded, "bounded", first.operationId);
-    assert.equal(done.status, "succeeded");
-    assert.ok(done.dropped > 0);
-    const gap = await result(bounded, "bounded", "get_operation", { operationId: first.operationId, after: 0 });
+    // The queue keeps the newest events; asking from the start names where to resume instead of silently skipping.
+    let gap: any;
+    for (let attempt = 0; attempt < 100 && gap?.isError !== true; attempt++) {
+      gap = await result(bounded, "bounded", "get_operation", { operationId: first.operationId, after: 0 });
+      if (gap.isError !== true) await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     assert.equal(gap.isError, true);
     assert.equal(gap.structuredContent.code, "event-gap");
     assert.equal(gap.structuredContent.retryable, true);
     assert.equal(typeof gap.structuredContent.retryFrom, "number");
+    assert.ok(gap.structuredContent.dropped > 0);
+    const cancelled = (await result(bounded, "bounded", "cancel_operation", { operationId: first.operationId })).structuredContent;
+    assert.equal(cancelled.status, "cancelled");
   } finally {
     await bounded.close();
   }
