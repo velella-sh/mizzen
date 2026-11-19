@@ -55,3 +55,10 @@ export {
 export { audiencesOf, pageResource, readablePage } from "./read.ts";
 export { auditLedger, auditLine } from "./audit.ts";
 export { readAccessPolicyFile, type AccessPolicyFileResult } from "./file.ts";
+export {
+  AccessNetworkError,
+  gatedFetch,
+  networkDecision,
+  type GatedFetch,
+  type NetworkGate,
+} from "./network.ts";

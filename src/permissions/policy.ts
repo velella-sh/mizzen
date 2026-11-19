@@ -345,7 +345,7 @@ export function scopeSize(scope: AccessWriteScope): number {
 /** Every problem ajv reported, as a located sentence. */
 function problemsFromAjv(errors: readonly ErrorObject[]): readonly AccessPolicyProblem[] {
   return errors.map((error) => {
-    const path = error.instancePath === "" ? `/${String(error.params.missingProperty ?? "")}` : error.instancePath;
+    const path = error.instancePath === "" ? `/${String(error.params.missingProperty ?? error.params.additionalProperty ?? "")}` : error.instancePath;
     const where = whereOf(error.instancePath);
     const extra =
       error.keyword === "additionalProperties"

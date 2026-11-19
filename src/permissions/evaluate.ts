@@ -142,6 +142,7 @@ export function writeScopeWithin(
   path: string,
 ): boolean {
   let covered = false;
+  let semantic = false;
 
   if (granted.files.length > 0) {
     if (!referencesWithin(granted.files, wanted.files)) return false;
@@ -153,11 +154,12 @@ export function writeScopeWithin(
     if (wanted[key].length === 0) continue;
     if (granted[key].length === 0) continue;
     if (!referencesWithin(granted[key], wanted[key])) return false;
+    semantic = true;
     covered = true;
   }
 
   // A caller that supplies only files is covered by a file grant; with no file grant it needs a semantic category.
-  if (wanted.files.length > 0 && granted.files.length === 0) covered = false;
+  if (wanted.files.length > 0 && granted.files.length === 0 && !semantic) return false;
   return covered;
 }
 
