@@ -10,7 +10,7 @@ const Ajv2020 = createRequire(import.meta.url)("ajv/dist/2020.js") as new (optio
 const SUITE = fileURLToPath(new URL("../fixtures/evals", import.meta.url));
 const SCHEMA = fileURLToPath(new URL("../schema/eval-report.schema.json", import.meta.url));
 
-test("the reference suite is deterministic and green except its recorded gap", async () => {
+test("the reference suite is deterministic and green with no recorded gap", async () => {
   const first = await runEvalSuite({ suite: SUITE });
   const second = await runEvalSuite({ suite: SUITE });
 
