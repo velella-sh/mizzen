@@ -55,7 +55,7 @@ test("an API reference, docs block, snippet, and symbol are linked", () => {
   const api = graph.nodes.find((node) => node.kind === "api");
   assert.ok(api);
   assert.equal(api.id, "api:guide.md#createWidget");
-  assert.ok(graph.edges.some((edge) => edge.from === "page:guide.md" && edge.to === api.id && edge.kind === "documents"));
+  assert.ok(graph.edges.some((edge) => edge.from === "page:api:guide.md#createWidget" && edge.to === api.id && edge.kind === "documents"));
   const snippet = graph.nodes.find((node) => node.kind === "snippet");
   assert.ok(snippet);
   assert.equal(snippet.label, "src/math.ts:1");

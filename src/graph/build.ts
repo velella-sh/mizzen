@@ -103,8 +103,17 @@ export function recordPos(pos: RecordPos): SourcePos {
   return { file: pos.file, line: pos.startLine, column: pos.startColumn, endLine: pos.endLine, endColumn: pos.endColumn };
 }
 
-/** The id of a page node: its source path, which a permalink change leaves alone. */
-export function pageNodeId(page: Pick<Page, "source">): string {
+/**
+ * The id of a page node: its source path, which a permalink change leaves alone. A generated page gets the identity
+ * that is stable for it: a record page its collection and record, and an API operation page its operation id, so many
+ * pages built from one template or one OpenAPI file stay distinct.
+ */
+export function pageNodeId(page: Page): string {
+  if (page.record !== undefined) {
+    return `page:record:${page.record.collection}/${page.record.id}${page.record.view === undefined ? "" : `#${page.record.view}`}`;
+  }
+  const api = apiOf(page);
+  if (api !== undefined) return `page:api:${page.source.file}#${api.id}`;
   return `page:${page.source.file}`;
 }
 
