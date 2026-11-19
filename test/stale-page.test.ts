@@ -81,6 +81,29 @@ test("a page without covers gets no stale state", async () => {
   }
 });
 
+test("a site in a repository subfolder still exposes stale state", async () => {
+  const root = site({
+    ...FILES,
+    "mizzen.yml": `${FILES["mizzen.yml"]}source: docs\nrepository:\n  url: https://github.com/example/docs\n  dir: ./web/site/\n`,
+    "docs/guide.md": FILES["guide.md"],
+  });
+  const themeRoot = theme();
+  const out = mkdtempSync(join(tmpdir(), "stale-page-out-"));
+  try {
+    assert.equal((await run(["stale", "mark", "docs/guide.md", "--site", root, "--date", "2026-01-01"])).code, 0);
+    write(root, { "src/x.ts": "changed" });
+    const result = await build({ root, out, themeRoot, defaultLayout: "doc" });
+    assert.deepEqual(result.diagnostics.filter((d) => d.severity === "error"), []);
+    assert.match(readFileSync(join(out, "guide/index.html"), "utf8"), /"reviewed":"2026-01-01"/);
+    assert.deepEqual(jsonBody(out, "guide/index.json").stale, {
+      reviewed: "2026-01-01",
+      files: [{ path: "src/x.ts", change: "changed" }],
+    });
+  } finally {
+    for (const path of [root, themeRoot, out]) rmSync(path, { recursive: true, force: true });
+  }
+});
+
 test("a covered file change misses the whole-build cache", async () => {
   const root = site(FILES);
   const themeRoot = theme();

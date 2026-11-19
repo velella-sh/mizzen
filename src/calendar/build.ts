@@ -10,6 +10,7 @@ import type { Diagnostic } from "../contracts/diagnostic.ts";
 import { filterRows, parseQuery } from "../data/query.ts";
 import { localizeFields, resolveIn, scalarText } from "../data/record-context.ts";
 import { referenceDateOf } from "../data/reference-date.ts";
+import { slugOf } from "../data/slug.ts";
 import { indexRecords } from "../outputs/search-shared.ts";
 import { recordEvents } from "./events.ts";
 import type { IcsEvent } from "./ics.ts";
@@ -35,6 +36,35 @@ export interface CalendarEvents {
 /** Compares by code point, never by locale. */
 export function byCodePoint(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Groups that get files, in path-selection order, skipping empty and colliding slugs. */
+export function calendarGroups(name: string, events: readonly CalendarEvent[], report?: (diagnostic: Diagnostic) => void) {
+  const groups = new Map<string, CalendarEvent[]>();
+  for (const item of events) {
+    for (const value of item.groups) {
+      const group = groups.get(value);
+      if (group === undefined) groups.set(value, [item]);
+      else group.push(item);
+    }
+  }
+  const used = new Map<string, string>();
+  return [...groups.keys()].sort(byCodePoint).flatMap((value) => {
+    const slug = slugOf(value);
+    const clash = used.get(slug);
+    if (slug === "" || clash !== undefined) {
+      report?.({
+        id: "calendars.group-name",
+        severity: "warning",
+        message: slug === ""
+          ? `The group "${value}" of the calendar "${name}" has no letters or digits for a file name, so it has no file.`
+          : `The groups "${clash}" and "${value}" of the calendar "${name}" give the same file name "${slug}.ics"; the second has no file.`,
+      });
+      return [];
+    }
+    used.set(slug, value);
+    return [{ value, file: `calendars/${name}/${slug}.ics`, events: groups.get(value)! }];
+  });
 }
 
 function groupValues(value: unknown): string[] {

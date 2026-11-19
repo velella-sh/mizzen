@@ -7,8 +7,7 @@
  * valid `url` writes none and reports it once.
  */
 import { writeIcs } from "../calendar/ics.ts";
-import { byCodePoint, calendarEvents } from "../calendar/build.ts";
-import { slugOf } from "../data/slug.ts";
+import { byCodePoint, calendarEvents, calendarGroups } from "../calendar/build.ts";
 import type { Site } from "../contracts/index.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import { originOf } from "../feeds/model.ts";
@@ -56,30 +55,10 @@ export const calendars: Output = {
       }
       files.push({ path: `calendars/${name}.ics`, contents: writeIcs({ name: title, events: events.slice(0, limit).map((e) => e.event) }) });
 
-      if (calendar.groupBy === undefined) continue;
-      const groups = new Map<string, typeof events>();
-      for (const item of events) {
-        for (const value of item.groups) groups.set(value, [...(groups.get(value) ?? []), item]);
-      }
-      const used = new Map<string, string>();
-      for (const value of [...groups.keys()].sort(byCodePoint)) {
-        const slug = slugOf(value);
-        const clash = used.get(slug);
-        if (slug === "" || clash !== undefined) {
-          ctx.report({
-            id: "calendars.group-name",
-            severity: "warning",
-            message:
-              slug === ""
-                ? `The group "${value}" of the calendar "${name}" has no letters or digits for a file name, so it has no file.`
-                : `The groups "${clash}" and "${value}" of the calendar "${name}" give the same file name "${slug}.ics"; the second has no file.`,
-          });
-          continue;
-        }
-        used.set(slug, value);
+      for (const group of calendarGroups(name, events, (d) => ctx.report(d))) {
         files.push({
-          path: `calendars/${name}/${slug}.ics`,
-          contents: writeIcs({ name: `${title} (${value})`, events: groups.get(value)!.slice(0, limit).map((e) => e.event) }),
+          path: group.file,
+          contents: writeIcs({ name: `${title} (${group.value})`, events: group.events.slice(0, limit).map((e) => e.event) }),
         });
       }
     }

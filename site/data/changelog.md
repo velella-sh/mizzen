@@ -79,6 +79,10 @@ The build writes `/changes/<collection>/` with the newest events, one page per s
 a list query over `<collection>.changes`, so a theme renders it like any other list page. The feed's entry id is the
 event id. A collection with no history file builds no page and writes no feed.
 
+The newest list groups events by exact snapshot date. In the layout, each row's `links.record` points to the affected
+record page when it still exists; removed and imported events have no record link. When the Atom feed is published,
+its URL is available as `list.feed` and as an alternate link in `head.links`.
+
 The history is also a read-only collection named `<collection>.changes`: lists, filters, grouping, feeds, and search
 read it like any other collection, while no template or page is built from it and it is never written back to the
 source.

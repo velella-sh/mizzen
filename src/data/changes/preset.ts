@@ -10,6 +10,7 @@ import type {
   Collection,
   Diagnostic,
   Page,
+  RecordProps,
   Site,
   SiteConfig,
   SourcePos,
@@ -80,6 +81,7 @@ export interface ChangelogPagesOptions {
   readonly config: SiteConfig;
   readonly collections: Readonly<Record<string, Collection>>;
   readonly data: Readonly<Record<string, unknown>>;
+  readonly pages: readonly Page[];
 }
 
 /** Builds the newest-events page and one list page per snapshot date for every collection that asks for them. */
@@ -89,39 +91,65 @@ export function buildChangelogPages(options: ChangelogPagesOptions): ChangelogPa
   const diagnostics: Diagnostic[] = [];
   if (config.outputs["data-changelog"] === false) return { pages, diagnostics };
 
+  const origin = originOf(config.url);
   for (const name of covered(config, collections)) {
     const collection = changesName(name);
     const history = collections[collection]!;
     const root = changelogUrl(config, name);
+    const urls = recordUrls(options.pages, config.lang, name);
+    const feed = origin === undefined ? undefined : `${origin}${config.base.replace(/\/+$/, "")}/${changelogFeedFile(name)}`;
+    const append = (built: ReturnType<typeof buildListPages>) => {
+      diagnostics.push(...built.diagnostics);
+      for (const page of built.pages) {
+        const list = page.list;
+        if (list === undefined) {
+          pages.push(page);
+          continue;
+        }
+        const rowWithLink = (row: RecordProps): RecordProps => {
+          const { record, type } = row.fields;
+          const url = typeof record === "string" && type !== "removed" && type !== "imported" ? urls.get(record) : undefined;
+          return url === undefined ? row : { ...row, links: { ...row.links, record: url } };
+        };
+        const records = list.records.map(rowWithLink);
+        const rows = new Map(records.map((row) => [row.id, row]));
+        pages.push({
+          ...page,
+          list: {
+            ...list,
+            records,
+            groups: list.groups.map((group) => ({ ...group, records: group.records.map((row) => rows.get(row.id)!) })),
+            ...(feed === undefined ? {} : { feed }),
+          },
+        });
+      }
+    };
 
-    const newest = buildListPages({
+    append(buildListPages({
       page: pageOf(config, root, `${name} changes`, {
         collection,
         sort: "date desc",
+        group: "date",
         fields: ["date", "type", "record", "field"],
       }),
       config,
       collections,
       data,
-    });
-    diagnostics.push(...newest.diagnostics);
-    pages.push(...newest.pages);
+    }));
 
     const dates = [...new Set(eventsOf(history).map((event) => event.date))].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
     for (const date of dates) {
-      const built = buildListPages({
+      append(buildListPages({
         page: pageOf(config, changelogDateUrl(config, name, date), `${name} changes on ${date}`, {
           collection,
           where: { date },
           sort: "record",
-          fields: ["id", "type", "record", "field"],
+          fields: ["id", "date", "type", "record", "field"],
         }),
         config,
         collections,
         data,
-      });
-      diagnostics.push(...built.diagnostics);
-      pages.push(...built.pages);
+      }));
     }
   }
 
@@ -140,13 +168,13 @@ function recordFieldsOf(collections: Readonly<Record<string, Collection>>, name:
 }
 
 /** The page URL of each record of a collection, for a feed entry that can link to it. */
-function recordUrls(site: Site, name: string): ReadonlyMap<string, string> {
+function recordUrls(pages: readonly Page[], lang: string, name: string): ReadonlyMap<string, string> {
   const urls = new Map<string, string>();
   const main = new Map<string, string>();
-  for (const page of site.pages) {
+  for (const page of pages) {
     const record = page.record;
     if (record === undefined || record.collection !== name || record.view !== undefined) continue;
-    if (page.lang === site.config.lang) main.set(record.id, page.url);
+    if (page.lang === lang) main.set(record.id, page.url);
     else if (!urls.has(record.id)) urls.set(record.id, page.url);
   }
   for (const [id, url] of main) urls.set(id, url);
@@ -164,7 +192,7 @@ export function changelogFeeds(site: Site): readonly OutputFile[] {
   for (const name of covered(site.config, site.collections)) {
     const changelog = site.config.collections[name]!.changelog!;
     const entries: FeedEntry[] = [];
-    const urls = recordUrls(site, name);
+    const urls = recordUrls(site.pages, site.config.lang, name);
     const events = [...eventsOf(site.collections[changesName(name)])].sort((a, b) =>
       a.date < b.date ? 1 : a.date > b.date ? -1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
     );

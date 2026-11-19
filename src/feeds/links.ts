@@ -18,6 +18,10 @@ export function feedLinks(site: Site, page: Page): LinkTag[] {
   if (origin === undefined) return [];
   const base = site.config.base.replace(/\/+$/, "");
   const links: LinkTag[] = [];
+  const changelog = page.list?.feed;
+  if (changelog !== undefined) {
+    links.push({ rel: "alternate", href: changelog, attrs: { type: FEED_MEDIA_TYPE.atom, title: page.title } });
+  }
   for (const [name, feed] of Object.entries(site.config.feeds)) {
     if (feed.collection !== collection || !feedIsWritten(site, name)) continue;
     for (const format of feed.formats ?? ["atom"]) {

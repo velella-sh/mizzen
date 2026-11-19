@@ -233,7 +233,7 @@ export interface RecordProps {
   readonly changes?: readonly ChangeEvent[];
 }
 
-/** One calendar file a record page belongs to, for a subscribe link. */
+/** One calendar file available for subscription. */
 export interface CalendarLink {
   /** The calendar's name in the config. */
   readonly name: string;
@@ -255,6 +255,8 @@ export interface ListGroup {
   readonly url?: string;
   /** How many records the group holds, including on the index page where `records` is empty. */
   readonly count?: number;
+  /** Subscription links for this group's value in calendars grouped by the same field. */
+  readonly calendars?: readonly CalendarLink[];
 }
 
 /** Where a list page sits in its pagination. */
@@ -279,4 +281,8 @@ export interface ListProps {
   readonly groups: readonly ListGroup[];
   /** Where this page sits in the list. */
   readonly pagination: ListPagination;
+  /** Subscription links for the collection's published calendars, in config order. */
+  readonly calendars?: readonly CalendarLink[];
+  /** Absolute URL of the generated collection changelog's Atom feed, when written. */
+  readonly feed?: string;
 }
