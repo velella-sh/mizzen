@@ -53,12 +53,13 @@ import { compareReports, reproduce } from "./reproduce.ts";
 import { BUILD_REPORT_PATH, buildReportOf, writeBuildReport } from "../reproduce/manifest.ts";
 import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
 import { traceEditApply, traceVerification } from "../trace/instrument.ts";
+import { runEval } from "./eval.ts";
 
 /** The command name on the PATH. */
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "graph", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -124,6 +125,7 @@ Commands:
   edit rollback <receipt.json> [dir]
                             Restore only the files a transaction receipt names
   edit verify <proof.json>  Check an edit proof or a verification proof (--input <file> for public evidence)
+  eval [suite]              Run a deterministic evaluation suite and print its report (--format, --out, --baseline)
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -433,6 +435,11 @@ type TraceOpts = {
   readonly args: readonly string[];
 };
 
+type EvalOpts = {
+  readonly command: "eval";
+  readonly args: readonly string[];
+};
+
 type GraphOpts = {
   readonly command: "graph";
   readonly args: readonly string[];
@@ -572,6 +579,7 @@ type Parsed =
         | GraphOpts
         | StaleOpts
         | TraceOpts
+        | EvalOpts
         | VersionsOpts;
     };
 
@@ -1424,6 +1432,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "trace", args: rest } };
   }
+  if (command === "eval") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "eval", args: rest } };
+  }
   if (command === "graph") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "graph", args: rest } };
@@ -1826,6 +1838,10 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
     }
+  }
+
+  if (options.command === "eval") {
+    return runEval(options.args, { write, error });
   }
 
   if (options.command === "graph") {
