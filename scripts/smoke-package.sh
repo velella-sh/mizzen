@@ -50,6 +50,100 @@ if ! grep -q 'class="mermaid-diagram"' "$mermaid_page"; then
 fi
 echo "packages build the Lateen site from node_modules"
 
+# A sample agent client uses only public JSON from the installed tarball: discover, register, run, read,
+# approve, run again, and cancel a task. No checkout, no help text, no internal module. The README the
+# tarball ships must name the commands the capability document reports, or the docs and the binary disagree.
+mkdir "$work/agent"
+cd "$work/agent"
+npm init -y >/dev/null
+npm install --silent --no-audit --no-fund "$work"/tar/velella-mizzen-*.tgz
+mkdir -p site/guide
+printf 'title: Agent smoke\n' > site/mizzen.yml
+printf '# Home\n\nThe agent smoke site.\n' > site/index.md
+printf '# Install\n\nInstall the engine with Node 24 and a terminal.\n' > site/guide/install.md
+node <<'JS'
+const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
+
+const mizzen = path.resolve("node_modules/@velella/mizzen/bin/mizzen.js");
+function run(args, input) {
+  const result = spawnSync(process.execPath, [mizzen, ...args], { encoding: "utf8", input });
+  if (result.error) throw result.error;
+  return result;
+}
+function parse(result, args) {
+  if (result.stdout.trim() === "") throw new Error(`mizzen ${args.join(" ")} wrote no JSON`);
+  return JSON.parse(result.stdout);
+}
+function ok(args, input) {
+  const result = run(args, input);
+  if (result.status !== 0) throw new Error(`mizzen ${args.join(" ")} exited ${result.status}: ${result.stderr}`);
+  return parse(result, args);
+}
+function conflict(args) {
+  const result = run(args);
+  if (result.status !== 1) throw new Error(`mizzen ${args.join(" ")} exited ${result.status}, not 1: ${result.stderr}`);
+  const document = parse(result, args);
+  if (document.ok !== false || document.problems.length === 0) throw new Error(`mizzen ${args.join(" ")} did not report a problem`);
+  return document;
+}
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+const caps = ok(["agent", "capabilities"]);
+assert(caps.version === 1 && caps.capabilities.length === 6, "capabilities are version 1 and list six names");
+assert(caps.capabilities.map((entry) => entry.name).join(",") === "task,pack,edit,verify,replay,eval", "capabilities keep their order");
+const evalCapability = caps.capabilities.find((entry) => entry.name === "eval");
+assert(evalCapability.available === false, "eval is reported unavailable");
+assert(typeof evalCapability.fallback === "string" && evalCapability.fallback.length > 0, "eval has a fallback reason");
+
+const schema = ok(["agent", "schema", "agent.task.register"]);
+assert(schema.version === 1 && schema.input.type === "object" && schema.output.type === "object", "the register schema is public JSON");
+assert(schema.exitCodes["2"].includes("invalid"), "the schema names exit code 2");
+
+const contract = {
+  version: 1,
+  idempotencyKey: "smoke-agent-task",
+  goal: "Update the install guide for Node 24",
+  scope: { pages: ["/guide/install/"], blocks: [], collections: [], symbols: [], files: ["guide/install.md"] },
+  snapshot: { content: "a".repeat(64), data: "b".repeat(64), config: "c".repeat(64), tooling: "d".repeat(64) },
+  budget: { contextTokens: 6000, toolCalls: 20, timeMs: 60000 },
+  permissions: { read: ["*"], write: ["agent"], check: ["agent"] },
+  acceptance: [{ id: "review", statement: "A person reviewed the wording", review: true }],
+};
+const registered = ok(["agent", "task", "register", "site", "--stdin"], JSON.stringify(contract));
+assert(registered.created === true && registered.state === "draft", "the task registered in draft");
+const id = registered.taskId;
+
+const first = ok(["agent", "task", "run", id, "site"]);
+assert(first.outcome === "awaiting-approval", "the review criterion pauses the run");
+assert(first.progress.events.map((event) => event.type).join(",") === "start,progress,approval-required,finish", "the events are ordered");
+assert(first.cost.estimated === true && first.cost.toolCalls === 1, "the cost report is machine-readable");
+
+const status = ok(["agent", "task", "status", id, "site"]);
+assert(status.task.state === "waiting" && status.run.outcome === "awaiting-approval", "status reads the paused task");
+
+const resumed = ok(["agent", "task", "resume", id, "site", "--approve", "all"]);
+assert(resumed.task.state === "ready" && resumed.approvals.includes("review"), "resume records the approval");
+
+const prepared = ok(["agent", "task", "run", id, "site"]);
+assert(prepared.outcome === "prepared" && prepared.task.state === "verify", "the approved task prepares");
+assert(prepared.resultRef.startsWith("context:"), "the prepared result names its context");
+
+const canceled = ok(["agent", "task", "cancel", id, "site"]);
+assert(canceled.task.state === "canceled", "cancel is terminal");
+const conflictDocument = conflict(["agent", "task", "cancel", id, "site"]);
+assert(conflictDocument.problems[0].code === "task.transition", "a repeated cancel reports the same conflict");
+
+const readme = fs.readFileSync("node_modules/@velella/mizzen/README.md", "utf8");
+for (const command of ["mizzen agent capabilities", "mizzen agent schema", "mizzen agent task register", "mizzen agent task run"]) {
+  assert(readme.includes(command), `the tarball's README documents ${command}`);
+}
+console.log("the installed agent CLI discovers, registers, runs, recovers, and cancels a task with public JSON");
+JS
+
 # The data contract types must be importable from the tarball alone, in an empty folder with no Lateen and no
 # checkout, so a theme can typecheck against a published pre-release.
 mkdir "$work/contract"
