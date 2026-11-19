@@ -61,7 +61,11 @@ export const tool: Tool<Input> = {
         });
       }
     }
-    const result = queryGraph(graph, { ...input, snapshot: input.snapshot ?? current } as GraphQueryOptions);
+    const result = queryGraph(graph, {
+      ...input,
+      snapshot: input.snapshot ?? current,
+      ...(site.access === undefined ? {} : { access: site.access }),
+    } as GraphQueryOptions);
     return json(result as unknown as Record<string, unknown>);
   },
 };

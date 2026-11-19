@@ -54,6 +54,16 @@ export interface RunNodeExampleOptions {
    * a new folder inside it; the caller's folder is never the working directory.
    */
   readonly cwd?: string;
+  /**
+   * V8's old-space limit, in MiB. Default: V8's own default. The limit is enforced by the child through
+   * `--max-old-space-size`, so an example that allocates past it dies instead of the host.
+   */
+  readonly memoryMb?: number;
+  /**
+   * Whether the example may reach the network. `deny` loads a preload module that makes `fetch`, `net`, `http`,
+   * `https`, `tls`, and `dns` throw before the example runs. Default: `allow`.
+   */
+  readonly network?: "allow" | "deny";
 }
 
 /** What an example did. */
@@ -76,10 +86,33 @@ export interface NodeExampleResult {
   readonly rejected: boolean;
   /** True when the run went through the OS sandbox. When false, only the process sandbox applies. */
   readonly sandboxed: boolean;
+  /** The V8 old-space limit the example ran under, in MiB; `0` means V8's default. */
+  readonly memoryMb: number;
+  /** Whether network access was allowed or denied for the example. */
+  readonly network: "allow" | "deny";
 }
 
 /** How long an example runs when the caller names no limit. */
 export const DEFAULT_TIMEOUT_MS = 10_000;
+
+/** The preload module a `network: "deny"` run loads before the example. */
+const DENY_NETWORK = `import { syncBuiltinESMExports } from "node:module";
+import net from "node:net";
+import http from "node:http";
+import https from "node:https";
+import tls from "node:tls";
+import dns from "node:dns";
+const deny = () => {
+  throw new Error("network access is disabled for this example");
+};
+globalThis.fetch = deny;
+net.connect = net.createConnection = deny;
+http.request = http.get = deny;
+https.request = https.get = deny;
+tls.connect = deny;
+dns.lookup = dns.resolve = deny;
+syncBuiltinESMExports();
+`;
 
 /** How many bytes of each stream are kept. Output past this is dropped, so one noisy example cannot fill memory. */
 export const MAX_OUTPUT_BYTES = 64 * 1024;
@@ -216,7 +249,11 @@ function runChild(
 }
 
 /** The scrubbed environment of an example: the six fixed values, then whatever the caller added. */
-function environment(root: string, extra: Readonly<Record<string, string>> | undefined): NodeJS.ProcessEnv {
+function environment(
+  root: string,
+  extra: Readonly<Record<string, string>> | undefined,
+  memoryMb: number,
+): NodeJS.ProcessEnv {
   return {
     ...extra,
     PATH: process.env.PATH ?? "",
@@ -224,6 +261,7 @@ function environment(root: string, extra: Readonly<Record<string, string>> | und
     TMPDIR: join(root, "tmp"),
     // Node re-adds an inherited coverage path even when env omits it; keep that write inside the sandbox.
     NODE_V8_COVERAGE: join(root, "tmp"),
+    ...(memoryMb === 0 ? {} : { NODE_OPTIONS: `--max-old-space-size=${memoryMb}` }),
     LANG: "C.UTF-8",
     NO_COLOR: "1",
   };
@@ -238,6 +276,14 @@ export async function runNodeExample(options: RunNodeExampleOptions): Promise<No
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new RangeError(`timeoutMs must be a positive number of milliseconds, not ${String(timeoutMs)}.`);
+  }
+  const memoryMb = options.memoryMb ?? 0;
+  if (!Number.isInteger(memoryMb) || memoryMb < 0) {
+    throw new RangeError(`memoryMb must be a non-negative integer, not ${String(options.memoryMb)}.`);
+  }
+  const network = options.network ?? "allow";
+  if (network !== "allow" && network !== "deny") {
+    throw new TypeError(`Unknown network policy "${String(options.network)}"; use "allow" or "deny".`);
   }
   const file = FILE_BY_LANG[options.lang];
   if (file === undefined) {
@@ -257,6 +303,8 @@ export async function runNodeExample(options: RunNodeExampleOptions): Promise<No
       outputLimited: false,
       rejected: true,
       sandboxed: false,
+      memoryMb,
+      network,
     };
   }
 
@@ -272,10 +320,15 @@ export async function runNodeExample(options: RunNodeExampleOptions): Promise<No
       mkdir(join(root, "tmp"), { recursive: true }),
       writeFile(join(root, file), options.code),
       writeFile(join(root, "package.json"), '{\n  "type": "module"\n}\n'),
+      ...(network === "deny" ? [writeFile(join(root, "deny-network.mjs"), DENY_NETWORK)] : []),
     ]);
 
-    plan = await planSandbox(process.execPath, [file], root);
-    const outcome = await runChild(plan, root, environment(root, options.env), timeoutMs, stdout, stderr);
+    plan = await planSandbox(
+      process.execPath,
+      [...(network === "deny" ? ["--import", "./deny-network.mjs"] : []), file],
+      root,
+    );
+    const outcome = await runChild(plan, root, environment(root, options.env, memoryMb), timeoutMs, stdout, stderr);
     if (outcome.spawnError !== undefined) stderr.push(Buffer.from(`${outcome.spawnError.message}\n`));
     return {
       ok: outcome.exitCode === 0 && !outcome.timedOut && !outcome.outputLimited && outcome.spawnError === undefined,
@@ -287,6 +340,8 @@ export async function runNodeExample(options: RunNodeExampleOptions): Promise<No
       outputLimited: outcome.outputLimited,
       rejected: false,
       sandboxed: plan.sandboxed,
+      memoryMb,
+      network,
     };
   } finally {
     // Cleanup is best effort: an example that made its folder unreadable must not turn a result into a throw.

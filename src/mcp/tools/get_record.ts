@@ -22,14 +22,18 @@ export const tool: Tool<Input> = {
   enabled: (setup) => setup.collections.length > 0,
   async handler(input, { site }) {
     const collection = site.site.collections[input.collection];
-    if (collection === undefined) {
-      return refusal("unknown-collection", `No collection "${input.collection}".`, { collections: Object.keys(site.site.collections).sort() });
+    if (collection === undefined || !site.readableCollection(input.collection)) {
+      const collections = Object.keys(site.site.collections).filter((name) => site.readableCollection(name)).sort();
+      return refusal("unknown-collection", `No collection "${input.collection}".`, { collections });
     }
     const record = collection.records.find((r) => r.id === input.id);
     if (record === undefined) {
       return refusal("unknown-record", `No record "${input.id}" in ${input.collection}.`, { closest: closestNames(collection.records.map((r) => r.id), input.id) });
     }
-    const page = site.pages.find((p) => p.page.record?.collection === input.collection && p.page.record.id === input.id && p.page.record.view === undefined);
+    if (!site.readableRecord(input.collection, record.id, record.fields)) {
+      return refusal("unknown-record", `No record "${input.id}" in ${input.collection}.`, { closest: [] });
+    }
+    const page = site.readablePages.find((p) => p.page.record?.collection === input.collection && p.page.record.id === input.id && p.page.record.view === undefined);
     const pos = record.position;
     return json({
       collection: input.collection,
