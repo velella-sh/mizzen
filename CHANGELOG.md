@@ -4,6 +4,96 @@ Releases of this package are tagged `v<version>`. Add a one-line fragment in `ch
 
 ## Unreleased
 
+## 0.2.5 — 2026-11-19
+
+This release makes data a first-class build input. Collections can read an API, a SQLite database, or NDJSON; rules
+transform, join, and summarize them; a `public` allowlist decides what leaves the engine; and `data explain`,
+`data transform-diff`, `data refresh`, and `mizzen reproduce` make a value, a rule change, and a build checkable. A
+`0.2.4` site needs no content migration; every new key and command is opt-in. The
+[upgrade guide](site/upgrade.md) covers the additions and the measured compatibility result.
+
+### Added
+
+- **API collection sources.** A collection whose `source` is an `https://` URL declares `records` and a `pagination`
+  mode (`page`, `offset`, `cursor`, or `next`). `mizzen data fetch` reads every page, stores the combined list under
+  `.mizzen/data/`, and pins the list and each page's URL, size, and SHA-256 in `mizzen.lock.json`; `--check` compares
+  without writing. Limits, retries, allowed next-page origins, and an environment-variable credential are part of the
+  config, and a failed page leaves the previous lock and store untouched. A build reads only the stored list and opens
+  no connection.
+- **SQLite and NDJSON collection inputs.** A collection can read a local `.sqlite`, `.sqlite3`, or `.db` file through
+  one configured read query, or an `.ndjson`/`.jsonl` file of one JSON object per line. `mizzen data extract` writes
+  the canonical result under `.mizzen/data/` and records its query id, row count, and SHA-256 in the lock; `--check`
+  verifies without writing. A build refuses a missing, stale, or mismatched extraction instead of reading the source,
+  and equivalent SQLite and NDJSON rows produce the same result bytes.
+- **Collection transforms.** A collection's `transform.steps` rewrites records before validation and publication with
+  `select`, `remove`, `rename`, `default`, `cast`, `normalize`, `map`, `date`, `unit`, `filter`, and `dedupe`. Steps run
+  in order, an absent path does nothing, and `validate: before-and-after` checks the raw record too. `mizzen data
+  transform [name] [dir] --limit <n> --json` previews the output and every finding without writing.
+- **Collection joins.** A collection's `join` enriches its records from other collections on a key, with `inner` or
+  `left` type, per-source `fields`, `onConflict`, `onNull`, `onMissingKey`, and `many` handling. The primary record keeps
+  its id, order, and URL; a chain of joins is allowed and a cycle is rejected. A secondary file is part of the build
+  key, so an incremental build matches a full one.
+- **Aggregate collections.** A collection whose `source` is another collection and that declares `aggregate` publishes
+  groups by one or more fields, with optional month or year buckets, `count`, `count-distinct`, `sum`, `average`, `min`,
+  and `max` metrics, `where`, `missing`, and `empty` policies. Group ids and order are independent of source row order,
+  and a summary is a normal collection for lists, records, feeds, search, and the API.
+- **Public fields.** A collection's `public` allowlist names the dot paths every public output may publish. The record
+  keeps every field internally, so transforms, joins, permalinks, and filters still read it; pages, twins, page JSON,
+  collection indexes, search, feeds, changelog, and the static API apply the same view. `id` is always public, an
+  absent policy publishes every field as before, and a public setting or template that names a private field fails
+  with `data.public-reference`.
+- **Field lineage.** `mizzen data explain <collection> <id> --field <path> --json` reports one field's versioned
+  (`format: 1`) chain from its source hash and row, through schema renames, transform rules, joins, and aggregates, to
+  every page URL and static API path that publishes it. `--public` prints permitted metadata only and refuses a field
+  the collection's `public` policy does not allow. The command writes nothing.
+- **Transformation rule diff.** `mizzen data transform-diff <baseline> <proposed> [dir] --collection <name>
+  --format text|json --check` runs two configs over the same locked input and reports records added, removed, or
+  changed by id, both values per field, the step that last wrote it on each side, and the affected outputs. Both
+  configs and the input are hashed; unequal input hashes are a target error. Exit `0` is unchanged, `1` a change under
+  `--check`, and `2` an invalid or incomplete comparison.
+- **Scheduled data refresh.** `mizzen data refresh [dir] --collections <a,b> --report <file>` fetches the selected
+  sources, validates the whole site and its quality rules, and writes one deterministic `mizzen-refresh/1` report with
+  the stage, lock hashes, source status, record counts, and changed ids. A failed stage restores the previous lock
+  bytes. The checked-in recipe runs the refresh with `contents: read`, builds and diffs the result, and lets only a
+  final `contents: write` job commit `mizzen.lock.json` and `.mizzen/data/` and update one review pull request.
+- **Diagnose and reproduce builds.** `mizzen build --diagnose` writes `.mizzen/build-report.json` with the input hashes,
+  effective config and reference date, tool and theme versions, environment, and every publishable output hash.
+  `mizzen compare <a> <b>` groups differences under inputs, config, tools, environment, or outputs and flags an
+  unexplained output difference. `mizzen reproduce <report> [dir] --check` preflights a recorded build, and
+  `--out` rebuilds without the cache and exits `1` when the output hash differs.
+
+### Changed
+
+- A collection source with `records` and `pagination` is fetched and locked as one record list; a source without them
+  keeps the previous byte-for-byte behavior and is parsed by its extension.
+- Transforms, joins, and aggregates run before a collection's schema, dates, derived values, lists, feeds, and API
+  outputs, and their configuration is part of the build key. Changing a rule refreshes exactly the output it affects,
+  and an incremental build writes the same bytes as a full one.
+- `mizzen data fetch` and `data extract` are the explicit network and database commands. A build still opens no
+  connection and reads only the content-addressed store and lock.
+- Generated reports are versioned: lineage reports use `format: 1`, refresh reports use `mizzen-refresh/1`, and build
+  reports use format `1`.
+
+### Fixed
+
+- Rule-diff diagnostics stay within the documented diagnostic ids, so a consumer that allowlists ids does not reject
+  an incomplete comparison.
+- A refresh that fails at fetch, validation, or quality restores the previous `mizzen.lock.json` bytes instead of
+  leaving a partially updated lock.
+
+### Compatibility
+
+- `0.2.4` Markdown, front matter, configuration, navigation, CLI commands, and flags remain supported. A 0.2.4 site
+  builds at the same URLs with its existing theme; the new keys and commands are opt-in.
+- The release compatibility test builds the committed compatibility site with the published `0.2.4` engine and the
+  `0.2.5` tarball in separate empty projects and compares every public file and canonical link. The 0.2.4 baseline is
+  in `fixtures/compat-0.2.4/baseline.json`; the recorded result is in [the upgrade guide](site/upgrade.md).
+- Node 24 or later is required, as in 0.2.4.
+- Generated JSON reports the engine as `0.2.5`; consumers should read `version` from `@velella/mizzen`, not pin an
+  older literal. Document-format versions are separate and did not change with the engine version.
+- Builds still open no network connection. `data fetch`, `data refresh`, `published-site check`, and the network
+  commands are explicit.
+
 ## 0.2.4 — 2026-11-18
 
 This release turns migration, change review, and data operations into normal parts of a build. Existing `0.2.3`

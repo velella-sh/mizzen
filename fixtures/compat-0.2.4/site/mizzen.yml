@@ -1,0 +1,41 @@
+# A small catalogue built from two data files: components and the releases that changed them.
+title: Sample catalogue
+description: A catalogue site built from two data files, with record pages, list pages, a feed, and search filters.
+lang: en
+url: https://example.com
+base: /catalogue
+exclude: [README.md]
+redirects:
+  /old-guide/: /components/
+  /legacy.html: /releases/
+collections:
+  components:
+    source: _data/components.yml
+    id: slug
+    template: _templates/components.md
+    permalink: /components/{slug}/
+    markdown: [summary]
+    dates: [released]
+    unique: [name]
+    search:
+      meta: [status, region]
+      filters: [status, region]
+      sort: [released]
+    index:
+      fields: [name, status, region]
+  releases:
+    source: _data/releases.json
+    template: _templates/releases.md
+    permalink: /releases/{id}/
+    markdown: [summary]
+    dates: [date]
+    references:
+      component: components
+    referenceDate: 2026-07-01
+feeds:
+  releases:
+    collection: releases
+    date: date
+    formats: [atom, json]
+    limit: 20
+    title: Catalogue releases
