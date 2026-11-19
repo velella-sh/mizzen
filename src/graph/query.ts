@@ -157,6 +157,16 @@ function encodeCursor(state: CursorState): string {
   return Buffer.from(JSON.stringify(state), "utf8").toString("base64url");
 }
 
+/** The snapshot a cursor names, or `undefined` when it is not a cursor this server wrote. */
+export function cursorSnapshot(cursor: string): string | undefined {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<CursorState>;
+    return parsed.version === 1 && typeof parsed.snapshot === "string" ? parsed.snapshot : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Decodes a cursor, or refuses one that names another snapshot or start. */
 function decodeCursor(cursor: string, snapshot: string, from: string): CursorState | undefined {
   try {

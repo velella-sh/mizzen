@@ -2,7 +2,7 @@
  * `apply_edit`: applies an edit through the `edit apply` transaction, so the source, its proof, and the audit entry
  * land together. Registered only when the server starts with `--allow-edits`.
  */
-import { editSchema, runEdit, type EditInput } from "../edit.ts";
+import { editSchema, runApply, type EditInput } from "../edit.ts";
 import type { Tool } from "../tool.ts";
 
 export const tool: Tool<EditInput> = {
@@ -14,5 +14,5 @@ export const tool: Tool<EditInput> = {
   enabled: (setup) => setup.allowEdits,
   // The edit rebuilds the site, which on a large site or a slow machine outlasts the default call limit.
   timeoutMs: 120_000,
-  handler: (input, { site }) => runEdit(site, input, true),
+  handler: (input, { site, runtime, session, signal }) => runApply(site, input, runtime, session, signal),
 };
