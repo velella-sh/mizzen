@@ -11,7 +11,7 @@ The release candidate was built against the published baseline in separate empty
 
 | Check | Baseline | Candidate | Result |
 | --- | --- | --- | --- |
-| Package | `@velella/mizzen@0.2.5` | `velella-mizzen-0.2.6.tgz` (`d5098d97…0cd5fc6`) | — |
+| Package | `@velella/mizzen@0.2.5` | `velella-mizzen-0.2.6.tgz` (`d5098d97e79693ffb421a823b71adbe09528f8e9fc95dd4d7488b409c0cd5fc6`) | — |
 | Public files compared | 197 | 197 | 0 missing, 0 changed, 0 added |
 | Canonical links | 2 | 2 | 0 differences |
 | `_redirects` | 2 rules | 2 rules | identical |

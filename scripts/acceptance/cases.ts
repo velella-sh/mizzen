@@ -911,7 +911,7 @@ const tasks: AcceptanceCase = {
     check(status.task.state === "draft", "status does not name the draft task");
     const preview = JSON.parse(
       output(ctx.mizzen(["agent", "task", "run", registered.taskId, site, "--dry-run"], ctx.dir), "agent task dry run"),
-    ) as { ok: boolean; writes: readonly string[]; outcome: string };
+    ) as { ok: boolean; dryRun: boolean; outcome: string };
     check(preview.ok === true, "the dry run failed");
     check(preview.dryRun === true, "the dry run did not report a preview");
     const cancel = JSON.parse(
