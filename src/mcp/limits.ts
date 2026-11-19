@@ -13,29 +13,82 @@ export const CALL_TIMEOUT_MS = 30_000;
 export const MAX_IN_FLIGHT = 4;
 /** Largest `maxTokens` `get_pack` accepts: about what one answer can carry. */
 export const MAX_PACK_TOKENS = 12_000;
+/** Most long-running operations one session may run at the same time. */
+export const MAX_OPERATIONS = 8;
+/** Most progress events one operation keeps; older events are dropped, never reordered. */
+export const MAX_EVENTS_PER_OPERATION = 64;
+/** Most operation records one session keeps; the oldest finished ones go first. */
+export const MAX_OPERATION_RECORDS = 100;
+/** Independent stage deadlines: a verify never inherits a shorter read deadline. */
+export const READ_TIMEOUT_MS = CALL_TIMEOUT_MS;
+export const CONTEXT_TIMEOUT_MS = 120_000;
+export const EDIT_TIMEOUT_MS = 180_000;
+export const VERIFY_TIMEOUT_MS = 300_000;
 
 /** The limits a server runs with; tests lower them. */
 export interface Limits {
   readonly maxAnswerBytes: number;
   readonly callTimeoutMs: number;
   readonly maxInFlight: number;
+  readonly readTimeoutMs: number;
+  readonly contextTimeoutMs: number;
+  readonly editTimeoutMs: number;
+  readonly verifyTimeoutMs: number;
+  readonly maxOperations: number;
+  readonly maxEventsPerOperation: number;
+  readonly maxOperationRecords: number;
 }
 
 export const DEFAULT_LIMITS: Limits = {
   maxAnswerBytes: MAX_ANSWER_BYTES,
   callTimeoutMs: CALL_TIMEOUT_MS,
   maxInFlight: MAX_IN_FLIGHT,
+  readTimeoutMs: READ_TIMEOUT_MS,
+  contextTimeoutMs: CONTEXT_TIMEOUT_MS,
+  editTimeoutMs: EDIT_TIMEOUT_MS,
+  verifyTimeoutMs: VERIFY_TIMEOUT_MS,
+  maxOperations: MAX_OPERATIONS,
+  maxEventsPerOperation: MAX_EVENTS_PER_OPERATION,
+  maxOperationRecords: MAX_OPERATION_RECORDS,
 };
+
+/** Extra machine-readable fields a refused call may carry. */
+export interface ErrorDetails {
+  readonly retryable?: boolean;
+  readonly stage?: "read" | "context" | "edit" | "verify" | "operation" | "protocol";
+  readonly task?: string;
+  readonly source?: string;
+  readonly data?: Readonly<Record<string, unknown>>;
+}
 
 /** A refusal the caller can read: it becomes a tool error, never a crash. */
 export class McpError extends Error {
   readonly code: string;
+  readonly details: ErrorDetails;
 
-  constructor(code: string, message: string) {
+  constructor(code: string, message: string, details: ErrorDetails = {}) {
     super(message);
     this.name = "McpError";
     this.code = code;
+    this.details = details;
   }
+}
+
+/** The deadline one stage gets; a tool's own longer limit wins. */
+export function timeoutFor(
+  limits: Limits,
+  stage: "read" | "context" | "edit" | "verify" | "operation" | "protocol" | undefined,
+  toolTimeoutMs: number | undefined,
+): number {
+  const stageMs =
+    stage === "context"
+      ? limits.contextTimeoutMs
+      : stage === "edit"
+        ? limits.editTimeoutMs
+        : stage === "verify"
+          ? limits.verifyTimeoutMs
+          : limits.readTimeoutMs;
+  return Math.max(stageMs, toolTimeoutMs ?? 0);
 }
 
 /** A site-relative path with forward slashes on every platform. */
