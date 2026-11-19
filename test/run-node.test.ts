@@ -258,3 +258,41 @@ test(
     }
   },
 );
+
+test("a memory limit reaches the child as V8's old-space bound", async () => {
+  const result = await runNodeExample({
+    lang: "js",
+    memoryMb: 64,
+    code: "console.log(process.env.NODE_OPTIONS);\n",
+  });
+  assert.equal(result.ok, true, result.stderr);
+  assert.equal(result.stdout, "--max-old-space-size=64\n");
+  assert.equal(result.memoryMb, 64);
+});
+
+test("a memory limit kills an example that exhausts its heap", async () => {
+  const result = await runNodeExample({
+    lang: "js",
+    memoryMb: 32,
+    code: "const rows = [];\nfor (;;) rows.push(new Array(1e6).fill(0));\n",
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.timedOut, false);
+  assert.equal(result.memoryMb, 32);
+});
+
+test("network deny blocks fetch and socket connections before the example runs", async () => {
+  const result = await runNodeExample({
+    lang: "mjs",
+    network: "deny",
+    code: [
+      'try { await fetch("https://example.com"); console.log("fetch reached"); } catch (error) { console.log(`fetch blocked: ${error.message}`); }',
+      'try { const net = await import("node:net"); net.connect(80, "example.com"); console.log("net reached"); } catch (error) { console.log(`net blocked: ${error.message}`); }',
+    ].join("\n"),
+  });
+  assert.equal(result.ok, true, result.stderr);
+  assert.equal(result.network, "deny");
+  assert.match(result.stdout, /fetch blocked: network access is disabled/u);
+  assert.match(result.stdout, /net blocked: network access is disabled/u);
+  assert.doesNotMatch(result.stdout, /reached/u);
+});

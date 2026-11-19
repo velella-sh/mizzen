@@ -122,7 +122,7 @@ Commands:
                             Apply a versioned multi-file edit atomically (--dry-run, --rebase, --approve)
   edit rollback <receipt.json> [dir]
                             Restore only the files a transaction receipt names
-  edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  edit verify <proof.json>  Check an edit proof or a verification proof (--input <file> for public evidence)
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -163,6 +163,7 @@ Options:
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
   --hash <hex>         Expected build hash for verify (default: the manifest's)
   --site <dir>         Site root for edit verify (default: .)
+  --input <file>       Public evidence for a verification proof: files, before, checks, output, human review, and package binding
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)
@@ -286,6 +287,7 @@ type EditVerifyOpts = {
   readonly site: string;
   readonly doctor: boolean;
   readonly format: EditFormat;
+  readonly input?: string;
 };
 
 type WatchOpts = {
@@ -782,6 +784,7 @@ function parseEditVerify(args: readonly string[]): Parsed {
   let site = ".";
   let doctor = false;
   let format: EditFormat = "text";
+  let input: string | undefined;
   for (let i = 0; i < rest.length; i++) {
     const arg = rest[i]!;
     const value = (): string => {
@@ -793,6 +796,7 @@ function parseEditVerify(args: readonly string[]): Parsed {
       if (arg === "-h" || arg === "--help") return { help: true };
       if (arg === "--site") site = value();
       else if (arg === "--doctor") doctor = true;
+      else if (arg === "--input") input = value();
       else if (arg === "--format") {
         const raw = value();
         const parsed = editFormat(raw);
@@ -807,7 +811,7 @@ function parseEditVerify(args: readonly string[]): Parsed {
   }
 
   if (proof === undefined) return { error: `edit verify needs a proof file: ${NAME} edit verify <proof.json>` };
-  return { options: { command: "edit-verify", proof, site, doctor, format } };
+  return { options: { command: "edit-verify", proof, site, doctor, format, ...(input === undefined ? {} : { input }) } };
 }
 
 /** Parses `data snapshot <name> [dir] [--allow-dirty]`. */
@@ -2078,11 +2082,12 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       proof: options.proof,
       siteRoot: options.site,
       doctor: options.doctor,
+      ...(options.input === undefined ? {} : { input: options.input }),
     });
     await traceVerification(result);
     const exitCode = result.ok
       ? 0
-      : result.failure?.kind === "proof" || result.failure?.kind === "doctor-unavailable"
+      : result.failure?.kind === "proof" || result.failure?.kind === "doctor-unavailable" || result.failure?.kind === "input"
         ? 2
         : 1;
     if (options.format === "json") {
