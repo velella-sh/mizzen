@@ -1,11 +1,11 @@
 ---
-title: Upgrade to 0.2.5
+title: Upgrade to 0.2.6
 description: Upgrade a 0.2.4 site without changing its Markdown, config, existing URLs, or published output, and try API, database, transform, join, aggregate, public-field, and lineage features.
 layout: doc
 permalink: /upgrade/
 ---
 
-# Upgrade to 0.2.5
+# Upgrade to 0.2.6
 
 An existing `0.2.4` docs or data site needs no content migration. Every new key and command is opt-in: keeping your
 Markdown, `mizzen.yml`, navigation, and theme as they are builds the same pages at the same URLs. The release
@@ -21,7 +21,7 @@ If you are coming from `0.2.3` or earlier, the
 After `0.2.5` is published, update the engine in the site's project:
 
 ```sh
-npm install --save-dev @velella/mizzen@0.2.5
+npm install --save-dev @velella/mizzen@0.2.6
 npx mizzen check .
 npx mizzen build . --out dist
 npx mizzen verify dist

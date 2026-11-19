@@ -5,7 +5,7 @@
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -109,4 +109,25 @@ test("the summary names the candidate, the digest, every case, and its result", 
   assert.match(text, /\| `blog` \| pass \|/);
   assert.match(text, /\| `diff` \| fail \| the paragraph edit was not reported \|/);
   assert.match(text, /case diff failed/);
+});
+
+test("a shipped library feature needs an existing test file, not a guess", () => {
+  const known = new Set(["test/tasks-e2e.test.ts"]);
+  const missing = scope([{ id: "tasks", title: "Tasks", status: "shipped", test: "test/no-such.test.ts" }]);
+  assert.match(validateScope(missing, [], "## Unreleased\n", known).join("\n"), /missing test file/);
+  const outside = scope([{ id: "tasks", title: "Tasks", status: "shipped", test: "src/tasks.ts" }]);
+  assert.match(validateScope(outside, [], "## Unreleased\n", known).join("\n"), /must name a committed file under test\//);
+  const neither = scope([{ id: "tasks", title: "Tasks", status: "shipped" }]);
+  assert.match(validateScope(neither, [], "## Unreleased\n", known).join("\n"), /needs a case id or a test file/);
+  const present = scope([{ id: "tasks", title: "Tasks", status: "shipped", test: "test/tasks-e2e.test.ts" }]);
+  assert.deepEqual(validateScope(present, [], "## Unreleased\n", known), []);
+});
+
+test("the committed scope records all 190 release issues with a proof", () => {
+  const parsed = parseScope(readFileSync(join(ROOT, "release/scope.json"), "utf8"));
+  assert.ok(parsed.scope);
+  const mapped = parsed.scope.features.filter((feature) => feature.issue !== undefined);
+  assert.equal(mapped.length, 190);
+  const files = new Set(readdirSync(join(ROOT, "test")).filter((name) => name.endsWith(".test.ts")).map((name) => `test/${name}`));
+  assert.deepEqual(validateScope(parsed.scope, CASE_IDS, CHANGELOG, files), []);
 });

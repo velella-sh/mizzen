@@ -3,7 +3,8 @@
 `scope.json` lists every feature of the release that `package.json` names. Each entry is one of:
 
 - `shipped`: a user-facing feature that a user can reach through the CLI, public configuration, or the exported
-  contracts. It names a stable case id from `scripts/acceptance/cases.ts`. The case runs in PR CI and again from the
+  contracts. It names a stable case id from `scripts/acceptance/cases.ts`, or a committed `test/*.test.ts` for a
+  library capability the CLI cannot reach. The case runs in PR CI and again from the
   exact tarball the publish job uploads, so a feature that a module implements but the CLI cannot reach fails the
   release.
 - `deferred`: a feature that is not part of this release. It carries a reason and must not be mentioned as shipped in
@@ -23,3 +24,10 @@ The release workflow runs the gate twice. In `verify` it installs the one tarbal
 failed case stops the workflow before `publish`. After `publish`, `acceptance-published` installs
 `@velella/mizzen@<version>` from npm and runs the same shipped cases again; a failure fails that run, and the release
 epic stays open until a post-publish run passes.
+
+## Test evidence for library capabilities
+
+A feature whose only public entry is a library module — generated JSON, a recipe, or an exported contract — names
+`test` instead of `case`: a committed `test/*.test.ts` file that proves it. The gate checks that the file exists, so a
+renamed or deleted test blocks the release instead of silently dropping the claim. A feature may name both: the case is
+the installed-package proof, the test is the detailed contract proof.

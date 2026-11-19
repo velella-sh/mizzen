@@ -9,7 +9,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -22,7 +22,15 @@ export interface ScopeFeature {
   readonly id: string;
   readonly title: string;
   readonly status: "shipped" | "deferred";
+  /** A public CLI/MCP acceptance case id from `scripts/acceptance/cases.ts`. */
   readonly case?: string;
+  /** A committed test file that proves a capability the CLI cannot reach, such as a library module. */
+  readonly test?: string;
+  /** The roadmap epic this feature belongs to, when the roadmap lists it. */
+  readonly epic?: number;
+  /** The roadmap issue this feature implements, when the roadmap lists it. */
+  readonly issue?: number;
+  readonly release?: string;
   readonly reason?: string;
 }
 
@@ -50,7 +58,7 @@ export function parseScope(text: string): { scope?: Scope; problems: readonly st
  * known case, a case no shipped feature runs, a deferred feature without a reason, or a deferred feature the changelog
  * announces as shipped.
  */
-export function validateScope(scope: Scope, caseIds: readonly string[], changelog: string): readonly string[] {
+export function validateScope(scope: Scope, caseIds: readonly string[], changelog: string, testFiles?: ReadonlySet<string>): readonly string[] {
   const problems: string[] = [];
   if (scope.version.trim() === "") problems.push("the scope has no version");
   if (scope.features.length === 0) problems.push("the scope has no features");
@@ -73,9 +81,21 @@ export function validateScope(scope: Scope, caseIds: readonly string[], changelo
       continue;
     }
     if (feature.status === "shipped") {
-      if (typeof feature.case !== "string" || feature.case === "") problems.push(`${label}: a shipped feature needs a case id`);
-      else if (!known.has(feature.case)) problems.push(`${label}: unknown case ${feature.case}`);
-      else used.add(feature.case);
+      const namedCase = typeof feature.case === "string" && feature.case !== "";
+      const namedTest = typeof feature.test === "string" && feature.test !== "";
+      if (!namedCase && !namedTest) problems.push(`${label}: a shipped feature needs a case id or a test file`);
+      if (namedCase) {
+        if (!known.has(feature.case!)) problems.push(`${label}: unknown case ${feature.case}`);
+        else used.add(feature.case!);
+      }
+      if (namedTest) {
+        const path = feature.test!;
+        if (!/^test\/[A-Za-z0-9_./-]+\.test\.ts$/.test(path)) {
+          problems.push(`${label}: test must name a committed file under test/, not ${path}`);
+        } else if (testFiles !== undefined && !testFiles.has(path)) {
+          problems.push(`${label}: missing test file ${path}`);
+        }
+      }
     } else {
       if (typeof feature.reason !== "string" || feature.reason.trim() === "") problems.push(`${label}: a deferred feature needs a reason`);
       if (mentions(changelog, feature, scope.version)) problems.push(`${label}: a deferred feature appears in the changelog as shipped`);
@@ -199,9 +219,10 @@ export async function run(argv: readonly string[]): Promise<number> {
   const parsed = parseScope(readFileSync(scopePath, "utf8"));
   const scope = parsed.scope ?? { version: "", features: [] };
   const caseIds = CASES.map((entry) => entry.id);
+  const testFiles = new Set(readdirSync(join(ROOT, "test")).filter((name) => name.endsWith(".test.ts")).map((name) => `test/${name}`));
   const problems = [
     ...parsed.problems,
-    ...validateScope(scope, caseIds, readFileSync(join(ROOT, "CHANGELOG.md"), "utf8")),
+    ...validateScope(scope, caseIds, readFileSync(join(ROOT, "CHANGELOG.md"), "utf8"), testFiles),
     ...releaseProblems({
       release,
       ...(candidate === undefined ? {} : { candidate }),
