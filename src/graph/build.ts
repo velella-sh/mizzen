@@ -351,6 +351,19 @@ function pageUnit(input: GraphInput, page: Page, index: { links: number; codeRef
     addEdge(edges, { from: pageId, to: apiId, kind: "documents", pos: page.source, unit });
   }
 
+  if (page.record !== undefined) {
+    const collection = input.site.collections[page.record.collection];
+    const record = collection?.records.find((candidate) => candidate.id === page.record!.id);
+    if (record !== undefined) {
+      const recordId = recordNodeId(page.record.collection, page.record.id);
+      addEdge(edges, { from: pageId, to: recordId, kind: "renders", pos: page.source, unit });
+      for (const field of Object.keys(record.fields)) {
+        if (field === input.site.config.collections[page.record.collection]?.evidence) continue;
+        addEdge(edges, { from: pageId, to: claimNodeId(page.record.collection, page.record.id, field), kind: "asserts", pos: record.fieldPositions[field] === undefined ? recordPos(record.position) : recordPos(record.fieldPositions[field]!), unit });
+      }
+    }
+  }
+
   const links = (input.links ?? []).filter((link) => link.page === page.source.file);
   for (const [position, link] of links.entries()) {
     const linkId = `link:${page.source.file}#${index.links + position + 1}`;
