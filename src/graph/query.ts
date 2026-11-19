@@ -12,6 +12,9 @@ import type {
   GraphNode,
   SourcePos,
 } from "../contracts/index.ts";
+import type { AccessPolicy, AccessResource } from "../contracts/permissions.ts";
+import { accessPolicyFingerprint } from "../permissions/policy.ts";
+import { readRule } from "../permissions/evaluate.ts";
 
 /** The default neighbor depth. */
 export const DEFAULT_QUERY_DEPTH = 3;
@@ -76,6 +79,8 @@ export interface GraphQueryOptions {
   readonly cursor?: string;
   /** Audiences the caller may read; without it, only public nodes are visible. */
   readonly allow?: readonly string[];
+  /** An access policy; without it, only public nodes are visible, as before. */
+  readonly access?: AccessPolicy;
   /** An earlier snapshot, so a missing node is `deleted` rather than `unknown`. */
   readonly previous?: Graph;
 }
@@ -121,11 +126,54 @@ function summaryOf(node: GraphNode): GraphNodeSummary {
   };
 }
 
-/** True when every audience of the node is allowed; a node without an audience is public. */
-function visible(node: GraphNode, allow: readonly string[] | undefined): boolean {
-  if (node.audience === undefined || node.audience.length === 0) return true;
-  if (allow === undefined) return false;
-  return node.audience.every((audience) => allow.includes(audience));
+/** A string metadata value, when the node holds one. */
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+/** The page a node belongs to: its source file, its unit, or its URL. */
+function pageOfNode(node: GraphNode): string | undefined {
+  const source = stringValue(node.data?.source);
+  if (source !== undefined) return source;
+  if (node.unit?.startsWith("page:")) return node.unit.slice(5);
+  if (node.kind === "page") return node.id.startsWith("page:") ? node.id.slice(5) : node.id;
+  return node.url;
+}
+
+/** The read resource a graph node stands for. */
+function accessResourceOf(node: GraphNode): AccessResource {
+  const page = pageOfNode(node);
+  const collection = stringValue(node.data?.collection);
+  switch (node.kind) {
+    case "page":
+      return { kind: "page", id: page ?? node.id, ...(page === undefined ? {} : { page }) };
+    case "block":
+      return { kind: "block", id: node.label, ...(page === undefined ? {} : { page }) };
+    case "collection":
+      return { kind: "collection", id: node.label, collection: node.label };
+    case "record":
+      return { kind: "record", id: stringValue(node.data?.id) ?? node.label, ...(collection === undefined ? {} : { collection }) };
+    case "field":
+    case "claim":
+      return {
+        kind: "field",
+        id: node.id,
+        ...(collection === undefined ? {} : { collection }),
+        ...(stringValue(node.data?.field) === undefined ? {} : { field: stringValue(node.data?.field)! }),
+      };
+    default:
+      return { kind: "other", id: node.id, ...(page === undefined ? {} : { page }) };
+  }
+}
+
+/** True when every audience of the node is allowed and the access policy reads its resource. */
+function visible(node: GraphNode, allow: readonly string[] | undefined, access: AccessPolicy | undefined): boolean {
+  if (node.audience !== undefined && node.audience.length > 0) {
+    if (allow === undefined) return false;
+    if (!node.audience.every((audience) => allow.includes(audience))) return false;
+  }
+  if (access !== undefined && !readRule(access, accessResourceOf(node)).allowed) return false;
+  return true;
 }
 
 /** The graph a query reads, or the one snapshot of an archive it names. */
@@ -143,6 +191,7 @@ interface CursorState {
   readonly version: 1;
   readonly snapshot: string;
   readonly from: string;
+  readonly policy: string | null;
   readonly depth: number;
   readonly nodes: number;
   readonly maxOutput: number;
@@ -157,11 +206,21 @@ function encodeCursor(state: CursorState): string {
   return Buffer.from(JSON.stringify(state), "utf8").toString("base64url");
 }
 
-/** Decodes a cursor, or refuses one that names another snapshot or start. */
-function decodeCursor(cursor: string, snapshot: string, from: string): CursorState | undefined {
+/** The snapshot a cursor names, or `undefined` when it is not a cursor this server wrote. */
+export function cursorSnapshot(cursor: string): string | undefined {
   try {
     const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<CursorState>;
-    if (parsed.version !== 1 || parsed.snapshot !== snapshot || parsed.from !== from) return undefined;
+    return parsed.version === 1 && typeof parsed.snapshot === "string" ? parsed.snapshot : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Decodes a cursor, or refuses one that names another snapshot, start, or policy. */
+function decodeCursor(cursor: string, snapshot: string, from: string, policy: string | null): CursorState | undefined {
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<CursorState>;
+    if (parsed.version !== 1 || parsed.snapshot !== snapshot || parsed.from !== from || parsed.policy !== policy) return undefined;
     if (typeof parsed.depth !== "number" || typeof parsed.nodes !== "number" || typeof parsed.maxOutput !== "number") return undefined;
     if (!Array.isArray(parsed.seen) || !Array.isArray(parsed.fromQueue) || !Array.isArray(parsed.depths) || typeof parsed.emitted !== "number") return undefined;
     return parsed as CursorState;
@@ -177,8 +236,8 @@ interface Adjacency {
 }
 
 /** Builds adjacency from the visible nodes and the edges with both ends visible. */
-function adjacencyOf(graph: Graph, allow: readonly string[] | undefined, kinds: ReadonlySet<GraphEdgeKind> | undefined): Adjacency {
-  const nodes = new Map(graph.nodes.filter((node) => visible(node, allow)).map((node) => [node.id, node] as const));
+function adjacencyOf(graph: Graph, allow: readonly string[] | undefined, kinds: ReadonlySet<GraphEdgeKind> | undefined, access: AccessPolicy | undefined): Adjacency {
+  const nodes = new Map(graph.nodes.filter((node) => visible(node, allow, access)).map((node) => [node.id, node] as const));
   const out = new Map<string, GraphEdge[]>();
   const into = new Map<string, GraphEdge[]>();
   const edges = graph.edges.filter(
@@ -269,15 +328,21 @@ function graphEdgeOf(entry: GraphNeighbor): GraphEdge {
 }
 
 /** The visible start node, if any. */
-function startNode(graph: Graph, from: string | undefined, allow: readonly string[] | undefined): GraphNode | undefined {
+function startNode(graph: Graph, from: string | undefined, allow: readonly string[] | undefined, access: AccessPolicy | undefined): GraphNode | undefined {
   if (from === undefined) return undefined;
-  return graph.nodes.find((node) => node.id === from && visible(node, allow));
+  return graph.nodes.find((node) => node.id === from && visible(node, allow, access));
 }
 
-/** Whether a previous snapshot held a node that the current one does not. */
-export function nodeStatus(current: Graph, id: string, previous?: Graph): "present" | "deleted" | "unknown" {
-  if (current.nodes.some((node) => node.id === id)) return "present";
-  if (previous?.nodes.some((node) => node.id === id) === true) return "deleted";
+/** Whether a previous snapshot held a node that the current one does not, under the same audience and policy. */
+export function nodeStatus(
+  current: Graph,
+  id: string,
+  previous?: Graph,
+  allow?: readonly string[],
+  access?: AccessPolicy,
+): "present" | "deleted" | "unknown" {
+  if (current.nodes.some((node) => node.id === id && visible(node, allow, access))) return "present";
+  if (previous?.nodes.some((node) => node.id === id && visible(node, allow, access)) === true) return "deleted";
   return "unknown";
 }
 
@@ -292,12 +357,12 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
   if (graph === undefined) {
     return { snapshot, ...(options.from === undefined ? {} : { from: options.from }), status: "unknown", neighbors: [], partial: false, ...(options.to === undefined ? {} : { found: false }) };
   }
-  const current = startNode(graph, options.from, options.allow);
+  const current = startNode(graph, options.from, options.allow, options.access);
   const status = current !== undefined
     ? "present"
     : options.previous === undefined
       ? "unknown"
-      : options.from !== undefined && options.previous.nodes.some((node) => node.id === options.from)
+      : options.from !== undefined && options.previous.nodes.some((node) => node.id === options.from && visible(node, options.allow, options.access))
         ? "deleted"
         : "unknown";
   if (current === undefined) {
@@ -309,10 +374,10 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
   const maxOutput = Math.max(1, options.maxOutput ?? DEFAULT_QUERY_OUTPUT);
   const direction = options.direction ?? "out";
   const kinds = options.kinds === undefined ? undefined : new Set(options.kinds);
-  const adjacency = adjacencyOf(graph, options.allow, kinds);
-  const visibleNodes = new Map(graph.nodes.filter((node) => visible(node, options.allow)).map((node) => [node.id, node] as const));
+  const adjacency = adjacencyOf(graph, options.allow, kinds, options.access);
+  const visibleNodes = new Map(graph.nodes.filter((node) => visible(node, options.allow, options.access)).map((node) => [node.id, node] as const));
 
-  const decoded = options.cursor === undefined ? undefined : decodeCursor(options.cursor, graph.snapshot.id, current.id);
+  const decoded = options.cursor === undefined ? undefined : decodeCursor(options.cursor, graph.snapshot.id, current.id, options.access === undefined ? null : accessPolicyFingerprint(options.access));
   const queue = decoded === undefined ? [{ id: current.id, depth: 0 }] : [...decoded.fromQueue];
   const seen = new Set(decoded === undefined ? [current.id] : decoded.seen);
   const depths = new Map<string, number>(decoded === undefined ? [[current.id, 0]] : decoded.depths as readonly (readonly [string, number])[]);
@@ -368,6 +433,7 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
           version: 1,
           snapshot: graph.snapshot.id,
           from: current.id,
+          policy: options.access === undefined ? null : accessPolicyFingerprint(options.access),
           depth,
           nodes: nodeLimit,
           maxOutput,

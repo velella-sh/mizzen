@@ -36,6 +36,7 @@ import { init } from "./init.ts";
 import { diffCommand, parseChangeType, parseFailOn, type ChangeType, type FailKind } from "./diff.ts";
 import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
+import { readAccessPolicyFile } from "../permissions/file.ts";
 import {
   conflictLines,
   editRollbackCommand,
@@ -463,6 +464,7 @@ type EditApplyOpts = {
   readonly dryRun: boolean;
   readonly allowUnchecked?: boolean;
   readonly proof?: string;
+  readonly policy?: string;
   readonly format: EditFormat;
 };
 
@@ -477,6 +479,7 @@ type EditTransactionOpts = {
   readonly proof?: string;
   readonly audit?: string;
   readonly format: EditFormat;
+  readonly policy?: string;
 };
 
 type EditRollbackOpts = {
@@ -528,6 +531,7 @@ type McpOpts = {
   readonly theme?: string;
   readonly allowEdits: boolean;
   readonly printConfig?: string;
+  readonly policy?: string;
 };
 
 type ImportOpts = {
@@ -648,6 +652,7 @@ function parseEditApply(args: readonly string[]): Parsed {
   let patch: string | undefined;
   let root: string | undefined;
   let proof: string | undefined;
+  let policy: string | undefined;
   let dryRun = false;
   let allowUnchecked = false;
   let format: EditFormat = "text";
@@ -663,6 +668,7 @@ function parseEditApply(args: readonly string[]): Parsed {
       if (arg === "--dry-run") dryRun = true;
       else if (arg === "--allow-unchecked") allowUnchecked = true;
       else if (arg === "--proof") proof = value();
+      else if (arg === "--policy") policy = value();
       else if (arg === "--format") {
         const raw = value();
         const parsed = editFormat(raw);
@@ -687,6 +693,7 @@ function parseEditApply(args: readonly string[]): Parsed {
       format,
       ...(allowUnchecked ? { allowUnchecked: true } : {}),
       ...(proof === undefined ? {} : { proof }),
+      ...(policy === undefined ? {} : { policy }),
     },
   };
 }
@@ -702,6 +709,7 @@ function parseEditTransaction(args: readonly string[]): Parsed {
   let receipt: string | undefined;
   let proof: string | undefined;
   let audit: string | undefined;
+  let policy: string | undefined;
   let dryRun = false;
   let rebase = false;
   let approve = false;
@@ -721,6 +729,7 @@ function parseEditTransaction(args: readonly string[]): Parsed {
       else if (arg === "--receipt") receipt = value();
       else if (arg === "--proof") proof = value();
       else if (arg === "--audit") audit = value();
+      else if (arg === "--policy") policy = value();
       else if (arg === "--format") {
         const parsed = editFormat(value());
         if (parsed === undefined) return { error: `--format for edit transaction must be text or json, not ${rest[i]}` };
@@ -747,6 +756,7 @@ function parseEditTransaction(args: readonly string[]): Parsed {
       ...(receipt === undefined ? {} : { receipt }),
       ...(proof === undefined ? {} : { proof }),
       ...(audit === undefined ? {} : { audit }),
+      ...(policy === undefined ? {} : { policy }),
       format,
     },
   };
@@ -1331,11 +1341,16 @@ function parseMcp(args: readonly string[]): Parsed {
   let theme: string | undefined;
   let allowEdits = false;
   let printConfig: string | undefined;
+  let policy: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]!;
     if (arg === "-h" || arg === "--help") return { help: true };
     if (arg === "--allow-edits") allowEdits = true;
-    else if (arg === "--theme" || arg === "--print-config") {
+    else if (arg === "--policy") {
+      const next = args[++i];
+      if (next === undefined || next.startsWith("-")) return { error: "--policy needs a file" };
+      policy = next;
+    } else if (arg === "--theme" || arg === "--print-config") {
       const next = args[++i];
       if (next === undefined || next.startsWith("-")) return { error: `${arg} needs a value` };
       if (arg === "--theme") theme = next;
@@ -1347,7 +1362,7 @@ function parseMcp(args: readonly string[]): Parsed {
     else if (root === undefined) root = arg;
     else return { error: `unexpected argument: ${arg}` };
   }
-  return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }) } };
+  return { options: { command: "mcp", root: root ?? ".", allowEdits, ...(theme === undefined ? {} : { theme }), ...(printConfig === undefined ? {} : { printConfig }), ...(policy === undefined ? {} : { policy }) } };
 }
 
 /** Parses `import <name> [dir] [--out <dir>] [--fail-on-manual] [--allow <ids>]`. */
@@ -1783,7 +1798,22 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         error(`${NAME}: no theme found; set theme.name in the config or pass --theme`);
         return 2;
       }
-      return await serveMcp({ root, themeRoot, allowEdits: options.allowEdits, version, defaultLayout: DEFAULT_LAYOUT }, (message) => process.stderr.write(`${message}\n`));
+      const loaded = options.policy === undefined ? undefined : await readAccessPolicyFile(options.policy);
+      if (loaded !== undefined && loaded.policy === undefined) {
+        for (const problem of loaded.problems) error(`${NAME}: ${problem}`);
+        return 2;
+      }
+      return await serveMcp(
+        {
+          root,
+          themeRoot,
+          allowEdits: options.allowEdits,
+          version,
+          defaultLayout: DEFAULT_LAYOUT,
+          ...(loaded?.policy === undefined ? {} : { access: loaded.policy }),
+        },
+        (message) => process.stderr.write(`${message}\n`),
+      );
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
@@ -1999,6 +2029,11 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   }
 
   if (options.command === "edit-apply") {
+    const loaded = options.policy === undefined ? undefined : await readAccessPolicyFile(options.policy);
+    if (loaded !== undefined && loaded.policy === undefined) {
+      for (const problem of loaded.problems) error(`${NAME}: ${problem}`);
+      return 2;
+    }
     try {
       const result = await editApply({
         siteRoot: options.root,
@@ -2006,6 +2041,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.proof === undefined ? {} : { proof: options.proof }),
         ...(options.dryRun ? { dryRun: true } : {}),
         ...(options.allowUnchecked === true ? { allowUnchecked: true } : {}),
+        ...(loaded?.policy === undefined ? {} : { access: loaded.policy }),
       });
       await traceEditApply(result, options.root);
       if (options.format === "json") {
@@ -2033,6 +2069,11 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   }
 
   if (options.command === "edit-transaction") {
+    const loaded = options.policy === undefined ? undefined : await readAccessPolicyFile(options.policy);
+    if (loaded !== undefined && loaded.policy === undefined) {
+      for (const problem of loaded.problems) error(`${NAME}: ${problem}`);
+      return 2;
+    }
     try {
       const result = await editTransactionCommand({
         transaction: options.transaction,
@@ -2043,6 +2084,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.receipt === undefined ? {} : { receipt: options.receipt }),
         ...(options.proof === undefined ? {} : { proof: options.proof }),
         ...(options.audit === undefined ? {} : { audit: options.audit }),
+        ...(loaded?.policy === undefined ? {} : { access: loaded.policy }),
         format: options.format,
       });
       if (options.format === "json") {

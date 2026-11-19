@@ -6,8 +6,11 @@
 import { createHash } from "node:crypto";
 import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 import type { Diagnostic, Page, Site } from "../contracts/index.ts";
+import type { AccessPolicy, AccessResource } from "../contracts/permissions.ts";
+import { readablePage } from "../permissions/read.ts";
+import { readRule } from "../permissions/evaluate.ts";
 import { loadConfig } from "../config/load.ts";
 import { buildModel } from "../model/build.ts";
 import { build } from "../pipeline/build.ts";
@@ -41,12 +44,14 @@ export interface SiteOptions {
   readonly root: string;
   readonly themeRoot: string;
   readonly defaultLayout?: string;
+  /** The access policy every tool call is held to; absent means public read only. */
+  readonly access?: AccessPolicy;
 }
 
 /** Files and folders the fingerprint ignores: hidden ones (`.mizzen`, `.git`) and dependencies. */
 const SKIPPED = (name: string): boolean => name.startsWith(".") || name === "node_modules";
 
-async function fingerprint(root: string): Promise<string> {
+function fingerprint(root: string): Promise<string> {
   const hash = createHash("sha256");
   const walk = async (dir: string): Promise<void> => {
     const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) => (a.name < b.name ? -1 : 1));
@@ -56,20 +61,21 @@ async function fingerprint(root: string): Promise<string> {
       if (entry.isDirectory()) await walk(path);
       else {
         const info = await stat(path).catch(() => undefined);
-        if (info !== undefined) hash.update(`${path}\0${info.size}\0${info.mtimeMs}\n`);
+        if (info !== undefined) hash.update(`${relative(root, path).split(sep).join("/")}\0${info.size}\0${info.mtimeMs}\n`);
       }
     }
   };
-  await walk(root);
-  return hash.digest("hex");
+  return walk(root).then(() => hash.digest("hex"));
 }
 
 export class SiteState {
   readonly root: string;
+  readonly access: AccessPolicy | undefined;
   readonly #options: SiteOptions;
   #parent = "";
   #seq = 0;
   #print = "";
+  #snapshot = "";
   #queue: Promise<unknown> = Promise.resolve();
   out = "";
   site!: Site;
@@ -79,6 +85,7 @@ export class SiteState {
   private constructor(options: SiteOptions, root: string) {
     this.#options = options;
     this.root = root;
+    this.access = options.access;
   }
 
   /** Builds the site once and returns its state. */
@@ -93,6 +100,46 @@ export class SiteState {
   /** Names of the collections the site declares. */
   get collections(): readonly string[] {
     return Object.keys(this.site.config.collections).sort();
+  }
+
+  /** The content fingerprint every tool of a session is pinned to. */
+  get snapshot(): string {
+    return this.#snapshot;
+  }
+
+  /** Whether the policy allows reading one page; without a policy every page stays visible, as before. */
+  readable(page: Page): boolean {
+    return this.access === undefined || readablePage(this.access, page);
+  }
+
+  /** The page list a tool may read, in the same order. */
+  get readablePages(): readonly PageInfo[] {
+    return this.access === undefined ? this.pages : this.pages.filter((info) => readablePage(this.access!, info.page));
+  }
+
+  /** Whether the policy allows one collection's data; without a policy every collection stays visible. */
+  readableCollection(name: string): boolean {
+    if (this.access === undefined) return true;
+    return readRule(this.access, { kind: "collection", id: name, collection: name }).allowed;
+  }
+
+  /** Whether the policy allows one record, by its collection audience and field policy. */
+  readableRecord(collection: string, id: string, fields: Readonly<Record<string, unknown>>): boolean {
+    if (this.access === undefined) return true;
+    const resource: AccessResource = { kind: "record", id, collection };
+    if (!readRule(this.access, resource).allowed) return false;
+    const allowed = this.access.read.fields?.[collection];
+    if (allowed === undefined) return true;
+    return Object.keys(fields).every(
+      (field) => readRule(this.access!, { kind: "field", id: field, collection, field }).allowed,
+    );
+  }
+
+  /** The page a source file belongs to, when it is one this policy may read. */
+  readableSource(file: string): boolean {
+    if (this.access === undefined) return true;
+    const info = this.pages.find((candidate) => candidate.source === file);
+    return info === undefined || readablePage(this.access, info.page);
   }
 
   /** Rebuilds when a source file changed since the last build; returns whether it did. Builds never overlap. */
@@ -122,6 +169,7 @@ export class SiteState {
     this.site = model.site;
     this.diagnostics = result.diagnostics;
     this.#print = print;
+    this.#snapshot = `snap:${print.slice(0, 32)}`;
     this.pages = await this.#readPages();
     if (previous !== "") await rm(previous, { recursive: true, force: true });
   }

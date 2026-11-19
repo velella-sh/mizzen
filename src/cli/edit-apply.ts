@@ -36,6 +36,8 @@ import {
   type Patch,
   type PatchSpan,
 } from "../edits/patch.ts";
+import type { AccessGrant, AccessPolicy } from "../contracts/permissions.ts";
+import { checkTransactionArtifacts, checkWriteTarget, scopeOfFile } from "../permissions/write.ts";
 import { createProof, formatProof } from "../edits/proof.ts";
 import { unifiedDiff } from "../diff/unified.ts";
 export { unifiedDiff } from "../diff/unified.ts";
@@ -58,6 +60,16 @@ export interface EditApplyOptions {
   readonly dryRun?: boolean;
   /** Apply a patch that carries neither `expected` nor `beforeHash`; the caller accepts the risk. */
   readonly allowUnchecked?: boolean;
+  /** An access policy; both its write path and write scope must allow the edited file. */
+  readonly access?: AccessPolicy;
+  /** The task for audit lines; defaults to the policy's task. */
+  readonly task?: string;
+  /** The input snapshot approvals were made under; defaults to the source hash. */
+  readonly snapshot?: string;
+  /** The page URL the edited file belongs to, when the policy scopes writes by page. */
+  readonly page?: string;
+  /** Approvals the caller holds; a stale one never authorizes a changed source. */
+  readonly approvals?: readonly AccessGrant[];
   /** Test seam for the commit transaction; the CLI never sets it. */
   readonly transactionHooks?: TransactionHooks;
 }
@@ -94,6 +106,7 @@ export type EditApplyErrorCode =
   | "edit.path-escape"
   | "edit.source-missing"
   | "edit.patch-refused"
+  | "edit.access-denied"
   | "edit.write-failed";
 
 /** A refused application. `usage` is true when the request itself is malformed (exit 2). */
@@ -446,6 +459,29 @@ export async function editApply(options: EditApplyOptions): Promise<EditApplyRes
   const diffHash = sha256(diff);
   const patchHash = sha256(canonicalJson(patch));
 
+  const access = options.access;
+  const accessSnapshot = options.snapshot ?? beforeHash;
+  const accessTask = options.task ?? access?.task ?? "edit";
+  if (access !== undefined) {
+    const checked = await checkWriteTarget({
+      policy: access,
+      siteRoot,
+      path: target.record,
+      scope: scopeOfFile(target.record, options.page),
+      task: accessTask,
+      snapshot: accessSnapshot,
+      ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
+    });
+    if (!checked.decision.allowed) {
+      throw new EditApplyError(
+        "edit.access-denied",
+        `${target.record}: the access policy denied the write (${checked.decision.rule}): ${checked.decision.reason} Nothing was written.`,
+        false,
+        { path: target.record, span: patch.span },
+      );
+    }
+  }
+
   if (options.dryRun === true) {
     return {
       dryRun: true,
@@ -500,6 +536,29 @@ export async function editApply(options: EditApplyOptions): Promise<EditApplyRes
     });
   }
   artifacts.push({ path: target.path, label: target.record, content: after, expectedBeforeHash: beforeHash });
+
+  if (access !== undefined) {
+    const transaction = await checkTransactionArtifacts(
+      {
+        policy: access,
+        siteRoot,
+        path: target.record,
+        scope: scopeOfFile(target.record, options.page),
+        task: accessTask,
+        snapshot: accessSnapshot,
+        ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
+      },
+      artifacts,
+    );
+    if (!transaction.allowed) {
+      throw new EditApplyError(
+        "edit.access-denied",
+        `${target.record}: the access policy denied the transaction (${transaction.rule}): ${transaction.reason} Nothing was written.`,
+        false,
+        { path: target.record, span: patch.span },
+      );
+    }
+  }
 
   try {
     await commitArtifacts(artifacts, options.transactionHooks);

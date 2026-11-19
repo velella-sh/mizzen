@@ -1,8 +1,9 @@
 /** `query_graph`: query the current knowledge-graph snapshot through the same schema and node ids the CLI uses. */
 import { buildGraph } from "../../graph/build.ts";
 import { collectGraphInput } from "../../graph/collect.ts";
-import { queryGraph, type GraphDirection, type GraphQueryOptions } from "../../graph/query.ts";
+import { cursorSnapshot, queryGraph, type GraphDirection, type GraphQueryOptions } from "../../graph/query.ts";
 import type { GraphEdgeKind } from "../../contracts/index.ts";
+import { McpError } from "../limits.ts";
 import { json, type Tool } from "../tool.ts";
 
 interface Input {
@@ -41,7 +42,30 @@ export const tool: Tool<Input> = {
   async handler(input, { site }) {
     const graphInput = await collectGraphInput({ root: site.root, site: site.site });
     const { graph } = buildGraph(graphInput);
-    const result = queryGraph(graph, { ...input, snapshot: input.snapshot ?? graph.snapshot.id } as GraphQueryOptions);
+    const current = graph.snapshot.id;
+    if (input.snapshot !== undefined && input.snapshot !== current) {
+      throw new McpError("stale-snapshot", `Snapshot ${input.snapshot} is not the current build (${current}); query the current snapshot.`, {
+        retryable: true,
+        stage: "read",
+        data: { snapshot: current, previousSnapshot: input.snapshot },
+      });
+    }
+    if (input.cursor !== undefined) {
+      const named = cursorSnapshot(input.cursor);
+      if (named === undefined) throw new McpError("bad-cursor", "The cursor is not one this server gave.", { retryable: false, stage: "read" });
+      if (named !== current) {
+        throw new McpError("stale-cursor", `The cursor belongs to snapshot ${named}; this session is on ${current}. Re-run the query on the current snapshot.`, {
+          retryable: true,
+          stage: "read",
+          data: { snapshot: current, previousSnapshot: named },
+        });
+      }
+    }
+    const result = queryGraph(graph, {
+      ...input,
+      snapshot: input.snapshot ?? current,
+      ...(site.access === undefined ? {} : { access: site.access }),
+    } as GraphQueryOptions);
     return json(result as unknown as Record<string, unknown>);
   },
 };

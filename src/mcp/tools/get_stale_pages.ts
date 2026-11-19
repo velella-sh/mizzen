@@ -36,7 +36,8 @@ export const tool: Tool<Input> = {
     if (loaded.errors.length > 0 || lock.diagnostics.length > 0 || loaded.pages.length === 0) {
       return json({ total: 0, pages: [], ...(problems.length > 0 ? { problems } : {}) });
     }
-    const { pages } = await applyMoves(compareToLock(loaded.pages, lock.lock), lock.lock, loaded.coversRoot);
+    const { pages: allPages } = await applyMoves(compareToLock(loaded.pages, lock.lock), lock.lock, loaded.coversRoot);
+    const pages = site.access === undefined ? allPages : allPages.filter((p) => site.readableSource(p.page));
     const covers = new Map(loaded.pages.map((p) => [p.page, p.covers]));
     const listed = pages.slice(0, limit).map((p) => ({
       source: p.page,

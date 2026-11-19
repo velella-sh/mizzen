@@ -24,7 +24,8 @@ export const tool: Tool<Input> = {
     const picked = site.diagnostics.filter(
       (d) =>
         (input.severity === undefined || d.severity === input.severity) &&
-        (wanted === undefined || (d.pos?.file.replace(/\\/g, "/") ?? "").startsWith(wanted)),
+        (wanted === undefined || (d.pos?.file.replace(/\\/g, "/") ?? "").startsWith(wanted)) &&
+        (site.access === undefined || (d.pos !== undefined && site.readableSource(d.pos.file.replace(/\\/g, "/")))),
     );
     const contract = JSON.parse(formatJson(picked)) as Record<string, unknown>;
     return json(contract);
