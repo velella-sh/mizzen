@@ -58,6 +58,15 @@ its help names the two accepted formats.
 | `data.api-source-too-large` | The combined records are larger than `limits.bytes`. | Raise `collections.<name>.limits.bytes`, or split the API. |
 | `data.api-duplicate-id` | Two records on different pages share an id. | Make the API's ids unique. |
 
+## Join
+
+| ID | Meaning | Fix |
+| --- | --- | --- |
+| `data.join-missing-key` | A record has no value for the configured join key and `onMissingKey: error` is set. | Fill the key in the source, or set `onMissingKey: skip`. |
+| `data.join-conflict` | A destination field receives different values from more than one source and `onConflict: error` is set. | Map the field to one source, or choose a precedence policy. |
+| `data.join-many` | A secondary source has more than one record for a key that expects one and `many: error` is set. | Make the key unique, or set `many` to `first`, `last`, or `list`. |
+| `data.join-cycle` | Join sources form a cycle. | Remove the cycle so each collection enriches from a lower source. |
+
 ## Templates
 
 | ID | Meaning | Fix |

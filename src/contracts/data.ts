@@ -40,6 +40,28 @@ export interface RecordPos {
   readonly endColumn: number;
 }
 
+/** Why one joined output field holds the value it holds, and which inputs could have supplied it. */
+export interface JoinedField {
+  /** The output field's name. */
+  readonly field: string;
+  /** The collection whose value was selected. */
+  readonly source: string;
+  /** The field in that collection the value came from. */
+  readonly input: string;
+  /** Every `<collection>.<field>` that could supply this destination, in precedence order. */
+  readonly inputs: readonly string[];
+  /** `only` for one input, `precedence` for the first present one, `null-fallthrough` when a null was passed over. */
+  readonly reason: "only" | "precedence" | "null-fallthrough";
+}
+
+/** For a joined record: its key values, and why each output field holds its value. */
+export interface JoinedOutput {
+  /** The key fields and their values, as text, in the join's order. */
+  readonly key: Readonly<Record<string, string>>;
+  /** One entry per output field the join wrote. */
+  readonly fields: Readonly<Record<string, JoinedField>>;
+}
+
 /** One record of a collection: its id, its fields, and where each of those sits. */
 export interface DataRecord {
   /** The record's id, as the config names it or as the mapping key gives it. */
@@ -59,6 +81,8 @@ export interface DataRecord {
    * build against the as-of date and never written back to the data file.
    */
   readonly derived?: Readonly<Record<string, unknown>>;
+  /** For a joined record: its key values, and why each output field holds its value. */
+  readonly joined?: JoinedOutput;
 }
 
 /** What a build read from the collections a site declares. */

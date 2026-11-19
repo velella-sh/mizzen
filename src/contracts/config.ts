@@ -488,6 +488,59 @@ export interface CollectionTransformConfig {
   readonly steps: readonly TransformStepConfig[];
 }
 
+/** How a join treats a primary record with no match in a secondary source. */
+export type JoinType = "inner" | "left";
+
+/** What a record whose key is missing or null does. */
+export type JoinMissingKey = "error" | "skip";
+
+/** How a destination field that more than one side supplies is chosen. */
+export type JoinConflict = "precedence" | "error";
+
+/** Whether a null value is a value of its own (`keep`) or falls through to the next source (`fallthrough`). */
+export type JoinNull = "keep" | "fallthrough";
+
+/** What more than one secondary record with the same key does. `error` reports a one-to-one violation. */
+export type JoinMany = "error" | "first" | "last" | "list";
+
+/** One collection joined into a collection's records, after its own source was read and transformed. */
+export interface JoinSourceConfig {
+  /** The collection whose records are joined in. */
+  readonly collection: string;
+  /** Fields on this collection's records that match the primary key, in the same order. Default: the join's `key`. */
+  readonly key?: string | readonly string[];
+  /** Output field → field in this collection. Absent: every top-level field. */
+  readonly fields?: Readonly<Record<string, string>>;
+  /** What more than one match with the same key does. Default: the join's `many`. */
+  readonly many?: JoinMany;
+  /** Output field that holds the nested records when `many` is `list`. Default: this collection's name. */
+  readonly manyField?: string;
+}
+
+/**
+ * Joins other collections into this collection's records on declared keys. The collection's own source is the primary
+ * side; every source in `sources` is one further join step in the order written. The primary record's id, position,
+ * and order decide the joined record's identity, so reordering a secondary source moves no id and no URL.
+ */
+export interface JoinConfig {
+  /** `inner` keeps only primary records that matched every source; `left` keeps every primary record. Default `inner`. */
+  readonly type?: JoinType;
+  /** Fields on the primary record that a source key matches. */
+  readonly key: string | readonly string[];
+  /** Output field → field on the primary record. Absent: every top-level field. */
+  readonly fields?: Readonly<Record<string, string>>;
+  /** The collections joined in, in precedence order after the primary. At least one. */
+  readonly sources: readonly JoinSourceConfig[];
+  /** What a primary or secondary record whose key is absent or null does. Default `error`. */
+  readonly onMissingKey?: JoinMissingKey;
+  /** How a destination more than one side supplies is chosen. Default `precedence`. */
+  readonly onConflict?: JoinConflict;
+  /** Whether a null value is kept as a value or falls through to the next source. Default `keep`. */
+  readonly onNull?: JoinNull;
+  /** What more than one match does when a source does not set `many`. Default `error`. */
+  readonly many?: JoinMany;
+}
+
 /** One data collection: where its records come from, and how its pages are built. */
 export interface CollectionConfig {
   /** Data file the records are read from, relative to the site root. */
@@ -571,6 +624,11 @@ export interface CollectionConfig {
    * `transform` publishes its records exactly as the source writes them. Default: none.
    */
   readonly transform?: CollectionTransformConfig;
+  /**
+   * Collections joined into this collection's records after its own source is read and transformed. The joined record
+   * keeps this collection's record id, position, and order; a source that changes refreshes the dependent output.
+   */
+  readonly join?: JoinConfig;
 }
 
 /** A cookieless analytics tool the site attaches with one script tag. */

@@ -838,6 +838,154 @@
         }
       }
     },
+    "join": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "sources"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "inner",
+            "left"
+          ],
+          "default": "inner",
+          "description": "`inner` keeps only primary records that matched every source; `left` keeps every primary record. Default inner."
+        },
+        "key": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ],
+          "description": "Field, or fields, on the primary record that a source's key matches."
+        },
+        "fields": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Output field → field on the primary record. Absent: every top-level field."
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/joinSource"
+          },
+          "description": "The collections joined in, in precedence order after the primary. Each is one join step."
+        },
+        "onMissingKey": {
+          "enum": [
+            "error",
+            "skip"
+          ],
+          "default": "error",
+          "description": "What a record whose key is absent or null does: `error` fails the build, `skip` leaves the record out with a warning. Default error."
+        },
+        "onConflict": {
+          "enum": [
+            "precedence",
+            "error"
+          ],
+          "default": "precedence",
+          "description": "How a destination more than one side supplies is chosen: the first source in order, or an error naming both inputs. Default precedence."
+        },
+        "onNull": {
+          "enum": [
+            "keep",
+            "fallthrough"
+          ],
+          "default": "keep",
+          "description": "Whether a null value is a value of its own (`keep`) or falls through to the next source (`fallthrough`). Default keep."
+        },
+        "many": {
+          "enum": [
+            "error",
+            "first",
+            "last",
+            "list"
+          ],
+          "default": "error",
+          "description": "What more than one secondary record with the same key does when a source does not set `many`: report a one-to-one violation, keep the first or last by id, or nest every match in `manyField`. Default error."
+        }
+      },
+      "description": "A join of other collections into this collection's records on declared keys."
+    },
+    "joinSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collection"
+      ],
+      "properties": {
+        "collection": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The collection whose records are joined in."
+        },
+        "key": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ],
+          "description": "Field, or fields, on this source's records that match the primary key, in the same order. Default the join's key."
+        },
+        "fields": {
+          "type": "object",
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Output field → field in this collection. Absent: every top-level field."
+        },
+        "many": {
+          "enum": [
+            "error",
+            "first",
+            "last",
+            "list"
+          ],
+          "description": "What more than one match with the same key does. Default the join's `many`."
+        },
+        "manyField": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Output field that holds the nested records when `many` is `list`. Default this collection's name."
+        }
+      },
+      "description": "One collection joined into a collection's records."
+    },
     "collection": {
       "type": "object",
       "additionalProperties": false,
@@ -1221,6 +1369,10 @@
               "description": "When records are checked against the collection's schema: `after` validates the transformed record, `before-and-after` also reports a raw record that does not match and still transforms it. Default `after`."
             }
           }
+        },
+        "join": {
+          "$ref": "#/$defs/join",
+          "description": "Collections joined into this collection's records after its own source is read and transformed. The record keeps this collection's id, position, and order."
         },
         "raw": {
           "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",

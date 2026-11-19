@@ -47,6 +47,8 @@ no product and no data set. The types it refers to are in [`src/contracts/data.t
 8. **Adding is allowed; removing is not.** A contract field, a config key, or an output file may gain
    a field in a later version. An existing name keeps its meaning.
 
+A collection may declare `join` to enrich its records from other collections on declared keys; the primary record keeps its id, order, and URL. See [Joining collections](join.md).
+
 ## Showing data in a page
 
 - `:data[path]` shows one value as text. `path` is dot-separated and is read from `_data` first, where a number

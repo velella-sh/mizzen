@@ -25,6 +25,7 @@ import { checkReferences } from "./checks/references.ts";
 import { checkUnique } from "./checks/unique.ts";
 import { parseCsv } from "./csv.ts";
 import { deriveRecords } from "./derived.ts";
+import { applyJoins } from "./join.ts";
 import { checkFieldSizes, checkRecordCount, checkSourceBytes, dataLimitsOf } from "./limits.ts";
 import { readLock, type DataLock } from "./lock.ts";
 import { resolveNpmSource } from "./package-source.ts";
@@ -435,6 +436,43 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
   const schemas = compileSchemas(root, config, configPositions, diagnostics);
   let read = 0;
   let skipped = 0;
+  /** Collections whose records are finished after every join resolved, with the transform rule that last touched a field. */
+  const joined = new Set<string>();
+  const lastRuleByName: Record<string, Readonly<Record<string, string>>> = {};
+  const transformed = new Set<string>();
+
+  /** Schema, uniqueness, dates, and derived values for a collection's final records, joined or not. */
+  const finishCollection = (
+    name: string,
+    entry: (typeof config.collections)[string],
+    source: string,
+    kept: readonly DataRecord[],
+    schema: ReturnType<typeof compileSchemas>["schemas"][string] | undefined,
+    lastRuleByField: Readonly<Record<string, string>>,
+    transforming: boolean,
+  ): readonly DataRecord[] => {
+    let records = kept;
+    if (schema !== undefined) {
+      const validated = validateRecords(
+        name,
+        records,
+        schema,
+        entry,
+        entry.records === undefined ? formatOf(source) : "json",
+        diagnostics,
+        transforming
+          ? { stage: "output", stepOf: (field) => (field === undefined ? undefined : lastRuleByField[field]) }
+          : undefined,
+      );
+      records = validated.records;
+      skipped += validated.skipped;
+    }
+    checkUnique(name, records, entry, diagnostics);
+    records = applyDates(name, records, entry.dates ?? [], diagnostics);
+    const derived = deriveRecords(name, records, entry.derived, config.asOf, configPositions[name] ?? atConfig());
+    diagnostics.push(...derived.diagnostics);
+    return derived.records;
+  };
 
   let lock: DataLock | undefined;
   let lockInvalid = false;
@@ -577,40 +615,26 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     const schema = schemas.schemas[name];
     const transform = entry.transform;
     const transforming = transform !== undefined && transform.steps.length > 0;
-    if (transforming && schema !== undefined && transform?.validate === "before-and-after") {
+    const joining = entry.join !== undefined;
+    if (joining) joined.add(name);
+    if (!joining && transforming && schema !== undefined && transform?.validate === "before-and-after") {
       validateRecords(name, kept, schema, entry, entry.records === undefined ? formatOf(source) : "json", diagnostics, { stage: "input", keepInvalid: true });
     }
     let lastRuleByField: Readonly<Record<string, string>> = {};
     if (transforming) {
-      const transformed = transformRecords(kept, transform, {
+      const transformedRecords = transformRecords(kept, transform, {
         collection: name,
         pos: configPos,
         ...(options.onTransformEvent === undefined ? {} : { onEvent: options.onTransformEvent }),
       });
-      kept = transformed.records;
-      lastRuleByField = transformed.lastRuleByField;
-      diagnostics.push(...transformed.diagnostics);
+      kept = transformedRecords.records;
+      lastRuleByField = transformedRecords.lastRuleByField;
+      diagnostics.push(...transformedRecords.diagnostics);
+      lastRuleByName[name] = lastRuleByField;
+      transformed.add(name);
     }
-    if (schema !== undefined) {
-      const validated = validateRecords(
-        name,
-        kept,
-        schema,
-        entry,
-        entry.records === undefined ? formatOf(source) : "json",
-        diagnostics,
-        transforming
-          ? { stage: "output", stepOf: (field) => (field === undefined ? undefined : lastRuleByField[field]) }
-          : undefined,
-      );
-      kept = validated.records;
-      skipped += validated.skipped;
-    }
-    checkUnique(name, kept, entry, diagnostics);
-    kept = applyDates(name, kept, entry.dates ?? [], diagnostics);
-    const derived = deriveRecords(name, kept, entry.derived, config.asOf, configPos);
-    kept = derived.records;
-    diagnostics.push(...derived.diagnostics);
+    // A joined collection is validated after its sources are joined in, so its schema can describe the output contract.
+    if (!joining) kept = finishCollection(name, entry, source, kept, schema, lastRuleByField, transforming);
     collections[name] = {
       name,
       source,
@@ -619,6 +643,26 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       ...(lock?.snapshots?.[name] === undefined ? {} : { snapshot: lock.snapshots[name]! }),
     };
   }
+
+  diagnostics.push(
+    ...applyJoins({
+      collections,
+      config,
+      positions: configPositions,
+      finish: (name, records) => {
+        const entry = config.collections[name]!;
+        return finishCollection(
+          name,
+          entry,
+          entry.source,
+          records,
+          schemas.schemas[name],
+          lastRuleByName[name] ?? {},
+          transformed.has(name),
+        );
+      },
+    }),
+  );
 
   checkReferences(collections, config, diagnostics);
   const summary = skippedSummary(skipped);
