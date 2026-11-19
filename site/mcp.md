@@ -23,6 +23,19 @@ mizzen mcp . --print-config claude-desktop
 
 Paste the result into the client's MCP settings. The output is the same every time, and it names the folder you gave.
 
+## Client capabilities and fallbacks
+
+The server reads the client's `initialize` hello before any tool runs and reports what it found in `_meta.mizzen`: the adapter id, the contract and protocol versions, the effective capabilities, and every fallback. A client may declare its optional features under `capabilities.experimental.mizzen`; an unreadable block is reported and ignored, never guessed.
+
+| If the client declares | The server does |
+| --- | --- |
+| no resources | advertises tools only; read page Markdown with `get_page` |
+| no progress or long-running tasks | answers synchronously with the receipt; poll by repeating the read |
+| no safe editing | refuses `apply_edit` with `client-editing-unavailable`; `propose_edit` still returns the patch |
+| no cursors | returns `nextOffset` instead of `nextCursor` |
+
+The startup log on stderr names the client and the unavailable capabilities. `--print-config` never writes a credential; a caller that must carry one uses an environment reference such as `${MIZZEN_TOKEN}`, resolved only at launch. The installable client skill ships in `skills/mizzen-client/` with a versioned manifest and checksum. See [the client integration notes](https://github.com/velella-sh/mizzen/blob/main/docs/client-integrations.md) for the contract and migration rules.
+
 ## Read-only by default
 
 Without `--allow-edits` the server cannot change a file. Every tool below reads, and `propose_edit` only computes a diff.
