@@ -34,7 +34,7 @@ Commands:
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
-  edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
+  edit verify <proof.json>  Check an edit proof or a verification proof (--input <file> for public evidence)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
@@ -69,6 +69,7 @@ Options:
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
   --hash <hex>         Expected build hash for verify (default: the manifest's)
   --site <dir>         Site root for edit verify (default: .)
+  --input <file>       Public evidence for a verification proof: files, before, checks, output, human review, and package binding
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)

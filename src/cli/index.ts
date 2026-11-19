@@ -142,6 +142,7 @@ Options:
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
   --hash <hex>         Expected build hash for verify (default: the manifest's)
   --site <dir>         Site root for edit verify (default: .)
+  --input <file>       Public evidence for a verification proof: files, before, checks, output, human review, and package binding
   --doctor             Rerun the doctor for edit verify
   --port <number>      Port for dev (default: 3000; 0 picks a free one)
   --host <host>        Host for dev (default: 127.0.0.1)

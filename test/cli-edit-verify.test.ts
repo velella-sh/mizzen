@@ -173,7 +173,7 @@ test("a malformed or absent proof exits 2", async () => {
     writeFileSync(wrongVersion, '{"version":2,"files":[]}');
     const version = capture();
     assert.equal(await main(["edit", "verify", wrongVersion, "--site", root], version.io), 2);
-    assert.match(version.errors[0] ?? "", /its version is 2, not 1\./);
+    assert.match(version.errors[0] ?? "", /is not a valid proof: The proof does not match the schema/u);
 
     const absent = capture();
     assert.equal(await main(["edit", "verify", join(root, "no-proof.json"), "--site", root], absent.io), 2);
