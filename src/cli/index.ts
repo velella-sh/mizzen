@@ -41,6 +41,7 @@ import { verify, verifyMessage } from "./verify.ts";
 import { compareReports, reproduce } from "./reproduce.ts";
 import { BUILD_REPORT_PATH, buildReportOf, writeBuildReport } from "../reproduce/manifest.ts";
 import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
+import { traceEditApply, traceVerification } from "../trace/instrument.ts";
 
 /** The command name on the PATH. */
 export const NAME = "mizzen";
@@ -1781,6 +1782,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.dryRun ? { dryRun: true } : {}),
         ...(options.allowUnchecked === true ? { allowUnchecked: true } : {}),
       });
+      await traceEditApply(result, options.root);
       if (options.format === "json") {
         log(formatEditApplyJson(result, 0).replace(/\n$/, ""));
         return 0;
@@ -1811,6 +1813,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       siteRoot: options.site,
       doctor: options.doctor,
     });
+    await traceVerification(result);
     const exitCode = result.ok
       ? 0
       : result.failure?.kind === "proof" || result.failure?.kind === "doctor-unavailable"

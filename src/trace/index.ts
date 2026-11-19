@@ -25,3 +25,22 @@ export { replayTrace, compareTraces, type TraceReplayOptions } from "./replay.ts
 export { TraceExportError, exportFilename, exportJson, exportTrace } from "./export.ts";
 export { DEFAULT_TRACE_LIMITS, boundTrace, type TraceLimits } from "./retain.ts";
 export { handoffOf } from "./handoff.ts";
+export {
+  recordEditApply,
+  recordMcpEdit,
+  recordPack,
+  recordVerification,
+  siteReference,
+  standaloneTrace,
+  traceEditApply,
+  traceMcpEdit,
+  tracePack,
+  traceVerification,
+  writeTraceFromEnv,
+  type AppliedEdit,
+  type CompiledContext,
+  type McpEditResult,
+  type RecordOptions,
+  type StandaloneTrace,
+  type VerifiedProof,
+} from "./instrument.ts";

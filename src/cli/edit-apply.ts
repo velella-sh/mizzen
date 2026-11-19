@@ -26,7 +26,7 @@
  */
 import { readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { sha256 } from "../data/lock.ts";
+import { canonicalJson, sha256 } from "../data/lock.ts";
 import { createEditAudit, formatEditAudit } from "../edits/audit.ts";
 import {
   applyPatches,
@@ -78,6 +78,8 @@ export interface EditApplyResult {
   readonly afterHash: string;
   /** The span the patch replaced, so a trace can point at it. */
   readonly span: PatchSpan;
+  /** SHA-256 of the canonical patch document that was applied. */
+  readonly patchHash: string;
   /** SHA-256 of the unified diff from the source before the patch to the source after it. */
   readonly diffHash: string;
 }
@@ -491,6 +493,7 @@ export async function editApply(options: EditApplyOptions): Promise<EditApplyRes
   const afterHash = hashSource(after);
   const diff = unifiedDiff(source, after, target.record);
   const diffHash = sha256(diff);
+  const patchHash = sha256(canonicalJson(patch));
 
   if (options.dryRun === true) {
     return {
@@ -501,6 +504,7 @@ export async function editApply(options: EditApplyOptions): Promise<EditApplyRes
       beforeHash,
       afterHash,
       span: patch.span,
+      patchHash,
       diffHash,
     };
   }
@@ -560,7 +564,7 @@ export async function editApply(options: EditApplyOptions): Promise<EditApplyRes
     );
   }
 
-  return { dryRun: false, siteRoot, file: target.record, proof, beforeHash, afterHash, span: patch.span, diffHash };
+  return { dryRun: false, siteRoot, file: target.record, proof, beforeHash, afterHash, span: patch.span, patchHash, diffHash };
 }
 
 /** How a command ended: `ok` is exit 0, `failed` exit 1, `invalid` exit 2. */
