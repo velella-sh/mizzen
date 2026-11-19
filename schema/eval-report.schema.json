@@ -1,0 +1,798 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/eval-report.schema.json",
+  "title": "Mizzen evaluation report",
+  "description": "One deterministic evaluation run: environment pins, the published rubric, every case's separate component scores and evidence, totals, the CI gate, and an optional baseline comparison. `mizzen eval --format json` writes this document. It holds no clock or machine-local path, so the same suite against the same pins gives the same bytes.",
+  "type": "object",
+  "required": [
+    "version",
+    "suite",
+    "run",
+    "pins",
+    "rubric",
+    "cases",
+    "totals",
+    "gate"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "suite": {
+      "type": "object",
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer"
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "id",
+        "runner",
+        "package"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "runner": {
+          "$ref": "#/$defs/runner"
+        },
+        "package": {
+          "type": "string"
+        }
+      }
+    },
+    "pins": {
+      "type": "object",
+      "required": [
+        "mizzen",
+        "package",
+        "tools"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mizzen": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/tool"
+          }
+        },
+        "build": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "The built folder this run scores."
+        }
+      }
+    },
+    "rubric": {
+      "type": "object",
+      "required": [
+        "version",
+        "weights",
+        "critical"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "weights": {
+          "type": "object",
+          "required": [
+            "success",
+            "evidence",
+            "scope",
+            "checks",
+            "efficiency"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "success": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "evidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "scope": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "checks": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "efficiency": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "critical": {
+          "const": "security"
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    },
+    "totals": {
+      "$ref": "#/$defs/totals"
+    },
+    "gate": {
+      "$ref": "#/$defs/gate"
+    },
+    "baseline": {
+      "$ref": "#/$defs/baseline"
+    }
+  },
+  "$defs": {
+    "runner": {
+      "type": "object",
+      "required": [
+        "id",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      }
+    },
+    "components": {
+      "type": "object",
+      "required": [
+        "success",
+        "evidence",
+        "scope",
+        "checks",
+        "efficiency"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "success": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "evidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "scope": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "checks": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "efficiency": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "pins": {
+      "type": "object",
+      "required": [
+        "fixture",
+        "config",
+        "pack",
+        "agent"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "fixture": {
+          "type": "string"
+        },
+        "config": {
+          "type": "string"
+        },
+        "pack": {
+          "type": "string"
+        },
+        "agent": {
+          "type": "string"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "tokens",
+        "toolCalls",
+        "budgetTokens",
+        "budgetToolCalls",
+        "contextTokens",
+        "contextPages"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "toolCalls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "budgetTokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "budgetToolCalls": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contextTokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "contextPages": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "required": [
+        "ok",
+        "verdict",
+        "producerVerdict",
+        "agrees",
+        "proofHash",
+        "checked",
+        "failures"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "ok": {
+          "type": "boolean"
+        },
+        "verdict": {
+          "enum": [
+            "proved",
+            "incomplete",
+            "failed"
+          ]
+        },
+        "producerVerdict": {
+          "enum": [
+            "proved",
+            "incomplete",
+            "failed"
+          ]
+        },
+        "agrees": {
+          "type": "boolean"
+        },
+        "proofHash": {
+          "enum": [
+            "matched",
+            "mismatched"
+          ]
+        },
+        "checked": {
+          "type": "object",
+          "required": [
+            "files",
+            "checks",
+            "outputs",
+            "humanReview",
+            "package"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "files": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "checks": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "outputs": {
+              "type": "boolean"
+            },
+            "humanReview": {
+              "type": "boolean"
+            },
+            "package": {
+              "type": "boolean"
+            }
+          }
+        },
+        "failures": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "code",
+              "message"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "pages",
+        "symbols",
+        "citations",
+        "refs",
+        "files",
+        "checks"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "citations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "refs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "status"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "verifier": {
+          "$ref": "#/$defs/verifier"
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "required": [
+        "version",
+        "id",
+        "title",
+        "capability",
+        "status",
+        "snapshot",
+        "pins",
+        "runner",
+        "components",
+        "weighted",
+        "security",
+        "criteria",
+        "metrics",
+        "evidence",
+        "findings"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "capability": {
+          "enum": [
+            "discovery",
+            "answer",
+            "context",
+            "edit",
+            "transaction",
+            "verification",
+            "handoff",
+            "conflict",
+            "permission"
+          ]
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "invalid",
+            "unavailable"
+          ]
+        },
+        "snapshot": {
+          "type": "string"
+        },
+        "pins": {
+          "$ref": "#/$defs/pins"
+        },
+        "runner": {
+          "$ref": "#/$defs/runner"
+        },
+        "components": {
+          "$ref": "#/$defs/components"
+        },
+        "weighted": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "security": {
+          "enum": [
+            "ok",
+            "violation"
+          ]
+        },
+        "criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "statement",
+              "satisfied"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "statement": {
+                "type": "string"
+              },
+              "satisfied": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "metrics": {
+          "$ref": "#/$defs/metrics"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        },
+        "unavailable": {
+          "type": "string"
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": [
+        "cases",
+        "passed",
+        "failed",
+        "invalid",
+        "unavailable",
+        "weighted",
+        "metrics"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "invalid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unavailable": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "weighted": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "metrics": {
+          "type": "object",
+          "required": [
+            "inputTokens",
+            "outputTokens",
+            "tokens",
+            "toolCalls"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "inputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "outputTokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "tokens": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "toolCalls": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "required": [
+        "passed",
+        "reasons",
+        "scored",
+        "unavailable"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scored": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unavailable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "required": [
+        "comparable",
+        "reasons",
+        "cases",
+        "weighted",
+        "previous",
+        "delta",
+        "regressed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "comparable": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "status",
+              "weighted",
+              "previous",
+              "delta",
+              "tokens",
+              "previousTokens",
+              "toolCalls",
+              "previousToolCalls"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "regressed",
+                  "improved",
+                  "unchanged",
+                  "incomparable",
+                  "new",
+                  "removed"
+                ]
+              },
+              "weighted": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "previous": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              },
+              "delta": {
+                "type": "number"
+              },
+              "tokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "previousTokens": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "toolCalls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "previousToolCalls": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "weighted": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "previous": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "delta": {
+          "type": "number"
+        },
+        "regressed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "id": "conflict.overlap",
+  "title": "Detect overlapping multi-agent work",
+  "capability": "conflict",
+  "goal": "Split two agents that both claim the install page, and refuse the overlap.",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [
+      "guide/**"
+    ],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "detected",
+      "statement": "The overlapping install-page scope is detected."
+    },
+    {
+      "id": "rejected",
+      "statement": "The split is rejected rather than assigning the page twice."
+    }
+  ],
+  "tools": [
+    {
+      "name": "coordination",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "split": "coordination/split.json"
+  },
+  "expected": {
+    "kind": "conflict",
+    "overlap": [
+      "guide/install.md"
+    ],
+    "resolution": "rejected"
+  }
+}

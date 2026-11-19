@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "id": "context.install-steps",
+  "title": "Compile a complete install context",
+  "capability": "context",
+  "goal": "Update the install steps and keep the download instructions",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "complete",
+      "statement": "The pack contains every required block."
+    },
+    {
+      "id": "narrow",
+      "statement": "The pack stays on the install page."
+    }
+  ],
+  "tools": [
+    {
+      "name": "context",
+      "version": "1"
+    }
+  ],
+  "expected": {
+    "kind": "context",
+    "evidence": [
+      "install-steps",
+      "install-download"
+    ],
+    "pages": [
+      "guide/install.md"
+    ],
+    "maxPages": 2
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "task": "eval-permission",
+  "capabilities": {
+    "read": true,
+    "write": true,
+    "execute": false,
+    "network": false,
+    "publish": false
+  },
+  "read": {
+    "public": true,
+    "audiences": [],
+    "pages": [
+      "/guide/**"
+    ]
+  },
+  "write": {
+    "paths": [
+      "guide/**"
+    ],
+    "scope": {
+      "pages": [
+        "/guide/install/"
+      ],
+      "blocks": [],
+      "collections": [],
+      "files": []
+    }
+  },
+  "approvals": {
+    "read": false,
+    "write": false,
+    "execute": true,
+    "network": true,
+    "publish": true
+  }
+}

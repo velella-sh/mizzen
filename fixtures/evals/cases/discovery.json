@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "id": "discovery.install",
+  "title": "Find where the Node requirement is documented",
+  "capability": "discovery",
+  "goal": "Where is the required Node version documented?",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "page",
+      "statement": "The agent finds the install guide."
+    },
+    {
+      "id": "precision",
+      "statement": "The agent cites no unrelated page."
+    }
+  ],
+  "tools": [
+    {
+      "name": "context",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "agent": "agents/discovery.json"
+  },
+  "expected": {
+    "kind": "discovery",
+    "pages": [
+      "guide/install.md"
+    ],
+    "symbols": []
+  }
+}

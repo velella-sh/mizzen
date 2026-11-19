@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "id": "answer.node-version",
+  "title": "Answer with a precise citation",
+  "capability": "answer",
+  "goal": "Which Node version does Mizzen require, and where is it documented?",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "answer",
+      "statement": "The answer names Node 24."
+    },
+    {
+      "id": "citation",
+      "statement": "The answer cites guide/install.md line 9."
+    }
+  ],
+  "tools": [
+    {
+      "name": "context",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "agent": "agents/answer.json"
+  },
+  "expected": {
+    "kind": "answer",
+    "answer": "Node 24",
+    "citations": [
+      "guide/install.md:9"
+    ],
+    "forbidden": [
+      "guide/deploy.md"
+    ]
+  }
+}

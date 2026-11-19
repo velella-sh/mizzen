@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "id": "verification.fabricated",
+  "title": "Reject a success claim with a skipped check",
+  "capability": "verification",
+  "goal": "Verify the install guide change independently.",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "verdict",
+      "statement": "Independent verification reaches the failed result."
+    },
+    {
+      "id": "evidence",
+      "statement": "The verifier checks the proof rather than the claim."
+    }
+  ],
+  "tools": [
+    {
+      "name": "verification",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "proof": "proofs/fabricated.json",
+    "input": "proofs/fabricated.input.json"
+  },
+  "expected": {
+    "kind": "verification",
+    "verdict": "failed"
+  }
+}

@@ -2,13 +2,18 @@
  * The public CLI entry point: report, badge, comparison, evaluation, gate, and `check --agents`. Issues #1265-#1267.
  */
 import assert from "node:assert/strict";
-import { readFileSync, writeFileSync } from "node:fs";
+import { cpSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
+import { fileURLToPath } from "node:url";
 import { main } from "../src/cli/index.ts";
-import { verifyReadinessReport } from "../src/readiness/report.ts";
+import type { EvalReport } from "../src/contracts/evals.ts";
 import type { ReadinessReport } from "../src/contracts/readiness.ts";
+import { runEvalSuite } from "../src/evals/index.ts";
+import { verifyReadinessReport } from "../src/readiness/report.ts";
 import { buildFixture, copyBuild, FIXTURE_THEME, type BuiltFixture } from "./readiness-fixture.ts";
+
+const EVALS_FIXTURE = fileURLToPath(new URL("../fixtures/evals", import.meta.url));
 
 let built: BuiltFixture;
 
@@ -126,6 +131,47 @@ test("check --agents scores the staging build from the real CLI", async () => {
   assert.deepEqual(errors, []);
   assert.match(logs.join("\n"), /Mizzen readiness 1\.0\.0/);
   assert.match(logs.join("\n"), /Status: pass/);
+});
+
+test("a real evaluation report with a build pin scores examples", async () => {
+  const reportPath = join(built.parent, "eval-scored.json");
+  assert.equal(await main(["readiness", built.out, "--report", reportPath], capture().io), 0);
+  const scored = JSON.parse(readFileSync(reportPath, "utf8")) as ReadinessReport;
+
+  const suite = join(built.parent, "readiness-evals");
+  cpSync(EVALS_FIXTURE, suite, { recursive: true });
+  writeFileSync(join(suite, "suite.json"), JSON.stringify({ ...JSON.parse(readFileSync(join(suite, "suite.json"), "utf8")), id: "mizzen-readiness" }));
+  const { report: evaluation } = await runEvalSuite({ suite, build: scored.build.hash });
+  const evaluationPath = join(built.parent, "readiness-evaluation.json");
+  writeFileSync(evaluationPath, `${JSON.stringify(evaluation, null, 2)}\n`);
+
+  const outPath = join(built.parent, "eval-scored-with.json");
+  const code = await main(["readiness", built.out, "--evals", evaluationPath, "--report", outPath], capture().io);
+  assert.equal(code, 0);
+  const evaluated = JSON.parse(readFileSync(outPath, "utf8")) as ReadinessReport;
+  assert.equal(evaluated.rules.find((rule) => rule.code === "examples.evaluation")?.status, "pass");
+  assert.equal(evaluated.evaluations.status, "pass");
+  assert.equal(evaluated.evaluations.snapshot, scored.build.hash);
+  assert.equal(evaluated.unknowns.some((rule) => rule.code === "examples.evaluation"), false);
+
+  const unpinned = join(built.parent, "unpinned-evaluation.json");
+  const { build: _build, ...pins } = evaluation.pins;
+  writeFileSync(unpinned, JSON.stringify({ ...evaluation, pins }));
+  const refused = capture();
+  assert.equal(await main(["readiness", built.out, "--evals", unpinned], refused.io), 2);
+  assert.match(refused.errors.join("\n"), /--build/);
+
+  const failing = capture();
+  writeFileSync(
+    join(built.parent, "failing-evaluation.json"),
+    JSON.stringify({
+      ...evaluation,
+      cases: evaluation.cases.map((entry, index) => (index === 0 ? { ...entry, status: "failed" as const } : entry)),
+      gate: { ...evaluation.gate, passed: false, reasons: ["a case failed"] },
+    }),
+  );
+  assert.equal(await main(["readiness", built.out, "--evals", join(built.parent, "failing-evaluation.json")], failing.io), 1);
+  assert.match(failing.logs.join("\n"), /examples\.evaluation/);
 });
 
 test("readiness writes Markdown when the badge path ends in .md", async () => {

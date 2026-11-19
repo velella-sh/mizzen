@@ -129,10 +129,21 @@ version, status, and unknown count. With `--evidence`, the report and badge link
 `examples.evaluation` is scored from an external report and is `unknown` until one arrives:
 
 ```bash
+mizzen build --out dist
+mizzen readiness dist --report readiness.json
+mizzen eval my-readiness-suite --build "$(jq -r .build.hash readiness.json)" --out readiness-evals.json
 mizzen readiness dist --evals readiness-evals.json
 ```
 
-The file must be an object with:
+The file is either a `mizzen eval` report or a small summary.
+
+A `mizzen eval` report counts only when:
+
+- its suite is named `mizzen-readiness` at version `1`;
+- its `pins.build` is the build hash this readiness run scores (recorded by `mizzen eval --build <sha256>`);
+- every case passed. A failed or invalid case fails the rule; a report with no scored cases, or any unavailable case, leaves the rule `unknown` rather than a pass.
+
+A summary is an object with:
 
 - `suite`: `mizzen-readiness`
 - `version`: `1.0.0`
