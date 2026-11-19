@@ -33,6 +33,9 @@ export const TASK_STATUSES = [
 /** The states a task cannot leave. */
 export const TASK_TERMINAL_STATUSES = ["done", "failed", "canceled", "expired"] as const;
 
+/** The states in which a task may still request a write or a check. */
+export const TASK_ACTIVE_STATUSES = ["ready", "waiting", "running", "blocked", "verify"] as const;
+
 /** Every allowed transition, by the state it leaves. */
 export const TASK_TRANSITIONS: Readonly<Record<TaskStatus, readonly TaskStatus[]>> = {
   draft: ["ready", "canceled", "expired"],
@@ -129,6 +132,36 @@ export function transitionTask(
     result,
   };
   return { task: { ...task, state: request.to, events: [...task.events, event] }, problems: [] };
+}
+
+/** Cancels a task, keeping every earlier event for audit. */
+export function cancelTask(task: TaskDocument, reason: string): TaskTransitionResult {
+  return transitionTask(task, { to: "canceled", reason });
+}
+
+/** Expires a task, keeping every earlier event for audit. */
+export function expireTask(task: TaskDocument, reason: string): TaskTransitionResult {
+  return transitionTask(task, { to: "expired", reason });
+}
+
+/** True when `principal` may read the task. Reading does not depend on the task's state. */
+export function canRead(task: TaskDocument, principal: string): boolean {
+  return task.permissions.read.includes("*") || task.permissions.read.includes(principal);
+}
+
+/** True when `principal` may request a write for the task, and the task is still active. */
+export function canWrite(task: TaskDocument, principal: string): boolean {
+  return isActive(task.state) && (task.permissions.write.includes("*") || task.permissions.write.includes(principal));
+}
+
+/** True when `principal` may request a check for the task, and the task is still active. */
+export function canCheck(task: TaskDocument, principal: string): boolean {
+  return isActive(task.state) && (task.permissions.check.includes("*") || task.permissions.check.includes(principal));
+}
+
+/** True for a state in which a task may still request work. */
+function isActive(state: TaskStatus): boolean {
+  return (TASK_ACTIVE_STATUSES as readonly TaskStatus[]).includes(state);
 }
 
 /** The result of replaying a task's events. */
