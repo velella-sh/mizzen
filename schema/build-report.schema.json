@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Mizzen build diagnostic report",
+  "description": "`.mizzen/build-report.json`: a versioned record of what a build read, how it was configured, which tools and environment produced it, and which publishable files it wrote. Paths are relative so moving a checkout changes nothing.",
+  "type": "object",
+  "required": ["format", "categories", "inputs", "config", "tools", "environment", "outputs"],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": 1,
+      "description": "The report format. Only 1 exists; Mizzen 0.2.5 reads it."
+    },
+    "categories": {
+      "type": "array",
+      "description": "The categories two reports are compared by, in order. A record with any other list is refused rather than compared by a rule this version does not know.",
+      "prefixItems": [
+        { "const": "inputs" },
+        { "const": "config" },
+        { "const": "tools" },
+        { "const": "environment" },
+        { "const": "outputs" }
+      ],
+      "minItems": 5,
+      "maxItems": 5
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Every declared input the build read: the lock files, the local data sources, and the discovered content files.",
+      "required": ["locks", "data", "content"],
+      "additionalProperties": false,
+      "properties": {
+        "lock": {
+          "type": "object",
+          "description": "The primary data lock, when one exists.",
+          "required": ["path", "sha256"],
+          "additionalProperties": false,
+          "properties": {
+            "path": { "type": "string", "minLength": 1, "description": "The lock file, relative to the site root." },
+            "sha256": { "$ref": "#/$defs/hash", "description": "SHA-256 of the lock file's bytes." }
+          }
+        },
+        "locks": {
+          "$ref": "#/$defs/fileMap",
+          "description": "Every lock file present, by path relative to the site root."
+        },
+        "data": {
+          "$ref": "#/$defs/fileMap",
+          "description": "Every local collection source, by path relative to the site root. A remote source is identified by its lock entry instead."
+        },
+        "content": {
+          "$ref": "#/$defs/fileMap",
+          "description": "Every discovered page, asset, data file, and template, by path relative to the source folder."
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "description": "The effective configuration: one hash of every resolved value, the reference date, and the rules that shape output. No config value is written.",
+      "required": ["sha256", "rules"],
+      "additionalProperties": false,
+      "properties": {
+        "sha256": { "$ref": "#/$defs/hash", "description": "SHA-256 of the canonical resolved config." },
+        "referenceDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "description": "The site's effective as-of date, which a query or output may compare dates with."
+        },
+        "rules": {
+          "type": "object",
+          "description": "The rule-bearing configuration: defaults, redirects, output switches, collection transforms and derived rules, quality rules, feeds, and calendars. It never holds a token or credential.",
+          "required": ["defaults", "redirects", "outputs", "collections", "feeds", "calendars"],
+          "additionalProperties": false,
+          "properties": {
+            "defaults": {
+              "type": "array",
+              "description": "Front-matter defaults by folder, with the keys they set and not their values.",
+              "items": {
+                "type": "object",
+                "required": ["path", "keys"],
+                "additionalProperties": false,
+                "properties": {
+                  "path": { "type": "string", "description": "Folder relative to the source." },
+                  "keys": { "type": "array", "items": { "type": "string" }, "description": "Front-matter keys the entry sets." }
+                }
+              }
+            },
+            "redirects": {
+              "type": "object",
+              "description": "Redirect map from an old path to its destination.",
+              "additionalProperties": { "type": "string" }
+            },
+            "outputs": {
+              "type": "object",
+              "description": "Output switches from the config.",
+              "additionalProperties": { "type": "boolean" }
+            },
+            "collections": {
+              "type": "object",
+              "description": "Per-collection rules that change records: transforms, derived values, and the configured reference date.",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "quality": {
+              "type": "object",
+              "description": "The configured data-quality rules, exceptions, and policy, when the site declares them.",
+              "additionalProperties": true
+            },
+            "feeds": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Feed names, sorted."
+            },
+            "calendars": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Calendar names, sorted."
+            }
+          }
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "description": "The actual versions that produced the build.",
+      "required": ["mizzen", "node", "theme"],
+      "additionalProperties": false,
+      "properties": {
+        "mizzen": { "type": "string", "minLength": 1, "description": "The Mizzen engine version." },
+        "node": { "type": "string", "minLength": 1, "description": "The Node.js version." },
+        "theme": {
+          "type": "object",
+          "description": "The theme or renderer, from its package metadata; a folder without one is `custom` with an empty version.",
+          "required": ["name", "version"],
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string", "minLength": 1, "description": "The theme package name." },
+            "version": { "type": "string", "description": "The theme package version, empty when it names none." }
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Environment values that can change output.",
+      "required": ["timezone", "locale"],
+      "additionalProperties": false,
+      "properties": {
+        "timezone": { "type": "string", "minLength": 1, "description": "The resolved IANA time zone." },
+        "locale": { "type": "string", "minLength": 1, "description": "The resolved locale." },
+        "lang": { "type": "string", "description": "The LANG variable, when set." },
+        "sourceDateEpoch": { "type": "string", "description": "SOURCE_DATE_EPOCH, when set; an output may read it." }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "description": "Every publishable file and one hash of the build, with the manifest and platform metadata left out as `mizzen verify` leaves them out.",
+      "required": ["hash", "files"],
+      "additionalProperties": false,
+      "properties": {
+        "hash": { "$ref": "#/$defs/hash", "description": "SHA-256 of one line per file, paths sorted by code point." },
+        "files": { "$ref": "#/$defs/fileMap", "description": "SHA-256 of each file, by path relative to the output folder." }
+      }
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the bytes, as 64 lowercase hexadecimal characters."
+    },
+    "fileMap": {
+      "type": "object",
+      "description": "A path-to-SHA-256 map. A path is relative with `/` separators and cannot leave its root.",
+      "propertyNames": {
+        "pattern": "^(?!/)(?!.*\\\\\\\\)(?!.*(^|/)\\.\\.(/|$))(?!.*[\\u0000-\\u001f\\u007f]).+$"
+      },
+      "additionalProperties": { "$ref": "#/$defs/hash" }
+    }
+  }
+}

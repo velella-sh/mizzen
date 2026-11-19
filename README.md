@@ -62,6 +62,7 @@ Commands:
   api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
+  compare <a> <b>           Compare two build diagnostic reports
   data fetch [dir]          Fetch and pin HTTPS collection sources (--check verifies only)
   data refresh [dir]        Fetch selected sources, validate, and write a review report (--collections, --report)
   data changes [name] [dir]  List a collection's pending history events (--write appends, --check fails on any)
@@ -89,6 +90,7 @@ Commands:
   published-site check      Check a published site from --sitemap <url>: status, canonical URL, redirects
   references check <file|-> [dir]
                             Resolve a JSON array of stored block references: resolved, removed, or unknown
+  reproduce <report> [dir]  Preflight a recorded build, rebuild it, and compare the reports (--check: preflight only)
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
   urls check [dir]          Compare record page URLs with urls.lock.json
@@ -105,7 +107,8 @@ Commands:
 Options:
   --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
   --theme <dir>        Theme root folder (layouts/, chrome/, components/)
-  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
+  --diagnose           For build: write .mizzen/build-report.json after the build
+  --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for compare, reproduce, data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
   --domain <host>      The one host published-site check may request (default: the sitemap's host)
   --redirects <file>   Redirect map for published-site check: a JSON object from a source address to its final address
@@ -116,7 +119,7 @@ Options:
   --host <host>        Host for dev (default: 127.0.0.1)
   --as-of <date|today> The date the build pretends it is, YYYY-MM-DD (build, check, watch, data quality); today reads the system date once. Wins over the config's asOf
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
-  --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure
+  --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure; for reproduce: preflight only
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
   --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for inputs inspect: print the report as JSON
   --limit <n>          For data transform: records to show per collection (default: 5)
@@ -162,6 +165,9 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | --- | --- |
 | `mizzen api check [dir] --against <folder\|ref>` | Builds the site and compares its data API with the one at `--against`, a built folder or a git ref; exits `1` when a collection, a field, or a version is gone or a field changed type, and prints the file, the field, and a fix. Added fields pass. |
 | `mizzen build [dir] --out <dir> --theme <dir>` | Builds `dir` (default `.`) into `--out` (default `dist`). Prints diagnostics as text. A build with an error still writes the site and exits `1`. |
+| `mizzen build [dir] --diagnose` | Writes `.mizzen/build-report.json`: a versioned record of the lock, data, and content inputs, the effective config hash, rules, and reference date, the Mizzen, Node, and theme versions, the time zone and locale, and every publishable output file with its relative path and SHA-256. Moving the checkout changes nothing. See [docs/reproduce.md](docs/reproduce.md). |
+| `mizzen compare <a> <b> --format text\|json` | Compares two build reports and groups every difference under inputs, config, tools, environment, or outputs. A changed output with every other category equal is flagged `unexplained`. |
+| `mizzen reproduce <report> [dir] --check --out <dir> --theme <dir>` | Checks the report's inputs and tool versions before building; a missing input or incompatible Mizzen, Node, or theme version stops with the reason. Then builds without the cache, writes a fresh report to `.mizzen/build-report.json`, and compares it with the recorded one. `--check` stops after preflight; exits `1` when the output hashes differ. |
 | `mizzen check [dir] --format text\|json\|sarif --theme <dir>` | Builds into a temporary folder, prints only the diagnostics in the chosen format, and removes the folder. Exits `1` on an error. |
 | `mizzen data changes [name] [dir] --write --check` | Lists what changed in a collection since the state in `data-changes/`; `--write` appends the events, and `--check` fails when the data changed without an entry. |
 | `mizzen data fetch [dir] --check` | Fetches every `https:` collection source, stores it under `.mizzen/data/`, and writes `mizzen.lock.json`; `--check` compares without writing. |
