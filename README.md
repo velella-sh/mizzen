@@ -97,6 +97,11 @@ Commands:
   reproduce <report> [dir]  Preflight a recorded build, rebuild it, and compare the reports (--check: preflight only)
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
+  trace show <trace.json>   Print a recorded agent trace: task, snapshot, stages, and evidence
+  trace search <trace.json>  Filter events by --stage, --file, --task, or --status
+  trace replay <trace.json>  Check the recorded order, input hashes, and results; writes nothing
+  trace export <trace.json>  Write or print only the authorized fields (--out <dir>)
+  trace handoff <trace.json>  Print the state, changes, decisions, and remaining work
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   versions snapshot <vN> [dir]
@@ -203,6 +208,11 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen network sitemap [dir]` | Writes the organization's sitemap index; `--url <origin>` names the host and `--out <dir>` the folder. |
 | `mizzen stale [dir]` | Lists pages whose covered files changed since they were reviewed. `--json`, `--fail` (exit `1` when any page is stale), `--changed <files…>`, and `--git-diff <base>` choose what counts as changed. |
 | `mizzen stale mark <page…>` | Records a page's covered files as reviewed; `--all` marks every page. |
+| `mizzen trace show <trace.json>` | Prints a recorded trace's task, snapshot, stages, statuses, and evidence references; `--json` prints the summary. |
+| `mizzen trace search <trace.json>` | Filters events by `--stage`, `--file`, `--task`, and `--status`; `--json` prints the events. |
+| `mizzen trace replay <trace.json>` | Checks the recorded order, input hashes, and results against an optional `--snapshot` and `--expect` trace. Writes and calls nothing. |
+| `mizzen trace export <trace.json>` | Writes or prints only the authorized fields, with a file name derived from the trace hashes; `--out <dir>`. |
+| `mizzen trace handoff <trace.json>` | Prints the state, changes, decisions, and remaining work for the next agent. |
 | `mizzen urls check [dir]` | Compares every record page's URL with `urls.lock.json` and prints the new, changed, and removed records. Writes nothing; exits `1` on an error. `--format text\|json`. See `site/data/urls.md`. |
 | `mizzen pack [dir] --topic <name> --budget <tokens> --out <file>` | Prints the context pack for one topic in `_data/context-packs.yml` to stdout, or writes it to `--out`. `--budget` overrides the topic's budget; without `--topic` the site's only topic is used, and a site with several lists them and exits `2`. Diagnostics go to stderr, so stdout stays clean Markdown. |
 | `mizzen published-site check --sitemap <url> [--domain <host>] [--redirects <file>]` | Fetches every URL in a sitemap or sitemap index and reports each page's status code, canonical URL, and redirect destination. `--domain` is the only host it may request; `--redirects` names a JSON map of expected sources to final addresses. `--format text\|json`; writes nothing and exits `1` on an error. |
