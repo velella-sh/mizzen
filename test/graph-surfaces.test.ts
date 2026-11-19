@@ -76,7 +76,7 @@ test("the CLI and MCP return the same path and node ids", async () => {
     const model = await buildModel(root);
     const site = { root, site: model.site } as unknown as SiteState;
     const call = async (input: Record<string, unknown>) =>
-      JSON.parse((await tool.handler(input, { site, signal: new AbortController().signal })).text) as {
+      JSON.parse((await tool.handler(input, { site, signal: new AbortController().signal, runtime: null as never, session: null as never })).text) as {
         found?: boolean;
         path?: { node: { id: string } }[];
         snapshot: string;

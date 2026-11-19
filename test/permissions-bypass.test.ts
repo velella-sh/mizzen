@@ -46,7 +46,7 @@ test("MCP get_page answers a denied page exactly like an unknown one", async () 
     find: () => ({ page: privatePage, source: "secret.md", sections: [], trust: "unknown" }),
     readable: () => false,
   } as unknown as SiteState;
-  const result = await getPage.handler({ page: "/secret/" }, { site, signal });
+  const result = await getPage.handler({ page: "/secret/" }, { site, signal, runtime: null as never, session: null as never });
   assert.equal(result.isError, true);
   assert.equal(result.text.includes("Secret title"), false);
   assert.equal(result.text.includes("secret.md"), false);
@@ -59,7 +59,7 @@ test("MCP search_docs never ranks a page the policy denies", async () => {
     readablePages: [{ page: publicPage, source: "guide.md", sections: [], trust: "unknown" }],
     site: { config: { base: "" } },
   } as unknown as SiteState;
-  const result = await searchDocs.handler({ query: "hidden" }, { site, signal });
+  const result = await searchDocs.handler({ query: "hidden" }, { site, signal, runtime: null as never, session: null as never });
   const data = result.data as { total: number; results: readonly unknown[] };
   assert.equal(data.total, 0);
   assert.deepEqual(data.results, []);
@@ -87,7 +87,7 @@ test("MCP get_diagnostics drops a finding whose file the policy denies", async (
     ],
     readableSource: (file: string) => file !== "secret.md",
   } as unknown as SiteState;
-  const result = await getDiagnostics.handler({}, { site, signal });
+  const result = await getDiagnostics.handler({}, { site, signal, runtime: null as never, session: null as never });
   assert.equal(result.text.includes("Secret title"), false);
   assert.equal(result.text.includes("secret.md"), false);
   assert.equal(result.text.includes("public.issue"), true);

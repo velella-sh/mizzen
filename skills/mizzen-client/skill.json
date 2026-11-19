@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "velella.skill.v1",
+  "name": "mizzen-client",
+  "version": 1,
+  "contractVersions": [1],
+  "entry": "SKILL.md",
+  "files": ["README.md", "SKILL.md"],
+  "checksum": {
+    "algorithm": "sha256",
+    "value": "5bed4290f6c84c314fa776b04aa81be993007744c18705084967415580b9dff4"
+  }
+}

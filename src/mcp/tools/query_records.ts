@@ -31,7 +31,7 @@ export const tool: Tool<Input> = {
     additionalProperties: false,
   },
   enabled: (setup) => setup.collections.length > 0,
-  async handler(input, { site }) {
+  async handler(input, { site, client }) {
     const collection = site.site.collections[input.collection];
     if (collection === undefined || !site.readableCollection(input.collection)) {
       const collections = Object.keys(site.site.collections).filter((name) => site.readableCollection(name)).sort();
@@ -69,6 +69,7 @@ export const tool: Tool<Input> = {
       fields: Object.fromEntries(names.filter((n) => Object.prototype.hasOwnProperty.call(row.fields, n)).map((n) => [n, row.fields[n]])),
     }));
     const next = offset + limit;
-    return json({ collection: input.collection, total: picked.length, records, ...(next < picked.length ? { nextCursor: String(next) } : {}) });
+    const more = next < picked.length;
+    return json({ collection: input.collection, total: picked.length, records, ...(more && client?.capabilities.cursors === false ? { nextOffset: next } : more ? { nextCursor: String(next) } : {}) });
   },
 };
