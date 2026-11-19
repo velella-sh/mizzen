@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "parent": "23a051f004b0b95af986180d6028c1715ba2e79b5b9a5acf8459fa5e03eba7af",
+  "order": [
+    "9d5a7ecd261a35c82cf1d07c83b916eb3638a85bdbb48f9fc3e559a9e921eaef",
+    "aabc230feda1ebd7f7b325cff4e8d25c86c2daaa175abe6897e51142bb102f9c"
+  ],
+  "parallel": {
+    "merge": "979bdabfecd6f99608a2bf1c51b2c923757cdc935c7ccc3237510685e225a140",
+    "files": [
+      {
+        "file": "examples/install.md",
+        "hash": "4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      {
+        "file": "guide/install.md",
+        "hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ]
+  },
+  "serial": {
+    "files": [
+      {
+        "file": "examples/install.md",
+        "hash": "4444444444444444444444444444444444444444444444444444444444444444"
+      },
+      {
+        "file": "guide/install.md",
+        "hash": "2222222222222222222222222222222222222222222222222222222222222222"
+      }
+    ]
+  },
+  "match": true,
+  "conflict": {
+    "blocked": true,
+    "code": "coordination.scope-overlap",
+    "subtasks": [
+      "6c7fe10d119c04752f7c06f6754941e99ce9f97f238a62103a743296e23fd9a8",
+      "aabc230feda1ebd7f7b325cff4e8d25c86c2daaa175abe6897e51142bb102f9c"
+    ],
+    "message": "Subtask 6c7fe10d119c04752f7c06f6754941e99ce9f97f238a62103a743296e23fd9a8 and subtask aabc230feda1ebd7f7b325cff4e8d25c86c2daaa175abe6897e51142bb102f9c both write page \"guide/install\"; start them one at a time or give each its own scope."
+  }
+}
