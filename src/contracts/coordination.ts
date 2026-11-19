@@ -411,6 +411,18 @@ export interface CoordinationUsageRow {
   readonly usage: TaskUsage;
 }
 
+/** A handoff, or every reason it could not be built. */
+export interface CoordinationHandoffResult {
+  readonly handoff?: CoordinationHandoff;
+  readonly problems: readonly TaskProblem[];
+}
+
+/** What accepting a handoff produced. */
+export interface CoordinationResumeResult {
+  readonly resume?: CoordinationResume;
+  readonly problems: readonly TaskProblem[];
+}
+
 /** The parent budget after every subtask is accounted for. */
 export interface CoordinationBudgetReport {
   readonly version: 1;
