@@ -37,6 +37,8 @@ import {
   type PatchSpan,
 } from "../edits/patch.ts";
 import { createProof, formatProof } from "../edits/proof.ts";
+import { unifiedDiff } from "../diff/unified.ts";
+export { unifiedDiff } from "../diff/unified.ts";
 import {
   commitArtifacts,
   TransactionError,
@@ -233,62 +235,11 @@ function insideRoot(
   return { path, record: inside.split(sep).join("/") };
 }
 
-/** The lines of a text, without a trailing newline's empty final line. */
-function linesOf(text: string): string[] {
-  if (text === "") return [];
-  const lines = text.split("\n");
-  if (lines[lines.length - 1] === "") lines.pop();
-  return lines;
-}
-
 /**
  * A unified diff of `before` and `after` for `file`, with three lines of context. A patch replaces
  * one span, so its change is one contiguous run; a shared prefix and suffix are cut away instead of
  * running a full diff, which keeps the output deterministic and small.
  */
-export function unifiedDiff(before: string, after: string, file: string, context = 3): string {
-  if (before === after) return "";
-  const oldLines = linesOf(before);
-  const newLines = linesOf(after);
-
-  let prefix = 0;
-  const shared = Math.min(oldLines.length, newLines.length);
-  while (prefix < shared && oldLines[prefix] === newLines[prefix]) prefix += 1;
-
-  let suffix = 0;
-  while (
-    suffix < oldLines.length - prefix &&
-    suffix < newLines.length - prefix &&
-    oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
-  ) {
-    suffix += 1;
-  }
-
-  const oldChangeEnd = oldLines.length - suffix;
-  const newChangeEnd = newLines.length - suffix;
-  const oldStart = Math.max(0, prefix - context);
-  const oldEnd = Math.min(oldLines.length, oldChangeEnd + context);
-  const newStart = Math.max(0, prefix - context);
-  const newEnd = Math.min(newLines.length, newChangeEnd + context);
-
-  const body: string[] = [];
-  for (let index = oldStart; index < prefix; index += 1) body.push(` ${oldLines[index]}`);
-  for (let index = prefix; index < oldChangeEnd; index += 1) body.push(`-${oldLines[index]}`);
-  for (let index = prefix; index < newChangeEnd; index += 1) body.push(`+${newLines[index]}`);
-  for (let index = oldChangeEnd; index < oldEnd; index += 1) body.push(` ${oldLines[index]}`);
-
-  const oldCount = oldEnd - oldStart;
-  const newCount = newEnd - newStart;
-  const oldFrom = oldCount === 0 ? oldStart : oldStart + 1;
-  const newFrom = newCount === 0 ? newStart : newStart + 1;
-  return [
-    `--- a/${file}`,
-    `+++ b/${file}`,
-    `@@ -${oldFrom},${oldCount} +${newFrom},${newCount} @@`,
-    ...body,
-    "",
-  ].join("\n");
-}
 
 /** The reason an errno error gives, as one phrase. */
 function reasonOf(error: unknown): string {
