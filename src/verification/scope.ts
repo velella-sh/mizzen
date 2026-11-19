@@ -36,7 +36,9 @@ export function scopeProof(input: ScopeInput): VerificationScope {
   const outOfScope = changes.filter((change) => !scopeAllows(allowed, change.path)).map((change) => change.path);
   const unexpected = expected.length === 0
     ? []
-    : changes.filter((change) => !scopeAllows(expected, change.path)).map((change) => change.path);
+    : changes
+        .filter((change) => scopeAllows(allowed, change.path) && !scopeAllows(expected, change.path))
+        .map((change) => change.path);
   return {
     allowed,
     expected,
