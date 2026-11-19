@@ -1,11 +1,11 @@
 /**
- * Deterministic identities for a task, its registration request, and its input snapshot.
+ * Deterministic identities for a task and its registration request.
  *
- * None of the three reads a clock, a path, an environment variable, or a random source: the same
- * bytes always give the same id on any machine. A task id comes from the caller's idempotency key,
- * a request id from the normalized contract, and a snapshot id from the four input hashes.
+ * Neither reads a clock, a path, an environment variable, or a random source: the same bytes
+ * always give the same id on any machine. A task id comes from the caller's idempotency key and a
+ * request id from the normalized contract; the snapshot id lives in `snapshot.ts`.
  */
-import type { TaskContract, TaskSnapshot } from "../contracts/task.ts";
+import type { TaskContract } from "../contracts/task.ts";
 import { canonicalJson, sha256 } from "../data/lock.ts";
 
 /** The task id: the idempotency key alone, so repeating a key always addresses the same task. */
@@ -31,14 +31,3 @@ export function requestIdOf(contract: TaskContract): string {
   );
 }
 
-/** The snapshot id: the four effective-input hashes, in canonical key order. */
-export function snapshotIdOf(snapshot: Omit<TaskSnapshot, "id">): string {
-  return sha256(
-    `mizzen-task-snapshot\0${canonicalJson({
-      content: snapshot.content,
-      data: snapshot.data,
-      config: snapshot.config,
-      tooling: snapshot.tooling,
-    })}`,
-  );
-}

@@ -27,7 +27,7 @@ import type {
   TaskScope,
   TaskSnapshot,
 } from "../contracts/task.ts";
-import { snapshotIdOf } from "./identity.ts";
+import { snapshotIdOf } from "./snapshot.ts";
 import { validateScopeReferences, type TaskReferenceIndex } from "./scope.ts";
 
 /** The only task-contract version this parser accepts. */
