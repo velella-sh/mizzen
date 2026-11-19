@@ -65,13 +65,14 @@ export function boundTrace(trace: TraceDocument, limits: Partial<TraceLimits> = 
     keep.delete(drop);
   }
 
-  let kept = rebuild(trace.events, keep);
-  while (eventBytes(kept.map((entry) => entry.event)) > maxBytes) {
-    const droppable = kept.filter((entry) => !critical(entry.event, entry.oldIndex));
-    const drop = droppable[droppable.length - 1];
+  while (eventBytes([...keep].sort((a, b) => a - b).map((index) => trace.events[index]!)) > maxBytes) {
+    const droppable = [...keep].filter((index) => !critical(trace.events[index]!, index)).sort((a, b) => b - a);
+    const drop = droppable[0];
     if (drop === undefined) break;
-    kept = kept.filter((entry) => entry !== drop);
+    keep.delete(drop);
   }
+
+  const kept = rebuild(trace.events, keep);
 
   const keptIndexes = new Set(kept.map((entry) => entry.oldIndex));
   const dropped = trace.events.filter((_event, index) => !keptIndexes.has(index));
