@@ -1,0 +1,6 @@
+- Add a recoverable MCP runtime: the handshake announces a contract version, task capabilities, and limits, and older clients keep the same core answers.
+- Add asynchronous pack, proof-verification, and task-replay operations with operation ids, progress measured in real work, cancellation at safe boundaries, bounded event queues, and recovery by operation id after a stdio disconnect.
+- Add stable snapshot-bound cursors to `search_docs` and `query_graph`, and a clear error for a cursor from another snapshot.
+- Make `apply_edit` idempotent with an optional key: the same key returns the same receipt, a different payload is refused, and a reconnect never applies the edit twice.
+- Add independent read, context, edit, and verify deadlines; machine-readable failures with code, stage, retryability, task, and source; and bounded, redacted responses that never carry a stack trace or a local path.
+- Pin every session to one site snapshot, signal when the site changes, and keep concurrent sessions' operations, receipts, and results apart.

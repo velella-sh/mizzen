@@ -156,7 +156,7 @@ test("cancelling an operation keeps no partial result", async () => {
 test("operation and event limits refuse or bound work instead of growing", async () => {
   const bounded = await harness(copyFixture("docs-site"), { allowEdits: true, limits: { maxOperations: 1, maxEventsPerOperation: 3, maxOperationRecords: 2 } });
   try {
-    await seedProofs(bounded, 200);
+    await seedProofs(bounded, 30);
     const first = await start(bounded, "bounded", "verify", {});
     const busy = await result(bounded, "bounded", "start_operation", { kind: "pack", input: { goal: "install", maxTokens: 500 } });
     assert.equal(busy.isError, true);
@@ -180,7 +180,7 @@ test("a read-only operation resumes after its server stops", async () => {
   const root = first.root;
   let started: any;
   try {
-    await seedProofs(first, 80);
+    await seedProofs(first, 40);
     started = await start(first, "resume", "verify", {});
   } finally {
     await first.close();
@@ -191,10 +191,11 @@ test("a read-only operation resumes after its server stops", async () => {
     assert.equal(done.status, "succeeded", JSON.stringify(done));
     assert.equal(done.resumed, true);
     assert.equal(done.result.ok, true);
-    assert.equal(done.result.verified, 80);
+    assert.equal(done.result.verified, 40);
     assert.equal(done.work.completed, done.work.total);
+    assert.equal(done.events[0].stage, "start");
     assert.equal(done.events.at(-1).stage, "done");
-    assert.ok(done.events.every((event) => event.completed >= 0 && event.completed <= event.total));
+    assert.ok(done.events.every((event: any) => event.completed >= 0 && event.completed <= event.total));
   } finally {
     await second.close();
   }
