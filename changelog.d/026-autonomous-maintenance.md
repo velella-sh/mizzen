@@ -1,0 +1,9 @@
+- Add versioned, content-addressed maintenance triggers: drift findings, stale pages, and data impact become idempotent tasks only when the snapshot and source changed.
+- Add task proposals that carry goal, constrained scope, and acceptance, decide between a deterministic mechanical repair and an agent, and exclude any page, file, or write the site policy denies.
+- Add budgeted maintenance context naming changed sources, affected pages, required checks, and every omission, so a model sees exact evidence before acting.
+- Add external maintenance patches: validated against task, snapshot, scope, and policy, applied to text in memory only, refused when a source moved, and reported as a no-op when the change is empty or a person already made it.
+- Add previews with the unified diff, required checks, affected published outputs, and a write gate that distinguishes dry-run, approval, allow, and deny without touching a source file.
+- Add independent verification: every required check must pass, each claim must cite a changed file and a passed check, scope is proved, a version 2 proof is built and then verified again from public inputs.
+- Add pull-request recipes as data with branch, title, body, evidence, impact, authorized files, and `publish: false`/`merge: false`; a later run updates the same open pull request instead of opening a duplicate.
+- Add maintenance state that records a failure with stage and code, keeps the last good snapshot, source hashes, proposal, and pull request, and resumes only on an explicit retry.
+- Add an end-to-end fixture where an API rename produces a task, a preview, one failed verification, a proved proposal, and a local recipe, with no network call and no merge.
