@@ -5,6 +5,8 @@
  */
 import { createInterface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
+import type { ClientHello, ClientProfile } from "../contracts/clients.ts";
+import { detectClient } from "../clients/detect.ts";
 import { DEFAULT_LIMITS, McpError, capAnswer, scrub, type Limits } from "./limits.ts";
 import type { Registry } from "./registry.ts";
 import { listResources, readResource } from "./resources.ts";
@@ -23,6 +25,8 @@ export interface ServerOptions {
   readonly info: ServerInfo;
   readonly limits?: Partial<Limits>;
   readonly log?: (message: string) => void;
+  /** Called once the `initialize` hello is read, before any tool runs. */
+  readonly onClient?: (profile: ClientProfile) => void;
 }
 
 type Id = string | number | null;
@@ -50,6 +54,7 @@ export function createServer(options: ServerOptions): Server {
   const limits: Limits = { ...DEFAULT_LIMITS, ...options.limits };
   const log = options.log ?? (() => {});
   let inFlight = 0;
+  let client: ClientProfile | undefined;
 
   const fail = (id: Id, code: number, message: string): Response => ({ jsonrpc: "2.0", id, error: { code, message: scrub(message, options.site.privateFolders) } });
 
@@ -58,6 +63,12 @@ export function createServer(options: ServerOptions): Server {
     if (typeof name !== "string") throw new McpError("invalid-params", "tools/call needs a tool name.");
     const tool = options.registry.get(name);
     if (tool === undefined) throw new McpError("unknown-tool", `Unknown tool: ${name}`);
+    if (name === "apply_edit" && client?.capabilities.editing === false) {
+      return errorResult(
+        "This client declared that it cannot apply an edit safely; call propose_edit and hand the patch to a person.",
+        "client-editing-unavailable",
+      );
+    }
     const input = params.arguments ?? {};
     const problems = options.registry.validate(name, input);
     if (problems.length > 0) return errorResult(`Invalid input for ${name}: ${problems.join("; ")}`);
@@ -76,7 +87,11 @@ export function createServer(options: ServerOptions): Server {
       });
       const run = (async () => {
         await options.site.refresh();
-        return tool.handler(input as Record<string, unknown>, { site: options.site, signal: controller.signal });
+        return tool.handler(input as Record<string, unknown>, {
+          site: options.site,
+          signal: controller.signal,
+          ...(client === undefined ? {} : { client }),
+        });
       })();
       run.catch(() => undefined); // a handler that outlives its timeout must not become an unhandled rejection
       const result = await Promise.race([run, timeout]);
@@ -106,10 +121,16 @@ export function createServer(options: ServerOptions): Server {
       case "initialize": {
         const asked = params.protocolVersion;
         const version = (SUPPORTED_VERSIONS as readonly unknown[]).includes(asked) ? (asked as string) : SUPPORTED_VERSIONS[0];
+        client = detectClient(params as unknown as ClientHello, { protocolVersions: SUPPORTED_VERSIONS });
+        options.onClient?.(client);
         return {
           protocolVersion: version,
-          capabilities: { tools: { listChanged: false }, resources: { listChanged: false, subscribe: false } },
+          capabilities: {
+            tools: { listChanged: false },
+            ...(client.capabilities.resources ? { resources: { listChanged: false, subscribe: false } } : {}),
+          },
           serverInfo: options.info,
+          _meta: { mizzen: client },
         };
       }
       case "ping":

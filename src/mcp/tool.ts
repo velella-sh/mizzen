@@ -1,4 +1,5 @@
 /** The contract of one MCP tool. A tool is one file in `src/mcp/tools/`; its name is the file name. */
+import type { ClientProfile } from "../contracts/clients.ts";
 import type { SiteState } from "./site.ts";
 
 /** A JSON Schema object describing a tool's input. */
@@ -21,6 +22,8 @@ export interface ToolSetup {
 export interface ToolContext {
   readonly site: SiteState;
   readonly signal: AbortSignal;
+  /** The client detected from `initialize`, before this call ran; absent before a handshake. */
+  readonly client?: ClientProfile;
 }
 
 /** A tool's answer: text for the agent, optionally the same data as a structured value. */

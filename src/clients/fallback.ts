@@ -10,6 +10,7 @@ const LABELS: Readonly<Record<string, string>> = {
   notifications: "notifications",
   progress: "progress",
   longRunningTasks: "long-running tasks",
+  "long-running-tasks": "long-running tasks",
   approvals: "approvals",
   editing: "safe editing",
   cursors: "cursors",
