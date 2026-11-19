@@ -1,0 +1,25 @@
+title: Monthly report
+description: A monthly summary built from raw sales rows, with an archive and a static API.
+url: https://example.com
+exclude: [README.md]
+collections:
+  sales:
+    source: _data/sales.yml
+    dates: [date]
+  monthly:
+    source: sales
+    aggregate:
+      by:
+        - { field: date, period: month, timezone: Europe/Berlin }
+      metrics:
+        orders: { op: count }
+        customers: { op: count-distinct, field: customer }
+        revenue: { op: sum, field: amount, decimals: 2 }
+        average: { op: average, field: amount, decimals: 2 }
+    template: _templates/month.md
+    permalink: /months/{id}/
+    dates: [date]
+api:
+  collections:
+    monthly:
+      fields: [date, orders, customers, revenue, average]

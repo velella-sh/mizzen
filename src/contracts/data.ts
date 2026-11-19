@@ -77,6 +77,11 @@ export interface DataRecord {
   /** Each date field's normalized form, keyed by field name: `YYYY-MM-DD` as written, an instant as UTC ISO 8601. */
   readonly normalizedDates?: Readonly<Record<string, string>>;
   /**
+   * Ids of the source records this summary record was computed from, for an aggregate collection. Additive and
+   * internal: no page or output publishes it.
+   */
+  readonly inputs?: readonly string[];
+  /**
    * Values the collection's `derived` rules computed for this record, keyed by the rule's name. Computed once per
    * build against the as-of date and never written back to the data file.
    */

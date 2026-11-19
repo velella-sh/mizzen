@@ -506,6 +506,8 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
   let lock: DataLock | undefined;
   let lockRead = false;
   for (const [name, collection] of Object.entries(options.site.collections)) {
+    // An aggregate has no file of its own; its source collection's file is mapped below.
+    if (options.site.config.collections[name]?.aggregate !== undefined) continue;
     const source = collection.source;
     let path: string | undefined;
     if (source.startsWith("npm:")) {
@@ -530,6 +532,13 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
       filePaths.add(path);
       addNode({ id: fileNodeId(path), kind: "data", path });
     }
+  }
+  // An aggregate collection reads its source collection as a whole, not a file of its own. Pointing its path at the
+  // source file keeps a page, a list, and an API file that reads the summary dependent on the records behind it.
+  for (const [name, collection] of Object.entries(options.site.collections)) {
+    if (options.site.config.collections[name]?.aggregate === undefined) continue;
+    const sourcePath = collectionPaths.get(collection.source);
+    if (sourcePath !== undefined) collectionPaths.set(name, sourcePath);
   }
   const blanketDataIds = dataIds.filter((id) => !collectionIds.has(id));
 
@@ -575,6 +584,26 @@ export async function buildDependencyGraph(options: DependencyGraphOptions): Pro
       });
       addEdge(collectionId, id);
       addEdge(id, configId);
+    }
+  }
+
+  // An aggregate record is computed from every input in its group and from its source collection as a whole. The
+  // collection edge is what refreshes both groups when a record moves between them: the new group's inputs name only
+  // the new membership, and the old group's summary changes too.
+  for (const [name, entry] of Object.entries(options.site.config.collections)) {
+    if (entry.aggregate === undefined) continue;
+    const collection = options.site.collections[name];
+    if (collection === undefined || !collectionPaths.has(entry.source)) continue;
+    const sourceCollection = collectionNodeId(entry.source);
+    addEdge(collectionNodeId(name), sourceCollection);
+    for (const record of collection.records) {
+      const id = recordNodeId(name, record.id);
+      if (!recordNodes.has(id)) continue;
+      addEdge(id, sourceCollection);
+      for (const input of record.inputs ?? []) {
+        const inputId = recordNodeId(entry.source, input);
+        if (recordNodes.has(inputId)) addEdge(id, inputId);
+      }
     }
   }
 

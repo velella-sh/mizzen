@@ -996,7 +996,7 @@
         "source": {
           "type": "string",
           "minLength": 1,
-          "description": "Data file the records are read from, relative to the site root."
+          "description": "Data file the records are read from, relative to the site root; on an aggregate collection, the name of the collection it summarizes."
         },
         "records": {
           "type": "string",
@@ -1374,6 +1374,10 @@
           "$ref": "#/$defs/join",
           "description": "Collections joined into this collection's records after its own source is read and transformed. The record keeps this collection's id, position, and order."
         },
+        "aggregate": {
+          "$ref": "#/$defs/aggregate",
+          "description": "Build this collection by grouping another collection's records. `source` names the collection to read; the summary is published like any other collection."
+        },
         "raw": {
           "description": "The collection's raw data, written as `data/<name>.raw.json`, `data/<name>.csv`, and `data/<name>.sha256`. `false` writes none.",
           "oneOf": [
@@ -1423,6 +1427,128 @@
             }
           },
           "description": "A compact JSON index of the collection's records for the theme, written under data/."
+        }
+      }
+    },
+    "aggregate": {
+      "description": "Build this collection by grouping another collection's records. `source` names the collection to read; the summary is published like any other collection.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "by",
+        "metrics"
+      ],
+      "properties": {
+        "by": {
+          "description": "Grouping fields, in order; every distinct combination is one group.",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/$defs/aggregateGroup"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "metrics": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/aggregateMetric"
+          },
+          "description": "Values computed per group, keyed by the field name the summary holds."
+        },
+        "where": {
+          "description": "Keep only the source records that match this filter before grouping; the same shape as a list's `where`."
+        },
+        "missing": {
+          "enum": [
+            "skip",
+            "group"
+          ],
+          "default": "skip",
+          "description": "What a record without one of the grouping values does: skip it, or group it separately with a null key. Default skip."
+        },
+        "empty": {
+          "enum": [
+            "keep",
+            "omit"
+          ],
+          "default": "keep",
+          "description": "What a group whose metrics all lack a value does: keep it with null values, or omit it. Default keep."
+        }
+      }
+    },
+    "aggregateGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field"
+      ],
+      "properties": {
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Field to group by."
+        },
+        "period": {
+          "enum": [
+            "month",
+            "year"
+          ],
+          "description": "Bucket a date field by month or year instead of by its written value."
+        },
+        "timezone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "IANA zone that decides which month or year an instant belongs to; required with `period`."
+        }
+      }
+    },
+    "aggregateMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op"
+      ],
+      "properties": {
+        "op": {
+          "enum": [
+            "count",
+            "count-distinct",
+            "sum",
+            "average",
+            "min",
+            "max"
+          ],
+          "description": "What to compute."
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Field to read, required except for `count`."
+        },
+        "decimals": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 12,
+          "description": "Decimal places a sum or average is rounded to. Default 2."
         }
       }
     },

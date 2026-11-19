@@ -23,6 +23,7 @@ import type {
 import { applyDates } from "./checks/dates.ts";
 import { checkReferences } from "./checks/references.ts";
 import { checkUnique } from "./checks/unique.ts";
+import { buildAggregate } from "./aggregate.ts";
 import { parseCsv } from "./csv.ts";
 import { deriveRecords } from "./derived.ts";
 import { applyJoins } from "./join.ts";
@@ -90,6 +91,23 @@ function configPosition(root: string, source: string): SourcePos {
     endLine: finish.line,
     endColumn: finish.column,
   };
+}
+
+/** Where a collection's name is written in `mizzen.yml`, for a finding about the collection as a whole. */
+function collectionConfigPosition(root: string, name: string): SourcePos {
+  let text: string;
+  try {
+    text = readFileSync(resolve(root, "mizzen.yml"), "utf8");
+  } catch {
+    return atConfig();
+  }
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`^[ \\t]{2}${escaped}[ \\t]*:`, "m").exec(text);
+  if (match === null) return atConfig();
+  const index = lineIndex(text);
+  const begin = lineColumnAt(index, match.index);
+  const finish = lineColumnAt(index, match.index + match[0].length - 1);
+  return { file: "mizzen.yml", line: begin.line, column: begin.column, endLine: finish.line, endColumn: finish.column };
 }
 
 /** The 1-based line and code-point column of `offset`, matching {@link lineIndex}. */
@@ -504,6 +522,7 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
 
   for (const name of names) {
     const entry = config.collections[name]!;
+    if (entry.aggregate !== undefined) continue;
     const limits = dataLimitsOf(name, entry);
     const configPos = configPositions[name]!;
     const idField = entry.id ?? "id";
@@ -663,7 +682,44 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
       },
     }),
   );
-
+  for (const name of names) {
+    const entry = config.collections[name]!;
+    if (entry.aggregate === undefined) continue;
+    const configPos = collectionConfigPosition(root, name);
+    const built = buildAggregate({
+      name,
+      source: entry.source,
+      aggregate: entry.aggregate,
+      sourceCollection: collections[entry.source],
+      entry,
+      sourceEntry: config.collections[entry.source],
+      ...(config.asOf === undefined ? {} : { asOf: config.asOf }),
+      pos: configPos,
+    });
+    diagnostics.push(...built.diagnostics);
+    if (built.collection === undefined) continue;
+    let kept = built.collection.records;
+    const transform = entry.transform;
+    if (transform !== undefined && transform.steps.length > 0) {
+      kept = transformRecords(kept, transform, {
+        collection: name,
+        pos: configPos,
+        ...(options.onTransformEvent === undefined ? {} : { onEvent: options.onTransformEvent }),
+      }).records;
+    }
+    const schema = schemas.schemas[name];
+    if (schema !== undefined) {
+      const validated = validateRecords(name, kept, schema, entry, "yaml", diagnostics);
+      kept = validated.records;
+      skipped += validated.skipped;
+    }
+    checkUnique(name, kept, entry, diagnostics);
+    kept = applyDates(name, kept, entry.dates ?? [], diagnostics);
+    const derived = deriveRecords(name, kept, entry.derived, config.asOf, configPos);
+    kept = derived.records;
+    diagnostics.push(...derived.diagnostics);
+    collections[name] = { ...built.collection, records: kept };
+  }
   checkReferences(collections, config, diagnostics);
   const summary = skippedSummary(skipped);
   if (summary !== undefined) diagnostics.push(summary);
