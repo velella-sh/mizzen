@@ -403,6 +403,7 @@ export function taskReferences(
         status: "resolved",
         url: holder.url,
         source: holder.source.file,
+        ...(recordedPage === undefined || recordedPage === holder.source.file ? {} : { moved: true }),
       });
     } else if (recordedPage !== undefined) {
       references.push({ block, page: recordedPage, status: "removed" });
