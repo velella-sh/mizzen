@@ -161,7 +161,8 @@ Options:
   --report <file>      For data refresh: write the structured report here
   --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
-  --topic <name>       Topic for pack (default: the site's only topic); not with --request
+  --task <file>        JSON task contract for pack; compiles task-aware context against the site
+  --topic <name>       Topic for pack (default: the site's only topic); not with --request or --task
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
@@ -249,6 +250,7 @@ type PackOpts = {
   readonly topic?: string;
   readonly budget?: number;
   readonly request?: string;
+  readonly task?: string;
   readonly format?: PackFormat;
   readonly out?: string;
 };
@@ -1297,6 +1299,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let topic: string | undefined;
   let budget: number | undefined;
   let request: string | undefined;
+  let task: string | undefined;
   let packFormat: PackFormat | undefined;
   let updateUrls = false;
   let updateBlocks = false;
@@ -1423,6 +1426,9 @@ export function parseArgs(args: readonly string[]): Parsed {
           return { error: "--request needs a file path or -" };
         }
         request = next;
+      } else if (arg === "--task") {
+        if (command !== "pack") return { error: "--task is only valid for pack" };
+        task = value();
       } else if (arg === "--budget") {
         if (command !== "pack") return { error: "--budget is only valid for pack" };
         const raw = value();
@@ -1483,6 +1489,12 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (request !== undefined && topic !== undefined) {
       return { error: "--request and --topic cannot be used together: a request names its own task" };
     }
+    if (task !== undefined && request !== undefined) {
+      return { error: "--task and --request cannot be used together: each names its own task" };
+    }
+    if (task !== undefined && topic !== undefined) {
+      return { error: "--task and --topic cannot be used together: a task names its own evidence" };
+    }
     if (request !== undefined && budget !== undefined) {
       return { error: "--request and --budget cannot be used together: the request carries its own budget" };
     }
@@ -1493,6 +1505,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(topic === undefined ? {} : { topic }),
         ...(budget === undefined ? {} : { budget }),
         ...(request === undefined ? {} : { request }),
+        ...(task === undefined ? {} : { task }),
         ...(packFormat === undefined ? {} : { format: packFormat }),
         ...(out === undefined ? {} : { out }),
       },
@@ -1782,6 +1795,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
           ...(options.request === undefined
             ? {}
             : { request: options.request === "-" ? "-" : resolve(options.request) }),
+          ...(options.task === undefined ? {} : { task: resolve(options.task) }),
           ...(options.format === undefined ? {} : { format: options.format }),
           ...(options.out === undefined ? {} : { out: resolve(options.out) }),
         },
