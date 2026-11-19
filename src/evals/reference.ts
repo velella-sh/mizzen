@@ -124,7 +124,7 @@ async function transactionOutput(input: EvalRunnerInput): Promise<EvalAgentOutpu
         partial: status === "rejected" && changed.length > 0,
         checks,
       },
-      toolCalls: [call("transaction", status === "applied")],
+      toolCalls: [call("transaction", true)],
       trace: { toolCalls: 1, inputTokens: output.usage.inputTokens, outputTokens: output.usage.outputTokens },
     };
   } finally {
@@ -153,7 +153,7 @@ async function verificationOutput(input: EvalRunnerInput): Promise<EvalAgentOutp
   return {
     ...output,
     verification,
-    toolCalls: [call("verification", report.ok)],
+    toolCalls: [call("verification", true)],
     trace: { toolCalls: 1, inputTokens: output.usage.inputTokens, outputTokens: output.usage.outputTokens },
   };
 }
@@ -180,7 +180,8 @@ async function handoffOutput(input: EvalRunnerInput): Promise<EvalAgentOutput> {
           files: ["guide/install.md"],
           approvalId: "resume-approval",
         });
-  const remaining = session.question === null ? [] : [session.question.field];
+  const questions = Array.isArray(document["questions"]) ? (document["questions"] as { field?: unknown }[]) : [];
+  const remaining = questions.map((question) => String(question.field ?? "")).filter((field) => field !== "");
   const output = emptyOutput(estimate(JSON.stringify(document)), estimate(JSON.stringify(remaining)));
   return {
     ...output,

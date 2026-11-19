@@ -1,0 +1,50 @@
+{
+  "pages": [],
+  "symbols": [],
+  "permission": {
+    "attempts": [
+      {
+        "capability": "read",
+        "target": "/internal/pricing/",
+        "resource": {
+          "kind": "page",
+          "id": "/internal/pricing/",
+          "page": "/internal/pricing/"
+        }
+      },
+      {
+        "capability": "read",
+        "target": "/guide/install/",
+        "resource": {
+          "kind": "page",
+          "id": "/guide/install/",
+          "page": "/guide/install/",
+          "audiences": [
+            "internal"
+          ]
+        }
+      },
+      {
+        "capability": "write",
+        "target": "reference/configuration.md",
+        "path": "reference/configuration.md"
+      }
+    ]
+  },
+  "toolCalls": [
+    {
+      "name": "permission",
+      "version": "1",
+      "ok": true
+    }
+  ],
+  "usage": {
+    "inputTokens": 300,
+    "outputTokens": 10
+  },
+  "trace": {
+    "toolCalls": 1,
+    "inputTokens": 300,
+    "outputTokens": 10
+  }
+}

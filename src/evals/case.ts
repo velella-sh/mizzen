@@ -31,10 +31,10 @@ function schemaAt(name: string): object {
   return JSON.parse(readFileSync(new URL(`../../schema/${name}`, import.meta.url), "utf8")) as object;
 }
 
-const validateCaseShape = new Ajv2020({ strict: true, allErrors: true, verbose: true }).compile(
+const validateCaseShape = new Ajv2020({ strict: true, strictRequired: false, allErrors: true, verbose: true }).compile(
   schemaAt("eval-case.schema.json"),
 );
-const validateSuiteShape = new Ajv2020({ strict: true, allErrors: true, verbose: true }).compile(
+const validateSuiteShape = new Ajv2020({ strict: true, strictRequired: false, allErrors: true, verbose: true }).compile(
   schemaAt("eval-suite.schema.json"),
 );
 

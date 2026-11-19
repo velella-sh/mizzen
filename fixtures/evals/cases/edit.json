@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "id": "edit.node-version",
+  "title": "Apply one targeted span edit",
+  "capability": "edit",
+  "goal": "Change the required Node version from 24 to 26 in the install guide.",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [
+      "guide/**"
+    ],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "change",
+      "statement": "The intended block changed at the right span."
+    },
+    {
+      "id": "rest",
+      "statement": "Every other block stayed intact."
+    }
+  ],
+  "tools": [
+    {
+      "name": "edit",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "agent": "agents/edit.json"
+  },
+  "expected": {
+    "kind": "edit",
+    "path": "guide/install.md",
+    "spans": [
+      {
+        "line": 9,
+        "column": 17,
+        "endLine": 9,
+        "endColumn": 23
+      }
+    ],
+    "after": "---\ntitle: Install\n---\n\n# Install the engine\n\nInstall the engine once per machine.\n\nMizzen requires Node 26 or later.\n\n## Download the package {#install-download}\n\nFetch the package from the release page.\n\n## Run the installer {#install-steps}\n\nRun the installer and follow its prompts.\n\n## Troubleshooting {#install-trouble}\n\nRead the log when the installer stops.\n",
+    "unchanged": [
+      {
+        "path": "guide/install.md",
+        "text": "## Run the installer {#install-steps}"
+      },
+      {
+        "path": "guide/install.md",
+        "text": "Fetch the package from the release page."
+      }
+    ]
+  }
+}

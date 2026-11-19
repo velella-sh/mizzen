@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "id": "conflict.overlap",
+  "title": "Detect overlapping multi-agent work",
+  "capability": "conflict",
+  "goal": "Resolve two agents that want the same install block.",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [
+      "guide/**"
+    ],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "detected",
+      "statement": "The deliberate overlap is detected."
+    }
+  ],
+  "tools": [
+    {
+      "name": "interaction",
+      "version": "1"
+    }
+  ],
+  "unavailable": "src/coordination is not on main yet; intent reservations are exercised by the edit transaction case, so no multi-agent conflict result is faked."
+}

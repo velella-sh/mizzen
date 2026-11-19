@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "id": "verification.proved",
+  "title": "Accept a proof whose evidence matches",
+  "capability": "verification",
+  "goal": "Verify the install guide change independently.",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "verdict",
+      "statement": "Independent verification reaches the proved result."
+    },
+    {
+      "id": "evidence",
+      "statement": "The verifier checks the proof rather than the claim."
+    }
+  ],
+  "tools": [
+    {
+      "name": "verification",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "proof": "proofs/proved.json",
+    "input": "proofs/proved.input.json"
+  },
+  "expected": {
+    "kind": "verification",
+    "verdict": "proved"
+  }
+}
