@@ -210,6 +210,11 @@ allow or deny writes an audit line. Redaction is shared across traces, reports, 
 4. Keep third-party schemas in sync by reading `schema/` from the installed package. No shipped schema removed a field
    in `0.2.6`.
 
+## Measured cost
+
+The build, pack, transaction, and replay timings and the budgets a regression must stay under are in
+[determinism and performance](determinism-0.2.6.md).
+
 ## Known limits
 
 - Automated maintenance and multi-agent coordination landed as deterministic library modules and recipe data. They

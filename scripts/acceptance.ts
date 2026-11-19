@@ -185,8 +185,14 @@ function value(argv: readonly string[], index: number, flag: string): string {
 
 /** Spawns the CLI under test with `process.execPath`, so a JavaScript, TypeScript, or installed shim all work. */
 function runner(bin: string): CaseContext["mizzen"] {
-  return (args, cwd): RunResult => {
-    const result = spawnSync(process.execPath, [bin, ...args], { cwd, encoding: "utf8", env: { ...process.env, NO_COLOR: "1" } });
+  return (args, cwd, input): RunResult => {
+    const result = spawnSync(process.execPath, [bin, ...args], {
+      cwd,
+      encoding: "utf8",
+      timeout: 120_000,
+      ...(input === undefined ? {} : { input }),
+      env: { ...process.env, NO_COLOR: "1" },
+    });
     return { status: result.status ?? 1, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
   };
 }

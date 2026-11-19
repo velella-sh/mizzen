@@ -60,8 +60,9 @@ None of these changes an ordinary docs site. Each is a separate entry point with
   rubric 1.0.0 and never turns missing evidence into a pass.
 - **Permissions.** `--policy <file>` enforces a least-privilege access policy on edits and MCP.
 
-The full contract review, the measured compatibility table, and executable examples are in
-[the 0.2.6 upgrade notes](https://github.com/velella-sh/mizzen/blob/main/docs/upgrade-0.2.6.md).
+The full contract review, the measured compatibility table, executable examples, and the
+[determinism and performance measurements](https://github.com/velella-sh/mizzen/blob/main/docs/determinism-0.2.6.md)
+are in [the 0.2.6 upgrade notes](https://github.com/velella-sh/mizzen/blob/main/docs/upgrade-0.2.6.md).
 
 ## Compatibility evidence
 

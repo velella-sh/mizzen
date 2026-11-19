@@ -7,7 +7,8 @@
       "status": "shipped",
       "test": "test/cli-agent.test.ts",
       "epic": 1073,
-      "issue": 1089
+      "issue": 1089,
+      "case": "tasks"
     },
     {
       "id": "expose-command-and-input-schemas",
@@ -23,7 +24,8 @@
       "status": "shipped",
       "test": "test/cli-agent.test.ts",
       "epic": 1073,
-      "issue": 1091
+      "issue": 1091,
+      "case": "tasks"
     },
     {
       "id": "execute-tasks-idempotently",
@@ -31,7 +33,8 @@
       "status": "shipped",
       "test": "test/cli-agent.test.ts",
       "epic": 1073,
-      "issue": 1092
+      "issue": 1092,
+      "case": "tasks"
     },
     {
       "id": "emit-structured-progress-events",
@@ -39,7 +42,8 @@
       "status": "shipped",
       "test": "test/cli-agent.test.ts",
       "epic": 1073,
-      "issue": 1093
+      "issue": 1093,
+      "case": "tasks"
     },
     {
       "id": "separate-results-from-diagnostics",
@@ -47,7 +51,8 @@
       "status": "shipped",
       "test": "test/cli-agent.test.ts",
       "epic": 1073,
-      "issue": 1094
+      "issue": 1094,
+      "case": "tasks"
     },
     {
       "id": "preview-effects-without-writing",
@@ -55,7 +60,8 @@
       "status": "shipped",
       "test": "test/cli-agent.test.ts",
       "epic": 1073,
-      "issue": 1095
+      "issue": 1095,
+      "case": "tasks"
     },
     {
       "id": "resume-and-cancel-tasks-from-the-cli",
@@ -63,7 +69,8 @@
       "status": "shipped",
       "test": "test/cli-agent.test.ts",
       "epic": 1073,
-      "issue": 1096
+      "issue": 1096,
+      "case": "tasks"
     },
     {
       "id": "report-cost-and-budget-limits",
@@ -71,7 +78,8 @@
       "status": "shipped",
       "test": "test/cli-agent.test.ts",
       "epic": 1073,
-      "issue": 1097
+      "issue": 1097,
+      "case": "tasks"
     },
     {
       "id": "test-the-installed-cli-package",
@@ -119,7 +127,8 @@
       "status": "shipped",
       "test": "test/interaction-checkpoint.test.ts",
       "epic": 1074,
-      "issue": 1103
+      "issue": 1103,
+      "case": "tasks"
     },
     {
       "id": "hand-work-off-to-a-human",
@@ -167,7 +176,8 @@
       "status": "shipped",
       "test": "test/tasks-contract.test.ts",
       "epic": 1075,
-      "issue": 1109
+      "issue": 1109,
+      "case": "tasks"
     },
     {
       "id": "assign-task-and-request-identities",
@@ -183,7 +193,8 @@
       "status": "shipped",
       "test": "test/tasks-snapshot.test.ts",
       "epic": 1075,
-      "issue": 1111
+      "issue": 1111,
+      "case": "tasks"
     },
     {
       "id": "express-semantic-task-scope",
@@ -191,7 +202,8 @@
       "status": "shipped",
       "test": "test/tasks-scope.test.ts",
       "epic": 1075,
-      "issue": 1112
+      "issue": 1112,
+      "case": "tasks"
     },
     {
       "id": "define-executable-acceptance-criteria",
@@ -199,7 +211,8 @@
       "status": "shipped",
       "test": "test/tasks-acceptance.test.ts",
       "epic": 1075,
-      "issue": 1113
+      "issue": 1113,
+      "case": "tasks"
     },
     {
       "id": "set-budgets-and-stop-conditions",
@@ -215,7 +228,8 @@
       "status": "shipped",
       "test": "test/tasks-lifecycle.test.ts",
       "epic": 1075,
-      "issue": 1115
+      "issue": 1115,
+      "case": "tasks"
     },
     {
       "id": "record-state-transition-events",
@@ -223,7 +237,8 @@
       "status": "shipped",
       "test": "test/tasks-lifecycle.test.ts",
       "epic": 1075,
-      "issue": 1116
+      "issue": 1116,
+      "case": "tasks"
     },
     {
       "id": "expire-and-revoke-tasks",
@@ -231,7 +246,8 @@
       "status": "shipped",
       "test": "test/tasks-revocation.test.ts",
       "epic": 1075,
-      "issue": 1117
+      "issue": 1117,
+      "case": "tasks"
     },
     {
       "id": "migrate-older-task-documents",
@@ -239,7 +255,8 @@
       "status": "shipped",
       "test": "test/tasks-migrate.test.ts",
       "epic": 1075,
-      "issue": 1118
+      "issue": 1118,
+      "case": "tasks"
     },
     {
       "id": "discover-related-tasks",
@@ -247,7 +264,8 @@
       "status": "shipped",
       "test": "test/tasks-related.test.ts",
       "epic": 1075,
-      "issue": 1119
+      "issue": 1119,
+      "case": "tasks"
     },
     {
       "id": "test-the-task-lifecycle-end-to-end",
@@ -255,7 +273,8 @@
       "status": "shipped",
       "test": "test/tasks-e2e.test.ts",
       "epic": 1075,
-      "issue": 1120
+      "issue": 1120,
+      "case": "tasks"
     },
     {
       "id": "convert-a-task-into-a-context-request",
@@ -263,7 +282,8 @@
       "status": "shipped",
       "test": "test/context-request.test.ts",
       "epic": 1076,
-      "issue": 1121
+      "issue": 1121,
+      "case": "packs"
     },
     {
       "id": "select-relevant-entry-points",
@@ -271,7 +291,8 @@
       "status": "shipped",
       "test": "test/context-select.test.ts",
       "epic": 1076,
-      "issue": 1122
+      "issue": 1122,
+      "case": "packs"
     },
     {
       "id": "resolve-required-transitive-dependencies",
@@ -279,7 +300,8 @@
       "status": "shipped",
       "test": "test/context-sources.test.ts",
       "epic": 1076,
-      "issue": 1123
+      "issue": 1123,
+      "case": "packs"
     },
     {
       "id": "preserve-precise-sources-for-context-fragments",
@@ -287,7 +309,8 @@
       "status": "shipped",
       "test": "test/context-sources.test.ts",
       "epic": 1076,
-      "issue": 1124
+      "issue": 1124,
+      "case": "packs"
     },
     {
       "id": "include-relevant-field-lineage",
@@ -311,7 +334,8 @@
       "status": "shipped",
       "test": "test/context-budget.test.ts",
       "epic": 1076,
-      "issue": 1127
+      "issue": 1127,
+      "case": "packs"
     },
     {
       "id": "make-token-accounting-transparent",
@@ -319,7 +343,8 @@
       "status": "shipped",
       "test": "test/context-budget.test.ts",
       "epic": 1076,
-      "issue": 1128
+      "issue": 1128,
+      "case": "packs"
     },
     {
       "id": "explain-why-inputs-were-omitted",
@@ -335,7 +360,8 @@
       "status": "shipped",
       "test": "test/context-answerability.test.ts",
       "epic": 1076,
-      "issue": 1130
+      "issue": 1130,
+      "case": "packs"
     },
     {
       "id": "request-missing-inputs",
@@ -343,7 +369,8 @@
       "status": "shipped",
       "test": "test/context-answerability.test.ts",
       "epic": 1076,
-      "issue": 1131
+      "issue": 1131,
+      "case": "packs"
     },
     {
       "id": "refill-context-incrementally",
@@ -359,7 +386,8 @@
       "status": "shipped",
       "test": "test/context-refill-cache.test.ts",
       "epic": 1076,
-      "issue": 1133
+      "issue": 1133,
+      "case": "packs"
     },
     {
       "id": "cache-and-refresh-packs-deterministically",
@@ -447,7 +475,8 @@
       "status": "shipped",
       "test": "test/graph-query.test.ts",
       "epic": 1077,
-      "issue": 1144
+      "issue": 1144,
+      "case": "graph"
     },
     {
       "id": "bound-graph-traversal-depth-and-size",
@@ -455,7 +484,8 @@
       "status": "shipped",
       "test": "test/graph-bounds.test.ts",
       "epic": 1077,
-      "issue": 1145
+      "issue": 1145,
+      "case": "graph"
     },
     {
       "id": "refresh-the-graph-incrementally",
@@ -479,7 +509,8 @@
       "status": "shipped",
       "test": "test/graph-surfaces.test.ts",
       "epic": 1077,
-      "issue": 1148
+      "issue": 1148,
+      "case": "graph"
     },
     {
       "id": "negotiate-capabilities-and-versions",
@@ -487,7 +518,8 @@
       "status": "shipped",
       "test": "test/mcp-server.test.ts",
       "epic": 1078,
-      "issue": 1149
+      "issue": 1149,
+      "case": "mcp"
     },
     {
       "id": "start-long-running-operations-asynchronously",
@@ -519,7 +551,8 @@
       "status": "shipped",
       "test": "test/mcp-runtime.test.ts",
       "epic": 1078,
-      "issue": 1153
+      "issue": 1153,
+      "case": "mcp"
     },
     {
       "id": "recover-after-disconnection",
@@ -575,7 +608,8 @@
       "status": "shipped",
       "test": "test/mcp-stale.test.ts",
       "epic": 1078,
-      "issue": 1160
+      "issue": 1160,
+      "case": "mcp"
     },
     {
       "id": "isolate-concurrent-sessions",
@@ -599,7 +633,8 @@
       "status": "shipped",
       "test": "test/edits-transaction.test.ts",
       "epic": 1079,
-      "issue": 1163
+      "issue": 1163,
+      "case": "edits"
     },
     {
       "id": "combine-multiple-block-edits",
@@ -607,7 +642,8 @@
       "status": "shipped",
       "test": "test/edits-transaction.test.ts",
       "epic": 1079,
-      "issue": 1164
+      "issue": 1164,
+      "case": "edits"
     },
     {
       "id": "apply-multi-file-changes-atomically",
@@ -615,7 +651,8 @@
       "status": "shipped",
       "test": "test/cli-edit-transaction-multi.test.ts",
       "epic": 1079,
-      "issue": 1165
+      "issue": 1165,
+      "case": "edits"
     },
     {
       "id": "enforce-snapshot-and-beforehash-preconditions",
@@ -623,7 +660,8 @@
       "status": "shipped",
       "test": "test/edits-transaction.test.ts",
       "epic": 1079,
-      "issue": 1166
+      "issue": 1166,
+      "case": "edits"
     },
     {
       "id": "support-optimistic-concurrency",
@@ -631,7 +669,8 @@
       "status": "shipped",
       "test": "test/edits-audit-concurrency.test.ts",
       "epic": 1079,
-      "issue": 1167
+      "issue": 1167,
+      "case": "edits"
     },
     {
       "id": "lock-edit-intent-by-semantic-scope",
@@ -647,7 +686,8 @@
       "status": "shipped",
       "test": "test/edits-patch-symlink.test.ts",
       "epic": 1079,
-      "issue": 1169
+      "issue": 1169,
+      "case": "edits"
     },
     {
       "id": "run-custom-transaction-invariants",
@@ -663,7 +703,8 @@
       "status": "shipped",
       "test": "test/cli-edit-transaction.test.ts",
       "epic": 1079,
-      "issue": 1171
+      "issue": 1171,
+      "case": "edits"
     },
     {
       "id": "preview-transactions",
@@ -671,7 +712,8 @@
       "status": "shipped",
       "test": "test/cli-edit-transaction-multi.test.ts",
       "epic": 1079,
-      "issue": 1172
+      "issue": 1172,
+      "case": "edits"
     },
     {
       "id": "report-actionable-conflicts",
@@ -679,7 +721,8 @@
       "status": "shipped",
       "test": "test/edits-plan.test.ts",
       "epic": 1079,
-      "issue": 1173
+      "issue": 1173,
+      "case": "edits"
     },
     {
       "id": "rebase-onto-a-new-snapshot",
@@ -687,7 +730,8 @@
       "status": "shipped",
       "test": "test/edits-transaction.test.ts",
       "epic": 1079,
-      "issue": 1174
+      "issue": 1174,
+      "case": "edits"
     },
     {
       "id": "roll-back-edits-using-a-receipt",
@@ -695,7 +739,8 @@
       "status": "shipped",
       "test": "test/cli-edit-transaction-multi.test.ts",
       "epic": 1079,
-      "issue": 1175
+      "issue": 1175,
+      "case": "edits"
     },
     {
       "id": "link-transactions-to-proof-and-audit-records",
@@ -703,7 +748,8 @@
       "status": "shipped",
       "test": "test/edits-audit.test.ts",
       "epic": 1079,
-      "issue": 1176
+      "issue": 1176,
+      "case": "edits"
     },
     {
       "id": "refresh-the-graph-and-build-incrementally",
@@ -719,7 +765,8 @@
       "status": "shipped",
       "test": "test/cli-edit-transaction-multi.test.ts",
       "epic": 1079,
-      "issue": 1178
+      "issue": 1178,
+      "case": "edits"
     },
     {
       "id": "build-a-verification-plan-from-the-task",
@@ -727,7 +774,8 @@
       "status": "shipped",
       "test": "test/verification-proof.test.ts",
       "epic": 1080,
-      "issue": 1179
+      "issue": 1179,
+      "case": "edits"
     },
     {
       "id": "tie-result-claims-to-evidence",
@@ -759,7 +807,8 @@
       "status": "shipped",
       "test": "test/verification-proof.test.ts",
       "epic": 1080,
-      "issue": 1183
+      "issue": 1183,
+      "case": "edits"
     },
     {
       "id": "verify-code-snippets-and-examples",
@@ -807,7 +856,8 @@
       "status": "shipped",
       "test": "test/verification-proof.test.ts",
       "epic": 1080,
-      "issue": 1189
+      "issue": 1189,
+      "case": "edits"
     },
     {
       "id": "make-proofs-deterministic-and-portable",
@@ -815,7 +865,8 @@
       "status": "shipped",
       "test": "test/verification-proof.test.ts",
       "epic": 1080,
-      "issue": 1190
+      "issue": 1190,
+      "case": "edits"
     },
     {
       "id": "validate-receipt-signatures-and-the-release-package",
@@ -951,7 +1002,8 @@
       "status": "shipped",
       "test": "test/permissions-read.test.ts",
       "epic": 1082,
-      "issue": 1207
+      "issue": 1207,
+      "case": "permissions"
     },
     {
       "id": "restrict-writes-by-scope-and-resolved-path",
@@ -959,7 +1011,8 @@
       "status": "shipped",
       "test": "test/permissions-write.test.ts",
       "epic": 1082,
-      "issue": 1208
+      "issue": 1208,
+      "case": "permissions"
     },
     {
       "id": "grant-permission-for-specific-check-runners",
@@ -1023,7 +1076,8 @@
       "status": "shipped",
       "test": "test/permissions-bypass.test.ts",
       "epic": 1082,
-      "issue": 1216
+      "issue": 1216,
+      "case": "permissions"
     },
     {
       "id": "define-a-versioned-trace-schema",
@@ -1055,7 +1109,8 @@
       "status": "shipped",
       "test": "test/trace-cost.test.ts",
       "epic": 1083,
-      "issue": 1220
+      "issue": 1220,
+      "case": "traces"
     },
     {
       "id": "record-decisions-refusals-and-approvals",
@@ -1087,7 +1142,8 @@
       "status": "shipped",
       "test": "test/trace-export.test.ts",
       "epic": 1083,
-      "issue": 1224
+      "issue": 1224,
+      "case": "traces"
     },
     {
       "id": "bound-trace-size-and-retention",
@@ -1103,7 +1159,8 @@
       "status": "shipped",
       "test": "test/trace-clean-replay.test.ts",
       "epic": 1083,
-      "issue": 1226
+      "issue": 1226,
+      "case": "traces"
     },
     {
       "id": "hand-off-work-from-a-trace",
@@ -1111,7 +1168,8 @@
       "status": "shipped",
       "test": "test/trace-handoff.test.ts",
       "epic": 1083,
-      "issue": 1227
+      "issue": 1227,
+      "case": "traces"
     },
     {
       "id": "test-replay-in-a-clean-environment",
@@ -1119,7 +1177,8 @@
       "status": "shipped",
       "test": "test/trace-cli.test.ts",
       "epic": 1083,
-      "issue": 1228
+      "issue": 1228,
+      "case": "traces"
     },
     {
       "id": "define-maintenance-triggers",
@@ -1239,7 +1298,8 @@
       "status": "shipped",
       "test": "test/evals-suite.test.ts",
       "epic": 1085,
-      "issue": 1243
+      "issue": 1243,
+      "case": "evals"
     },
     {
       "id": "evaluate-discovery-and-answers",
@@ -1311,7 +1371,8 @@
       "status": "shipped",
       "test": "test/evals-suite.test.ts",
       "epic": 1085,
-      "issue": 1252
+      "issue": 1252,
+      "case": "evals"
     },
     {
       "id": "publish-an-auditable-scoring-rubric-and-weights",
@@ -1319,7 +1380,8 @@
       "status": "shipped",
       "test": "test/evals-score.test.ts",
       "epic": 1085,
-      "issue": 1253
+      "issue": 1253,
+      "case": "evals"
     },
     {
       "id": "measure-tokens-and-tool-calls",
@@ -1335,7 +1397,8 @@
       "status": "shipped",
       "test": "test/evals-baseline.test.ts",
       "epic": 1085,
-      "issue": 1255
+      "issue": 1255,
+      "case": "evals"
     },
     {
       "id": "keep-the-model-runner-outside-the-engine",
@@ -1351,7 +1414,8 @@
       "status": "shipped",
       "test": "test/evals-cli.test.ts",
       "epic": 1085,
-      "issue": 1257
+      "issue": 1257,
+      "case": "evals"
     },
     {
       "id": "run-the-reference-suite-from-the-tarball",
@@ -1367,7 +1431,8 @@
       "status": "shipped",
       "test": "test/readiness-rubric-scan.test.ts",
       "epic": 1086,
-      "issue": 1259
+      "issue": 1259,
+      "case": "readiness"
     },
     {
       "id": "validate-structural-contracts-against-a-real-build",
@@ -1407,7 +1472,8 @@
       "status": "shipped",
       "test": "test/readiness-cli.test.ts",
       "epic": 1086,
-      "issue": 1264
+      "issue": 1264,
+      "case": "readiness"
     },
     {
       "id": "enforce-readiness-thresholds-in-ci",
@@ -1415,7 +1481,8 @@
       "status": "shipped",
       "test": "test/readiness-cli.test.ts",
       "epic": 1086,
-      "issue": 1265
+      "issue": 1265,
+      "case": "readiness"
     },
     {
       "id": "compare-readiness-across-two-builds",
@@ -1431,7 +1498,8 @@
       "status": "shipped",
       "test": "test/readiness-compare-badge.test.ts",
       "epic": 1086,
-      "issue": 1267
+      "issue": 1267,
+      "case": "readiness"
     },
     {
       "id": "protect-privacy-in-public-readiness-reports",
@@ -1455,7 +1523,8 @@
       "status": "shipped",
       "test": "test/readiness-package.test.ts",
       "epic": 1086,
-      "issue": 1270
+      "issue": 1270,
+      "case": "readiness"
     },
     {
       "id": "define-the-client-adapter-contract",
@@ -1471,7 +1540,8 @@
       "status": "shipped",
       "test": "test/clients-profiles.test.ts",
       "epic": 1087,
-      "issue": 1272
+      "issue": 1272,
+      "case": "mcp"
     },
     {
       "id": "ship-an-installable-skill",
@@ -1487,7 +1557,8 @@
       "status": "shipped",
       "test": "test/cli-mcp-config.test.ts",
       "epic": 1087,
-      "issue": 1274
+      "issue": 1274,
+      "case": "mcp"
     },
     {
       "id": "provide-fallbacks-for-limited-clients",
@@ -1495,7 +1566,8 @@
       "status": "shipped",
       "test": "test/clients-profiles.test.ts",
       "epic": 1087,
-      "issue": 1275
+      "issue": 1275,
+      "case": "mcp"
     },
     {
       "id": "handle-version-compatibility-and-migration",
@@ -1519,7 +1591,8 @@
       "status": "shipped",
       "test": "test/clients-profiles.test.ts",
       "epic": 1087,
-      "issue": 1278
+      "issue": 1278,
+      "case": "mcp"
     },
     {
       "id": "import-docusaurus",

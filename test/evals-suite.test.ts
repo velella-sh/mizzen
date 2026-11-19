@@ -33,7 +33,7 @@ test("the reference suite is deterministic and green with no recorded gap", asyn
 test("a case reports every pin, the rubric, and separate components", async () => {
   const { report } = await runEvalSuite({ suite: SUITE });
   assert.equal(report.run.package, "source");
-  assert.equal(report.pins.mizzen, "0.2.5");
+  assert.equal(report.pins.mizzen, "0.2.6");
   assert.deepEqual(report.rubric.weights, EVAL_RUBRIC_WEIGHTS);
   assert.ok(Math.abs(Object.values(EVAL_RUBRIC_WEIGHTS).reduce((total, weight) => total + weight, 0) - 1) < 1e-9);
   for (const item of report.cases) {
