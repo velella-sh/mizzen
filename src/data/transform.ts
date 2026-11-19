@@ -40,6 +40,8 @@ type ValueFinding = (path: string, message: string, help?: string) => void;
 
 /** One field change a transformation step made, for an internal consumer such as the preview. */
 export interface TransformEvent {
+  /** The collection whose rules made the change. */
+  readonly collection: string;
   /** The id of the rule that made the change. */
   readonly rule: string;
   /** The id of the record the change touched. */
@@ -623,7 +625,7 @@ export function transformRecords(
   let current = records;
 
   const emit = (record: DataRecord, rule: string, op: TransformStep["op"], path: string, target: string, from: unknown, to: unknown): void => {
-    const event: TransformEvent = { rule, record: record.id, op, path, target, from, to };
+    const event: TransformEvent = { collection: options.collection, rule, record: record.id, op, path, target, from, to };
     events.push(event);
     lastRuleByField[topOf(path)] = rule;
     lastRuleByField[topOf(target)] = rule;
