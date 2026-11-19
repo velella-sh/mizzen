@@ -148,6 +148,7 @@ interface CursorState {
   readonly maxOutput: number;
   readonly fromQueue: readonly { readonly id: string; readonly depth: number }[];
   readonly seen: readonly string[];
+  readonly depths: readonly (readonly [string, number])[];
   readonly emitted: number;
 }
 
@@ -162,7 +163,7 @@ function decodeCursor(cursor: string, snapshot: string, from: string): CursorSta
     const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<CursorState>;
     if (parsed.version !== 1 || parsed.snapshot !== snapshot || parsed.from !== from) return undefined;
     if (typeof parsed.depth !== "number" || typeof parsed.nodes !== "number" || typeof parsed.maxOutput !== "number") return undefined;
-    if (!Array.isArray(parsed.seen) || !Array.isArray(parsed.fromQueue) || typeof parsed.emitted !== "number") return undefined;
+    if (!Array.isArray(parsed.seen) || !Array.isArray(parsed.fromQueue) || !Array.isArray(parsed.depths) || typeof parsed.emitted !== "number") return undefined;
     return parsed as CursorState;
   } catch {
     return undefined;
@@ -314,6 +315,7 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
   const decoded = options.cursor === undefined ? undefined : decodeCursor(options.cursor, graph.snapshot.id, current.id);
   const queue = decoded === undefined ? [{ id: current.id, depth: 0 }] : [...decoded.fromQueue];
   const seen = new Set(decoded === undefined ? [current.id] : decoded.seen);
+  const depths = new Map<string, number>(decoded === undefined ? [[current.id, 0]] : decoded.depths as readonly (readonly [string, number])[]);
   let nodesTruncated = false;
   while (queue.length > 0) {
     const currentFrame = queue.shift()!;
@@ -325,13 +327,18 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
         continue;
       }
       seen.add(entry.node.id);
+      depths.set(entry.node.id, currentFrame.depth + 1);
       queue.push({ id: entry.node.id, depth: currentFrame.depth + 1 });
     }
-    if (nodesTruncated) break;
+    if (nodesTruncated) {
+      queue.unshift(currentFrame);
+      break;
+    }
   }
 
   const allEntries: GraphNeighbor[] = [];
   for (const id of seen) {
+    if ((depths.get(id) ?? 0) >= depth) continue;
     allEntries.push(...entriesOf(id, adjacency, visibleNodes, direction));
   }
   const emitted = decoded?.emitted ?? 0;
@@ -342,6 +349,11 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
     const entry = allEntries[index]!;
     const size = JSON.stringify(entry).length;
     if (used + size > maxOutput) {
+      if (neighbors.length === 0) {
+        // A bound smaller than one entry would never make progress; one entry is always returned.
+        neighbors.push(entry);
+        used += size;
+      }
       outputTruncated = true;
       break;
     }
@@ -361,6 +373,7 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
           maxOutput,
           fromQueue: queue,
           seen: [...seen],
+          depths: [...depths],
           emitted: emitted + neighbors.length,
         })
       : undefined;
