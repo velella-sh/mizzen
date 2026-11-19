@@ -53,8 +53,11 @@ test("mizzen eval compares with a baseline and reports a changed pin", async () 
     const run = capture();
     assert.equal(await main(["eval", SUITE, "--format", "json"], run.io), 0);
     const report = JSON.parse(run.logs.join("")) as EvalReport;
-    const baseline = baselineOf(report);
-    baseline.cases = baseline.cases.map((item) => item.id === "answer.node-version" ? { ...item, pins: { ...item.pins, fixture: "0".repeat(64) } } : item);
+    const recorded = baselineOf(report);
+    const baseline = {
+      ...recorded,
+      cases: recorded.cases.map((item) => item.id === "answer.node-version" ? { ...item, pins: { ...item.pins, fixture: "0".repeat(64) } } : item),
+    };
     const file = join(dir, "baseline.json");
     writeFileSync(file, `${JSON.stringify(baseline, null, 2)}\n`);
 
