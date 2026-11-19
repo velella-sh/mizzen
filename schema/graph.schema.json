@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/graph.schema.json",
+  "title": "Mizzen knowledge graph",
+  "description": "One immutable snapshot of the source and documentation knowledge graph: nodes for pages, blocks, headings, links, includes, API operations, symbols, snippets, collections, records, fields, transforms, joins, derived values, claims, evidence, check results, and lineage; edges between them; and the source evidence of every node and edge. An edge whose source or target is not a node of the snapshot is invalid and is rejected by the builder.",
+  "type": "object",
+  "required": ["format", "snapshot", "nodes", "edges"],
+  "properties": {
+    "format": { "const": 1, "description": "The contract version." },
+    "snapshot": { "$ref": "#/$defs/snapshot" },
+    "nodes": {
+      "type": "array",
+      "description": "Every node, sorted by id.",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "description": "Every edge, sorted by source, target, kind, and position. Both ends must be nodes of this snapshot.",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "snapshot": {
+      "type": "object",
+      "required": ["format", "id"],
+      "properties": {
+        "format": { "const": 1 },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable snapshot identity: a caller label or a SHA-256 of the snapshot's contents."
+        },
+        "label": { "type": "string", "minLength": 1, "description": "A human label beside a hash id." }
+      },
+      "additionalProperties": false
+    },
+    "pos": {
+      "type": "object",
+      "required": ["file", "line", "column", "endLine", "endColumn"],
+      "properties": {
+        "file": { "type": "string", "description": "Source path relative to the repository root." },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endColumn": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "nodeKind": {
+      "enum": [
+        "page",
+        "block",
+        "heading",
+        "link",
+        "include",
+        "api",
+        "symbol",
+        "snippet",
+        "collection",
+        "record",
+        "field",
+        "transform",
+        "join",
+        "derived",
+        "claim",
+        "evidence",
+        "check",
+        "lineage"
+      ]
+    },
+    "edgeKind": {
+      "enum": [
+        "contains",
+        "links",
+        "targets",
+        "includes",
+        "documents",
+        "references",
+        "renders",
+        "asserts",
+        "backs",
+        "checks",
+        "derives",
+        "reads",
+        "writes",
+        "joins"
+      ]
+    },
+    "value": {
+      "oneOf": [
+        { "type": "string" },
+        { "type": "number" },
+        { "type": "boolean" },
+        { "type": "array", "items": { "type": "string" } }
+      ]
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "kind", "label"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/nodeKind" },
+        "label": { "type": "string" },
+        "pos": { "$ref": "#/$defs/pos" },
+        "url": { "type": "string", "minLength": 1 },
+        "data": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/value" }
+        },
+        "audience": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "unit": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "edge": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "kind": { "$ref": "#/$defs/edgeKind" },
+        "pos": { "$ref": "#/$defs/pos" },
+        "unit": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  }
+}
