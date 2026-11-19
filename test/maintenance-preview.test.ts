@@ -22,7 +22,7 @@ const REGISTRATION = registerTask(
 assert.deepEqual(REGISTRATION.problems, []);
 const TASK = REGISTRATION.task!;
 
-function patch(replacement = "build(configs)"): unknown {
+function patch(replacement = "build(configs)"): Record<string, unknown> {
   return {
     version: 1,
     task: TASK.id,
