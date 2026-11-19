@@ -40,6 +40,7 @@ Without `--allow-edits` the server cannot change a file. Every tool below reads,
 | `get_pack` | A context pack for a goal, within a token budget of at most 12000. |
 | `get_record` | On a site with collections: one record's fields, page URL, and place in its data file. |
 | `query_records` | On a site with collections: records filtered and sorted with the list rules, one page at a time. |
+| `query_graph` | The knowledge graph: a node's neighbors and the shortest path to another node, with the same ids and JSON as `mizzen graph`. |
 
 The server also offers `llms.txt`, `AGENTS.md`, and each page's Markdown twin as resources at `mizzen://site/<path>`.
 

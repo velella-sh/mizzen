@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "idempotencyKey": "install-1",
+  "scope": {
+    "pages": ["/guide/install/"]
+  },
+  "snapshot": {
+    "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "data": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "config": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "tooling": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "budget": {
+    "contextTokens": 6000,
+    "toolCalls": 20,
+    "timeMs": 60000
+  },
+  "acceptance": [
+    {
+      "id": "doctor",
+      "statement": "The doctor passes",
+      "check": "doctor"
+    }
+  ]
+}
