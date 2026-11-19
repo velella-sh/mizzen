@@ -96,7 +96,7 @@ const SIBLING_THEME = siblingThemeRoot(import.meta.url);
 export const usage = `Usage: ${NAME} <command> [dir] [options]
 
 Commands:
-  agent capabilities         Print versioned JSON capabilities: task, pack, edit, verify, replay, eval
+  agent capabilities        Print versioned JSON capabilities: task, pack, edit, verify, replay, eval
   agent schema [name]       Print a command's input schema, output schema, and exit codes
   agent task register [dir]  Register a task from --file <path> or --stdin
   agent task preview [dir]  Show proposed changes, required checks, and affected outputs; writes nothing

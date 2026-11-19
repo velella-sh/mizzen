@@ -66,9 +66,9 @@ const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const mizzen = path.resolve("node_modules/.bin/mizzen");
+const mizzen = path.resolve("node_modules/@velella/mizzen/bin/mizzen.js");
 function run(args, input) {
-  const result = spawnSync(mizzen, args, { encoding: "utf8", input });
+  const result = spawnSync(process.execPath, [mizzen, ...args], { encoding: "utf8", input });
   if (result.error) throw result.error;
   return result;
 }
