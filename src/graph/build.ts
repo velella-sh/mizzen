@@ -507,7 +507,7 @@ function collectionUnit(input: GraphInput, name: string, collection: Collection)
         unit,
       });
       addEdge(edges, { from: recordId, to: claimId, kind: "asserts", pos: claimPos, unit });
-      addEdge(edges, { from: claimId, to: fieldNodeId(name, record.id, field), kind: "backs", pos: claimPos, unit });
+      addEdge(edges, { from: claimId, to: fieldNodeId(name, record.id, field), kind: "references", pos: claimPos, unit });
       for (const claim of publicClaims?.[field] ?? []) {
         const evidenceId = evidenceNodeId(claim.url);
         nodes.push({
