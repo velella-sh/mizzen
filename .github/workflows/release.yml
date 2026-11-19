@@ -128,7 +128,7 @@ jobs:
           scripts/smoke-package.sh ../mizzen ../lateen
           --mizzen-tarball "$RUNNER_TEMP"/dist/velella-mizzen-*.tgz
           --lateen-tarball "$RUNNER_TEMP"/theme/velella-lateen-*.tgz
-      - name: Compare with the published 0.2.4 package and 0.2.2 theme
+      - name: Compare with the published 0.2.5 package and 0.2.3 theme
         if: steps.meta.outputs.published != 'true'
         working-directory: mizzen
         run: >-
