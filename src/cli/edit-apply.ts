@@ -26,6 +26,7 @@
  */
 import { readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
+import { canonicalJson, sha256 } from "../data/lock.ts";
 import { createEditAudit, formatEditAudit } from "../edits/audit.ts";
 import {
   applyPatches,
@@ -36,6 +37,8 @@ import {
   type PatchSpan,
 } from "../edits/patch.ts";
 import { createProof, formatProof } from "../edits/proof.ts";
+import { unifiedDiff } from "../diff/unified.ts";
+export { unifiedDiff } from "../diff/unified.ts";
 import {
   commitArtifacts,
   TransactionError,
@@ -75,6 +78,12 @@ export interface EditApplyResult {
   readonly beforeHash: string;
   /** SHA-256 of the source after the patch. */
   readonly afterHash: string;
+  /** The span the patch replaced, so a trace can point at it. */
+  readonly span: PatchSpan;
+  /** SHA-256 of the canonical patch document that was applied. */
+  readonly patchHash: string;
+  /** SHA-256 of the unified diff from the source before the patch to the source after it. */
+  readonly diffHash: string;
 }
 
 /** Why {@link editApply} refused. Each code names one situation, so the CLI can pick an exit code. */
@@ -226,62 +235,11 @@ function insideRoot(
   return { path, record: inside.split(sep).join("/") };
 }
 
-/** The lines of a text, without a trailing newline's empty final line. */
-function linesOf(text: string): string[] {
-  if (text === "") return [];
-  const lines = text.split("\n");
-  if (lines[lines.length - 1] === "") lines.pop();
-  return lines;
-}
-
 /**
  * A unified diff of `before` and `after` for `file`, with three lines of context. A patch replaces
  * one span, so its change is one contiguous run; a shared prefix and suffix are cut away instead of
  * running a full diff, which keeps the output deterministic and small.
  */
-export function unifiedDiff(before: string, after: string, file: string, context = 3): string {
-  if (before === after) return "";
-  const oldLines = linesOf(before);
-  const newLines = linesOf(after);
-
-  let prefix = 0;
-  const shared = Math.min(oldLines.length, newLines.length);
-  while (prefix < shared && oldLines[prefix] === newLines[prefix]) prefix += 1;
-
-  let suffix = 0;
-  while (
-    suffix < oldLines.length - prefix &&
-    suffix < newLines.length - prefix &&
-    oldLines[oldLines.length - 1 - suffix] === newLines[newLines.length - 1 - suffix]
-  ) {
-    suffix += 1;
-  }
-
-  const oldChangeEnd = oldLines.length - suffix;
-  const newChangeEnd = newLines.length - suffix;
-  const oldStart = Math.max(0, prefix - context);
-  const oldEnd = Math.min(oldLines.length, oldChangeEnd + context);
-  const newStart = Math.max(0, prefix - context);
-  const newEnd = Math.min(newLines.length, newChangeEnd + context);
-
-  const body: string[] = [];
-  for (let index = oldStart; index < prefix; index += 1) body.push(` ${oldLines[index]}`);
-  for (let index = prefix; index < oldChangeEnd; index += 1) body.push(`-${oldLines[index]}`);
-  for (let index = prefix; index < newChangeEnd; index += 1) body.push(`+${newLines[index]}`);
-  for (let index = oldChangeEnd; index < oldEnd; index += 1) body.push(` ${oldLines[index]}`);
-
-  const oldCount = oldEnd - oldStart;
-  const newCount = newEnd - newStart;
-  const oldFrom = oldCount === 0 ? oldStart : oldStart + 1;
-  const newFrom = newCount === 0 ? newStart : newStart + 1;
-  return [
-    `--- a/${file}`,
-    `+++ b/${file}`,
-    `@@ -${oldFrom},${oldCount} +${newFrom},${newCount} @@`,
-    ...body,
-    "",
-  ].join("\n");
-}
 
 /** The reason an errno error gives, as one phrase. */
 function reasonOf(error: unknown): string {
@@ -484,15 +442,21 @@ export async function editApply(options: EditApplyOptions): Promise<EditApplyRes
 
   const beforeHash = hashSource(source);
   const afterHash = hashSource(after);
+  const diff = unifiedDiff(source, after, target.record);
+  const diffHash = sha256(diff);
+  const patchHash = sha256(canonicalJson(patch));
 
   if (options.dryRun === true) {
     return {
       dryRun: true,
       siteRoot,
       file: target.record,
-      diff: unifiedDiff(source, after, target.record),
+      diff,
       beforeHash,
       afterHash,
+      span: patch.span,
+      patchHash,
+      diffHash,
     };
   }
 
@@ -551,7 +515,7 @@ export async function editApply(options: EditApplyOptions): Promise<EditApplyRes
     );
   }
 
-  return { dryRun: false, siteRoot, file: target.record, proof, beforeHash, afterHash };
+  return { dryRun: false, siteRoot, file: target.record, proof, beforeHash, afterHash, span: patch.span, patchHash, diffHash };
 }
 
 /** How a command ended: `ok` is exit 0, `failed` exit 1, `invalid` exit 2. */

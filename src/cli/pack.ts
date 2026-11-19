@@ -16,17 +16,26 @@
  * problem goes to stderr in one pass, and stdout stays empty. `--request` cannot be combined with `--topic` or
  * `--budget`, because the request carries its own budget.
  *
+ * `--task` reads a versioned `TaskContract` and compiles task-aware context through `../context/compile.ts`: the
+ * task scope selects graph entry points, their dependencies close the pack, and the result reports what it omitted,
+ * which criteria it answers, and what it still needs. It reads `blocks.lock.json`, so a removed block is named rather
+ * than invented, and it cannot be combined with `--request` or `--topic`.
+ *
  * Diagnostics such as `context-pack.no-pages` and over-budget warnings go to stderr, so stdout stays a clean
  * document. `--format json` prints or writes the structured evidence instead of Markdown. Exit codes are the
  * CLI's: 0 ok, 1 no context or errors, 2 usage.
  */
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ContextRequest } from "../contracts/context-request.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
 import type { OutputContext } from "../contracts/output.ts";
+import type { TaskContract } from "../contracts/task.ts";
 import { buildModel } from "../model/build.ts";
+import { readBlocksLock } from "../blocks/lock.ts";
+import { compileTaskContext, contextJson, ContextCompileError } from "../context/compile.ts";
 import { compilePack } from "../packs/compile.ts";
+import { parseTaskContract } from "../tasks/contract.ts";
 import {
   buildPack,
   readPackTopic,
@@ -37,6 +46,7 @@ import {
 } from "../outputs/context-pack.ts";
 import { formatText } from "../pipeline/diagnostics.ts";
 import { readContextRequest, readStandardInput } from "./pack-request.ts";
+import { tracePack } from "../trace/instrument.ts";
 
 /** What `--format` prints: the Markdown pack, or its structured evidence. */
 export type PackFormat = "markdown" | "json";
@@ -51,6 +61,8 @@ export interface PackOptions {
   readonly budget?: number;
   /** A JSON context request, or `-` for stdin; when set, the topic path is not read. */
   readonly request?: string;
+  /** A JSON task contract; when set, the task-aware compiler reads the site and its block lock. */
+  readonly task?: string;
   /** The payload: Markdown (default) or the structured `PackEvidence`. */
   readonly format?: PackFormat;
   /** A file to write the pack to, resolved by the caller; stdout when absent. */
@@ -135,6 +147,31 @@ async function readRequest(
   return { ok: true, request: read.request };
 }
 
+/** Reads and validates `--task`, returning every problem instead of throwing. */
+async function readTask(
+  source: string,
+): Promise<{ readonly task: TaskContract } | { readonly problems: readonly string[] }> {
+  let text: string;
+  try {
+    text = await readFile(source, "utf8");
+  } catch (err) {
+    return { problems: [`cannot read the task from ${source}: ${err instanceof Error ? err.message : String(err)}`] };
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch (err) {
+    return { problems: [`the task in ${source} is not valid JSON: ${err instanceof Error ? err.message : String(err)}`] };
+  }
+  const parsed = parseTaskContract(value);
+  if (parsed.contract !== undefined) return { task: parsed.contract };
+  return {
+    problems: parsed.problems.map(
+      (problem) => `${source} ${problem.path === "" ? "/" : problem.path}: ${problem.code}: ${problem.message}`,
+    ),
+  };
+}
+
 /**
  * Builds one context pack and writes it to stdout or `--out`. Returns the CLI exit code.
  *
@@ -161,6 +198,39 @@ export async function pack(options: PackOptions, io: PackIo): Promise<number> {
   };
   const site = model.site;
 
+  if (options.task !== undefined) {
+    const read = await readTask(options.task);
+    if ("problems" in read) {
+      for (const problem of read.problems) io.error(`mizzen: ${problem}`);
+      return 2;
+    }
+    const { lock, diagnostics: lockDiagnostics } = await readBlocksLock(options.root);
+    if (lockDiagnostics.length > 0) {
+      reportDiagnostics(lockDiagnostics, io.error);
+      if (lockDiagnostics.some((diagnostic) => diagnostic.severity === "error")) return 1;
+    }
+    let compiled;
+    try {
+      compiled = await compileTaskContext(site, read.task, {
+        root: options.root,
+        lock,
+        ...(options.budget === undefined ? {} : { maxTokens: options.budget }),
+        report: (diagnostic) => diagnostics.push(diagnostic),
+      });
+    } catch (err) {
+      if (err instanceof ContextCompileError) {
+        for (const problem of err.problems) io.error(`mizzen: ${problem}`);
+        return 2;
+      }
+      throw err;
+    }
+    reportDiagnostics(diagnostics, io.error);
+    const text = options.format === "json" ? contextJson(compiled) : compiled.markdown;
+    if (options.out === undefined) io.write(text);
+    else await writeAtomic(options.out, text);
+    return 0;
+  }
+
   if (requested.ok) {
     const compiled = await compilePack(site, requested.request, ctx, { warnings: model.diagnostics });
     reportDiagnostics(diagnostics, io.error);
@@ -169,6 +239,10 @@ export async function pack(options: PackOptions, io: PackIo): Promise<number> {
       return 1;
     }
     await emit(compiled.markdown, compiled.evidence, options, io);
+    await tracePack(
+      { markdown: compiled.markdown, evidence: compiled.evidence },
+      { ...(options.out === undefined ? {} : { out: options.out }), root: options.root },
+    );
     return 0;
   }
 
@@ -228,5 +302,9 @@ export async function pack(options: PackOptions, io: PackIo): Promise<number> {
   reportDiagnostics(diagnostics, io.error);
 
   await emit(built.contents, built.evidence, options, io);
+  await tracePack(
+    { markdown: built.contents, evidence: built.evidence },
+    { ...(options.out === undefined ? {} : { out: options.out }), root: options.root },
+  );
   return 0;
 }

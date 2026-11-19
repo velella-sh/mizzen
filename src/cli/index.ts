@@ -24,6 +24,7 @@ import { runPublishedSite } from "./published-site.ts";
 import { runStale } from "./stale.ts";
 import { runGraph } from "./graph.ts";
 import { referencesUsage, runReferences } from "./references.ts";
+import { runTrace, traceUsage } from "./trace.ts";
 import { runDocsVersion } from "./docs-version.ts";
 import { runImport } from "./import.ts";
 import { runInputs } from "./inputs.ts";
@@ -35,6 +36,14 @@ import { init } from "./init.ts";
 import { diffCommand, parseChangeType, parseFailOn, type ChangeType, type FailKind } from "./diff.ts";
 import { FORMATS as DIFF_FORMATS, type DiffFormat } from "../diff/format.ts";
 import { editApply, EditApplyError, formatEditApplyJson } from "./edit-apply.ts";
+import {
+  conflictLines,
+  editRollbackCommand,
+  editTransactionCommand,
+  formatEditRollbackJson,
+  formatEditTransactionJson,
+} from "./edit-transaction.ts";
+import { EditTransactionError } from "../edits/edit-transaction.ts";
 import { formatVerifyProofJson, verifyProof, verifyProofMessage } from "./edit-verify.ts";
 import { clientConfig, isClient, serveMcp, CLIENTS } from "./mcp.ts";
 import { pack } from "./pack.ts";
@@ -42,12 +51,13 @@ import { verify, verifyMessage } from "./verify.ts";
 import { compareReports, reproduce } from "./reproduce.ts";
 import { BUILD_REPORT_PATH, buildReportOf, writeBuildReport } from "../reproduce/manifest.ts";
 import { DEFAULT_WATCH_OUT, watch as watchSite } from "./watch.ts";
+import { traceEditApply, traceVerification } from "../trace/instrument.ts";
 
 /** The command name on the PATH. */
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "graph", "import", "init", "mcp", "network", "pack", "published-site", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -108,6 +118,10 @@ Commands:
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
+  edit transaction <file.json> [dir]
+                            Apply a versioned multi-file edit atomically (--dry-run, --rebase, --approve)
+  edit rollback <receipt.json> [dir]
+                            Restore only the files a transaction receipt names
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
@@ -123,6 +137,11 @@ Commands:
   reproduce <report> [dir]  Preflight a recorded build, rebuild it, and compare the reports (--check: preflight only)
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
+  trace show <trace.json>   Print a recorded agent trace: task, snapshot, stages, and evidence
+  trace search <trace.json>  Filter events by --stage, --file, --task, or --status
+  trace replay <trace.json>  Check the recorded order, input hashes, and results; writes nothing
+  trace export <trace.json>  Write or print only the authorized fields (--out <dir>)
+  trace handoff <trace.json>  Print the state, changes, decisions, and remaining work
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   versions snapshot <vN> [dir]
@@ -161,7 +180,8 @@ Options:
   --report <file>      For data refresh: write the structured report here
   --update-blocks      For build: give pages stable block ids and write blocks.lock.json
   --request <file|->   Versioned JSON context request for pack; - reads stdin
-  --topic <name>       Topic for pack (default: the site's only topic); not with --request
+  --task <file>        JSON task contract for pack; compiles task-aware context against the site
+  --topic <name>       Topic for pack (default: the site's only topic); not with --request or --task
   --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
@@ -249,6 +269,7 @@ type PackOpts = {
   readonly topic?: string;
   readonly budget?: number;
   readonly request?: string;
+  readonly task?: string;
   readonly format?: PackFormat;
   readonly out?: string;
 };
@@ -404,6 +425,11 @@ type ReferencesOpts = {
   readonly args: readonly string[];
 };
 
+type TraceOpts = {
+  readonly command: "trace";
+  readonly args: readonly string[];
+};
+
 type GraphOpts = {
   readonly command: "graph";
   readonly args: readonly string[];
@@ -421,6 +447,26 @@ type EditApplyOpts = {
   readonly dryRun: boolean;
   readonly allowUnchecked?: boolean;
   readonly proof?: string;
+  readonly format: EditFormat;
+};
+
+type EditTransactionOpts = {
+  readonly command: "edit-transaction";
+  readonly root: string;
+  readonly transaction: string;
+  readonly dryRun: boolean;
+  readonly rebase: boolean;
+  readonly approve: boolean;
+  readonly receipt?: string;
+  readonly proof?: string;
+  readonly audit?: string;
+  readonly format: EditFormat;
+};
+
+type EditRollbackOpts = {
+  readonly command: "edit-rollback";
+  readonly root: string;
+  readonly receipt: string;
   readonly format: EditFormat;
 };
 
@@ -487,6 +533,8 @@ type Parsed =
         | DevOpts
         | DoctorOpts
         | EditApplyOpts
+        | EditTransactionOpts
+        | EditRollbackOpts
         | EditVerifyOpts
         | PackOpts
         | DiffOpts
@@ -517,6 +565,7 @@ type Parsed =
         | ReferencesOpts
         | GraphOpts
         | StaleOpts
+        | TraceOpts
         | VersionsOpts;
     };
 
@@ -623,6 +672,103 @@ function parseEditApply(args: readonly string[]): Parsed {
       ...(proof === undefined ? {} : { proof }),
     },
   };
+}
+
+/** Parses `mizzen edit transaction <file> [dir] [--dry-run] [--rebase] [--approve] ...`. */
+function parseEditTransaction(args: readonly string[]): Parsed {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
+  if (subcommand !== "transaction") return { error: `unknown edit subcommand: ${subcommand}` };
+
+  let transaction: string | undefined;
+  let root: string | undefined;
+  let receipt: string | undefined;
+  let proof: string | undefined;
+  let audit: string | undefined;
+  let dryRun = false;
+  let rebase = false;
+  let approve = false;
+  let format: EditFormat = "text";
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    const value = (): string => {
+      const next = rest[++i];
+      if (next === undefined || next.startsWith("-")) throw new Error(`${arg} needs a value`);
+      return next;
+    };
+    try {
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--dry-run") dryRun = true;
+      else if (arg === "--rebase") rebase = true;
+      else if (arg === "--approve") approve = true;
+      else if (arg === "--receipt") receipt = value();
+      else if (arg === "--proof") proof = value();
+      else if (arg === "--audit") audit = value();
+      else if (arg === "--format") {
+        const parsed = editFormat(value());
+        if (parsed === undefined) return { error: `--format for edit transaction must be text or json, not ${rest[i]}` };
+        format = parsed;
+      } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      else if (transaction === undefined) transaction = arg;
+      else if (root === undefined) root = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  if (transaction === undefined) {
+    return { error: "edit transaction needs a file: edit transaction <transaction.json> [dir]" };
+  }
+  return {
+    options: {
+      command: "edit-transaction",
+      root: root ?? ".",
+      transaction,
+      dryRun,
+      rebase,
+      approve,
+      ...(receipt === undefined ? {} : { receipt }),
+      ...(proof === undefined ? {} : { proof }),
+      ...(audit === undefined ? {} : { audit }),
+      format,
+    },
+  };
+}
+
+/** Parses `mizzen edit rollback <receipt.json> [dir]`. */
+function parseEditRollback(args: readonly string[]): Parsed {
+  const [subcommand, ...rest] = args;
+  if (subcommand === "-h" || subcommand === "--help" || subcommand === "help") return { help: true };
+  if (subcommand !== "rollback") return { error: `unknown edit subcommand: ${subcommand}` };
+
+  let receipt: string | undefined;
+  let root: string | undefined;
+  let format: EditFormat = "text";
+  for (let i = 0; i < rest.length; i++) {
+    const arg = rest[i]!;
+    const value = (): string => {
+      const next = rest[++i];
+      if (next === undefined || next.startsWith("-")) throw new Error(`${arg} needs a value`);
+      return next;
+    };
+    try {
+      if (arg === "-h" || arg === "--help") return { help: true };
+      if (arg === "--format") {
+        const parsed = editFormat(value());
+        if (parsed === undefined) return { error: `--format for edit rollback must be text or json, not ${rest[i]}` };
+        format = parsed;
+      } else if (arg.startsWith("-")) return { error: `unknown option: ${arg}` };
+      else if (receipt === undefined) receipt = arg;
+      else if (root === undefined) root = arg;
+      else return { error: `unexpected argument: ${arg}` };
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+  if (receipt === undefined) {
+    return { error: "edit rollback needs a receipt: edit rollback <receipt.json> [dir]" };
+  }
+  return { options: { command: "edit-rollback", root: root ?? ".", receipt, format } };
 }
 
 /** Parses `edit verify <proof.json> [--site <dir>] [--doctor]`. */
@@ -1235,6 +1381,8 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "edit") {
     const subcommand = rest[0];
     if (subcommand === "verify") return parseEditVerify(rest);
+    if (subcommand === "transaction") return parseEditTransaction(rest);
+    if (subcommand === "rollback") return parseEditRollback(rest);
     return parseEditApply(rest);
   }
   if (command === "network") {
@@ -1252,6 +1400,10 @@ export function parseArgs(args: readonly string[]): Parsed {
   if (command === "references") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "references", args: rest } };
+  }
+  if (command === "trace") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "trace", args: rest } };
   }
   if (command === "graph") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
@@ -1297,6 +1449,7 @@ export function parseArgs(args: readonly string[]): Parsed {
   let topic: string | undefined;
   let budget: number | undefined;
   let request: string | undefined;
+  let task: string | undefined;
   let packFormat: PackFormat | undefined;
   let updateUrls = false;
   let updateBlocks = false;
@@ -1423,6 +1576,9 @@ export function parseArgs(args: readonly string[]): Parsed {
           return { error: "--request needs a file path or -" };
         }
         request = next;
+      } else if (arg === "--task") {
+        if (command !== "pack") return { error: "--task is only valid for pack" };
+        task = value();
       } else if (arg === "--budget") {
         if (command !== "pack") return { error: "--budget is only valid for pack" };
         const raw = value();
@@ -1483,6 +1639,12 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (request !== undefined && topic !== undefined) {
       return { error: "--request and --topic cannot be used together: a request names its own task" };
     }
+    if (task !== undefined && request !== undefined) {
+      return { error: "--task and --request cannot be used together: each names its own task" };
+    }
+    if (task !== undefined && topic !== undefined) {
+      return { error: "--task and --topic cannot be used together: a task names its own evidence" };
+    }
     if (request !== undefined && budget !== undefined) {
       return { error: "--request and --budget cannot be used together: the request carries its own budget" };
     }
@@ -1493,6 +1655,7 @@ export function parseArgs(args: readonly string[]): Parsed {
         ...(topic === undefined ? {} : { topic }),
         ...(budget === undefined ? {} : { budget }),
         ...(request === undefined ? {} : { request }),
+        ...(task === undefined ? {} : { task }),
         ...(packFormat === undefined ? {} : { format: packFormat }),
         ...(out === undefined ? {} : { out }),
       },
@@ -1616,6 +1779,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "references") {
     try {
       return await runReferences(options.args, { write, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "trace") {
+    try {
+      return await runTrace(options.args, { write, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
@@ -1782,6 +1954,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
           ...(options.request === undefined
             ? {}
             : { request: options.request === "-" ? "-" : resolve(options.request) }),
+          ...(options.task === undefined ? {} : { task: resolve(options.task) }),
           ...(options.format === undefined ? {} : { format: options.format }),
           ...(options.out === undefined ? {} : { out: resolve(options.out) }),
         },
@@ -1802,6 +1975,7 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
         ...(options.dryRun ? { dryRun: true } : {}),
         ...(options.allowUnchecked === true ? { allowUnchecked: true } : {}),
       });
+      await traceEditApply(result, options.root);
       if (options.format === "json") {
         log(formatEditApplyJson(result, 0).replace(/\n$/, ""));
         return 0;
@@ -1826,12 +2000,86 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
     }
   }
 
+  if (options.command === "edit-transaction") {
+    try {
+      const result = await editTransactionCommand({
+        transaction: options.transaction,
+        siteRoot: options.root,
+        ...(options.dryRun ? { dryRun: true } : {}),
+        ...(options.rebase ? { rebase: true } : {}),
+        ...(options.approve ? { approve: true } : {}),
+        ...(options.receipt === undefined ? {} : { receipt: options.receipt }),
+        ...(options.proof === undefined ? {} : { proof: options.proof }),
+        ...(options.audit === undefined ? {} : { audit: options.audit }),
+        format: options.format,
+      });
+      if (options.format === "json") {
+        log(formatEditTransactionJson(result, 0).replace(/\n$/, ""));
+        return 0;
+      }
+      if (result.dryRun) {
+        if (result.diff !== undefined) log(result.diff.replace(/\n$/, ""));
+        for (const check of result.checks) {
+          const detail = check.message === undefined ? "" : `: ${check.message}`;
+          log(`${NAME} edit transaction: ${check.id} ${check.status}${detail}`);
+        }
+        log(`${NAME} edit transaction: dry run: ${result.files.length} file(s) would change; nothing was written`);
+        return 0;
+      }
+      for (const file of result.files) {
+        log(`${NAME} edit transaction: wrote ${file.file} ${file.beforeHash.slice(0, 12)} -> ${file.afterHash.slice(0, 12)}`);
+      }
+      if (result.proof !== undefined) log(`${NAME} edit transaction: proof ${result.proof}`);
+      if (result.receipt !== undefined) log(`${NAME} edit transaction: receipt ${result.receipt}`);
+      return 0;
+    } catch (err) {
+      if (err instanceof EditTransactionError) {
+        const exitCode = err.usage ? 2 : 1;
+        if (options.format === "json") log(formatEditTransactionJson(err, exitCode).replace(/\n$/, ""));
+        else {
+          error(`${NAME}: ${err.message}`);
+          for (const line of conflictLines(err.conflicts)) error(`${NAME}: ${line}`);
+        }
+        return exitCode;
+      }
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "edit-rollback") {
+    try {
+      const { report } = await editRollbackCommand({
+        receipt: options.receipt,
+        siteRoot: options.root,
+        format: options.format,
+      });
+      if (options.format === "json") {
+        log(formatEditRollbackJson(report, 0).replace(/\n$/, ""));
+        return 0;
+      }
+      for (const file of report.restored) log(`${NAME} edit rollback: restored ${file}`);
+      for (const file of report.preserved) log(`${NAME} edit rollback: preserved ${file}`);
+      return 0;
+    } catch (err) {
+      if (err instanceof EditTransactionError) {
+        const exitCode = err.usage ? 2 : 1;
+        if (options.format === "json") log(formatEditRollbackJson(err, exitCode).replace(/\n$/, ""));
+        else error(`${NAME}: ${err.message}`);
+        return exitCode;
+      }
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
   if (options.command === "edit-verify") {
     const result = await verifyProof({
       proof: options.proof,
       siteRoot: options.site,
       doctor: options.doctor,
     });
+    await traceVerification(result);
     const exitCode = result.ok
       ? 0
       : result.failure?.kind === "proof" || result.failure?.kind === "doctor-unavailable"

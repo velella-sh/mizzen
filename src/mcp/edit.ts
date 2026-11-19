@@ -11,6 +11,7 @@ import { McpError } from "./limits.ts";
 import type { Runtime, Session } from "./runtime/operations.ts";
 import type { SiteState } from "./site.ts";
 import { json, refusal, type InputSchema, type ToolResult } from "./tool.ts";
+import { traceMcpEdit } from "../trace/instrument.ts";
 
 /** What both edit tools take: one span, the text and hash it was read with, and the replacement. */
 export interface EditInput {
@@ -92,6 +93,16 @@ export async function runEdit(site: SiteState, input: EditInput, apply: boolean,
     }
     await site.refresh();
     const diagnostics = site.diagnostics.filter((d) => d.pos?.file.replace(/\\/g, "/") === result.file);
+    await traceMcpEdit(
+      { file: input.file, span: input.span },
+      {
+        file: result.file,
+        beforeHash: result.beforeHash,
+        afterHash: result.afterHash,
+        ...(result.proof === undefined ? {} : { proof: site.relative(result.proof) }),
+        diagnostics: diagnostics.length,
+      },
+    );
     return json({
       ok: true,
       applied: true,

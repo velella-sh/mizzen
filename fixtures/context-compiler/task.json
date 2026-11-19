@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "idempotencyKey": "context-compiler-e2e",
+  "goal": "Update the install guide for Node 24",
+  "scope": {
+    "pages": ["/guide/install/"],
+    "blocks": ["install-steps"],
+    "collections": [],
+    "symbols": [],
+    "files": []
+  },
+  "snapshot": {
+    "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "data": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "config": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "tooling": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+  },
+  "budget": {
+    "contextTokens": 12000,
+    "toolCalls": 40,
+    "timeMs": 300000
+  },
+  "permissions": {
+    "read": ["*"],
+    "write": ["agent"],
+    "check": ["agent"]
+  },
+  "acceptance": [
+    {
+      "id": "steps",
+      "statement": "The `install-steps` block names the installer.",
+      "review": true
+    }
+  ]
+}
