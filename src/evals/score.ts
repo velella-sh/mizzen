@@ -594,7 +594,7 @@ export async function scoreCase(input: ScoreInput): Promise<Scored> {
   const criteria: EvalCriterionResult[] = value.criteria.map((criterion, index) => ({
     id: criterion.id,
     statement: criterion.statement,
-    satisfied: security === "ok" && (values[index] ?? components.success === 1),
+    satisfied: security === "ok" && traceOk && (values[index] ?? components.success === 1),
   }));
 
   const metrics: EvalMetrics = {

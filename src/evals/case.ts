@@ -87,6 +87,13 @@ function problemOf(error: ErrorObject): EvalProblem {
       message: `${path === "" ? "The document" : path} must be one of ${String((error.params as Record<string, unknown>)["allowedValues"])}.`,
     };
   }
+  if (error.keyword === "pattern" && (path === "/fixture" || path === "/cases" || path.startsWith("/inputs/") || path.startsWith("/cases/"))) {
+    return {
+      path,
+      code: "eval.relative-path",
+      message: `${path} must be relative, with forward slashes and no \`..\` segment.`,
+    };
+  }
   if (error.keyword === "oneOf" || error.keyword === "anyOf") {
     return {
       path,
@@ -218,7 +225,7 @@ export function parseEvalSuite(value: unknown): EvalSuiteParseResult {
   const parsed = value as EvalSuite;
   const problems: EvalProblem[] = [];
   duplicates(parsed.cases, "/cases", "case path", problems);
-  duplicates((parsed.pins.tools ?? []).map((tool) => tool.name), "/pins/tools", "tool name", problems);
+  duplicates((parsed.pins?.tools ?? []).map((tool) => tool.name), "/pins/tools", "tool name", problems);
   for (const [index, path] of parsed.cases.entries()) {
     if (!relative(path)) {
       problems.push({
