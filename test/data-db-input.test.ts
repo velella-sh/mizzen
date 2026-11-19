@@ -8,7 +8,9 @@ import { test } from "node:test";
 import { dataExtract } from "../src/cli/data.ts";
 import { loadConfig, loadConfigText } from "../src/config/load.ts";
 import { loadCollections } from "../src/data/collections.ts";
+import { extractCollection, extractionIdentityOf, readLockedExtraction } from "../src/data/extract.ts";
 import { readLock, storedPath } from "../src/data/lock.ts";
+import { readQueryProblem } from "../src/data/sqlite-query.ts";
 
 function tree(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), "data-db-input-"));
@@ -74,6 +76,24 @@ test("invalid SQLite and NDJSON configuration is refused before a file is opened
     "site",
   );
   assert.ok(sqliteOnNdjson.diagnostics.some((diagnostic) => diagnostic.severity === "error"));
+});
+
+test("SQLite query validation ignores semicolons inside values, identifiers, and comments", () => {
+  assert.equal(readQueryProblem("SELECT ';' AS value"), undefined);
+  assert.equal(readQueryProblem("SELECT \"semi;colon\" FROM items"), undefined);
+  assert.equal(readQueryProblem("SELECT `semi;colon` FROM items"), undefined);
+  assert.equal(readQueryProblem("SELECT [semi;colon] FROM items"), undefined);
+  assert.equal(readQueryProblem("SELECT 1 /* ; */"), undefined);
+  assert.equal(readQueryProblem("SELECT 1; -- trailing ; comment"), undefined);
+  assert.equal(readQueryProblem("SELECT 1; /* trailing ; comment */"), undefined);
+  assert.equal(readQueryProblem("SELECT 'it''s; valid';"), undefined);
+  assert.match(readQueryProblem("SELECT 1; SELECT 2") ?? "", /more than one statement/);
+  assert.match(readQueryProblem("SELECT 1; -- comment\n SELECT 2") ?? "", /more than one statement/);
+  assert.match(readQueryProblem("SELECT 1; /* comment */ SELECT 2") ?? "", /more than one statement/);
+  assert.equal(readQueryProblem("-- leading comment\n SELECT 1"), undefined);
+  assert.equal(readQueryProblem("/* leading comment */ SELECT 1"), undefined);
+  assert.match(readQueryProblem("-- only a comment") ?? "", /only a comment/);
+  assert.match(readQueryProblem("/* unterminated") ?? "", /unterminated comment/);
 });
 
 test("SQLite extraction is read-only, parameterized, mapped, sorted, and byte-identical when repeated (#919-#923, #927)", async () => {
@@ -372,5 +392,103 @@ test("equivalent SQLite and NDJSON inputs produce the same catalog and result by
   } finally {
     rmSync(sqliteRoot, { recursive: true, force: true });
     rmSync(ndjsonRoot, { recursive: true, force: true });
+  }
+});
+
+
+test("SQLite rejects duplicate columns, a missing selected key, and duplicate row ids without a partial lock", async () => {
+  const root = tree({
+    "mizzen.yml": "collections:\n  products:\n    source: _data/products.sqlite\n    sqlite:\n      query: SELECT sku, sku FROM products\n",
+  });
+  try {
+    database(root, "_data/products.sqlite", PRODUCTS_SQL);
+    const duplicateColumn = await dataExtract({ root });
+    assert.equal(duplicateColumn.code, 1);
+    assert.ok(duplicateColumn.errors.some((message) => message.includes("selects column")));
+
+    writeFileSync(join(root, "mizzen.yml"), "collections:\n  products:\n    source: _data/products.sqlite\n    sqlite:\n      query: SELECT name FROM products\n");
+    const missingKey = await dataExtract({ root });
+    assert.equal(missingKey.code, 1);
+    assert.ok(missingKey.errors.some((message) => message.includes("does not select")));
+
+    const direct = await extractCollection(root, "products", {
+      source: "_data/products.sqlite",
+      sqlite: { query: "SELECT 'same' AS id FROM products UNION ALL SELECT 'same'" },
+    });
+    assert.equal(direct.extracted, undefined);
+    assert.ok(direct.diagnostics.some((diagnostic) => diagnostic.id === "data.record-duplicate-id"));
+    assert.equal(existsSync(join(root, "mizzen.lock.json")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("empty NDJSON and an outside source have deterministic extraction outcomes", async () => {
+  const root = tree({ "_data/empty.ndjson": "" });
+  try {
+    const empty = await extractCollection(root, "items", { source: "_data/empty.ndjson" });
+    assert.deepEqual(empty.diagnostics, []);
+    assert.equal(empty.extracted?.records.length, 0);
+    assert.equal(empty.extracted?.bytes.byteLength, 0);
+
+    const outside = await extractCollection(root, "items", { source: "../outside.ndjson" });
+    assert.equal(outside.diagnostics[0]?.id, "data.source-outside-root");
+
+    const missing = await extractCollection(root, "items", { source: "_data/missing.ndjson" });
+    assert.equal(missing.diagnostics[0]?.id, "data.source-missing");
+
+    const noQuery = await extractCollection(root, "items", { source: "_data/products.sqlite" });
+    assert.equal(noQuery.diagnostics[0]?.id, "config.sqlite-query");
+
+    const writeQuery = await extractCollection(root, "items", {
+      source: "_data/products.sqlite",
+      sqlite: { query: "DELETE FROM products" },
+    });
+    assert.equal(writeQuery.diagnostics[0]?.id, "config.sqlite-query");
+
+    const missingDatabase = await extractCollection(root, "items", {
+      source: "_data/missing.sqlite",
+      sqlite: { query: "SELECT id FROM products" },
+    });
+    assert.equal(missingDatabase.diagnostics[0]?.id, "data.sqlite-query");
+
+    assert.deepEqual(await extractCollection(root, "items", { source: "_data/items.yml" }), { diagnostics: [] });
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("a locked extraction validates record count, JSON shape, and the record id", async () => {
+  const root = tree({});
+  const entry = { source: "_data/items.ndjson", id: "id" } as const;
+  try {
+    for (const [name, text, records, expected] of [
+      ["count", '{"id":"a"}\n', 0, /holds 1 records/],
+      ["json", "not-json\n", 1, /not valid JSON/],
+      ["shape", '["not-a-record"]\n', 1, /not a record/],
+      ["id", '{"name":"a"}\n', 1, /has no "id" field/],
+    ] as const) {
+      const bytes = new TextEncoder().encode(text);
+      const digest = createHash("sha256").update(bytes).digest("hex");
+      const store = storedPath(root, digest);
+      mkdirSync(dirname(store), { recursive: true });
+      writeFileSync(store, bytes);
+      const result = await readLockedExtraction(root, "items", entry, {
+        version: 1,
+        sources: {},
+        extractions: {
+          items: {
+            source: entry.source,
+            ...extractionIdentityOf("items", entry),
+            bytes: bytes.byteLength,
+            sha256: digest,
+            records,
+          },
+        },
+      });
+      assert.match(result.diagnostic?.message ?? "", expected, name);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });

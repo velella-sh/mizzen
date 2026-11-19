@@ -8,14 +8,17 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import type { Ajv2020 as Ajv2020Class } from "ajv/dist/2020.js";
 import { main } from "../src/cli/index.ts";
-import { reproduce } from "../src/cli/reproduce.ts";
+import { compareReports, reproduce } from "../src/cli/reproduce.ts";
 import { build } from "../src/pipeline/build.ts";
 import {
   BUILD_REPORT_PATH,
   buildReportOf,
   buildReportText,
   compareBuildReports,
+  comparisonJson,
+  comparisonText,
   preflightReport,
+  preflightText,
   readBuildReport,
   validateBuildReport,
   type BuildReport,
@@ -175,6 +178,40 @@ test("preflight names a missing input and an incompatible version before buildin
   }
 });
 
+test("preflight names tool, input, and environment differences together", async () => {
+  const parent = scratch();
+  try {
+    const root = site(parent, {
+      "mizzen.yml": `${CONFIG}collections:\n  items:\n    source: _data/items.yml\n`,
+      "index.md": "# Hello\n",
+      "_data/items.yml": "- id: a\n",
+      "mizzen.lock.json": '{"version":1,"sources":{}}\n',
+    });
+    const report = await reportFor(root, join(parent, "out"));
+    const changed = cloneReport(report) as unknown as Record<string, any>;
+    changed.tools.node = "25.0.0";
+    changed.tools.theme.version = "0.0.0";
+    changed.inputs.locks["mizzen.lock.json"] = "1".repeat(64);
+    for (const path of Object.keys(changed.inputs.data)) changed.inputs.data[path] = "2".repeat(64);
+    for (const path of Object.keys(changed.inputs.content)) changed.inputs.content[path] = "3".repeat(64);
+    changed.environment.timezone = "Pacific/Kiritimati";
+    changed.environment.locale = "fa-IR";
+
+    const result = await preflightReport(changed as BuildReport, { root, themeRoot: THEME });
+    const messages = result.problems.map((problem) => problem.message).join("\n");
+    assert.equal(result.ok, false);
+    assert.match(messages, /Node 25\.0\.0/);
+    assert.match(messages, /theme .* 0\.0\.0/);
+    assert.match(messages, /lock file mizzen\.lock\.json differs/);
+    assert.match(messages, /data input .*items\.yml differs/);
+    assert.match(messages, /content input .* differs/);
+    assert.match(messages, /time zone Pacific\/Kiritimati/);
+    assert.match(messages, /locale fa-IR/);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
 test("a clean checkout with an imported input package reproduces the output hashes", async () => {
   const parent = scratch();
   try {
@@ -215,6 +252,41 @@ test("a clean checkout with an imported input package reproduces the output hash
   }
 });
 
+test("a report fingerprints rule values instead of copying secrets", async () => {
+  const parent = scratch();
+  const secret = "do-not-write-this-token";
+  try {
+    const root = site(parent, {
+      "mizzen.yml": `${CONFIG}collections:\n  items:\n    source: _data/items.yml\n    transform:\n      steps:\n        - op: default\n          field: token\n          value: ${secret}\nredirects:\n  /old/: https://example.com/?token=${secret}\n`,
+      "index.md": "# Hello\n",
+      "_data/items.yml": "- id: a\n",
+    });
+    const report = await reportFor(root, join(parent, "out"));
+    const text = buildReportText(report);
+    assert.equal(text.includes(secret), false);
+    assert.equal(validateBuildReport(report), undefined);
+
+    const detailed = cloneReport(report) as unknown as Record<string, any>;
+    detailed.config.rules.collections.items.derived = { age: "a".repeat(64) };
+    detailed.config.rules.quality = { sha256: "b".repeat(64) };
+    assert.equal(validateBuildReport(detailed as BuildReport), undefined);
+    for (const rawValue of [
+      (raw: Record<string, any>) => { raw.config.rules.redirects["/old/"] = secret; },
+      (raw: Record<string, any>) => { raw.config.rules.collections.items.transform = { steps: [{ value: secret }] }; },
+      (raw: Record<string, any>) => { raw.config.rules.collections.items.derived.age = secret; },
+      (raw: Record<string, any>) => { raw.config.rules.quality = { rules: [secret] }; },
+      (raw: Record<string, any>) => { raw.config.rules.extra = { value: secret }; },
+      (raw: Record<string, any>) => { raw.config.rules.defaults[0].extra = secret; },
+    ]) {
+      const raw = cloneReport(detailed as BuildReport) as unknown as Record<string, any>;
+      rawValue(raw);
+      assert.notEqual(validateBuildReport(raw as BuildReport), undefined);
+    }
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
 test("the schema accepts a generated report and refuses another format or category list", async () => {
   const parent = scratch();
   try {
@@ -224,9 +296,86 @@ test("the schema accepts a generated report and refuses another format or catego
     const schema = JSON.parse(readFileSync(new URL("../schema/build-report.schema.json", import.meta.url), "utf8")) as object;
     const validate = new Ajv2020({ strict: true, allErrors: true }).compile(schema);
     assert.equal(validate(report), true, JSON.stringify(validate.errors));
+    const raw = cloneReport(report) as unknown as Record<string, any>;
+    raw.config.rules.collections.items = { transform: { steps: [{ value: "secret" }] } };
+    assert.equal(validate(raw), false, "the schema refuses raw transform values");
     assert.equal(validateBuildReport({ ...report, format: 2 }), "format 2 is not the format this version reads (1)");
     assert.match(validateBuildReport({ ...report, categories: ["inputs", "outputs"] }) ?? "", /categories/);
   } finally {
     rmSync(parent, { recursive: true, force: true });
   }
+});
+
+
+test("report readers and comparison commands return structured usage errors", async () => {
+  const parent = scratch();
+  const missing = join(parent, "missing.json");
+  try {
+    const unreadable = await readBuildReport(missing);
+    assert.match("error" in unreadable ? unreadable.error : "", /cannot be read/);
+
+    const invalid = join(parent, "invalid.json");
+    writeFileSync(invalid, "not-json\n");
+    const invalidJson = await readBuildReport(invalid);
+    assert.match("error" in invalidJson ? invalidJson.error : "", /not valid JSON/);
+    writeFileSync(invalid, "{}\n");
+    const invalidShape = await readBuildReport(invalid);
+    assert.match("error" in invalidShape ? invalidShape.error : "", /not a build report/);
+
+    assert.equal((await reproduce({ manifest: missing, root: parent, out: join(parent, "out"), themeRoot: THEME, check: false, format: "text" })).code, 2);
+    assert.equal((await compareReports({ before: missing, after: missing, format: "text" })).code, 2);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("reproduce --check and compare expose preflight and comparison output without rebuilding", async () => {
+  const parent = scratch();
+  try {
+    const root = site(parent, { "mizzen.yml": CONFIG, "index.md": "# Hello\n" });
+    const report = await reportFor(root, join(parent, "out"));
+    const manifest = join(parent, "report.json");
+    writeFileSync(manifest, buildReportText(report));
+
+    const checked = await reproduce({ manifest, root, out: join(parent, "unused"), themeRoot: THEME, check: true, format: "json" });
+    assert.equal(checked.code, 0, checked.problems.join("\n"));
+    assert.equal(JSON.parse(checked.output).ok, true);
+
+    const incompatible = cloneReport(report) as unknown as Record<string, any>;
+    incompatible.tools.mizzen = "0.0.0";
+    writeFileSync(manifest, buildReportText(incompatible as BuildReport));
+    const refused = await reproduce({ manifest, root, out: join(parent, "unused"), themeRoot: THEME, check: false, format: "text" });
+    assert.equal(refused.code, 1);
+    assert.match(refused.problems.join("\n"), /Mizzen 0\.0\.0/);
+
+    writeFileSync(manifest, buildReportText(report));
+    const other = join(parent, "other.json");
+    writeFileSync(other, buildReportText(report));
+    const compared = await compareReports({ before: manifest, after: other, format: "json" });
+    assert.equal(compared.code, 0);
+    assert.equal(JSON.parse(compared.output).same, true);
+    assert.equal((await compareReports({ before: manifest, after: join(parent, "absent.json"), format: "text" })).code, 2);
+  } finally {
+    rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test("text and JSON comparisons and preflight output preserve every category", () => {
+  const base: BuildReport = {
+    format: 1,
+    categories: ["inputs", "config", "tools", "environment", "outputs"],
+    inputs: { locks: {}, data: {}, content: {} },
+    config: { sha256: "a".repeat(64), rules: { defaults: [], redirects: {}, outputs: {}, collections: {}, feeds: [], calendars: [] } },
+    tools: { mizzen: "0.2.5", node: "24.0.0", theme: { name: "theme", version: "1" } },
+    environment: { timezone: "UTC", locale: "en-US" },
+    outputs: { hash: "b".repeat(64), files: {} },
+  };
+  const changed = cloneReport(base) as unknown as Record<string, any>;
+  changed.outputs.hash = "c".repeat(64);
+  const comparison = compareBuildReports(base, changed as BuildReport);
+  assert.match(comparisonText(comparison), /unexplained:/);
+  assert.match(comparisonText(comparison), /outputs: 1 difference/);
+  assert.equal(JSON.parse(comparisonJson(comparison)).unexplained, true);
+  assert.match(preflightText({ ok: true, problems: [] }), /reproducible:/);
+  assert.match(preflightText({ ok: false, problems: [{ category: "inputs", message: "missing", fatal: true }] }), /error: inputs: missing/);
 });

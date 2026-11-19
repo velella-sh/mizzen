@@ -18,7 +18,7 @@ The report has one format version (`1`) and five comparable categories:
 | Category | What it records |
 | --- | --- |
 | `inputs` | SHA-256 of `mizzen.lock.json`, `urls.lock.json`, and `blocks.lock.json`; every local collection source; every discovered page, asset, data file, and template. Paths are relative. |
-| `config` | One hash of the resolved config, the effective reference date (`asOf`), and the rule-bearing config: defaults, redirects, output switches, collection transforms and derived rules, quality rules, feeds, and calendars. Config values and secrets are never written. |
+| `config` | One hash of the resolved config, the effective reference date (`asOf`), and output switches. Defaults record only their paths and keys; collection, quality, and redirect rule values are represented by SHA-256 fingerprints. Config values and secrets are never written. |
 | `tools` | The actual Mizzen version, Node.js version, and theme package name and version. |
 | `environment` | The resolved time zone and locale, plus `LANG` and `SOURCE_DATE_EPOCH` when set. |
 | `outputs` | The build hash and every publishable file with its relative path and SHA-256, by the same rule `mizzen verify` uses. |

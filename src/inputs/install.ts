@@ -5,7 +5,7 @@
  * lock, so the previous inputs stay active. Installing the same package again finds every hash equal and writes nothing.
  */
 import { lstat, mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import type { Diagnostic } from "../contracts/index.ts";
 import { LOCK_FILE, lockText, readLock, sha256, storedPath, type DataLock, type LockedSource } from "../data/lock.ts";
 import {
@@ -356,10 +356,16 @@ export async function importInputs(options: ImportInputsOptions): Promise<Import
           ? before
           : change.entry;
     }
+    const changedLocalSources = new Set(localChanges.map((change) => change.destination));
+    const extractions = Object.fromEntries(
+      Object.entries(pinned.lock.extractions ?? {}).filter(([, entry]) => !changedLocalSources.has(resolve(realRoot, entry.source))),
+    );
+    const extractionChanged = Object.keys(extractions).length !== Object.keys(pinned.lock.extractions ?? {}).length;
     const nextLock: DataLock = {
       version: 1,
       sources: sortedSources(sources),
       ...(pinned.lock.snapshots === undefined ? {} : { snapshots: pinned.lock.snapshots }),
+      ...(pinned.lock.extractions === undefined ? {} : { extractions }),
     };
     const nextText = lockText(nextLock);
     let lockTextNow: string | undefined;
@@ -368,9 +374,9 @@ export async function importInputs(options: ImportInputsOptions): Promise<Import
     } catch {
       lockTextNow = undefined;
     }
-    // A package of file inputs alone needs no lock; the build reads the files. A lock is written only when it gains
-    // or changes a package or URL entry.
-    const lockChanged = lockedChanges.length > 0 && lockTextNow !== nextText;
+    // File inputs alone need no lock until they replace a source with a locked extraction. URL entries and those
+    // invalidations write the lock; unrelated snapshots and extraction entries stay unchanged.
+    const lockChanged = (lockedChanges.length > 0 || extractionChanged) && lockTextNow !== nextText;
 
     const activated: { readonly destination: string; readonly before?: Uint8Array }[] = [];
     const createdStore: string[] = [];

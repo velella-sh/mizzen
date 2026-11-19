@@ -5,8 +5,8 @@
  *
  * Paths are relative to the site root or the output folder with `/` separators, so moving a checkout changes nothing.
  * Content comes from `canonicalJson`, hashes from `output.build-hash`, and the output list is the same fingerprint
- * `mizzen verify` checks. No configuration value is written, so a token or credential in the config can only change
- * the config hash, never the report text.
+ * `mizzen verify` checks. Rule values and redirect destinations are fingerprinted, so a token or credential in the
+ * config can only change a hash, never the report text.
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -16,7 +16,6 @@ import { discover } from "../content/discover.ts";
 import { canonicalJson } from "../data/lock.ts";
 import { version } from "../index.ts";
 import { fingerprint, hashOf, isIdentityPath } from "../outputs/build-hash.ts";
-import type { CollectionTransformConfig } from "../contracts/config.ts";
 import type { SiteConfig } from "../contracts/index.ts";
 
 /** The report format this version writes and reads. */
@@ -39,17 +38,22 @@ export interface InputFile {
   readonly sha256: string;
 }
 
-/** The rule-bearing part of the effective config, with no secret or token value. */
+/** SHA-256 of one canonical rule value, stored instead of the value itself. */
+export interface RuleFingerprint {
+  readonly sha256: string;
+}
+
+/** The rule-bearing part of the effective config, with every rule value fingerprinted. */
 export interface ConfigRules {
   readonly defaults: readonly { readonly path: string; readonly keys: readonly string[] }[];
   readonly redirects: Readonly<Record<string, string>>;
   readonly outputs: Readonly<Record<string, boolean>>;
   readonly collections: Readonly<Record<string, {
-    readonly transform?: CollectionTransformConfig;
-    readonly derived?: Readonly<Record<string, unknown>>;
+    readonly transform?: RuleFingerprint;
+    readonly derived?: Readonly<Record<string, string>>;
     readonly referenceDate?: string;
   }>>;
-  readonly quality?: Readonly<Record<string, unknown>>;
+  readonly quality?: RuleFingerprint;
   readonly feeds: readonly string[];
   readonly calendars: readonly string[];
 }
@@ -161,23 +165,26 @@ async function hashFile(path: string): Promise<string | undefined> {
   }
 }
 
-/** The rule-bearing config, deliberately built from named keys so no new secret-bearing key can slip in. */
+/** The rule-bearing config, with every value that could carry a secret replaced by its SHA-256. */
 export function rulesOf(config: SiteConfig): ConfigRules {
-  const collections: Record<string, { transform?: CollectionTransformConfig; derived?: Readonly<Record<string, unknown>>; referenceDate?: string }> = {};
+  const collections: Record<string, { transform?: RuleFingerprint; derived?: Readonly<Record<string, string>>; referenceDate?: string }> = {};
+  const fingerprintRule = (value: unknown): string => hashOf(canonicalJson(value));
   for (const name of Object.keys(config.collections).sort(byCodePoint)) {
     const entry = config.collections[name]!;
-    const rules: { transform?: CollectionTransformConfig; derived?: Readonly<Record<string, unknown>>; referenceDate?: string } = {};
-    if (entry.transform !== undefined) rules.transform = entry.transform;
-    if (entry.derived !== undefined) rules.derived = entry.derived;
+    const rules: { transform?: RuleFingerprint; derived?: Readonly<Record<string, string>>; referenceDate?: string } = {};
+    if (entry.transform !== undefined) rules.transform = { sha256: fingerprintRule(entry.transform) };
+    if (entry.derived !== undefined) {
+      rules.derived = Object.fromEntries(Object.entries(entry.derived).map(([field, rule]) => [field, fingerprintRule(rule)]));
+    }
     if (entry.referenceDate !== undefined) rules.referenceDate = entry.referenceDate;
     if (Object.keys(rules).length > 0) collections[name] = rules;
   }
   return {
     defaults: config.defaults.map((entry) => ({ path: entry.path, keys: Object.keys(entry.values).sort(byCodePoint) })),
-    redirects: config.redirects,
+    redirects: Object.fromEntries(Object.entries(config.redirects).map(([from, to]) => [from, fingerprintRule(to)])),
     outputs: config.outputs,
     collections,
-    ...(config.quality === undefined ? {} : { quality: config.quality as unknown as Readonly<Record<string, unknown>> }),
+    ...(config.quality === undefined ? {} : { quality: { sha256: fingerprintRule(config.quality) } }),
     feeds: Object.keys(config.feeds).sort(byCodePoint),
     calendars: Object.keys(config.calendars ?? {}).sort(byCodePoint),
   };
@@ -306,12 +313,22 @@ function isFileMap(value: unknown): value is Readonly<Record<string, string>> {
 }
 
 function isRules(value: unknown): value is ConfigRules {
+  const fingerprint = (entry: unknown): boolean =>
+    isRecord(entry) && Object.keys(entry).length === 1 && isHash(entry["sha256"]);
   if (!isRecord(value)) return false;
+  if (Object.keys(value).some((key) => !["defaults", "redirects", "outputs", "collections", "quality", "feeds", "calendars"].includes(key))) return false;
   if (!Array.isArray(value["defaults"])) return false;
-  if (!value["defaults"].every((entry) => isRecord(entry) && typeof entry["path"] === "string" && Array.isArray(entry["keys"]) && entry["keys"].every((key) => typeof key === "string"))) return false;
-  if (!isRecord(value["redirects"]) || !Object.values(value["redirects"]).every((to) => typeof to === "string")) return false;
+  if (!value["defaults"].every((entry) => isRecord(entry) && Object.keys(entry).length === 2 && typeof entry["path"] === "string" && Array.isArray(entry["keys"]) && entry["keys"].every((key) => typeof key === "string"))) return false;
+  if (!isRecord(value["redirects"]) || !Object.values(value["redirects"]).every((to) => isHash(to))) return false;
   if (!isRecord(value["outputs"]) || !Object.values(value["outputs"]).every((on) => typeof on === "boolean")) return false;
-  if (!isRecord(value["collections"])) return false;
+  if (!isRecord(value["collections"]) || !Object.values(value["collections"]).every((entry) => {
+    if (!isRecord(entry)) return false;
+    if (Object.keys(entry).some((key) => key !== "transform" && key !== "derived" && key !== "referenceDate")) return false;
+    if (entry["transform"] !== undefined && !fingerprint(entry["transform"])) return false;
+    if (entry["derived"] !== undefined && (!isRecord(entry["derived"]) || !Object.values(entry["derived"]).every((hash) => isHash(hash)))) return false;
+    return entry["referenceDate"] === undefined || (typeof entry["referenceDate"] === "string" && /^\d{4}-\d{2}-\d{2}$/.test(entry["referenceDate"]));
+  })) return false;
+  if (value["quality"] !== undefined && !fingerprint(value["quality"])) return false;
   if (!Array.isArray(value["feeds"]) || !value["feeds"].every((name) => typeof name === "string")) return false;
   if (!Array.isArray(value["calendars"]) || !value["calendars"].every((name) => typeof name === "string")) return false;
   return true;

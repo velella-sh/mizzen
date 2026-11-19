@@ -303,6 +303,23 @@ test("a repeated cursor, the page cap, and the byte cap each stop with their own
   }
 });
 
+test("the stored JSON list obeys the collection byte limit, not only the raw responses", async () => {
+  const body = page([{ id: "a" }, { id: "b" }]);
+  const server = await serve(() => ({ body }));
+  const root = tree({
+    "mizzen.yml": config(`http://127.0.0.1:${server.port}/items`, { limits: { bytes: Buffer.byteLength(body) } }),
+  });
+  try {
+    const result = await dataFetch({ root });
+    assert.equal(result.code, 1);
+    assert.ok(result.errors.some((line) => line.includes("stores") && line.includes("limit is")), result.errors.join("\n"));
+    assert.equal(existsSync(join(root, "mizzen.lock.json")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    await server.close();
+  }
+});
+
 test("a credential is read from the environment, sent only to its origin, and never written", async () => {
   const secret = "hunter2-secret";
   const server = await serve((url, headers) => ({

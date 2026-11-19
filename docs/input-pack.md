@@ -129,9 +129,11 @@ written last, through a rename, and only when it gains or changes a locked entry
 files already replaced are restored and the lock is untouched, so the previous inputs stay active. Nothing is left
 staged.
 
-A file-only package needs no `mizzen.lock.json`; the build reads the files in place. A package with `https:` inputs
-writes their bytes under `.mizzen/data/` and merges only those entries, keeping every other source and snapshot in the
-destination lock.
+A file-only package needs no `mizzen.lock.json` unless it replaces a SQLite or NDJSON source that has a locked
+extraction. Import removes that extraction, including when the lock spells its path with `./`, so the next build asks
+for `mizzen data extract` instead of publishing stale records; unrelated extraction entries stay in place. A package
+with `https:` inputs writes their bytes under `.mizzen/data/` and merges only those entries, keeping every other source
+and snapshot in the destination lock.
 
 ## Transfer examples
 
