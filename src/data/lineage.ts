@@ -423,7 +423,9 @@ async function chainFor(
 
   // A join runs after the primary collection's transform. The selected destination is the final value.
   const joined = record.joined?.fields[topOf(fieldPath)];
-  if (!skipJoin && joined !== undefined) {
+  // A primary field the join kept under its own name has no selection to explain; the transform chain covers it.
+  const kept = joined !== undefined && joined.source === collection.name && joined.input === topOf(fieldPath);
+  if (!skipJoin && joined !== undefined && !kept) {
     const sourceCollection = context.collections?.[joined.source];
     const sourceRecord = joinedRecordOf(record, entry, joined.source, sourceCollection);
     const sourceInput =

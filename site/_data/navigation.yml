@@ -48,6 +48,8 @@ main:
         url: /data/collections/
       - title: Public fields
         url: /data/public-fields/
+      - title: Field lineage
+        url: /data/lineage/
       - title: Templates
         url: /data/templates/
       - title: Lists
