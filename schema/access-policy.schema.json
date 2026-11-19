@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/velella-sh/mizzen/schema/access-policy.schema.json",
+  "title": "Mizzen access policy",
+  "description": "A versioned access policy: independent capabilities, a semantic read allowlist, write paths and scope, named check runners, network destinations and stages, and per-capability approvals. `parseAccessPolicy` in `src/permissions/policy.ts` validates against this schema, fills least-privilege defaults, and reports every problem with its JSON Pointer. An absent policy grants public read only.",
+  "type": "object",
+  "required": ["version"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The policy version. Only 1 exists."
+    },
+    "task": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "\\S",
+      "description": "The task this policy belongs to; defaults to `site`."
+    },
+    "capabilities": {
+      "type": "object",
+      "description": "The independent switches. Omitted capabilities are false except read.",
+      "properties": {
+        "read": { "type": "boolean", "description": "Read public or allowed content. Default true." },
+        "write": { "type": "boolean", "description": "Write through the write policy. Default false." },
+        "execute": { "type": "boolean", "description": "Run a named check runner. Default false." },
+        "network": { "type": "boolean", "description": "Reach an allowed destination in an allowed stage. Default false." },
+        "publish": { "type": "boolean", "description": "Publish artifacts. Default false." }
+      },
+      "additionalProperties": false
+    },
+    "read": {
+      "type": "object",
+      "description": "Public content, allowed audiences, and optional page, block, collection, and field allowlists.",
+      "properties": {
+        "public": { "type": "boolean", "description": "Whether content without an audience is readable. Default true." },
+        "audiences": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reference" },
+          "uniqueItems": true,
+          "description": "Audiences the task may read. Empty means public only."
+        },
+        "pages": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reference" },
+          "uniqueItems": true,
+          "description": "Page URLs, source paths, ids, or globs. Absent means every public page."
+        },
+        "blocks": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reference" },
+          "uniqueItems": true,
+          "description": "Block ids or globs. Absent means every block of a readable page."
+        },
+        "collections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reference" },
+          "uniqueItems": true,
+          "description": "Collection names. Absent means no collection data."
+        },
+        "fields": {
+          "type": "object",
+          "description": "Per-collection field allowlist. A collection left out publishes no field.",
+          "patternProperties": {
+            "^[A-Za-z0-9][A-Za-z0-9._-]*$": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/reference" },
+              "uniqueItems": true
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "write": {
+      "type": "object",
+      "required": ["paths", "scope"],
+      "description": "An allowed path list and a semantic scope; both must allow a write.",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/path" },
+          "uniqueItems": true,
+          "description": "Site-relative paths or globs the task may write."
+        },
+        "scope": {
+          "type": "object",
+          "description": "The pages, blocks, collections, or files the write is about. At least one entry is required.",
+          "properties": {
+            "pages": { "type": "array", "items": { "$ref": "#/$defs/reference" }, "uniqueItems": true },
+            "blocks": { "type": "array", "items": { "$ref": "#/$defs/reference" }, "uniqueItems": true },
+            "collections": { "type": "array", "items": { "$ref": "#/$defs/reference" }, "uniqueItems": true },
+            "files": { "type": "array", "items": { "$ref": "#/$defs/path" }, "uniqueItems": true }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "required": ["runners"],
+      "description": "Named check runners. A runner grant never allows an arbitrary command or the network.",
+      "properties": {
+        "runners": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "inputs", "resources"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S" },
+              "inputs": { "type": "array", "items": { "$ref": "#/$defs/reference" }, "uniqueItems": true },
+              "resources": { "type": "array", "items": { "$ref": "#/$defs/reference" }, "uniqueItems": true }
+            },
+            "additionalProperties": false
+          },
+          "description": "Runners the task may execute, each with its own input and resource allowlist."
+        }
+      },
+      "additionalProperties": false
+    },
+    "network": {
+      "type": "object",
+      "required": ["destinations", "stages"],
+      "description": "Explicit destinations and the stages they are allowed in. Both must match.",
+      "properties": {
+        "destinations": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/destination" },
+          "uniqueItems": true
+        },
+        "stages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "enum": ["build", "verify", "replay", "publish"] },
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "approvals": {
+      "type": "object",
+      "description": "Capabilities that need a separate, explicit approval. Default: write, execute, network, and publish.",
+      "properties": {
+        "read": { "type": "boolean" },
+        "write": { "type": "boolean" },
+        "execute": { "type": "boolean" },
+        "network": { "type": "boolean" },
+        "publish": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "reference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "\\S"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?(?:/|$))(?!.*\\\\)(?!.*:)[^\\u0000]+$",
+      "description": "A site-relative path or glob with forward slashes: no leading slash, drive letter, backslash, or `..` segment."
+    },
+    "destination": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "^(?:[a-z][a-z\\d+.-]*://|\\*{1,2}$|[A-Za-z0-9*](?:[A-Za-z0-9.*-]*\\.)+[A-Za-z]{2,})",
+      "description": "An absolute URL, a host name, or `*`; a scheme-less value is a host."
+    }
+  }
+}

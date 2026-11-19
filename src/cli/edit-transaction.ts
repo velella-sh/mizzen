@@ -10,6 +10,8 @@
  * invalid content, or failed write, `2` a malformed request or transaction.
  */
 import { resolve } from "node:path";
+import type { AccessGrant, AccessPolicy } from "../contracts/permissions.ts";
+import { checkWriteTarget } from "../permissions/write.ts";
 import {
   applyEditTransaction,
   EditTransactionError,
@@ -37,6 +39,10 @@ export interface EditTransactionCommandOptions {
   readonly proof?: string;
   readonly audit?: string;
   readonly format?: TransactionFormat;
+  /** An access policy; every patched file needs an allowed path and a matching scope. */
+  readonly access?: AccessPolicy;
+  /** Approvals the caller holds; stale ones never authorize a changed snapshot. */
+  readonly approvals?: readonly AccessGrant[];
 }
 
 /** Options for {@link editRollbackCommand}. */
@@ -158,6 +164,32 @@ export async function editTransactionCommand(options: EditTransactionCommandOpti
     transaction = rebased.transaction;
   }
   const receipt = options.receipt ?? defaultReceiptPath(options.transaction);
+  if (options.access !== undefined) {
+    for (const patched of transaction.patches) {
+      const scope = {
+        pages: transaction.scope.pages,
+        blocks: transaction.scope.blocks,
+        collections: transaction.scope.records,
+        files: transaction.scope.files.length > 0 ? transaction.scope.files : [patched.file],
+      };
+      const checked = await checkWriteTarget({
+        policy: options.access,
+        siteRoot: options.siteRoot,
+        path: patched.file,
+        scope,
+        task: transaction.task.id,
+        snapshot: transaction.snapshot.id ?? "unversioned",
+        ...(options.approvals === undefined ? {} : { approvals: options.approvals }),
+      });
+      if (!checked.decision.allowed) {
+        throw new EditTransactionError(
+          "edit.transaction-scope",
+          `${patched.file}: the access policy denied the write (${checked.decision.rule}): ${checked.decision.reason}`,
+          false,
+        );
+      }
+    }
+  }
   return applyEditTransaction({
     siteRoot: options.siteRoot,
     transaction,

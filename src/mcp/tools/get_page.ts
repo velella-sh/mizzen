@@ -22,8 +22,10 @@ export const tool: Tool<Input> = {
   },
   async handler(input, { site }) {
     const info = site.find(input.page);
-    if (info === undefined) {
-      return refusal("unknown-page", `No page matches "${input.page}".`, { closest: closestPages(site, input.page) });
+    if (info === undefined || !site.readable(info.page)) {
+      return refusal("unknown-page", `No page matches "${input.page}".`, {
+        closest: site.access === undefined ? closestPages(site, input.page) : [],
+      });
     }
     const { page } = info;
     const headings = page.headings.map((h) => ({ id: h.id, level: h.depth, text: h.text }));

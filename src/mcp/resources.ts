@@ -30,7 +30,7 @@ async function listed(site: SiteState): Promise<readonly Resource[]> {
     if (exists) out.push({ uri: `${PREFIX}${name}`, name, mimeType: name.endsWith(".md") ? "text/markdown" : "text/plain" });
   }
   const base = site.site.config.base;
-  for (const { page } of site.pages) {
+  for (const { page } of site.readablePages) {
     const twin = twinUrl(page.url);
     if (twin === undefined) continue;
     const path = underBase(twin, base).replace(/^\//, "");

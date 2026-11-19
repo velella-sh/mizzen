@@ -41,7 +41,11 @@ export const tool: Tool<Input> = {
   async handler(input, { site }) {
     const graphInput = await collectGraphInput({ root: site.root, site: site.site });
     const { graph } = buildGraph(graphInput);
-    const result = queryGraph(graph, { ...input, snapshot: input.snapshot ?? graph.snapshot.id } as GraphQueryOptions);
+    const result = queryGraph(graph, {
+      ...input,
+      snapshot: input.snapshot ?? graph.snapshot.id,
+      ...(site.access === undefined ? {} : { access: site.access }),
+    } as GraphQueryOptions);
     return json(result as unknown as Record<string, unknown>);
   },
 };

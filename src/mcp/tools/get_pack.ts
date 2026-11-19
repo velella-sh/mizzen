@@ -52,7 +52,7 @@ export const tool: Tool<Input> = {
       site.site,
       parsed.request,
       { renderPage: () => Promise.reject(new Error("pack builds no pages")), report: (d) => void diagnostics.push(d) },
-      { warnings: site.diagnostics },
+      { warnings: site.diagnostics, ...(site.access === undefined ? {} : { access: site.access }) },
     );
     if (compiled === undefined) {
       return refusal("empty-pack", "The request selected no context.", { diagnostics });

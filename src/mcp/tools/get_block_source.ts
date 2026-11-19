@@ -5,7 +5,7 @@
  * matched id beside every span.
  */
 import { hashSource, sliceBySpan, type PatchSpan } from "../../edits/patch.ts";
-import { bodyBlocks, closestPages } from "../pages.ts";
+import { bodyBlocks } from "../pages.ts";
 import { json, refusal, type Tool, type ToolResult } from "../tool.ts";
 import type { PageInfo, SiteState } from "../site.ts";
 
@@ -79,7 +79,7 @@ export const tool: Tool<Input> = {
   },
   async handler(input, { site }): Promise<ToolResult> {
     const info = site.find(input.page);
-    if (info === undefined) return refusal("unknown-page", `No page matches "${input.page}".`, { closest: closestPages(site, input.page) });
+    if (info === undefined || !site.readable(info.page)) return refusal("unknown-page", `No page matches "${input.page}".`, { closest: [] });
     if ([input.heading, input.text, input.block].filter((value) => value !== undefined).length !== 1) {
       return refusal("bad-request", "Give exactly one of `heading`, `text`, or `block`.");
     }

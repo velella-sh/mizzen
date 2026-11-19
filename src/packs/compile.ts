@@ -34,6 +34,7 @@ import { posix } from "node:path";
 import type { ContextRequest } from "../contracts/context-request.ts";
 import type { Page, Site } from "../contracts/content.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
+import type { AccessPolicy } from "../contracts/permissions.ts";
 import type { OutputContext } from "../contracts/output.ts";
 import type { SourcePos } from "../contracts/source.ts";
 import { discoverVersions } from "../content/versions.ts";
@@ -53,6 +54,7 @@ import {
 } from "../outputs/context-pack.ts";
 import { trustReport, type TrustEntry, type TrustEntryFactor, type TrustPageEntry } from "../outputs/trust.ts";
 import { blockIdOf, formatSpan } from "../source/spans.ts";
+import { readablePage } from "../permissions/read.ts";
 import {
   rankPages,
   type RankTrustEvidence,
@@ -97,6 +99,8 @@ export interface CompileOptions {
    * raises no page and is published nowhere.
    */
   readonly trustBuild?: string;
+  /** An access policy; a page it denies is never a candidate and never appears in an omission. */
+  readonly access?: AccessPolicy;
 }
 
 /** One page's entry in a trust snapshot: the published entry and the rank projection measured from it. */
@@ -642,7 +646,9 @@ export async function compilePack(
   ctx: OutputContext,
   options: CompileOptions = {},
 ): Promise<CompiledPack | undefined> {
-  const docs = site.pages.filter((page) => page.kind === "doc");
+  const access = options.access;
+  const allDocs = site.pages.filter((page) => page.kind === "doc");
+  const docs = access === undefined ? allDocs : allDocs.filter((page) => readablePage(access, page));
   const versions = pageVersionsOf(site);
   const base = site.config.base;
   const topic = oneLine(request.task.goal) || "request";
@@ -664,7 +670,26 @@ export async function compilePack(
         ? []
         : docs.filter((page) => page.headings.some((heading) => heading.text === ref.trim()));
     const named = direct.length > 0 ? direct : byHeading;
-    if (named.length === 0) continue;
+    if (named.length === 0) {
+      const denied =
+        access === undefined
+          ? []
+          : allDocs.filter(
+              (page) =>
+                !docs.includes(page) &&
+                (namesPage(page, ref, base) || page.headings.some((heading) => heading.text === ref.trim())),
+            );
+      if (denied.length > 0) {
+        ctx.report({
+          id: "context-pack.evidence-denied",
+          severity: "error",
+          message: `The access policy does not allow required evidence \`${ref}\`.`,
+          help: "Ask for an approval or remove the ref; the policy does not allow this evidence.",
+        });
+        return undefined;
+      }
+      continue;
+    }
     const blocked = named.filter((page) => !allowed.has(page));
     for (const page of blocked) {
       ctx.report({

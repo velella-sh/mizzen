@@ -68,7 +68,14 @@ export async function runEdit(site: SiteState, input: EditInput, apply: boolean)
     await mkdir(folder, { recursive: true });
     const patch = join(folder, `${input.beforeHash.slice(0, 12)}-${sha(patchOf(input))}.patch.json`);
     await writeFile(patch, patchOf(input), "utf8");
-    const result = await editApply({ siteRoot: site.root, patch, ...(apply ? {} : { dryRun: true }) });
+    const page = site.pages.find((info) => info.source === input.file)?.page.url;
+    const result = await editApply({
+      siteRoot: site.root,
+      patch,
+      ...(apply ? {} : { dryRun: true }),
+      ...(site.access === undefined ? {} : { access: site.access }),
+      ...(page === undefined ? {} : { page }),
+    });
     if (!apply) {
       return json({
         ok: true,
