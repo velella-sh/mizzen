@@ -176,7 +176,7 @@ test("register reads the same contract from a file and stdin and writes one dete
     assert.equal(first.created, true);
     assert.equal(first.state, "draft");
     assert.deepEqual(first.writes, [`.mizzen/agent/tasks/${first.taskId}.json`]);
-    assert.equal(existsSync(join(root, first.writes[0])), true);
+    assert.equal(existsSync(join(root, first.writes[0]!)), true);
 
     const fromStdin = capture(JSON.stringify(contract()));
     assert.equal(await main(["agent", "task", "register", fileRoot, "--stdin"], fromStdin.io), 0, fromStdin.errors.join("\n"));

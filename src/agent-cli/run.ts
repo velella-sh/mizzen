@@ -329,7 +329,7 @@ export async function runCommand(options: RunOptions, io: AgentIo): Promise<numb
     recorded.taskId === task.id &&
     recorded.taskState === task.state
   ) {
-    const document = { ...recorded.result, reused: true };
+    const document: Record<string, unknown> = { ...recorded.result, reused: true };
     const recordedEvents = (recorded.result.progress as { readonly events?: readonly AgentEvent[] } | undefined)?.events ?? [];
     return emitRun(io, options.format, document, recordedEvents, document.ok === true ? 0 : 1, `mizzen: task ${task.id} already ran; returning the recorded result.`);
   }
