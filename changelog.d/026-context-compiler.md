@@ -1,0 +1,4 @@
+- Add task-aware context compilation: a task contract becomes a ranked request, the knowledge graph selects entry points and closes their dependencies, and sourced fragments carry file, span, block or record id, and build snapshot.
+- Add fixed-budget packing with stable priority, whole-fragment admission, exact fragment/template/safety accounting, and omitted inputs explained as budget, permission, scope, or irrelevance.
+- Add per-criterion answerability with exact evidence shortages and concrete scope, approval, or evidence requests, plus deterministic pack diff, refill, cache refresh, and targeted invalidation.
+- Add `mizzen pack --task <file>`, which reads a task contract and `blocks.lock.json` and prints the compiled Markdown or JSON; private collection fields and denied principals never reach an entry, fragment, omission, or lineage report.
