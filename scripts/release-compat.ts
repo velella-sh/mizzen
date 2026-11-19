@@ -10,7 +10,7 @@
  * Usage:
  *   node scripts/release-compat.ts --candidate <tarball> [--baseline @velella/mizzen@0.2.4]
  *     [--theme @velella/lateen@0.2.2] [--report compat-report.json] [--skip-theme]
- *   node scripts/release-compat.ts --write-baseline fixtures/compat-0.2.2/baseline.json
+ *   node scripts/release-compat.ts --write-baseline fixtures/compat-0.2.4/baseline.json
  *
  * `--write-baseline` only builds the baseline package and records its snapshot. Do not regenerate
  * the committed baseline to make the test pass: review the difference and record it in the fixture
@@ -24,7 +24,7 @@ import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
-const DEFAULT_FIXTURE = join(ROOT, "fixtures/compat-0.2.2");
+const DEFAULT_FIXTURE = join(ROOT, "fixtures/compat-0.2.4");
 const TEST_THEME = join(ROOT, "fixtures/compat-0.2/theme");
 const TEXT = new Set([".html", ".json", ".md", ".txt", ".xml", ".csv", ".ndjson", ".yml", ".js", ".css"]);
 /** Pagefind's wasm is built per platform, so the same source produces different bytes on macOS and Linux. */
