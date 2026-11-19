@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { editApply, EditApplyError } from "../src/cli/edit-apply.ts";
+import { editTransactionCommand } from "../src/cli/edit-transaction.ts";
+import { EditTransactionError } from "../src/edits/edit-transaction.ts";
 import { hashSource } from "../src/edits/patch.ts";
 import type { AccessPolicy } from "../src/contracts/permissions.ts";
 import { parseAccessPolicy } from "../src/permissions/policy.ts";
@@ -152,4 +154,68 @@ test("edit apply allows a mapped page and refuses the same file for another page
     (error: unknown) => error instanceof EditApplyError && error.code === "edit.access-denied",
   );
   assert.equal(readFileSync(join(root, "guide.md"), "utf8"), "old\n");
+});
+
+function transactionFile(root: string, file: string, pages: readonly string[]): string {
+  const beforeHash = hashSource(readFileSync(join(root, file), "utf8"));
+  const path = join(root, `tx-${file.replace(/[^a-z0-9]+/gi, "-")}.json`);
+  writeFileSync(
+    path,
+    JSON.stringify({
+      version: 1,
+      task: { id: "task" },
+      snapshot: { files: { [file]: beforeHash } },
+      scope: { pages },
+      patches: [
+        {
+          file,
+          patches: [
+            {
+              span: { line: 1, column: 1, endLine: 1, endColumn: 3 },
+              expected: "old",
+              replacement: "new",
+              beforeHash,
+            },
+          ],
+        },
+      ],
+      preconditions: { requireBeforeHash: true, validateContent: true },
+    }),
+  );
+  return path;
+}
+
+test("edit transaction writes only a file whose path and page the policy allows", async () => {
+  const root = tree({ "docs/guide.md": "old\n", "other/guide.md": "old\n" });
+  const access = policy({
+    capabilities: { write: true },
+    write: { paths: ["docs/**"], scope: { pages: ["/guide/"] } },
+  });
+
+  const inside = await editTransactionCommand({
+    siteRoot: root,
+    transaction: transactionFile(root, "docs/guide.md", ["/guide/"]),
+    access,
+  });
+  assert.equal(inside.applied, true);
+  assert.equal(readFileSync(join(root, "docs/guide.md"), "utf8"), "new\n");
+
+  await assert.rejects(
+    editTransactionCommand({
+      siteRoot: root,
+      transaction: transactionFile(root, "other/guide.md", ["/guide/"]),
+      access,
+    }),
+    (error: unknown) => error instanceof EditTransactionError && error.code === "edit.transaction-scope",
+  );
+  assert.equal(readFileSync(join(root, "other/guide.md"), "utf8"), "old\n");
+
+  await assert.rejects(
+    editTransactionCommand({
+      siteRoot: root,
+      transaction: transactionFile(root, "docs/guide.md", ["/private/"]),
+      access,
+    }),
+    (error: unknown) => error instanceof EditTransactionError && error.code === "edit.transaction-scope",
+  );
 });

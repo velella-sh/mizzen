@@ -82,6 +82,10 @@ Commands:
   doctor [dir]              Check the config, content, output paths, runtime, and toolchain
   edit apply <patch.json> [dir]
                             Apply a span patch to its source file and record a proof
+  edit transaction <file.json> [dir]
+                            Apply a versioned multi-file edit atomically (--dry-run, --rebase, --approve)
+  edit rollback <receipt.json> [dir]
+                            Restore only the files a transaction receipt names
   edit verify <proof.json>  Check an edit proof against the site and rerun the doctor
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
@@ -97,6 +101,11 @@ Commands:
   reproduce <report> [dir]  Preflight a recorded build, rebuild it, and compare the reports (--check: preflight only)
   stale [dir]               List pages whose covered files changed since review (--json, --fail, --changed <files…>, --git-diff <base>)
   stale mark <page…>        Record a page's covered files as reviewed (--all for every page)
+  trace show <trace.json>   Print a recorded agent trace: task, snapshot, stages, and evidence
+  trace search <trace.json>  Filter events by --stage, --file, --task, or --status
+  trace replay <trace.json>  Check the recorded order, input hashes, and results; writes nothing
+  trace export <trace.json>  Write or print only the authorized fields (--out <dir>)
+  trace handoff <trace.json>  Print the state, changes, decisions, and remaining work
   urls check [dir]          Compare record page URLs with urls.lock.json
   verify [dir]              Check a built folder against the hash in its manifest
   versions snapshot <vN> [dir]
@@ -190,6 +199,8 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen dev [dir] --port <number> --host <host> --theme <dir>` | Builds `dir`, serves the output with pretty URLs, watches the source and theme, rebuilds on change, and reloads the browser over Server-Sent Events. The reload script is added to HTML responses only; the files on disk stay as `build` wrote them. Ctrl-C stops the server. |
 | `mizzen doctor [dir] --format text\|json\|sarif --theme <dir>` | Checks the runtime, the config, the content, the output paths, and the toolchain without writing to the site, and prints the findings in the chosen format. Exits `1` on an error. |
 | `mizzen edit apply <patch.json> [dir] --dry-run --proof <path> --allow-unchecked` | Applies one span patch (the JSON shape of `src/edits/patch.ts`) to the source file its `span.file` names, resolved against `dir` and refused outside it. The patch is applied in memory and the file is replaced through a rename only when it succeeds, so a refused patch leaves it byte-identical. A patch that carries neither `expected` nor `beforeHash` is refused (exit `2`) unless `--allow-unchecked` is given; one that carries only one is still refused. Writes an edit proof (`src/edits/proof.ts`) with the SHA-256 before and after, at `--proof` or `<patch>.proof.json`, and prints its path. `--dry-run` prints a unified diff and writes neither. Exits `1` on a refused patch or path, `2` on a missing or invalid patch. `--format json` prints the same outcome as one report: `status`, `exitCode`, the file, the proof, and any `diagnostics` with their path and span. |
+| `mizzen edit transaction <file.json> [dir] --dry-run --rebase --approve --receipt <path> --proof <path> --audit <path>` | Applies the versioned transaction of `src/contracts/edit-transaction.ts` as one all-or-nothing set: every snapshot and patch hash must match, spans may not overlap, files must stay inside the task's scope and the site's real path, content must parse, and every invariant must hold. Writes the source files, their proof, one audit line per file, and a rollback receipt; a failure at any rename restores the files already replaced. `--dry-run` prints one aggregate diff and every check without writing or reserving anything. `--rebase` relocates patches onto the current bytes; a low-confidence match needs `--approve`. Exits `1` on a conflict or failed check, `2` on a malformed transaction. `--format json` prints the files, checks, conflicts, and record paths. |
+| `mizzen edit rollback <receipt.json> [dir] --format text\|json` | Restores only the files the receipt names, and only when each still holds the receipt's after hash. A file changed by a later independent edit is preserved and reported, never overwritten. Exits `1` on a damaged receipt or failed restore, `2` on a missing receipt. |
 | `mizzen edit verify <proof.json> --site <dir> --doctor` | Re-hashes every file the edit's proof record names, under `--site` (default `.`), and compares each with its after-edit hash. The first mismatch is named, and the command exits `1`; a proof that cannot be read exits `2`. With `--doctor` it also runs `mizzen doctor --format json` and compares the level with the recorded one; without it, the hashes are checked and the command says the doctor check did not run. `--format json` prints the same outcome as one report, with the failed check, its path, and the doctor levels it compared. |
 | `mizzen import <name> <dir> [--out <dir>] [--fail-on-manual] [--allow <ids>]` | Previews a migration: the importer reads `dir` and prints each file's proposed destination and URL, and the items a person still has to do. Writes nothing, or writes the mapped project to the empty `--out` folder outside the source. Exits `1` on an error and `2` on an unknown importer. `--fail-on-manual` also exits `1` while a manual item is unresolved, and `--allow <ids>` records the diagnostic ids (comma-separated) a person has reviewed, so those items no longer fail the gate. |
 | `mizzen inputs export [dir] --collections <a,b> --out <file>` | Writes one deterministic package of the selected collections' sources and their `references` targets, plus the lock entries those sources need; `--out` defaults to `inputs.mizzenpack` in the current folder. Every missing input is reported by id and nothing is written. Environment files, the cache, and files outside the site never enter. See `docs/input-pack.md`. |
@@ -203,6 +214,11 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen network sitemap [dir]` | Writes the organization's sitemap index; `--url <origin>` names the host and `--out <dir>` the folder. |
 | `mizzen stale [dir]` | Lists pages whose covered files changed since they were reviewed. `--json`, `--fail` (exit `1` when any page is stale), `--changed <files…>`, and `--git-diff <base>` choose what counts as changed. |
 | `mizzen stale mark <page…>` | Records a page's covered files as reviewed; `--all` marks every page. |
+| `mizzen trace show <trace.json>` | Prints a recorded trace's task, snapshot, stages, statuses, and evidence references; `--json` prints the summary. |
+| `mizzen trace search <trace.json>` | Filters events by `--stage`, `--file`, `--task`, and `--status`; `--json` prints the events. |
+| `mizzen trace replay <trace.json>` | Checks the recorded order, input hashes, and results against an optional `--snapshot` and `--expect` trace. Writes and calls nothing. |
+| `mizzen trace export <trace.json>` | Writes or prints only the authorized fields, with a file name derived from the trace hashes; `--out <dir>`. |
+| `mizzen trace handoff <trace.json>` | Prints the state, changes, decisions, and remaining work for the next agent. |
 | `mizzen urls check [dir]` | Compares every record page's URL with `urls.lock.json` and prints the new, changed, and removed records. Writes nothing; exits `1` on an error. `--format text\|json`. See `site/data/urls.md`. |
 | `mizzen pack [dir] --topic <name> --budget <tokens> --out <file>` | Prints the context pack for one topic in `_data/context-packs.yml` to stdout, or writes it to `--out`. `--budget` overrides the topic's budget; without `--topic` the site's only topic is used, and a site with several lists them and exits `2`. Diagnostics go to stderr, so stdout stays clean Markdown. |
 | `mizzen published-site check --sitemap <url> [--domain <host>] [--redirects <file>]` | Fetches every URL in a sitemap or sitemap index and reports each page's status code, canonical URL, and redirect destination. `--domain` is the only host it may request; `--redirects` names a JSON map of expected sources to final addresses. `--format text\|json`; writes nothing and exits `1` on an error. |
