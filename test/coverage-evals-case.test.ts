@@ -78,12 +78,38 @@ test("a suite with the wrong shape and a case path with a dot segment are refuse
   assert.ok(relative.problems.some((problem) => problem.path === "/cases/0" && problem.code === "eval.relative-path"));
 });
 
-test("a missing case, an invalid case JSON, and an invalid suite JSON are located problems", async () => {
+test("duplicate ids and tool names, a capability mismatch, a permission policy, and an unsafe schema path are refused", () => {
+  const duplicated = parseEvalCase(validCase({
+    criteria: [{ id: "same", statement: "First." }, { id: "same", statement: "Second." }],
+    tools: [{ name: "context", version: "1" }, { name: "context", version: "2" }],
+  }));
+  assert.ok(duplicated.problems.some((problem) => problem.path === "/criteria/1" && problem.code === "eval.duplicate"));
+  assert.ok(duplicated.problems.some((problem) => problem.path === "/tools/1" && problem.code === "eval.duplicate"));
+
+  const mismatch = parseEvalCase(validCase({ capability: "discovery", inputs: { agent: "agents/answer.json" } }));
+  assert.ok(mismatch.problems.some((problem) => problem.path === "/expected/kind" && problem.code === "eval.capability-mismatch"));
+
+  const permission = parseEvalCase(validCase({
+    capability: "permission",
+    inputs: { agent: "agents/permission.json" },
+    expected: { kind: "permission", attempts: [{ capability: "read", target: "/secret/" }] },
+  }));
+  assert.ok(permission.problems.some((problem) => problem.path === "/inputs/policy" && problem.code === "eval.missing-input"));
+
+  const unsafe = parseEvalCase(validCase({ fixture: "../outside" }));
+  assert.ok(unsafe.problems.some((problem) => problem.path === "/fixture" && problem.code === "eval.relative-path"));
+});
+
+test("a missing case, a missing suite, an invalid case JSON, and an invalid suite JSON are located problems", async () => {
   const dir = mkdtempSync(join(tmpdir(), "coverage-evals-"));
   try {
     const missing = await readEvalCase(join(dir, "missing.json"));
     assert.equal(missing.problems[0]?.code, "eval.unreadable");
     assert.ok(missing.problems[0]?.message.includes("cannot read the case"));
+
+    const missingSuite = await readEvalSuite(join(dir, "missing.json"));
+    assert.equal(missingSuite.problems[0]?.code, "eval.unreadable");
+    assert.ok(missingSuite.problems[0]?.message.includes("cannot read the suite"));
 
     const badCase = join(dir, "case.json");
     writeFileSync(badCase, "{");
@@ -95,7 +121,7 @@ test("a missing case, an invalid case JSON, and an invalid suite JSON are locate
     writeFileSync(badSuite, "{");
     const invalidSuite = await readEvalSuite(badSuite);
     assert.equal(invalidSuite.problems[0]?.code, "eval.invalid-json");
-    assert.ok(invalidSuite.problems[0]?.message.includes("cannot read the suite") === false);
+    assert.ok(invalidSuite.problems[0]?.message.includes("the suite is not valid JSON"));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

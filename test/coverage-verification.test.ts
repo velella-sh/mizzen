@@ -102,11 +102,22 @@ test("the public file set must name exactly the transaction's files, before and 
   assert.ok(before.failures.some((failure) => failure.code === "verification.file" && failure.message.includes("before")));
 });
 
+test("no public file evidence is an explicit failure", async () => {
+  const proof = provedProof();
+  const report = await independentlyVerify(proof, { input: { checks: { doctor: OK }, outputHash: OUTPUT } });
+  assert.ok(report.failures.some((failure) => failure.code === "verification.input-missing" && failure.message.includes("file evidence")));
+});
+
 test("every recorded check needs one public result and no extra results", async () => {
   const proof = provedProof();
 
   const missing = await independentlyVerify(proof, { input: publicInput({ checks: {} }) });
   assert.ok(missing.failures.some((failure) => failure.code === "verification.check" && failure.path === "doctor"));
+
+  const mismatch = await independentlyVerify(proof, {
+    input: publicInput({ checks: { doctor: { status: "failed", outputHash: OK.outputHash } } }),
+  });
+  assert.ok(mismatch.failures.some((failure) => failure.code === "verification.check" && failure.path === "doctor"));
 
   const extra = await independentlyVerify(proof, { input: publicInput({ checks: { doctor: OK, ghost: OK } }) });
   assert.ok(extra.failures.some((failure) => failure.code === "verification.check" && failure.path === "ghost"));
@@ -135,6 +146,10 @@ test("the public output hash or files must reproduce the proof's output", async 
   });
   const odd = await independentlyVerify(unexplained, { input: publicInput() });
   assert.ok(odd.failures.some((failure) => failure.code === "verification.output" && failure.message.includes("unexplained")));
+
+  const mismatchedFlag = withHash({ ...proof, outputs: { ...proof.outputs, match: false } });
+  const flag = await independentlyVerify(mismatchedFlag, { input: publicInput() });
+  assert.ok(flag.failures.some((failure) => failure.code === "verification.output" && failure.message.includes("match flag")));
 });
 
 test("a human criterion needs a matching public decision", async () => {
