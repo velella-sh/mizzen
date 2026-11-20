@@ -97,7 +97,8 @@ test("an applied edit records status, links, span, proof, and optional fields", 
     assert.deepEqual(event.links?.span, SPAN);
     assert.equal(full.document().receipts.length, 1);
 
-    const dry = recordEditApply(recorder(), { ...appliedEdit(), dryRun: true, proof: undefined });
+    const { proof: _proof, ...withoutProof } = appliedEdit();
+    const dry = recordEditApply(recorder(), { ...withoutProof, dryRun: true });
     assert.equal(dry.status, "skipped");
     assert.equal(dry.result, null);
     assert.equal(dry.subtask, undefined);
