@@ -48,7 +48,7 @@ test("pack: progress notifications, pinning, and the event-gap refusal", async (
     assert.equal(typeof progress.params.message, "string");
 
     await assert.rejects(
-      runtime.operation(session, started.operationId, 0),
+      runtime.operation(session, started.operationId, 0, 0),
       (error: any) => error.code === "event-gap",
     );
 
