@@ -15,6 +15,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # The released theme, not a moving main: the numbers must be comparable between runs, and the release gate must
+  # measure the theme the engine ships against. Keep in sync with LATEEN_VERSION in release.yml.
+  LATEEN_VERSION: "0.2.3"
+
 jobs:
   bench:
     runs-on: ubuntu-latest
@@ -28,7 +33,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
-          ref: main
+          ref: v${{ env.LATEEN_VERSION }}
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0

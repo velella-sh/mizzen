@@ -19,6 +19,7 @@ interface Job {
 }
 interface Workflow {
   readonly on: Record<string, unknown>;
+  readonly env?: Record<string, string>;
   readonly concurrency?: { readonly group: string; readonly "cancel-in-progress": string };
   readonly jobs: Record<string, Job>;
 }
@@ -107,12 +108,16 @@ test("nightly failures notify without executing code or artifacts from the faile
   assert.match(alert.jobs.notify!.steps![0]!.run!, /gh issue comment/);
 });
 
-test("engine checks test Lateen main, while a release tests its pinned theme, with npm download caching", () => {
+test("every workflow tests the same pinned released theme, with npm download caching", () => {
+  const release = workflow("release").env!.LATEEN_VERSION;
+  for (const name of ["ci", "benchmark"]) {
+    assert.equal(workflow(name).env!.LATEEN_VERSION, release, `${name} measures the theme the release ships against`);
+  }
   for (const name of ["ci", "benchmark", "release"]) {
     for (const job of Object.values(workflow(name).jobs)) {
       for (const step of job.steps ?? []) {
         if (step.with?.repository === "velella-sh/lateen") {
-          assert.equal(step.with.ref, name === "release" ? "v${{ env.LATEEN_VERSION }}" : "main");
+          assert.equal(step.with.ref, "v${{ env.LATEEN_VERSION }}");
         }
         if (step.uses?.startsWith("actions/setup-node@") && step.with?.["registry-url"] === undefined) {
           assert.equal(step.with?.cache, "npm", name);

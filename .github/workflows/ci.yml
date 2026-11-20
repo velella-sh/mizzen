@@ -10,6 +10,12 @@ on:
 permissions:
   contents: read
 
+env:
+  # The released theme, not a moving main: an unrelated theme change must not decide whether an engine change is
+  # green, and a theme that renders differently on two clean builds blocks every pull request. Keep in sync with
+  # LATEEN_VERSION in release.yml and benchmark.yml.
+  LATEEN_VERSION: "0.2.3"
+
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -45,7 +51,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
-          ref: main
+          ref: v${{ env.LATEEN_VERSION }}
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -98,7 +104,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
-          ref: main
+          ref: v${{ env.LATEEN_VERSION }}
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -172,7 +178,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
-          ref: main
+          ref: v${{ env.LATEEN_VERSION }}
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
