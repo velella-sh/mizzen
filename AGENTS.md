@@ -2,7 +2,7 @@
 
 A deterministic docs engine with exact source positions: config, content model, Markdown, navigation, render host, outputs, diagnostics, and CLI. The theme lives in Lateen, not here.
 
-Read `README.md` and `CONTRIBUTING.md` first. Deeper detail is in `docs/`.
+Start with the affected build stage or CLI command and its tests. Consult the [CLI reference](README.md#cli) for command behavior, the relevant guide in `docs/` for feature details, and [CONTRIBUTING.md](CONTRIBUTING.md) for CI and release procedures.
 
 ## Setup
 
