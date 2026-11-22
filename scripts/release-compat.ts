@@ -78,8 +78,37 @@ export const hasDifferences = (diff: ReleaseDiff): boolean =>
   diff.missing.length > 0 || diff.changed.length > 0 || diff.added.length > 0 ||
   diff.canonicals.length > 0 || diff.redirects || diff.sitemap.length > 0;
 
-/** Hashes every public file under `out`, normalizing the engine version stamp in JSON and agent files. */
-export function snapshotOutput(out: string, engine: string): ReleaseSnapshot {
+/**
+ * The head tags 0.2.6 added to every page, so a candidate can be compared with a pre-0.2.6 baseline: Open Graph and
+ * Twitter meta tags, JSON-LD scripts, a canonical link on a page the baseline gave none, and the description meta on
+ * the pages named in `descriptions` (the site-description fallback). Nothing else is removed, so any other head or body
+ * change still fails the comparison. `trust.json`'s `build.id` is a hash of the rendered HTML and moves with it.
+ */
+export interface AddedHead {
+  readonly baseline: ReleaseSnapshot;
+  readonly descriptions: readonly string[];
+  /** The baseline's `trust.json` `build.id`, which the candidate's id (a hash of the rendered HTML) is replaced by. */
+  readonly buildId: string;
+}
+
+const META_TAG = /<meta (?:property="og:|name="twitter:)[^>]*\/?>/g;
+const JSON_LD = /<script type="application\/ld\+json">[\s\S]*?<\/script>/g;
+const CANONICAL = /<link rel="canonical" href="[^"]+"\s*\/?>/g;
+const DESCRIPTION = /<meta name="description" content="[^"]*"\s*\/?>/g;
+
+/** `html` without the tags 0.2.6 added; `keepCanonical` is true for a page whose baseline already had its canonical. */
+export function withoutAddedHead(html: string, keepCanonical: boolean, dropDescription: boolean): string {
+  let text = html.replace(META_TAG, "").replace(JSON_LD, "");
+  if (!keepCanonical) text = text.replace(CANONICAL, "");
+  if (dropDescription) text = text.replace(DESCRIPTION, "");
+  return text;
+}
+
+/**
+ * Hashes every public file under `out`, normalizing the engine version stamp in JSON and agent files. With `added`,
+ * the 0.2.6 head tags are removed first (see {@link AddedHead}); a canonical the baseline had is kept and compared.
+ */
+export function snapshotOutput(out: string, engine: string, added?: AddedHead): ReleaseSnapshot {
   const files: Record<string, string> = {};
   const canonicals: Record<string, string> = {};
   const walk = (dir: string): void => {
@@ -94,12 +123,18 @@ export function snapshotOutput(out: string, engine: string): ReleaseSnapshot {
           // Pagefind ships its wasm per platform; those bytes are not part of the engine's output contract.
           files[key] = "platform";
         } else if (TEXT.has(key.slice(key.lastIndexOf(".")))) {
-          const text = bytes.toString("utf8");
-          files[key] = sha256(text.replace(/"engine":\s*"[^"]*"/g, '"engine": "<version>"'));
+          let text = bytes.toString("utf8");
           if (key.endsWith(".html")) {
-            const canonical = /<link rel="canonical" href="([^"]+)"/.exec(text);
-            if (canonical !== null) canonicals[key] = canonical[1]!;
+            const canonical = [...text.matchAll(/<link rel="canonical" href="([^"]+)"/g)];
+            if (canonical.length > 1) throw new Error(`${key} has ${canonical.length} canonical links`);
+            if (added !== undefined) text = withoutAddedHead(text, added.baseline.canonicals[key] !== undefined, added.descriptions.includes(key));
+            if (canonical.length === 1 && (added === undefined || added.baseline.canonicals[key] !== undefined)) {
+              canonicals[key] = canonical[0]![1]!;
+            }
+          } else if (added !== undefined && key === "trust.json") {
+            text = text.replace(/("build": \{\s*"algorithm": "sha256",\s*"id": )"[0-9a-f]+"/, `$1"${added.buildId}"`);
           }
+          files[key] = sha256(text.replace(/"engine":\s*"[^"]*"/g, '"engine": "<version>"'));
         } else {
           files[key] = createHash("sha256").update(bytes).digest("hex");
         }
@@ -199,7 +234,8 @@ function main(argv: readonly string[]): void {
   try {
     const baselineProject = project("baseline", [options.baseline]);
     const baselineVersion = installedVersion(baselineProject, "@velella/mizzen");
-    const baseline = snapshotOutput(buildSite(baselineProject), baselineVersion);
+    const baselineOut = buildSite(baselineProject);
+    const baseline = snapshotOutput(baselineOut, baselineVersion);
     const baselineEvidence = {
       package: options.baseline,
       version: baselineVersion,
@@ -218,18 +254,45 @@ function main(argv: readonly string[]): void {
     const candidatePath = options.candidate!;
     const candidateProject = project("candidate", [candidatePath]);
     const candidateVersion = installedVersion(candidateProject, "@velella/mizzen");
-    const candidate = snapshotOutput(buildSite(candidateProject), candidateVersion);
+    // A pre-0.2.6 baseline gets the 0.2.6 head tags removed from the candidate (see AddedHead); a later one is exact.
+    const trustId = /"build":\s*\{\s*"algorithm":\s*"sha256",\s*"id":\s*"([0-9a-f]+)"/.exec(
+      existsSync(join(baselineOut, "trust.json")) ? readFileSync(join(baselineOut, "trust.json"), "utf8") : "",
+    )?.[1];
+    const added: AddedHead | undefined = /^0\.2\.[0-5]$/.test(baselineVersion) && trustId !== undefined
+      ? { baseline, descriptions: ["index.html"], buildId: trustId }
+      : undefined;
+    const candidate = snapshotOutput(buildSite(candidateProject), candidateVersion, added);
     const diff = compareSnapshots(baseline, candidate);
     let themeOk = true;
     let themeEvidence: Record<string, unknown> = {};
     if (!options.skipTheme) {
+      const baselineThemeProject = project("baseline-theme", [options.baseline, options.theme, "preact"]);
+      const baselineThemeOut = buildSite(baselineThemeProject, "@velella/lateen");
       const themeProject = project("theme", [candidatePath, options.theme, "preact"]);
       const themeVersion = installedVersion(themeProject, "@velella/lateen");
       const out = buildSite(themeProject, "@velella/lateen");
       const index = readFileSync(join(out, "index.html"), "utf8");
       const diagram = readFileSync(join(out, "diagrams", "index.html"), "utf8");
       const redirects = readFileSync(join(out, "_redirects"), "utf8");
+      const htmlFiles = (dir: string): string[] => {
+        const found: string[] = [];
+        const walk = (current: string): void => {
+          for (const entry of readdirSync(current, { withFileTypes: true })) {
+            if (entry.isDirectory()) walk(join(current, entry.name));
+            else if (entry.name.endsWith(".html")) found.push(join(current, entry.name));
+          }
+        };
+        walk(dir);
+        return found;
+      };
+      const singleCanonical = htmlFiles(out).every((file) =>
+        (readFileSync(file, "utf8").match(/<link rel="canonical"/g) ?? []).length <= 1
+      );
+      const alternates = (html: string): string[] => html.match(/<link rel="alternate" hreflang="[^>]*>/g) ?? [];
+      const baselineIndex = readFileSync(join(baselineThemeOut, "index.html"), "utf8");
       const checks: [string, boolean][] = [
+        ["at most one canonical link per page", singleCanonical],
+        ["same hreflang set as the baseline", JSON.stringify(alternates(index)) === JSON.stringify(alternates(baselineIndex))],
         ["canonical under base", index.includes('<link rel="canonical" href="https://example.com/catalogue/"/>')],
         ["theme asset under base", /(?:href|src)="\/catalogue\/assets\/theme\//.test(index)],
         ["Mermaid inline SVG", diagram.includes('class="mermaid-diagram"') && !diagram.includes('class="mermaid-fallback"')],

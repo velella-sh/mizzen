@@ -33,9 +33,14 @@ export interface ScriptTag {
   readonly attrs?: Readonly<Record<string, string>>;
 }
 
-/** What goes in `<head>`: set by the engine, added to by the layout. */
+/**
+ * What goes in `<head>`: set by the engine (`headMeta`), added to by the layout. The engine owns the description,
+ * robots, canonical, Open Graph and Twitter tags, `og:image` (only for a page whose social image is written),
+ * JSON-LD, `hreflang`, search, feed and calendar links, and analytics scripts; each appears once, so a layout prints
+ * the lists as they are and adds only its own assets.
+ */
 export interface Head {
-  /** The document title. */
+  /** The document title: the page's own title; the layout adds the site name if it wants one. */
   readonly title: string;
   /** Meta tags. */
   readonly meta: readonly MetaTag[];

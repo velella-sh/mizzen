@@ -18,6 +18,15 @@ The release candidate was built against the published baseline in separate empty
 | Sitemap URLs | 31 | 31 | 0 differences |
 | Theme | `@velella/lateen@0.2.2` baseline | `@velella/lateen@0.2.3` | canonical, base assets, Mermaid SVG, and redirects keep the base |
 
+### Intended difference: page head tags
+
+The build now prints the head that `headMeta` computes: Open Graph and Twitter tags, a canonical link, JSON-LD, and
+`og:image` for a page whose social image is written. The compatibility comparison removes exactly those tags from the
+candidate (and the derived `trust.json` `build.id`) and requires everything else to match, including the single
+canonical link and the `hreflang` set. In the compatibility site that is, on 31 pages, `og:type`, `og:title`,
+`og:url`, `og:site_name`, `twitter:card`, a canonical link, `og:description` on 23 pages, and 38 JSON-LD blocks, plus a
+description on the home page. See `fixtures/compat-0.2.5/README.md`.
+
 Reproduce it with the committed compatibility site:
 
 ```sh

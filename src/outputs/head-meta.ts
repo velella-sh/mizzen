@@ -8,10 +8,14 @@ import { feedLinks } from "../feeds/links.ts";
 import { jsonLdFromMapping } from "../data/json-ld.ts";
 import { isLaterListPage, isNoindex, mainRecordOf, seoConfigOf } from "../data/seo.ts";
 import { SOCIAL_IMAGE_SIZE, socialImagePath } from "../social/image-path.ts";
+import { hreflangLinks } from "./hreflang.ts";
+import { opensearchLink } from "./opensearch.ts";
 
 /**
  * Computes each page's {@link Head} once, so layouts only print it. This unit writes no file: the render step calls
- * {@link headMeta} for every page and hands the result to the layout.
+ * {@link headMeta} for every page, with the trail it computed for the layout, and hands the result to the layout. It is
+ * the only place a page head is made: the title, description, Open Graph and Twitter tags, `robots`, verification
+ * tags, canonical, `hreflang` alternates, OpenSearch link, feed and calendar links, JSON-LD, and analytics scripts.
  *
  * Rules (front matter keys from `schema/front-matter/base.schema.json`):
  * - `canonical_url` from front matter wins over the page's own URL; a canonical needs `config.url`, so without it
@@ -22,7 +26,12 @@ import { SOCIAL_IMAGE_SIZE, socialImagePath } from "../social/image-path.ts";
  *   sets `social.template` gets the generated image of the `social-images` output (see `src/social/image-path.ts`).
  * - A record page's canonical may come from the collection's `seo.canonical` field; front matter still wins. Page two
  *   onwards of a list always has its own URL as canonical, even when the list's front matter names one.
- * - `noindex` (`seo.noindex` field of a record, or `noindex_pagination: true` on a list) writes `robots: noindex`.
+ * - `noindex` (`seo.noindex` field of a record, or `noindex_pagination: true` on a list) writes `robots: noindex`. A
+ *   preview build writes the same tag; the head never has two `robots` tags, however many of these apply.
+ * - The `title` is the page's own title, as the theme prints it; the site title is not appended.
+ * - The generated social image is named only when the build will write it: `images` lists the URLs of the pages whose
+ *   image the `social-images` output draws (see `src/social/plan.ts`), so a turned-off output or a template that does
+ *   not load leaves no `og:image` pointing at a missing file.
  * - `og: false` drops the Open Graph and Twitter card tags and the image in the structured data; the canonical link
  *   and the description stay.
  * - A collection's `seo.jsonLd` mapping adds one object to each of its record pages (see `src/data/json-ld.ts`). A list
@@ -31,9 +40,6 @@ import { SOCIAL_IMAGE_SIZE, socialImagePath } from "../social/image-path.ts";
  * - Structured data: the home page is a `WebSite`, every other page a `TechArticle` (publisher: the site title), and a
  *   page with a breadcrumb trail adds a `BreadcrumbList`.
  */
-
-/** The separator between a page's title and the site title in the document title. */
-const TITLE_SEPARATOR = " | ";
 
 /** Returns the value when it is a string with text in it, else `undefined`. */
 function text(value: unknown): string | undefined {
@@ -118,19 +124,20 @@ export function canonicalOf(site: Site, page: Page): string | undefined {
  * @param site The whole site model, for the site title, base, URL, and description.
  * @param page The page the head is for.
  * @param trail The page's breadcrumb from the navigation, the page itself last; empty when the page is not listed.
+ * @param images The URLs of the pages whose generated social image the build writes. Without it, every page the
+ *   social config covers is taken to have one.
  */
-export function headMeta(site: Site, page: Page, trail: Trail): Head {
+export function headMeta(site: Site, page: Page, trail: Trail, images?: ReadonlySet<string>): Head {
   const home = isHome(site, page);
   const siteTitle = site.config.title;
   const pageName = home ? siteTitle : page.title;
-  const title = home ? siteTitle : `${page.title}${TITLE_SEPARATOR}${siteTitle}`;
 
   const description = text(page.frontMatter.description) ?? (home ? text(site.config.description) : undefined);
   const canonical = canonicalOf(site, page);
   const social = page.frontMatter.og !== false;
 
   const ownImage = text(page.frontMatter.image);
-  const imageValue = ownImage ?? socialImagePath(site, page);
+  const imageValue = ownImage ?? (images === undefined || images.has(page.url) ? socialImagePath(site, page) : undefined);
   const image = social && imageValue !== undefined ? absolute(site, imageValue) : undefined;
 
   const meta: MetaTag[] = [];
@@ -153,6 +160,9 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
   meta.push(...verificationMeta(site, page));
 
   const links: LinkTag[] = canonical === undefined ? [] : [{ rel: "canonical", href: canonical }];
+  links.push(...hreflangLinks(site, page));
+  const search = opensearchLink(site);
+  if (search !== undefined) links.push(search);
   links.push(...feedLinks(site, page));
   links.push(...calendarHeadLinks(site, page));
 
@@ -185,5 +195,5 @@ export function headMeta(site: Site, page: Page, trail: Trail): Head {
     if (own !== undefined) jsonLd.push(own);
   }
 
-  return { title, meta, links, jsonLd, scripts: analyticsScripts(site, page) };
+  return { title: page.title, meta, links, jsonLd, scripts: analyticsScripts(site, page) };
 }

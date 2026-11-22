@@ -129,7 +129,7 @@ test("a page's head can advertise its twin with rel=alternate and type=text/mark
   const head = headMeta(model, p, []);
   const link = twinLink(p);
   assert.deepEqual(link, { rel: "alternate", href: "/evergreen/guide/install/index.md", attrs: { type: "text/markdown" } });
-  assert.deepEqual([...head.links, link], [{ rel: "canonical", href: "https://example.com/evergreen/guide/install/" }, link]);
+  assert.deepEqual([...head.links.filter((l) => l.rel === "canonical"), link], [{ rel: "canonical", href: "https://example.com/evergreen/guide/install/" }, link]);
 });
 
 test("app pages, assets, and doc pages without a twin are advertised with no link", () => {

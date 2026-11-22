@@ -16,6 +16,9 @@ const bin = fileURLToPath(new URL("../bin/mizzen.ts", import.meta.url));
 // The 0.2.2 baseline was built from the published package with this fixed test theme. The engine version stamp in
 // agent.json is normalized; every other byte must match. A reviewed change adds the difference to the fixture README
 // rather than regenerating the baseline.
+/** `trust.json`'s `build.id` in the baseline: a hash of the rendered HTML, so it only moves when the HTML does. */
+const BASELINE_BUILD_ID = "2a206cf5ba876667827a15dc7a2572b9d0a5f7d538e3ca2e9d3da2039a04e536";
+
 test("a 0.2.2 site keeps its pages, canonicals, redirects, JSON, and Markdown on the release build", async () => {
   const baseline = JSON.parse(await readFile(join(compat, "baseline.json"), "utf8")) as ReleaseSnapshot;
   assert.equal(baseline.engine, "0.2.2");
@@ -35,7 +38,8 @@ test("a 0.2.2 site keeps its pages, canonicals, redirects, JSON, and Markdown on
       cwd: parent,
       stdio: "pipe",
     });
-    const candidate = snapshotOutput(out, version);
+    // 0.2.6 added page head tags (see the fixture README); they are removed from the candidate, nothing else is.
+    const candidate = snapshotOutput(out, version, { baseline, descriptions: ["index.html"], buildId: BASELINE_BUILD_ID });
     const diff = compareSnapshots(baseline, candidate);
     assert.equal(
       hasDifferences(diff),

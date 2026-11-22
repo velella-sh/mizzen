@@ -32,7 +32,9 @@ Run the comparison with:
 node --test test/compat-0.2.test.ts
 ```
 
-There are currently **no intended differences**. Do not regenerate the baseline
+There is currently **one intended difference**, for every page: the 0.2.6 head tags. The test removes the Open Graph
+and Twitter meta tags, the JSON-LD scripts, and the canonical link (the 0.2.0 head had none) from the built HTML before
+hashing; the page list and every other byte still match. Do not regenerate the baseline
 to make this test pass. A reviewed change must instead add the affected path, its
 new hash, and a reason to `intendedDifferences` in the test. A removed or moved
 page always fails the page-list comparison.

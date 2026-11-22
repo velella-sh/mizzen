@@ -62,7 +62,8 @@ script and list the families in the slot's `font-family`. Two files of the same 
 ## Files written
 
 One PNG per page under `assets/social/`, named from the page's URL. The head's `og:image`, `og:image:width`, and
-`og:image:height` point at it. A page's own `image` front matter wins over the generated one. Unchanged pages are drawn
+`og:image:height` point at it, only for a page whose image is written: with `outputs: {"social-images": false}`, a missing
+template, or `social: false` on the page, the head names no generated image. A page's own `image` front matter wins over the generated one. Unchanged pages are drawn
 from a cache, so a rebuild draws only what changed.
 
 ## Findings
