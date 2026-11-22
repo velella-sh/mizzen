@@ -14,9 +14,19 @@ Mizzen turns a folder of Markdown into a static docs site. It is a deterministic
 
 ## Install
 
+:::code-tabs{labels='["npm","pnpm","yarn"]' group="package-manager"}
 ```sh
 npm install --save-dev @velella/mizzen @velella/lateen
 ```
+
+```sh
+pnpm add --save-dev @velella/mizzen @velella/lateen
+```
+
+```sh
+yarn add --dev @velella/mizzen @velella/lateen
+```
+:::
 
 Installing both packages in `package.json` pins the versions for the next person.
 
@@ -60,11 +70,25 @@ Every key is in [Configuration](/config/).
 
 ## Check, preview, and build
 
-```sh
-npx mizzen check .
-npx mizzen dev .
-npx mizzen build . --out dist
-```
+:::steps
+1. Check the site before you commit.
+
+   ```sh
+   npx mizzen check .
+   ```
+
+2. Preview it while you write. The browser reloads when a file changes.
+
+   ```sh
+   npx mizzen dev .
+   ```
+
+3. Build the site into `dist`.
+
+   ```sh
+   npx mizzen build . --out dist
+   ```
+:::
 
 `check` builds to a temporary folder and prints only the diagnostics, so it is the command to run before you commit. `dev` serves the site and reloads the browser when a file changes. `build` writes the site to `dist`. A build fails on an unknown config key, an unknown layout, or two files that write the same path.
 

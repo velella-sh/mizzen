@@ -16,7 +16,7 @@ The release candidate was built against the published baseline in separate empty
 | Canonical links | 2 | 2 | 0 differences |
 | `_redirects` | 2 rules | 2 rules | identical |
 | Sitemap URLs | 31 | 31 | 0 differences |
-| Theme | `@velella/lateen@0.2.2` baseline | `@velella/lateen@0.2.3` | canonical, base assets, Mermaid SVG, and redirects keep the base |
+| Theme | `@velella/lateen@0.2.2` baseline | `@velella/lateen@0.2.4` | canonical, base assets, Mermaid SVG, and redirects keep the base |
 
 Reproduce it with the committed compatibility site:
 
@@ -24,7 +24,7 @@ Reproduce it with the committed compatibility site:
 npm pack --pack-destination /tmp/mizzen
 node scripts/release-compat.ts \
   --baseline @velella/mizzen@0.2.5 \
-  --theme @velella/lateen@0.2.3 \
+  --theme @velella/lateen@0.2.4 \
   --candidate /tmp/mizzen/velella-mizzen-0.2.6.tgz \
   --report /tmp/mizzen/compat-report.json
 ```
@@ -203,8 +203,8 @@ allow or deny writes an audit line. Redaction is shared across traces, reports, 
    npx mizzen verify dist
    ```
 
-2. Commit `package.json` and `package-lock.json`. Lateen `0.2.3` is the published theme this release was checked
-   against; Lateen `0.2.2` still works.
+2. Commit `package.json` and `package-lock.json`. Lateen `0.2.4` is the published theme this release was checked
+   against; Lateen `0.2.3` and `0.2.2` still work.
 3. Adopt an agent feature only when you need it. Run `mizzen agent capabilities` to see what the installed package
    reports, then add a task contract, a policy, or a readiness gate to CI.
 4. Keep third-party schemas in sync by reading `schema/` from the installed package. No shipped schema removed a field
@@ -222,5 +222,5 @@ The build, pack, transaction, and replay timings and the budgets a regression mu
   `0.2.6`; they are recorded as library capabilities in `release/scope.json`, not as shipped commands.
 - The live evaluation runner needs a model endpoint and is opt-in; its results are separate from the offline gate and
   are not part of the release acceptance run.
-- The release was verified on the published `@velella/lateen@0.2.3` and on the sibling `../lateen` checkout. A
+- The release was verified on the published `@velella/lateen@0.2.4` and on the sibling `../lateen` checkout. A
   different theme version is outside that measured contract.

@@ -9,7 +9,7 @@
  *
  * Usage:
  *   node scripts/release-compat.ts --candidate <tarball> [--baseline @velella/mizzen@0.2.5]
- *     [--theme @velella/lateen@0.2.3] [--report compat-report.json] [--skip-theme]
+ *     [--theme @velella/lateen@0.2.4] [--report compat-report.json] [--skip-theme]
  *   node scripts/release-compat.ts --write-baseline fixtures/compat-0.2.5/baseline.json
  *
  * `--write-baseline` only builds the baseline package and records its snapshot. Do not regenerate
@@ -165,7 +165,7 @@ function parseArgs(argv: readonly string[]): {
 } {
   const options: { baseline: string; candidate?: string; theme: string; report?: string; writeBaseline?: string; skipTheme: boolean; fixture: string } = {
     baseline: "@velella/mizzen@0.2.5",
-    theme: "@velella/lateen@0.2.3",
+    theme: "@velella/lateen@0.2.4",
     skipTheme: false,
     fixture: DEFAULT_FIXTURE,
   };

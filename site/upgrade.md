@@ -27,8 +27,25 @@ npx mizzen build . --out dist
 npx mizzen verify dist
 ```
 
-Commit `package.json` and `package-lock.json`. Keep your existing theme; Lateen `0.2.3` is the published theme the
-release was checked against, and Lateen `0.2.2` still builds. Node 24 or later is still required.
+Commit `package.json` and `package-lock.json`. Keep your existing theme; Lateen `0.2.4` is the published theme the
+release was checked against, and Lateen `0.2.3` and `0.2.2` still build. Node 24 or later is still required.
+
+## What Lateen 0.2.4 adds
+
+Lateen `0.2.4` redraws the theme with the Sailcloth design and keeps every option and URL. This site uses the new parts
+where they help a reader:
+
+- [Steps](https://velella.sh/lateen/components/steps/) give each step a stable anchor, and the
+  [install page](/install/) uses them for check, preview, and build.
+- [Code tabs](https://velella.sh/lateen/components/code-tabs/) take a `group`, so choosing pnpm in one example
+  switches the other package-manager examples on the page.
+- [Quote](https://velella.sh/lateen/components/quote/) sets a quotation apart with an optional name and source.
+- Tables can carry a caption and description, code blocks have a wrap toggle, and the article ends with a back-to-top
+  link and next-step cards.
+
+:::quote{name="Lateen 0.2.4" source="https://github.com/velella-sh/lateen/releases/tag/v0.2.4"}
+A site that only bumps the package keeps its pages and URLs.
+:::
 
 ## What stays the same
 
@@ -71,7 +88,7 @@ test theme:
 
 - 197 public files compared: 0 missing, 0 changed, 0 added.
 - 2 canonical links, 2 redirect rules, and 31 sitemap URLs: no differences.
-- `@velella/lateen@0.2.3`: canonical links, theme assets, the Mermaid diagram, and redirect destinations keep the
+- `@velella/lateen@0.2.4`: canonical links, theme assets, the Mermaid diagram, and redirect destinations keep the
   configured `base`.
 
 Automated maintenance and multi-agent coordination are library modules and recipe data in this release; they have

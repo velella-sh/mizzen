@@ -14,7 +14,7 @@ env:
   # The released theme, not a moving main: an unrelated theme change must not decide whether an engine change is
   # green, and a theme that renders differently on two clean builds blocks every pull request. Keep in sync with
   # LATEEN_VERSION in release.yml and benchmark.yml.
-  LATEEN_VERSION: "0.2.3"
+  LATEEN_VERSION: "0.2.4"
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.run_id }}

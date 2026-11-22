@@ -18,7 +18,7 @@ permissions:
 env:
   # The released theme, not a moving main: the numbers must be comparable between runs, and the release gate must
   # measure the theme the engine ships against. Keep in sync with LATEEN_VERSION in release.yml.
-  LATEEN_VERSION: "0.2.3"
+  LATEEN_VERSION: "0.2.4"
 
 jobs:
   bench:
