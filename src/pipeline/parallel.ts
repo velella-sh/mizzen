@@ -34,15 +34,9 @@ import type { ThemeOverridesConfig } from "../contracts/config.ts";
 import type { Diagnostic, DiagnosticFix } from "../contracts/diagnostic.ts";
 import type { Pager, Trail } from "../contracts/nav.ts";
 import type { SourcePos } from "../contracts/source.ts";
-import type { Head } from "../contracts/render.ts";
 import { OWN_EXTENSION } from "../runtime/modules.ts";
 import { navState } from "../nav/tree.ts";
-import { hreflangLinks } from "../outputs/hreflang.ts";
-import { opensearchLink } from "../outputs/opensearch.ts";
-import { analyticsScripts } from "../analytics/script.ts";
-import { verificationMeta } from "../outputs/verification.ts";
-import { feedLinks } from "../feeds/links.ts";
-import { canonicalOf } from "../outputs/head-meta.ts";
+import { headMeta } from "../outputs/head-meta.ts";
 import { loadRegistry, type ThemeRegistry } from "../render/registry.ts";
 import { recordPropsWithCalendar } from "../outputs/record-calendar.ts";
 import { renderPage, type ThemeComponent } from "../render/render.ts";
@@ -105,6 +99,8 @@ export interface RenderPoolOptions {
   readonly registry: ThemeRegistry;
   /** Layout used when a page names none in its front matter or in `defaults`. */
   readonly defaultLayout?: string;
+  /** The URLs of the pages whose generated social image the build writes; see {@link renderOnePage}. */
+  readonly images?: ReadonlySet<string> | undefined;
   /** How many worker threads to start; at least 2, since one thread is the case that needs no pool. */
   readonly workers: number;
   /**
@@ -161,29 +157,6 @@ function placeOf(site: Site, page: Page): { trail: Trail; pager: Pager } {
   return { trail: [], pager: {} };
 }
 
-/** The head of a page: its title, description, `hreflang` alternates, the OpenSearch link when the site has a URL, and its collection's feeds. A preview build adds `robots: noindex` and the preview's canonical to every page. */
-function headOf(site: Site, page: Page): Head {
-  const description = page.frontMatter.description;
-  const search = opensearchLink(site);
-  const canonical = site.preview === undefined ? undefined : canonicalOf(site, page);
-  return {
-    title: page.title,
-    meta: [
-      ...(typeof description === "string" ? [{ name: "description", content: description }] : []),
-      ...(site.preview === undefined ? [] : [{ name: "robots", content: "noindex" }]),
-      ...verificationMeta(site, page),
-    ],
-    links: [
-      ...(canonical === undefined ? [] : [{ rel: "canonical", href: canonical }]),
-      ...hreflangLinks(site, page),
-      ...(search === undefined ? [] : [search]),
-      ...feedLinks(site, page),
-    ],
-    jsonLd: [],
-    scripts: analyticsScripts(site, page),
-  };
-}
-
 function escapeText(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -199,12 +172,17 @@ function fallbackHtml(page: Page): string {
  * This is the one layout resolution of the render stage: the in-process pipeline and the workers both call it, so
  * their HTML, diagnostics, and fallbacks are the same. A page with no layout, or an unknown one, is an error and is
  * written as its own body instead.
+ *
+ * The page's head comes from {@link headMeta}, with the breadcrumb computed here for the layout, so it is found once.
+ * `images` lists the pages whose generated social image the build writes; without it, the head names the image of
+ * every page the social config covers.
  */
 export function renderOnePage(
   registry: ThemeRegistry,
   site: Site,
   page: Page,
   defaultLayout: string | undefined,
+  images?: ReadonlySet<string>,
 ): RenderedPage {
   const name = page.frontMatter.layout ?? defaultLayout;
   if (name === undefined) {
@@ -252,7 +230,7 @@ export function renderOnePage(
     chromeIslands: chromeIslandsOf(registry, site.config.base),
     trail,
     pager,
-    head: headOf(site, page),
+    head: headMeta(site, page, trail, images),
     ...(record === undefined ? {} : { record }),
     ...(list === undefined ? {} : { list }),
   });
@@ -313,6 +291,7 @@ type InitMessage = {
   readonly overrides: ThemeOverridesConfig | undefined;
   readonly site: Site;
   readonly defaultLayout: string | undefined;
+  readonly images: ReadonlySet<string> | undefined;
 };
 
 type RenderMessage = {
@@ -420,6 +399,7 @@ interface WorkerState {
   readonly registry: ThemeRegistry;
   readonly site: Site;
   readonly defaultLayout: string | undefined;
+  readonly images: ReadonlySet<string> | undefined;
 }
 
 /** Runs in a worker thread: loads the theme once, then renders the batches it is sent, in order. */
@@ -431,7 +411,7 @@ function startWorker(): void {
     if (message.type === "init") {
       void loadRegistry(message.themeRoot, { siteRoot: message.siteRoot, overrides: message.overrides }).then(
         (registry) => {
-          state = { registry, site: message.site, defaultLayout: message.defaultLayout };
+          state = { registry, site: message.site, defaultLayout: message.defaultLayout, images: message.images };
           port.postMessage({ type: "ready" } satisfies Reply);
         },
         (error: unknown) => port.postMessage({ type: "init-failed", message: messageOf(error) } satisfies Reply),
@@ -446,7 +426,7 @@ function startWorker(): void {
     // A page that throws fails its whole batch; the main thread renders those pages itself, with the diagnostic.
     try {
       const pages = message.pages.map((page) =>
-        renderOnePage(current.registry, current.site, page, current.defaultLayout),
+        renderOnePage(current.registry, current.site, page, current.defaultLayout, current.images),
       );
       port.postMessage({ type: "done", id: message.id, pages } satisfies Reply);
     } catch (error) {
@@ -489,6 +469,7 @@ interface PoolState {
   readonly site: Site;
   readonly registry: ThemeRegistry;
   readonly defaultLayout: string | undefined;
+  readonly images: ReadonlySet<string> | undefined;
   /** The most pages that may be dispatched and unanswered at once. */
   readonly concurrency: number;
   /** How long one worker may take to initialize and how long one batch may take to answer. */
@@ -530,6 +511,7 @@ class WorkerPool implements RenderPool {
         overrides: state.overrides,
         site: state.site,
         defaultLayout: state.defaultLayout,
+        images: state.images,
       } satisfies InitMessage);
       // A theme that never finishes loading would otherwise leave this worker pending forever (#108).
       this.#arm(slot, `the worker thread did not initialize within ${String(state.deadlineMs)} ms`);
@@ -720,7 +702,7 @@ class WorkerPool implements RenderPool {
 
   /** Renders one page with this process's registry, with a diagnostic that names `reason` when a worker failed. */
   #inProcess(page: Page, reason: string | undefined): RenderedPage {
-    const rendered = renderOnePage(this.#state.registry, this.#state.site, page, this.#state.defaultLayout);
+    const rendered = renderOnePage(this.#state.registry, this.#state.site, page, this.#state.defaultLayout, this.#state.images);
     if (reason === undefined) return rendered;
     const diagnostic: Diagnostic = {
       id: "render.worker-failed",
@@ -820,6 +802,7 @@ export function createRenderPool(options: RenderPoolOptions): RenderPool {
     site: options.site,
     registry: options.registry,
     defaultLayout: options.defaultLayout,
+    images: options.images,
     concurrency,
     deadlineMs,
   };

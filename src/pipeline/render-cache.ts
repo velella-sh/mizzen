@@ -20,7 +20,7 @@ import { relationDependenciesOf } from "../data/relations/dependencies.ts";
 import { recordHash } from "./dependency-graph.ts";
 
 /** Bumped when the meaning of an entry changes, so an entry written by an older engine is never trusted. */
-export const RENDER_CACHE_FORMAT = 3;
+export const RENDER_CACHE_FORMAT = 4;
 
 /** The largest entry read or written; a page's HTML is far below this, and a larger file is not ours. */
 export const MAX_RENDER_ENTRY_BYTES = 8 * 1024 * 1024;
@@ -38,6 +38,8 @@ export interface RenderCacheEntry {
  * A page's identity inside one settings key: its whole model, layout included. `evidence` is the trust and drift
  * evidence the theme reads for this page, which can move with git and with quoted source positions; it is per page so
  * a body edit elsewhere does not retire this page. `asOf` is the build's date, given only for a page that reads it.
+ * `image` is "1" when the build writes the page's generated social image, which its head then names; a template that
+ * stops loading, or an output turned off, changes it.
  */
 export function renderPageKey(
   settings: string,
@@ -46,10 +48,11 @@ export function renderPageKey(
   evidence = "",
   records = "",
   asOf?: string,
+  image = "",
 ): string {
   const hash = createHash("sha256");
   hash.update(
-    `mizzen-render-page\0${RENDER_CACHE_FORMAT}\0${settings}\0${defaultLayout ?? ""}\0${evidence}\0${records}\0${asOf ?? ""}\0`,
+    `mizzen-render-page\0${RENDER_CACHE_FORMAT}\0${settings}\0${defaultLayout ?? ""}\0${evidence}\0${records}\0${asOf ?? ""}\0${image}\0`,
   );
   hash.update(JSON.stringify(page));
   return hash.digest("hex");

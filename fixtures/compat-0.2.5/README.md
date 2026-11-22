@@ -20,3 +20,18 @@ which Pagefind builds per platform and are compared by presence only.
 
 Do not regenerate the baseline to make it pass. A reviewed difference gets a reason here and in
 `docs/upgrade-0.2.6.md` first.
+
+## Intended difference: page head tags (0.2.6)
+
+The page head now comes from one function that also writes Open Graph, Twitter, canonical, and JSON-LD tags. The
+comparison removes exactly these from the *candidate* before hashing, and nothing else, so any other head or body
+change still fails:
+
+- every `<meta property="og:…">` and `<meta name="twitter:…">` tag;
+- every `<script type="application/ld+json">` block;
+- the `<link rel="canonical">` on a page whose baseline had none (the baseline's own canonicals are kept and compared);
+- the `<meta name="description">` of `index.html`, which now falls back to the site description;
+- `trust.json`'s `build.id`, a hash of the rendered HTML, which is replaced by the baseline's id.
+
+The same pages, bodies, tag order, hreflang links, redirects, and sitemap still match byte for byte. A candidate page
+with two canonical links throws.

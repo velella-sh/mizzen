@@ -80,7 +80,7 @@ test("a preview build marks every page noindex and points its canonical at the p
     await build({ root: site, out: normal, themeRoot: theme, defaultLayout: "doc", basePath: "/preview/pr-1" });
     const normalHome = readFileSync(join(normal, "index.html"), "utf8");
     assert.equal(normalHome.includes('content="noindex"'), false, "a normal build stays indexable");
-    assert.equal(canonical(normalHome), undefined, "a normal build's head is unchanged");
+    assert.equal(canonical(normalHome), "https://example.com/preview/pr-1/", "a normal build names the page's own URL");
 
     const preview = join(parent, "preview");
     const result = await build({

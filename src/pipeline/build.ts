@@ -30,6 +30,7 @@ import { buildDependencyGraph } from "./dependency-graph.ts";
 import { planInvalidation, formatInvalidationReport, type InvalidationPlan } from "./invalidation.ts";
 import { pruneRenderCache, pruneRenderEntries, readRenderInputs, recordKeyOf, recordShapeOf, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
 import { moduleName } from "../runtime/modules.ts";
+import { plannedSocialImages } from "../social/plan.ts";
 import { createRenderPool, renderOnePage, type RenderPool } from "./parallel.ts";
 import { placeholderDiagnostics } from "./placeholder-diagnostic.ts";
 
@@ -508,6 +509,8 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           ...(preview === undefined ? {} : { preview }),
           ...(Object.keys(site.collections).length === 0 ? {} : { recordShape: recordShapeOf(site) }),
         }).catch(() => undefined);
+  /** The pages whose social image this build writes: their heads name it, so it is part of their render key. */
+  const socialPages = await plannedSocialImages(site, root);
   const recordKey = recordKeyOf(site);
   /** Every page's render key, computed once: the lookup, the write, and the prune of unused entries all read it. */
   const pageKeys = new Map<string, string>();
@@ -521,6 +524,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
         evidenceByUrl.get(page.url) ?? "",
         recordKey(page),
         page.dates === true ? site.config.asOf : undefined,
+        socialPages.has(page.url) ? "1" : "",
       );
       pageKeys.set(page.url, key);
     }
@@ -638,6 +642,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           overrides: loaded.config.theme.overrides,
           site: renderSite,
           registry,
+          images: socialPages,
           ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
           workers,
         })
@@ -691,7 +696,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       const renderStartedAt = performance.now();
       try {
         const rendered =
-          pool === undefined ? renderOnePage(registry, renderSite, page, options.defaultLayout) : await pool.render(page);
+          pool === undefined ? renderOnePage(registry, renderSite, page, options.defaultLayout, socialPages) : await pool.render(page);
         renderedPages += 1;
         reportRendered(rendered, page);
         if (renderStore !== undefined && settingsKey !== undefined) {

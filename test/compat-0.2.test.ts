@@ -6,11 +6,15 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { build } from "../src/pipeline/build.ts";
+import { withoutAddedHead } from "../scripts/release-compat.ts";
 
 const fixture = fileURLToPath(new URL("../fixtures/docs-site", import.meta.url));
 const compat = fileURLToPath(new URL("../fixtures/compat-0.2", import.meta.url));
 
 // Every intentional difference must name the page, its new hash, and the reason; never replace the 0.2.0 hashes.
+/** Pages whose description meta is new in 0.2.6: the site-description fallback on a page with none of its own. */
+const DESCRIPTION_PAGES = new Set<string>([]);
+
 const intendedDifferences: Record<string, { sha256: string; reason: string }> = {
   "features/index.html": {
     sha256: "a8eb846e424876014d0e21c68ed3df8100e47495840ffc5745007726c60f4e2c",
@@ -35,7 +39,9 @@ test("the 0.2.0 docs fixture keeps its page list and every page's HTML bytes", a
       assert.notEqual(intendedDifferences[path]!.sha256, baseline.pages[path], `unnecessary exception: ${path}`);
     }
     for (const path of pages) {
-      const hash = createHash("sha256").update(await readFile(join(out, path))).digest("hex");
+      // 0.2.6 added head tags (see the fixture README); they are removed, nothing else is.
+      const html = withoutAddedHead(await readFile(join(out, path), "utf8"), false, DESCRIPTION_PAGES.has(path));
+      const hash = createHash("sha256").update(html).digest("hex");
       assert.equal(hash, intendedDifferences[path]?.sha256 ?? baseline.pages[path], path);
     }
   } finally {

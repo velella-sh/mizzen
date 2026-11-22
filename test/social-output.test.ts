@@ -24,6 +24,8 @@ function site(pages: Page[], social: SiteConfig["social"] | undefined, extra: Pa
     base: "/docs",
     url: "https://example.com",
     source: ".",
+    lang: "en",
+    languages: [],
     ...(social === undefined ? {} : { social }),
     ...extra,
   } as unknown as SiteConfig;

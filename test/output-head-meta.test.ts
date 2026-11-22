@@ -56,6 +56,11 @@ const trail: Trail = [
   { title: "Install", url: "/guide/install/" },
 ];
 
+/** The canonical links of a head; the others (search, feeds, alternates) have their own tests. */
+function canonicalLinks(head: ReturnType<typeof headMeta>) {
+  return head.links.filter((link) => link.rel === "canonical");
+}
+
 function metaValue(head: ReturnType<typeof headMeta>, key: string): string | undefined {
   return head.meta.find((tag) => tag.name === key)?.content;
 }
@@ -115,9 +120,9 @@ function assertValidJsonLd(head: ReturnType<typeof headMeta>): void {
 test("a doc page gets a title with the site name, a canonical link, Open Graph tags, and a TechArticle", () => {
   const head = headMeta(site(config({ title: "Example", url: "https://example.com" })), page("/guide/install/", { description: "How to install" }), trail);
 
-  assert.equal(head.title, "Install | Example");
+  assert.equal(head.title, "Install", "the page title, as the theme prints it");
   assert.equal(metaValue(head, "description"), "How to install");
-  assert.deepEqual(head.links, [{ rel: "canonical", href: "https://example.com/guide/install/" }]);
+  assert.deepEqual(canonicalLinks(head), [{ rel: "canonical", href: "https://example.com/guide/install/" }]);
   assert.equal(metaValue(head, "og:type"), "article");
   assert.equal(metaValue(head, "og:title"), "Install");
   assert.equal(metaValue(head, "og:description"), "How to install");
@@ -139,11 +144,11 @@ test("the home page is a WebSite with the site description and no breadcrumb", (
   const cfg = config({ title: "Example", description: "A docs site", url: "https://example.com", base: "/example" });
   const head = headMeta(site(cfg), page("/example/", {}, { title: "Home", kind: "doc" }), []);
 
-  assert.equal(head.title, "Example");
+  assert.equal(head.title, "Home");
   assert.equal(metaValue(head, "description"), "A docs site");
   assert.equal(metaValue(head, "og:type"), "website");
   assert.equal(metaValue(head, "og:title"), "Example");
-  assert.deepEqual(head.links, [{ rel: "canonical", href: "https://example.com/example/" }]);
+  assert.deepEqual(canonicalLinks(head), [{ rel: "canonical", href: "https://example.com/example/" }]);
   assert.equal(head.jsonLd.length, 1, "no trail means no BreadcrumbList");
   const web = ldOf(head, "WebSite");
   assert.ok(web);
@@ -160,7 +165,7 @@ test("front matter canonical_url and description win over the computed values", 
     page("/", { canonical_url: "https://original.example/install/", description: "Page summary" }, { url: "/" }),
     [],
   );
-  assert.deepEqual(head.links, [{ rel: "canonical", href: "https://original.example/install/" }]);
+  assert.deepEqual(canonicalLinks(head), [{ rel: "canonical", href: "https://original.example/install/" }]);
   assert.equal(metaValue(head, "description"), "Page summary");
   assert.equal(metaValue(head, "og:url"), "https://original.example/install/");
   assert.equal(ldOf(head, "WebSite")?.description, "Page summary");
@@ -205,7 +210,7 @@ test("og: false drops Open Graph, Twitter, and the structured-data image but kee
     page("/guide/install/", { og: false, image: "/images/install.png", description: "How to install" }),
     trail,
   );
-  assert.deepEqual(head.links, [{ rel: "canonical", href: "https://example.com/guide/install/" }]);
+  assert.deepEqual(canonicalLinks(head), [{ rel: "canonical", href: "https://example.com/guide/install/" }]);
   assert.equal(metaValue(head, "description"), "How to install");
   for (const key of ["og:type", "og:title", "og:description", "og:url", "og:site_name", "og:image", "twitter:card"]) {
     assert.equal(metaValue(head, key), undefined, `${key} is dropped`);

@@ -71,6 +71,8 @@ test theme:
 
 - 197 public files compared: 0 missing, 0 changed, 0 added.
 - 2 canonical links, 2 redirect rules, and 31 sitemap URLs: no differences.
+- The page head gained Open Graph, Twitter, canonical, and JSON-LD tags; the comparison removes exactly those and
+  requires every other byte to match.
 - `@velella/lateen@0.2.3`: canonical links, theme assets, the Mermaid diagram, and redirect destinations keep the
   configured `base`.
 
