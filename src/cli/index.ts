@@ -21,6 +21,7 @@ import { checkQuality } from "../data/quality.ts";
 import { dataChanges } from "../data/changes/write.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
+import { runSiteAttestation } from "./site-attestation.ts";
 import { runStale } from "./stale.ts";
 import { runGraph } from "./graph.ts";
 import { referencesUsage, runReferences } from "./references.ts";
@@ -148,7 +149,11 @@ Commands:
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
   network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
+  published-site attest <bundle> <provenance.json> [--key <private.pem>]
+                            Print a detached site and evidence attestation
   published-site check      Check a published site from --sitemap <url>: status, canonical URL, redirects
+  published-site verify <bundle> <attestation.json> <trust-policy.json>
+                            Verify a local bundle offline and print a JSON report
   readiness [built]         Score a built folder against the public readiness rubric (--report, --badge, --compare)
   references check <file|-> [dir]
                             Resolve a JSON array of stored block references: resolved, removed, or unknown
@@ -2016,6 +2021,10 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
 
   if (options.command === "published-site") {
     try {
+      const subcommand = options.args[0];
+      if (subcommand === "attest" || subcommand === "verify") {
+        return await runSiteAttestation(options.args, { log, error });
+      }
       return await runPublishedSite(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);

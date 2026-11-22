@@ -56,7 +56,11 @@ Commands:
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
   network sitemap [dir]     Write the organization's sitemap index (--url <origin>, --out <dir>)
   pack [dir]                Print one context pack for a topic or an ad-hoc request, to stdout or --out
+  published-site attest <bundle> <provenance.json> [--key <private.pem>]
+                            Print a detached site and evidence attestation
   published-site check      Check a published site from --sitemap <url>: status, canonical URL, redirects
+  published-site verify <bundle> <attestation.json> <trust-policy.json>
+                            Verify a local bundle offline and print a JSON report
   readiness [built]         Score a built folder against the public readiness rubric (--report, --badge, --compare)
   references check <file|-> [dir]
                             Resolve a JSON array of stored block references: resolved, removed, or unknown
@@ -201,6 +205,8 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen trace handoff <trace.json>` | Prints the state, changes, decisions, and remaining work for the next agent. |
 | `mizzen urls check [dir]` | Compares every record page's URL with `urls.lock.json` and prints the new, changed, and removed records. Writes nothing; exits `1` on an error. `--format text\|json`. See [Stable URLs](/data/urls/). |
 | `mizzen pack [dir] --topic <name> --budget <tokens> --out <file>` | Prints the context pack for one topic in `_data/context-packs.yml` to stdout, or writes it to `--out`. `--budget` overrides the topic's budget; without `--topic` the site's only topic is used, and a site with several lists them and exits `2`. Diagnostics go to stderr, so stdout stays clean Markdown. |
+| `mizzen published-site attest <bundle> <provenance.json> [--key <private.pem>]` | Prints a detached attestation with build provenance and an allowlisted evidence manifest. |
+| `mizzen published-site verify <bundle> <attestation.json> <trust-policy.json>` | Verifies the site bundle and its evidence offline against a local trust policy and prints a JSON report. Exits `1` if verification fails. |
 | `mizzen published-site check --sitemap <url> [--domain <host>] [--redirects <file>]` | Fetches every URL in a sitemap or sitemap index and reports each page's status code, canonical URL, and redirect destination. `--domain` is the only host it may request; `--redirects` names a JSON map of expected sources to final addresses. `--format text\|json`; writes nothing and exits `1` on an error. |
 | `mizzen readiness [built] --report <file> --badge <file> --compare <file> --min-overall <n> --min <section>=<n> --fail-on-unknown` | Scores a built folder against the [public readiness rubric](https://github.com/velella-sh/mizzen/blob/main/docs/readiness.md): structure, navigation, context, examples, verification, permissions, and maintenance, with weights, unknowns, located findings, and remediation. Writes a versioned JSON report whose digest verifies, an SVG or Markdown badge, and an optional comparison with an earlier report. Exits `1` on a failed critical rule, a failed threshold, or a failing report. |
 | `mizzen graph [dir] [--from <id>] [--to <id>]` | Answers one query against the knowledge graph: a node's neighbors and the shortest path to another node, with the same JSON and node ids as the `query_graph` MCP tool. `--depth`, `--nodes`, and `--max-output` bound the answer; a bounded answer is `partial` and carries `--cursor`. `--allow` names the audiences the caller may read. |

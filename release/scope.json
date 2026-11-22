@@ -1803,6 +1803,71 @@
       "status": "shipped",
       "case": "transform-lineage",
       "release": "0.2.5"
+    },
+    {
+      "id": "define-a-site-output-attestation",
+      "title": "Define a site output attestation",
+      "status": "shipped",
+      "test": "test/site-attestation.test.ts",
+      "epic": 1323,
+      "issue": 1417
+    },
+    {
+      "id": "sign-through-trust-adapters",
+      "title": "Sign through trust adapters",
+      "status": "shipped",
+      "test": "test/site-attestation.test.ts",
+      "epic": 1323,
+      "issue": 1418
+    },
+    {
+      "id": "bind-all-output-files-to-their-hashes",
+      "title": "Bind all output files to their hashes",
+      "status": "shipped",
+      "test": "test/site-attestation.test.ts",
+      "epic": 1323,
+      "issue": 1419
+    },
+    {
+      "id": "publish-an-evidence-manifest",
+      "title": "Publish an evidence manifest",
+      "status": "shipped",
+      "test": "test/site-attestation.test.ts",
+      "epic": 1323,
+      "issue": 1420
+    },
+    {
+      "id": "verify-a-site-bundle-offline",
+      "title": "Verify a site bundle offline",
+      "status": "shipped",
+      "test": "test/site-attestation.test.ts",
+      "epic": 1323,
+      "issue": 1421
+    },
+    {
+      "id": "detect-tampering-and-detached-evidence",
+      "title": "Detect tampering and detached evidence",
+      "status": "shipped",
+      "test": "test/site-attestation.test.ts",
+      "epic": 1323,
+      "issue": 1422
+    },
+    {
+      "id": "support-consumer-trust-policies",
+      "title": "Support consumer trust policies",
+      "status": "shipped",
+      "test": "test/site-attestation.test.ts",
+      "epic": 1323,
+      "issue": 1423
+    },
+    {
+      "id": "test-publishing-and-tamper-detection-with-the-package",
+      "title": "Test publishing and tamper detection with the package",
+      "status": "shipped",
+      "test": "test/site-attestation.test.ts",
+      "epic": 1323,
+      "issue": 1424,
+      "case": "verifiable-publishing"
     }
   ]
 }

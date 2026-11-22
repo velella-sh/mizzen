@@ -5,7 +5,7 @@
  * comes from npm.
  */
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { dirname, join, relative } from "node:path";
@@ -1136,6 +1136,53 @@ const readiness: AcceptanceCase = {
   },
 };
 
+const verifiablePublishing: AcceptanceCase = {
+  id: "verifiable-publishing",
+  title: "An installed Mizzen signs public output, verifies it locally, and detects tampering",
+  run(ctx) {
+    const site = join(ctx.dir, "site");
+    tree(site, {
+      "mizzen.yml": "title: Publishing acceptance\n",
+      "guide/publishing.md": "---\ntitle: Publishing acceptance\n---\n\n# Publishing acceptance\n",
+    });
+    const themeRoot = theme(ctx.dir);
+    tree(themeRoot, { "package.json": '{"name":"acceptance","version":"1.0.0","type":"module"}\n' });
+    const bundle = build(ctx, site, themeRoot, ["--diagnose"]);
+    const page = "guide/publishing/index.html";
+    check(read(bundle, page).includes("Publishing acceptance"), "the fixture page was not built");
+    const evidence = "evidence/check.json";
+    tree(bundle, { [evidence]: '{"result":"pass"}\n' });
+    const { privateKey, publicKey } = generateKeyPairSync("ed25519");
+    const { tools } = JSON.parse(read(site, ".mizzen/build-report.json"));
+    tree(ctx.dir, {
+      "key.pem": privateKey.export({ type: "pkcs8", format: "pem" }),
+      "provenance.json": JSON.stringify({
+        site: "publishing-acceptance", sourceCommit: "a".repeat(40), snapshot: "fixture-v1",
+        engine: tools.mizzen, theme: tools.theme, builtOn: "2026-11-21",
+        publicEvidence: { snapshot: "fixture-v1", paths: [evidence] },
+      }),
+      "policy.json": JSON.stringify({
+        site: "publishing-acceptance", snapshot: "fixture-v1", formats: [1], minimumEvidence: 1,
+        unsigned: "reject", keys: [publicKey.export({ type: "spki", format: "pem" })],
+      }),
+    });
+    const attestation = output(ctx.mizzen(["published-site", "attest", bundle, "provenance.json", "--key", "key.pem"], ctx.dir), "sign fixture");
+    check(!attestation.includes(ctx.dir) && !attestation.includes("PRIVATE KEY"), "the attestation leaked a path or credential");
+    tree(ctx.dir, { "attestation.json": attestation });
+    const verify = () => ctx.mizzen(["published-site", "verify", bundle, "attestation.json", "policy.json"], ctx.dir);
+    const accepted = verify();
+    ok(accepted, "verify the signed bundle");
+    check(JSON.parse(accepted.stdout).ok === true, "verification must return JSON success");
+
+    tree(bundle, { [page]: "<p>Tampered</p>\n", [evidence]: '{"result":"fail"}\n' });
+    const rejected = verify();
+    check(rejected.status === 1, "tampering must fail verification");
+    const findings = JSON.parse(rejected.stdout).issues as readonly { code: string; path: string }[];
+    check(findings.some(({ code, path }) => code === "file-changed" && path === page), "the changed page was not located");
+    check(findings.some(({ code, path }) => code === "evidence-changed" && path === evidence), "the swapped evidence was not located");
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   blog,
@@ -1168,4 +1215,5 @@ export const CASES: readonly AcceptanceCase[] = [
   permissions,
   evals,
   readiness,
+  verifiablePublishing,
 ];

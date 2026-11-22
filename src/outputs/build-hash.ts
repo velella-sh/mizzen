@@ -136,6 +136,7 @@ async function collect(
   dir: string,
   files: string[],
   unsupported: UnsupportedEntryError[],
+  allFiles: boolean,
 ): Promise<void> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = relative(root, join(dir, entry.name)).split(sep).join("/");
@@ -155,10 +156,10 @@ async function collect(
       continue;
     }
     if (entry.isDirectory()) {
-      if (!isPlatformMetadata(path)) await collect(root, join(dir, entry.name), files, unsupported);
+      if (allFiles || !isPlatformMetadata(path)) await collect(root, join(dir, entry.name), files, unsupported, allFiles);
       continue;
     }
-    if (path === MANIFEST_PATH || path === PREVIEW_DIFF_PATH || isPlatformMetadata(path)) continue;
+    if (!allFiles && (path === MANIFEST_PATH || path === PREVIEW_DIFF_PATH || isPlatformMetadata(path))) continue;
     if (!isIdentityPath(path)) {
       unsupported.push(new UnsupportedEntryError(path, "path"));
       continue;
@@ -170,15 +171,19 @@ async function collect(
 /**
  * Hashes every regular file under `root` in path order, leaving out the manifest that records the result and the
  * metadata files an operating system adds. `verify` uses this on a built folder, and {@link recordBuildHash} uses it
- * on the staging folder before the build is swapped in.
+ * on the staging folder before the build is swapped in. Detached attestations opt in to hashing every file.
  *
  * A symlink, socket, FIFO, device, or other special entry is an {@link UnsupportedEntryError}: including it would
  * read outside the folder or describe something that is not content, and ignoring it would hide a change.
  */
-export async function fingerprint(root: string, asOf?: string): Promise<BuildRecord> {
+export async function fingerprint(
+  root: string,
+  asOf?: string,
+  options: { readonly allFiles?: boolean } = {},
+): Promise<BuildRecord> {
   const found: string[] = [];
   const unsupported: UnsupportedEntryError[] = [];
-  await collect(root, root, found, unsupported);
+  await collect(root, root, found, unsupported, options.allFiles === true);
   if (unsupported.length > 0) {
     unsupported.sort((a, b) => byCodePoint(a.path, b.path));
     throw unsupported[0];
