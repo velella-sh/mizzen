@@ -322,6 +322,7 @@ export function renderPage(options: RenderOptions): RenderResult {
     }
   };
   collect();
+  const originalIslands = new Set(islands.map(({ src }) => src));
   const resolvedPage: Page = { ...page, html: resolved.html };
   const skipFontPreloads = new Set<string>();
   const hints = {
@@ -343,7 +344,12 @@ export function renderPage(options: RenderOptions): RenderResult {
     ...(options.list === undefined ? {} : { list: options.list }),
   });
   const body = stringOf(node);
+  // Existing layouts may append client modules to the list they receive.
+  const layoutIslands = islands.filter(({ src }) => !originalIslands.has(src));
   collect();
+  for (const island of layoutIslands) {
+    if (!islands.some(({ src }) => src === island.src)) islands.push(island);
+  }
   return {
     html: withDocument(body, page),
     islands,
