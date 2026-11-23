@@ -29,6 +29,12 @@ function escapeHtml(text: string): string {
   return text.replace(/[&<>]/g, (char) => (char === "&" ? "&amp;" : char === "<" ? "&lt;" : "&gt;"));
 }
 
+/** A one-line description for the head: the first paragraph with its whitespace collapsed, at most 200 characters. */
+function summaryOf(text: string): string {
+  const flat = (text.trim().split(/\n\s*\n/)[0] ?? "").replace(/\s+/g, " ").trim();
+  return flat.length <= 200 ? flat : `${flat.slice(0, 199).trimEnd()}…`;
+}
+
 /** One operation as a doc page; the theme reads the operation model from the front matter. */
 function operationPage(page: ApiReferencePage, config: SiteConfig, file: string): Page {
   return {
@@ -36,6 +42,7 @@ function operationPage(page: ApiReferencePage, config: SiteConfig, file: string)
     source: sourceOf(file),
     frontMatter: {
       title: page.title,
+      description: summaryOf(page.description ?? "") || `${page.operation.method.toUpperCase()} ${page.operation.path}`,
       layout: "api-reference",
       apiReference: { kind: "operation", operation: page.operation },
     },
@@ -89,6 +96,8 @@ export async function buildApiReferencePagesFor(root: string, config: SiteConfig
     source: sourceOf(file),
     frontMatter: {
       title: document.title,
+      description:
+        summaryOf(document.description ?? "") || `${document.title} API reference, version ${document.version}, with ${built.pages.length} operations.`,
       layout: "api-reference-index",
       apiReference: {
         kind: "index",

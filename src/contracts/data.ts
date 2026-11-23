@@ -38,6 +38,19 @@ export interface RecordPos {
   readonly endLine: number;
   /** 1-based column of the record's last character. */
   readonly endColumn: number;
+  /**
+   * The source the collection's config names, as written: a path, an `https:` URL, a package address, or the path of a
+   * database or NDJSON file. For a record read from a pinned download or a locked extraction (an API or URL, SQLite, or
+   * NDJSON source), `file` is the stored copy under `.mizzen/data/` and this names where the data came from. Absent on
+   * a position that is not a collection record's, such as a template's.
+   */
+  readonly source?: string;
+  /**
+   * True only when `file` is a real local file inside the site that the author can open and edit, and the lines and
+   * columns above point into it. False for a stored copy, a package file, and a locked extraction, whose lines count
+   * the stored result (one record per line, in the extraction's order), not a line of the source.
+   */
+  readonly editable?: boolean;
 }
 
 /** Why one joined output field holds the value it holds, and which inputs could have supplied it. */

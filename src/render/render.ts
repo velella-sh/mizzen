@@ -3,7 +3,7 @@ import { render as renderToString } from "preact-render-to-string";
 import type { Page, Site } from "../contracts/content.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
 import type { Pager, Trail } from "../contracts/nav.ts";
-import type { Component, Head, Island, Layout } from "../contracts/render.ts";
+import type { Component, Head, Island, Layout, RenderNode } from "../contracts/render.ts";
 import type { ListProps, RecordProps } from "../contracts/data.ts";
 import type { SourcePos } from "../contracts/source.ts";
 import { parseSpan } from "../source/spans.ts";
@@ -133,12 +133,24 @@ function findClose(html: string, from: number): { inner: string; end: number } |
   return undefined;
 }
 
+/** Renders a component by name; what `renderComponent` is in the props a layout and a component get. */
+type RenderComponent = (name: string, props?: Readonly<Record<string, unknown>>, html?: string) => string;
+
+/** How deep one component may render another by name before the engine stops it, so two that call each other end. */
+const MAX_COMPONENT_DEPTH = 32;
+
+/** Turns a node a unit returned into HTML. */
+function stringOf(node: RenderNode): string {
+  return typeof node === "string" ? node : renderToString(node as VNode);
+}
+
 /** Turns one page's body HTML into resolved component HTML and records what was used. */
 function resolveComponents(
   html: string,
   page: Page,
   site: Site,
   components: Readonly<Record<string, ThemeComponent>>,
+  renderComponent: RenderComponent,
 ): { html: string; used: string[]; diagnostics: Diagnostic[] } {
   const used: string[] = [];
   const diagnostics: Diagnostic[] = [];
@@ -175,7 +187,7 @@ function resolveComponents(
         help: "Register the component in the theme or fix the name.",
       });
       // Pass the children through so the page still reads.
-      const nested = resolveComponents(close.inner, page, site, components);
+      const nested = resolveComponents(close.inner, page, site, components, renderComponent);
       out += nested.html;
       used.push(...nested.used);
       diagnostics.push(...nested.diagnostics);
@@ -184,7 +196,7 @@ function resolveComponents(
       continue;
     }
     used.push(name);
-    const nested = resolveComponents(close.inner, page, site, components);
+    const nested = resolveComponents(close.inner, page, site, components, renderComponent);
     used.push(...nested.used);
     diagnostics.push(...nested.diagnostics);
     let props: Readonly<Record<string, unknown>> = {};
@@ -212,8 +224,15 @@ function resolveComponents(
         });
       }
     }
-    const node = entry.component({ props, page, site, html: nested.html });
-    const rendered = typeof node === "string" ? node : renderToString(node as VNode);
+    const node = entry.component({
+      props,
+      page,
+      site,
+      html: nested.html,
+      inline: attrs["data-inline"] !== undefined,
+      renderComponent,
+    });
+    const rendered = stringOf(node);
     out += keepDataSrc(rendered, dataSrc);
     cursor = close.end;
     OPEN.lastIndex = cursor;
@@ -253,16 +272,56 @@ function byCodePoint(a: string, b: string): number {
  */
 export function renderPage(options: RenderOptions): RenderResult {
   const { site, page, layout, components, trail, pager, head } = options;
-  const resolved = resolveComponents(page.html, page, site, components);
-  const uniqueNames = [...new Set(resolved.used)].sort(byCodePoint);
-  const islands: Island[] = [...(options.chromeIslands ?? [])];
+  // Components a unit asked for by name, beyond those the content wrote; their CSS and islands join the page's.
+  const requested = new Set<string>();
+  const requestDiagnostics: Diagnostic[] = [];
+  let depth = 0;
+  const renderComponent: RenderComponent = (name, props = {}, html = "") => {
+    const entry = Object.hasOwn(components, name) ? components[name] : undefined;
+    if (entry === undefined) {
+      requestDiagnostics.push({
+        id: "render.unknown-component",
+        severity: "warning",
+        message: `Unknown component "${name}".`,
+        pos: page.source,
+        help: "Register the component in the theme or fix the name.",
+      });
+      return "";
+    }
+    if (depth >= MAX_COMPONENT_DEPTH) {
+      requestDiagnostics.push({
+        id: "render.component-depth",
+        severity: "error",
+        message: `Component "${name}" is rendered ${MAX_COMPONENT_DEPTH} levels deep; its units call each other without end.`,
+        pos: page.source,
+        help: "Break the cycle between the units that render each other by name.",
+      });
+      return "";
+    }
+    requested.add(name);
+    depth += 1;
+    try {
+      return stringOf(entry.component({ props, page, site, html, inline: false, renderComponent }));
+    } finally {
+      depth -= 1;
+    }
+  };
+  const resolved = resolveComponents(page.html, page, site, components, renderComponent);
+  const islands: Island[] = [];
   const css: string[] = [];
-  for (const name of uniqueNames) {
-    const entry = components[name];
-    if (!entry) continue;
-    if (entry.island) islands.push(entry.island);
-    if (entry.css !== undefined) css.push(entry.css);
-  }
+  /** Sets `islands` and `css` to the chrome islands, then those of every component the page used, in name order. */
+  const collect = (): void => {
+    const names = [...new Set([...resolved.used, ...requested])].sort(byCodePoint);
+    islands.splice(0, islands.length, ...(options.chromeIslands ?? []));
+    css.length = 0;
+    for (const name of names) {
+      const entry = components[name];
+      if (!entry) continue;
+      if (entry.island) islands.push(entry.island);
+      if (entry.css !== undefined) css.push(entry.css);
+    }
+  };
+  collect();
   const resolvedPage: Page = { ...page, html: resolved.html };
   const skipFontPreloads = new Set<string>();
   const hints = {
@@ -279,15 +338,17 @@ export function renderPage(options: RenderOptions): RenderResult {
     head,
     islands,
     hints,
+    renderComponent,
     ...(options.record === undefined ? {} : { record: options.record }),
     ...(options.list === undefined ? {} : { list: options.list }),
   });
-  const body = typeof node === "string" ? node : renderToString(node as VNode);
+  const body = stringOf(node);
+  collect();
   return {
     html: withDocument(body, page),
     islands,
     css,
     ...(skipFontPreloads.size === 0 ? {} : { skipFontPreloads: [...skipFontPreloads].sort(byCodePoint) }),
-    diagnostics: resolved.diagnostics,
+    diagnostics: [...resolved.diagnostics, ...requestDiagnostics],
   };
 }

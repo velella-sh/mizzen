@@ -1,0 +1,1 @@
+- Add `ComponentProps.inline`: true when a component was written as a text directive (`:name[label]{...}`), false for a leaf or container directive, an alert, or a component rendered with `renderComponent`. The Markdown stage marks a text directive's `<sl-component>` with `data-inline`. Tests: `test/render-component.test.ts`.

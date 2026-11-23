@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import type {
-  Chrome, CodeConfig, Collection, CollectionSnapshot, Component, DataRecord, Diagnostic, Head, Island, Layout, ListProps, NavTree, Output, Page, Pager, Plugin, RecordPos, RecordProps, Site, SiteConfig, SourcePos, Trail,
+  Chrome, CodeConfig, Collection, CollectionSnapshot, Component, DataRecord, Diagnostic, Head, Island, Layout, ListProps, NavTree, Output, Page, Pager, Plugin, RecordPos, RecordProps, RenderComponent, Site, SiteConfig, SourcePos, Trail,
 } from "../src/contracts/index.ts";
 
 // These values only have to type-check (`npm run typecheck`); the runtime assertions keep the test from being empty.
@@ -80,6 +80,7 @@ const head: Head = {
 const island: Island = { name: "code-tabs", src: "/example/assets/code-tabs.js" };
 const diagnostic: Diagnostic = { id: "link.broken", severity: "error", message: "No page at /missing/", pos, help: "Fix the link." };
 
+const renderComponent: RenderComponent = () => "";
 const layout: Layout = ({ page: p }) => ({ type: "main", title: p.title });
 const dataLayout: Layout = ({ record: r, list: l }) => ({
   type: "main",
@@ -120,9 +121,9 @@ test("example values of every contract type type-check and carry what the contra
   assert.equal(head.meta.length, 2);
   assert.equal(island.name, "code-tabs");
   assert.equal(code.plugins[0]?.name, "example");
-  assert.deepEqual(layout({ site, page, trail, pager, head, islands: [island] }), { type: "main", title: "Install" });
+  assert.deepEqual(layout({ site, page, trail, pager, head, islands: [island], renderComponent }), { type: "main", title: "Install" });
   assert.deepEqual(
-    dataLayout({ site, page, trail, pager, head, islands: [island], record: recordProps, list: listProps }),
+    dataLayout({ site, page, trail, pager, head, islands: [island], renderComponent, record: recordProps, list: listProps }),
     { type: "main", title: "Button", records: 1 },
   );
   assert.equal(page.record?.position.startLine, recordPos.startLine);
@@ -135,7 +136,7 @@ test("example values of every contract type type-check and carry what the contra
   assert.equal(plain.snapshot, undefined);
   assert.deepEqual(site.network?.projects.filter((p) => p.current).map((p) => p.id), ["docs"]);
   assert.deepEqual(chrome({ site, page, trail, pager }), { type: "header", title: "Example" });
-  assert.deepEqual(component({ props: { kind: "note" }, page, site, html: "" }), { type: "aside", kind: "note" });
+  assert.deepEqual(component({ props: { kind: "note" }, page, site, html: "", inline: false, renderComponent }), { type: "aside", kind: "note" });
   const reported: Diagnostic[] = [];
   const files = await output.run(site, { renderPage: async () => "", report: (d) => reported.push(d) });
   assert.deepEqual(files, [{ path: "example.txt", contents: page.url }]);

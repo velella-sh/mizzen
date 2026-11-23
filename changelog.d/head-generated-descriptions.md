@@ -1,0 +1,1 @@
+- Give the pages the engine generates a description: the blog archive and author pages, the API reference index, and each operation page now carry a `description` (the operation's or the document's own text, else a plain summary), so every page has one `description`, `og:description`, and `twitter:card`. Tests: `test/head-generated.test.ts`.

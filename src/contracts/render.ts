@@ -74,6 +74,18 @@ export interface RenderHints {
   skipFontPreload(family: string): void;
 }
 
+/**
+ * Renders the component `name` through the site's registry, so `theme.overrides.components` apply, and returns its
+ * HTML. The component's `style.css` and `client.ts` island join the page's, exactly as if the content had used it. A
+ * unit calls this where it would otherwise import another unit, which would skip the override.
+ *
+ * @param name The component's folder name under `components/`. An unknown name is a `render.unknown-component`
+ *   warning and renders as an empty string.
+ * @param props The component's `props`; default none.
+ * @param html The component's `html` body, already rendered; default empty.
+ */
+export type RenderComponent = (name: string, props?: Readonly<Record<string, unknown>>, html?: string) => string;
+
 /** Props of a layout, which renders one whole page. */
 export interface LayoutProps {
   /** The whole site model. */
@@ -94,6 +106,8 @@ export interface LayoutProps {
   readonly record?: RecordProps;
   /** The records, groups, and pagination of a list page; unset on every other page. */
   readonly list?: ListProps;
+  /** Renders a component by name; see {@link RenderComponent}. */
+  readonly renderComponent: RenderComponent;
 }
 
 /** Props of a chrome part (header, sidebar, footer, table of contents), which the layout places. */
@@ -118,6 +132,14 @@ export interface ComponentProps<P extends Readonly<Record<string, unknown>> = Re
   readonly site: Site;
   /** The component's body, already rendered to HTML. */
   readonly html: string;
+  /**
+   * True when the component was written as a text directive (`:name[label]{...}`), so it sits inside a paragraph;
+   * false for a leaf (`::name`) or container (`:::name`) directive, an alert, a component the engine adds, and one
+   * rendered through {@link ComponentProps.renderComponent}.
+   */
+  readonly inline: boolean;
+  /** Renders another component by name through the site's registry; see {@link RenderComponent}. */
+  readonly renderComponent: RenderComponent;
 }
 
 /** A layout unit: the default export of `layouts/<name>.ts`. */
