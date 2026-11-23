@@ -1,0 +1,1 @@
+- Publish versioned check reports from `_data/report-set.json`, with static run and comparison pages, trend data, and a public JSON endpoint. Collect doctor runs through `@velella/mizzen/reports`.

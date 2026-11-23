@@ -24,8 +24,9 @@ export function isVersionAlias(page: Page): boolean {
  * file keeps every page at its own URL. */
 export function applyVersionRouting(pages: readonly Page[], versions: unknown, base: string): AppliedVersionRouting {
   if (versions === undefined) return { pages, diagnostics: [] };
-  const routing = resolveVersionRouting(pages, versions, { base });
-  const routed: Page[] = [];
+  // A check report is a site-wide archive with fixed URLs outside the docs version tree.
+  const routing = resolveVersionRouting(pages.filter(({ reportView }) => reportView === undefined), versions, { base });
+  const routed = pages.filter(({ reportView }) => reportView !== undefined);
   for (const route of routing.routes) {
     for (const url of route.urls) {
       const alias = route.canonical !== null && url !== route.canonical;

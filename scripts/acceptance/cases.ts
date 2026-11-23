@@ -1222,8 +1222,38 @@ const verifiablePublishing: AcceptanceCase = {
   },
 };
 
+const checkReports: AcceptanceCase = {
+  id: "check-reports",
+  title: "Publish check report pages and JSON",
+  run(ctx) {
+    const site = join(ctx.dir, "reports");
+    const shared = { tool: "Example", scope: "docs", coverage: "complete", checks: [], findings: [] };
+    tree(site, {
+      "mizzen.yml": "title: Check reports\noutputs: { check-report: true }\n",
+      "_data/report-set.json": JSON.stringify({
+        schemaVersion: 1, title: "Check reports", route: "/checks/",
+        runs: [
+          { ...shared, id: "before", date: "2026-11-22", metrics: [{ id: "size", unit: "B", value: 10 }] },
+          {
+            ...shared, id: "after", date: "2026-11-23", metrics: [{ id: "size", unit: "B", value: 12 }],
+            findings: [{ id: "new", severity: "unknown", message: "A finding without a severity claim" }],
+          },
+        ],
+        comparisons: [{ base: "before", head: "after" }],
+      }),
+    });
+    const out = build(ctx, site, theme(ctx.dir));
+    const payload = JSON.parse(read(out, "checks/data.json"));
+    check(payload.comparisons[0]?.changes[0]?.kind === "new", "the new finding did not reach JSON");
+    check(payload.series.find((item: { id: string }) => item.id === "size")?.points[1]?.value === 12, "the metric did not reach the trend");
+    check(read(out, "checks/runs/after/index.html").includes('href="/checks/data.json"'), "the run did not link to its JSON");
+    check(read(out, "checks/compare/before/after/index.html").includes('href="/checks/data.json"'), "the comparison page was not built");
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
+  checkReports,
   blog,
   apiReference,
   annotations,
