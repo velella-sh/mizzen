@@ -22,7 +22,7 @@ test("mizzen eval prints a JSON report and exits 0 for the reference suite", asy
   const status = await main(["eval", SUITE, "--format", "json"], io);
   assert.equal(status, 0, errors.join("\n"));
   const report = JSON.parse(logs.join("")) as EvalReport;
-  assert.equal(report.totals.passed, 10);
+  assert.equal(report.totals.passed, 11);
   assert.equal(report.gate.passed, true);
   assert.equal(report.rubric.critical, "security");
 });
@@ -36,14 +36,14 @@ test("mizzen eval prints a text summary and writes --out", async () => {
     assert.equal(status, 0, errors.join("\n"));
     assert.deepEqual(logs, []);
     const report = JSON.parse(readFileSync(out, "utf8")) as EvalReport;
-    assert.equal(report.cases.length, 10);
+    assert.equal(report.cases.length, 11);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 
   const text = capture();
   assert.equal(await main(["eval", SUITE], text.io), 0, text.errors.join("\n"));
-  assert.match(text.logs.join(""), /10 passed, 0 failed, 0 invalid, 0 unavailable/);
+  assert.match(text.logs.join(""), /11 passed, 0 failed, 0 invalid, 0 unavailable/);
   assert.match(text.logs.join(""), /gate: passed/);
 });
 

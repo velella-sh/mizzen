@@ -26,6 +26,7 @@ import { runPublishedSite } from "./published-site.ts";
 import { runSiteAttestation } from "./site-attestation.ts";
 import { runStale } from "./stale.ts";
 import { runGraph } from "./graph.ts";
+import { runKnowledge } from "./knowledge.ts";
 import { referencesUsage, runReferences } from "./references.ts";
 import { runTrace, traceUsage } from "./trace.ts";
 import { runDocsVersion } from "./docs-version.ts";
@@ -68,7 +69,7 @@ import type { ReadinessDimension } from "../contracts/readiness.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "evidence", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "evidence", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -149,6 +150,7 @@ Commands:
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
+  knowledge [dir]           Report explicit unknowns, documentation gaps, and unsupported cases (--json, --baseline)
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
@@ -498,6 +500,11 @@ type GraphOpts = {
   readonly args: readonly string[];
 };
 
+type KnowledgeOpts = {
+  readonly command: "knowledge";
+  readonly args: readonly string[];
+};
+
 type VersionsOpts = {
   readonly command: "versions";
   readonly args: readonly string[];
@@ -633,6 +640,7 @@ type Parsed =
         | ReferencesOpts
         | ExamplesOpts
         | GraphOpts
+        | KnowledgeOpts
         | StaleOpts
         | TraceOpts
         | EvalOpts
@@ -1594,6 +1602,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "graph", args: rest } };
   }
+  if (command === "knowledge") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command: "knowledge", args: rest } };
+  }
   if (command === "versions") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "versions", args: rest } };
@@ -2020,6 +2032,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "graph") {
     try {
       return await runGraph(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "knowledge") {
+    try {
+      return await runKnowledge(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;

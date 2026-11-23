@@ -9,12 +9,15 @@ import type {
   GraphArchive,
   GraphEdge,
   GraphEdgeKind,
+  GraphKnowledge,
   GraphNode,
   SourcePos,
 } from "../contracts/index.ts";
 import type { AccessPolicy, AccessResource } from "../contracts/permissions.ts";
+import type { KnowledgeScope, KnowledgeStatus } from "../contracts/knowledge.ts";
 import { accessPolicyFingerprint } from "../permissions/policy.ts";
 import { readRule } from "../permissions/evaluate.ts";
+import { scopeCovers } from "../knowledge/parse.ts";
 
 /** The default neighbor depth. */
 export const DEFAULT_QUERY_DEPTH = 3;
@@ -48,6 +51,13 @@ export interface GraphNodeSummary {
   readonly label: string;
   readonly pos?: SourcePos;
   readonly url?: string;
+  /** The node's explicit knowledge, when it declares one and the caller may see it. */
+  readonly knowledge?: GraphKnowledge;
+  /**
+   * Whether the node's knowledge is a definitive answer to this query: absent when the node declares nothing; false
+   * when the query names a scope the declaration does not cover, or when the declaration needs review.
+   */
+  readonly definitive?: boolean;
 }
 
 /** One step of a path: the node and the edge that led to it, absent on the first step. */
@@ -83,6 +93,11 @@ export interface GraphQueryOptions {
   readonly access?: AccessPolicy;
   /** An earlier snapshot, so a missing node is `deleted` rather than `unknown`. */
   readonly previous?: Graph;
+  /**
+   * The scope the caller is asking about, such as `platform:windows`. A node whose knowledge covers every one of
+   * these limits is a definitive answer; a node whose knowledge is limited to something else is not, and is marked so.
+   */
+  readonly scope?: readonly KnowledgeScope[];
 }
 
 /** What a query returns. */
@@ -102,6 +117,10 @@ export interface GraphQueryResult {
   readonly cursor?: string;
   /** Why the answer is partial: `nodes` or `output`. */
   readonly reason?: "nodes" | "output";
+  /** True when any returned node carries knowledge the query's scope does not cover, or that needs review. */
+  readonly definitive: boolean;
+  /** The knowledge statuses among the returned nodes, so a caller can see an `unknown` without reading every node. */
+  readonly knowledge?: readonly { readonly id: string; readonly status: KnowledgeStatus }[];
 }
 
 /** Compares strings by code point. */
@@ -115,14 +134,24 @@ function comparePos(a: SourcePos | undefined, b: SourcePos | undefined): number 
   return byCodePoint(a.file, b.file) || a.line - b.line || a.column - b.column || a.endLine - b.endLine || a.endColumn - b.endColumn;
 }
 
-/** A node's public summary. */
-function summaryOf(node: GraphNode): GraphNodeSummary {
+/**
+ * A node's public summary, with its knowledge. A declaration is definitive for a query only when the query's scope
+ * is covered by the declaration's scope and the declaration does not need review. When the graph knows nothing about
+ * review (a node built outside a build), only the scope decides.
+ */
+function summaryOf(node: GraphNode, scope: readonly KnowledgeScope[] | undefined): GraphNodeSummary {
+  const knowledge = node.knowledge;
+  const definitive = knowledge === undefined
+    ? undefined
+    : scopeCovers(knowledge.scope, scope) && knowledge.review !== true;
   return {
     id: node.id,
     kind: node.kind,
     label: node.label,
     ...(node.pos === undefined ? {} : { pos: node.pos }),
     ...(node.url === undefined ? {} : { url: node.url }),
+    ...(knowledge === undefined ? {} : { knowledge }),
+    ...(definitive === undefined ? {} : { definitive }),
   };
 }
 
@@ -260,20 +289,21 @@ function entriesOf(
   adjacency: Adjacency,
   nodes: ReadonlyMap<string, GraphNode>,
   direction: GraphDirection,
+  scope: readonly KnowledgeScope[] | undefined,
 ): GraphNeighbor[] {
   const entries: GraphNeighbor[] = [];
   if (direction === "out" || direction === "both") {
     for (const edge of adjacency.out.get(node) ?? []) {
       const target = nodes.get(edge.to);
       if (target === undefined) continue;
-      entries.push({ node: summaryOf(target), edge: { from: edge.from, to: edge.to, kind: edge.kind, ...(edge.pos === undefined ? {} : { pos: edge.pos }) }, direction: "out" });
+      entries.push({ node: summaryOf(target, scope), edge: { from: edge.from, to: edge.to, kind: edge.kind, ...(edge.pos === undefined ? {} : { pos: edge.pos }) }, direction: "out" });
     }
   }
   if (direction === "in" || direction === "both") {
     for (const edge of adjacency.into.get(node) ?? []) {
       const source = nodes.get(edge.from);
       if (source === undefined) continue;
-      entries.push({ node: summaryOf(source), edge: { from: edge.from, to: edge.to, kind: edge.kind, ...(edge.pos === undefined ? {} : { pos: edge.pos }) }, direction: "in" });
+      entries.push({ node: summaryOf(source, scope), edge: { from: edge.from, to: edge.to, kind: edge.kind, ...(edge.pos === undefined ? {} : { pos: edge.pos }) }, direction: "in" });
     }
   }
   return entries;
@@ -287,26 +317,27 @@ function shortestPath(
   nodes: ReadonlyMap<string, GraphNode>,
   direction: GraphDirection,
   maxDepth: number,
+  scope: readonly KnowledgeScope[] | undefined,
 ): GraphPathStep[] | undefined {
-  if (from === to) return [{ node: summaryOf(nodes.get(from)!) }];
+  if (from === to) return [{ node: summaryOf(nodes.get(from)!, scope) }];
   const queue: { id: string; depth: number }[] = [{ id: from, depth: 0 }];
   const seen = new Set([from]);
   const parent = new Map<string, { id: string; edge: GraphEdge; direction: "out" | "in" }>();
   while (queue.length > 0) {
     const current = queue.shift()!;
     if (current.depth >= maxDepth) continue;
-    for (const entry of entriesOf(current.id, adjacency, nodes, direction)) {
+    for (const entry of entriesOf(current.id, adjacency, nodes, direction, scope)) {
       if (seen.has(entry.node.id)) continue;
       seen.add(entry.node.id);
       const edge = graphEdgeOf(entry);
       parent.set(entry.node.id, { id: current.id, edge, direction: entry.direction });
       if (entry.node.id === to) {
-        const steps: GraphPathStep[] = [{ node: summaryOf(nodes.get(to)!) }];
+        const steps: GraphPathStep[] = [{ node: summaryOf(nodes.get(to)!, scope) }];
         let cursor = to;
         while (cursor !== from) {
           const step = parent.get(cursor);
           if (step === undefined) return undefined;
-          steps.unshift({ node: summaryOf(nodes.get(step.id)!), edge: step.edge, direction: step.direction });
+          steps.unshift({ node: summaryOf(nodes.get(step.id)!, scope), edge: step.edge, direction: step.direction });
           cursor = step.id;
         }
         return steps;
@@ -315,6 +346,13 @@ function shortestPath(
     }
   }
   return undefined;
+}
+
+/** The statuses among returned nodes, one per node, sorted by node id. */
+function dedupeStatuses(statuses: readonly { id: string; status: KnowledgeStatus }[]): { id: string; status: KnowledgeStatus }[] {
+  const seen = new Map<string, KnowledgeStatus>();
+  for (const entry of statuses) if (!seen.has(entry.id)) seen.set(entry.id, entry.status);
+  return [...seen].map(([id, status]) => ({ id, status })).sort((a, b) => byCodePoint(a.id, b.id));
 }
 
 /** The edge a neighbor entry carries, with its position. */
@@ -355,7 +393,7 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
   const graph = snapshotOf(source, requested);
   const snapshot = requested ?? "";
   if (graph === undefined) {
-    return { snapshot, ...(options.from === undefined ? {} : { from: options.from }), status: "unknown", neighbors: [], partial: false, ...(options.to === undefined ? {} : { found: false }) };
+    return { snapshot, ...(options.from === undefined ? {} : { from: options.from }), status: "unknown", neighbors: [], partial: false, definitive: false, ...(options.to === undefined ? {} : { found: false }) };
   }
   const current = startNode(graph, options.from, options.allow, options.access);
   const status = current !== undefined
@@ -366,7 +404,7 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
         ? "deleted"
         : "unknown";
   if (current === undefined) {
-    return { snapshot: graph.snapshot.id, ...(options.from === undefined ? {} : { from: options.from }), status, neighbors: [], partial: false, ...(options.to === undefined ? {} : { found: false }) };
+    return { snapshot: graph.snapshot.id, ...(options.from === undefined ? {} : { from: options.from }), status, neighbors: [], partial: false, definitive: false, ...(options.to === undefined ? {} : { found: false }) };
   }
 
   const depth = Math.max(0, Math.min(MAX_QUERY_DEPTH, options.depth ?? DEFAULT_QUERY_DEPTH));
@@ -385,7 +423,7 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
   while (queue.length > 0) {
     const currentFrame = queue.shift()!;
     if (currentFrame.depth >= depth) continue;
-    for (const entry of entriesOf(currentFrame.id, adjacency, visibleNodes, direction)) {
+    for (const entry of entriesOf(currentFrame.id, adjacency, visibleNodes, direction, options.scope)) {
       if (seen.has(entry.node.id)) continue;
       if (seen.size >= nodeLimit) {
         nodesTruncated = true;
@@ -404,7 +442,7 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
   const allEntries: GraphNeighbor[] = [];
   for (const id of seen) {
     if ((depths.get(id) ?? 0) >= depth) continue;
-    allEntries.push(...entriesOf(id, adjacency, visibleNodes, direction));
+    allEntries.push(...entriesOf(id, adjacency, visibleNodes, direction, options.scope));
   }
   const emitted = decoded?.emitted ?? 0;
   const neighbors: GraphNeighbor[] = [];
@@ -444,6 +482,18 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
         })
       : undefined;
 
+  // A node whose knowledge the query's scope does not cover, or which needs review, is not a definitive answer. A
+  // returned status of `unknown` or `unverified` is likewise not definitive, whatever the scope says.
+  const statuses: { id: string; status: KnowledgeStatus }[] = [];
+  let definitive = true;
+  for (const entry of [summaryOf(current, options.scope), ...neighbors.map((neighbor) => neighbor.node)]) {
+    const knowledge = entry.knowledge;
+    if (knowledge === undefined) continue;
+    statuses.push({ id: entry.id, status: knowledge.status });
+    if (entry.definitive !== true) definitive = false;
+  }
+  const knowledge = statuses.length === 0 ? undefined : dedupeStatuses(statuses);
+
   const result: GraphQueryResult = {
     snapshot: graph.snapshot.id,
     from: current.id,
@@ -452,9 +502,11 @@ export function queryGraph(source: Graph | GraphArchive, options: GraphQueryOpti
     partial,
     ...(partial ? { reason: outputTruncated ? "output" : "nodes" } : {}),
     ...(cursor === undefined ? {} : { cursor }),
+    definitive,
+    ...(knowledge === undefined ? {} : { knowledge }),
   };
   if (options.to !== undefined) {
-    const path = shortestPath(current.id, options.to, adjacency, visibleNodes, direction, options.depth === undefined ? MAX_QUERY_DEPTH : depth);
+    const path = shortestPath(current.id, options.to, adjacency, visibleNodes, direction, options.depth === undefined ? MAX_QUERY_DEPTH : depth, options.scope);
     return { ...result, ...(path === undefined ? { found: false } : { path, found: true }) };
   }
   return result;

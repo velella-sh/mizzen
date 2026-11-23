@@ -1868,6 +1868,71 @@
       "epic": 1323,
       "issue": 1424,
       "case": "verifiable-publishing"
+    },
+    {
+      "id": "define-the-knowledge-status-taxonomy",
+      "title": "Define the knowledge status taxonomy",
+      "status": "shipped",
+      "test": "test/knowledge-status.test.ts",
+      "epic": 1318,
+      "issue": 1367
+    },
+    {
+      "id": "declare-knowledge-status-in-pages-and-data",
+      "title": "Declare knowledge status in pages and data",
+      "status": "shipped",
+      "test": "test/knowledge-status.test.ts",
+      "epic": 1318,
+      "issue": 1368
+    },
+    {
+      "id": "scope-unknowns-and-flag-them-for-review",
+      "title": "Scope unknowns and flag them for review",
+      "status": "shipped",
+      "test": "test/knowledge-report.test.ts",
+      "epic": 1318,
+      "issue": 1369
+    },
+    {
+      "id": "propagate-knowledge-status-to-context-packs-and-graphs",
+      "title": "Propagate knowledge status to context packs and graphs",
+      "status": "shipped",
+      "test": "test/knowledge-graph-pack.test.ts",
+      "epic": 1318,
+      "issue": 1370
+    },
+    {
+      "id": "enforce-evidence-limits-on-agent-claims",
+      "title": "Enforce evidence limits on agent claims",
+      "status": "shipped",
+      "test": "test/knowledge-proof.test.ts",
+      "epic": 1318,
+      "issue": 1371
+    },
+    {
+      "id": "report-knowledge-gaps",
+      "title": "Report knowledge gaps",
+      "status": "shipped",
+      "test": "test/knowledge-report.test.ts",
+      "epic": 1318,
+      "issue": 1372,
+      "case": "knowledge"
+    },
+    {
+      "id": "redact-private-rationale-in-public-output",
+      "title": "Redact private rationale in public output",
+      "status": "shipped",
+      "test": "test/knowledge-status.test.ts",
+      "epic": 1318,
+      "issue": 1373
+    },
+    {
+      "id": "evaluate-answers-when-evidence-is-missing",
+      "title": "Evaluate answers when evidence is missing",
+      "status": "shipped",
+      "test": "test/knowledge-eval.test.ts",
+      "epic": 1318,
+      "issue": 1374
     }
   ]
 }

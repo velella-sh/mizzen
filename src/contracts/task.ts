@@ -93,6 +93,21 @@ export interface TaskAcceptanceCriterion {
   readonly check?: string;
   /** Explicitly requires human review; the criterion is never proved automatically. */
   readonly review?: true;
+  /**
+   * The claim's own knowledge status. A criterion that rests on an `unknown` or `unverified` claim is never proved,
+   * whatever a check reports, and its claim names what evidence or review would settle it.
+   */
+  readonly knowledge?: "unknown" | "unverified";
+  /** What would settle a knowledge criterion: the evidence to supply, or a required human review. */
+  readonly needs?: TaskCriterionNeed;
+}
+
+/** What a criterion resting on an unknown or unverified claim still needs. */
+export interface TaskCriterionNeed {
+  /** The evidence that would establish the claim, in one sentence. */
+  readonly evidence?: string;
+  /** True when a person, not a check, must confirm the claim. */
+  readonly review?: boolean;
 }
 
 /** The versioned contract a caller registers. */

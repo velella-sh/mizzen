@@ -32,6 +32,7 @@
  */
 import { posix } from "node:path";
 import type { ContextRequest } from "../contracts/context-request.ts";
+import type { KnowledgeScope } from "../contracts/knowledge.ts";
 import type { Page, Site } from "../contracts/content.ts";
 import type { Diagnostic } from "../contracts/diagnostic.ts";
 import type { AccessPolicy } from "../contracts/permissions.ts";
@@ -47,12 +48,15 @@ import {
   type PackBuild,
   type PackEvidence,
   type PackItem,
+  type PackKnowledge,
+  knowledgeSummaryOf,
   type PackOmission,
   type PackPageOmission,
   type PackSection,
   type PackSelection,
 } from "../outputs/context-pack.ts";
 import { trustReport, type TrustEntry, type TrustEntryFactor, type TrustPageEntry } from "../outputs/trust.ts";
+import { knowledgeLine, packKnowledgeOf } from "../knowledge/pack.ts";
 import { blockIdOf, formatSpan } from "../source/spans.ts";
 import { readablePage } from "../permissions/read.ts";
 import {
@@ -418,6 +422,7 @@ function itemOf(
   versions: ReadonlyMap<string, string>,
   snapshot: TrustSnapshot,
   ranked: RankedPage,
+  knowledge: PackKnowledge | undefined,
 ): PackItem {
   const source = sourceOf(page);
   const entry = snapshot.applies ? snapshot.pages.get(page.url)?.trust : undefined;
@@ -433,6 +438,7 @@ function itemOf(
     hash: hashOf(page.markdown),
     rank: { score: ranked.score, reasons: ranked.reasons },
     ...(entry === undefined ? {} : { trust: entry }),
+    ...(knowledge === undefined ? {} : { knowledge }),
     sections: (kept?.keptSections ?? []).map((section) => sectionOf(page, section)),
     content,
   };
@@ -440,12 +446,12 @@ function itemOf(
 
 /** The header of one page section. */
 function headerOf(page: Page, site: Site): string {
-  return `## ${oneLine(page.title)}\n\n- URL: ${absoluteUrl(page.url, site)}\n- Source: \`${sourceOf(page)}\``;
+  return `## ${oneLine(page.title)}\n\n- URL: ${absoluteUrl(page.url, site)}\n- Source: \`${sourceOf(page)}\`${knowledgeLine(packKnowledgeOf(page, site.config.asOf))}`;
 }
 
 /** The header of one structured item, so the Markdown and the JSON name the same origin. */
 function headerOfItem(item: PackItem, site: Site): string {
-  return `## ${oneLine(item.title)}\n\n- URL: ${absoluteUrl(item.url, site)}\n- Source: \`${item.origin.source}\``;
+  return `## ${oneLine(item.title)}\n\n- URL: ${absoluteUrl(item.url, site)}\n- Source: \`${item.origin.source}\`${knowledgeLine(item.knowledge)}`;
 }
 
 /** The pack's title line. */
@@ -867,8 +873,19 @@ export async function compilePack(
     if (folder !== null && folder !== undefined) versionFolders.set(page.url, folder);
   }
   const rankedByPage = new Map(ranked.map((entry) => [entry.page, entry]));
+  const asOf = site.config.asOf;
   const items = chosen.map((page, index) =>
-    itemOf(page, contents[index] ?? "", trimmed, index, build, versionFolders, snapshot, rankedByPage.get(page)!),
+    itemOf(
+      page,
+      contents[index] ?? "",
+      trimmed,
+      index,
+      build,
+      versionFolders,
+      snapshot,
+      rankedByPage.get(page)!,
+      packKnowledgeOf(page, asOf),
+    ),
   );
 
   // The Markdown and JSON are two renderings of this one item list, so they cannot name different evidence.
@@ -947,6 +964,7 @@ export async function compilePack(
     items,
     accounting,
     coverage: coverageOf(items),
+    knowledge: knowledgeSummaryOf(items),
     warnings: packWarnings.map(warningOf),
   };
 

@@ -996,6 +996,45 @@ const graph: AcceptanceCase = {
   },
 };
 
+const knowledge: AcceptanceCase = {
+  id: "knowledge",
+  title: "Explicit unknowns are declared, reported, redacted, and kept from a definitive graph answer",
+  run: (ctx) => {
+    const site = join(ctx.dir, "knowledge-site");
+    tree(site, {
+      "mizzen.yml": "title: Knowledge\n",
+      "index.md": "---\ntitle: Home\n---\n\n# Home\n\nSee [Windows](/windows/).\n",
+      "windows.md":
+        "---\ntitle: Windows\nknowledge:\n  status: unknown\n  scope: [platform:windows]\n  rationale: private-reason-898\n  citation: https://secret.example/898\n  expires: 2020-01-01\n---\n\n# Windows\n\nNot established.\n",
+      "plain.md": "---\ntitle: Plain\n---\n\n# Plain\n",
+    });
+
+    const text = output(ctx.mizzen(["knowledge", site, "--as-of", "2026-11-23"], ctx.dir), "knowledge");
+    check(/unknown 1/.test(text), "the report does not count the explicit unknown");
+    check(/missing 2/.test(text), "the report does not keep the documentation gaps apart");
+    check(/documentation gap/.test(text), "the report does not name the documentation gap");
+    check(/needs review/.test(text), "the expired declaration is not flagged for review");
+    check(!text.includes("private-reason-898") && !text.includes("secret.example"), "the report leaks a private value");
+
+    const json = JSON.parse(output(ctx.mizzen(["knowledge", site, "--json"], ctx.dir), "knowledge json")) as {
+      counts: Record<string, number>;
+      entries: readonly { declaration?: { redacted?: boolean } }[];
+    };
+    check(json.counts.unknown === 1 && json.counts.missing === 2, "the JSON counts are wrong");
+    check(json.entries.some((entry) => entry.declaration?.redacted === true), "the JSON does not mark the redaction");
+    check(!JSON.stringify(json).includes("private-reason-898"), "the JSON leaks a private rationale");
+
+    const graph = JSON.parse(
+      output(ctx.mizzen(["graph", site, "--from", "page:index.md", "--scope", "platform:linux", "--json"], ctx.dir), "graph"),
+    ) as { neighbors: readonly { node: { id: string; definitive?: boolean } }[] };
+    const windows = graph.neighbors.find((entry) => entry.node.id === "page:windows.md");
+    check(windows?.node.definitive === false, "an out-of-scope query treated the unknown as definitive");
+
+    const gated = ctx.mizzen(["knowledge", site, "--fail-on", "unknown"], ctx.dir);
+    check(gated.status === 1, "the gate did not fail on an explicit unknown");
+  },
+};
+
 const mcp: AcceptanceCase = {
   id: "mcp",
   title: "The MCP handshake, tool list, search, and client report work over stdio",
@@ -1094,7 +1133,7 @@ const evals: AcceptanceCase = {
     check(report.version === 1, "the eval report is not version 1");
     check(report.run.runner.id === "reference", "the eval did not use the offline reference runner");
     check(/^[0-9a-f]{64}$/.test(report.run.id), "the eval run id is not deterministic");
-    check(report.cases.length === 10, "the reference suite has 10 cases");
+    check(report.cases.length === 11, "the reference suite has 11 cases");
     check(report.gate.passed === true, "the reference suite gate failed");
     check(!text.includes(ctx.dir), "the eval report leaks an absolute path");
   },
@@ -1210,6 +1249,7 @@ export const CASES: readonly AcceptanceCase[] = [
   packs,
   edits,
   graph,
+  knowledge,
   mcp,
   traces,
   permissions,

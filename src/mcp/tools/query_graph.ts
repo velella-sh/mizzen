@@ -17,6 +17,7 @@ interface Input {
   readonly direction?: GraphDirection;
   readonly kinds?: readonly GraphEdgeKind[];
   readonly allow?: readonly string[];
+  readonly scope?: readonly { readonly kind: "surface" | "behavior" | "platform" | "version"; readonly value: string }[];
 }
 
 export const tool: Tool<Input> = {
@@ -36,6 +37,16 @@ export const tool: Tool<Input> = {
       direction: { enum: ["out", "in", "both"], description: "Which way edges are followed (default out)." },
       kinds: { type: "array", items: { type: "string" }, description: "Edge kinds to follow; every kind when absent." },
       allow: { type: "array", items: { type: "string" }, description: "Audiences the caller may read; without it only public nodes are visible." },
+      scope: {
+        type: "array",
+        description: "The scope the caller is asking about, such as platform:windows; a node whose declaration does not cover it is returned with definitive false.",
+        items: {
+          type: "object",
+          required: ["kind", "value"],
+          properties: { kind: { enum: ["surface", "behavior", "platform", "version"] }, value: { type: "string", minLength: 1 } },
+          additionalProperties: false,
+        },
+      },
     },
     additionalProperties: false,
   },

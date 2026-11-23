@@ -657,6 +657,11 @@ export interface CollectionConfig {
   readonly json?: CollectionJsonConfig;
   /** Top-level record field that maps the record's other fields to the claims that back them; absent keeps evidence off. */
   readonly evidence?: string;
+  /**
+   * Top-level record field that holds an explicit knowledge declaration (`status`, `scope`, `rationale`, `citation`,
+   * `expires`, `evidence`, `public`); absent keeps knowledge off. The field's value is never published raw.
+   */
+  readonly knowledge?: string;
   /** What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. Default `error`. */
   readonly onInvalid?: "error" | "skip";
   /** What a record that was published and is no longer in the collection does. Default `error` once `urls.lock.json` exists. */

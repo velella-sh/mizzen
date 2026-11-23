@@ -53,6 +53,8 @@ export interface FrontMatter {
   readonly image?: string;
   /** Links translations of the same page. */
   readonly translation_key?: string;
+  /** An explicit statement of how certain this page is, and the scope that limits it. */
+  readonly knowledge?: unknown;
   /** Any other key, kept for the layout. */
   readonly [key: string]: unknown;
 }
@@ -184,6 +186,11 @@ export interface Page {
    * canonical URL and on every page of a site without version settings.
    */
   readonly aliasOf?: string;
+  /**
+   * The page's explicit knowledge declaration, when it wrote one; absent keeps the page out of nothing and reads as
+   * `missing`, which is not one of the five statuses. Its span points at the exact `knowledge` key.
+   */
+  readonly knowledge?: import("./knowledge.ts").KnowledgeDeclaration;
 }
 
 /** A record the URL lock published that its collection no longer holds. */

@@ -53,6 +53,7 @@ const FROZEN: Shape = {
     "inputs": "?readonly string[]",
     "derived": "?Readonly<Record<string, unknown>>",
     "joined": "?JoinedOutput",
+    "knowledge": "?import(\"./knowledge.ts\").KnowledgeDeclaration",
   },
   JoinedField: {
     "field": "string",

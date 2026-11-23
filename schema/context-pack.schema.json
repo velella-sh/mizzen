@@ -11,6 +11,7 @@
     "items",
     "accounting",
     "coverage",
+    "knowledge",
     "warnings"
   ],
   "properties": {
@@ -40,6 +41,10 @@
     "accounting": {
       "description": "How the budget was spent, with every cost visible.",
       "$ref": "#/$defs/accounting"
+    },
+    "knowledge": {
+      "description": "The knowledge status of the selected pages: counts by status, items that declare nothing, items to review, and items limited to a scope.",
+      "$ref": "#/$defs/knowledgeSummary"
     },
     "coverage": {
       "description": "What required evidence the pack covers, and what it explicitly cannot.",
@@ -368,6 +373,10 @@
           "description": "The page's trust entry; absent when trust could not be read.",
           "$ref": "#/$defs/trust"
         },
+        "knowledge": {
+          "description": "The page's explicit knowledge status, scope, and public citations; absent when it declares none.",
+          "$ref": "#/$defs/knowledge"
+        },
         "sections": {
           "description": "The kept top-level sections, in document order.",
           "type": "array",
@@ -682,6 +691,45 @@
             ]
           }
         }
+      },
+      "additionalProperties": false
+    },
+    "knowledge": {
+      "type": "object",
+      "description": "One selected page's explicit knowledge: status, scope, public citations, review state, and span.",
+      "required": ["status", "scope", "review", "span"],
+      "properties": {
+        "status": { "enum": ["unknown", "unsupported", "unverified", "not-applicable", "out-of-scope"] },
+        "scope": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "value"],
+            "properties": {
+              "kind": { "enum": ["surface", "behavior", "platform", "version"] },
+              "value": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        "citations": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "review": { "type": "boolean" },
+        "span": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "knowledgeSummary": {
+      "type": "object",
+      "description": "The knowledge of a pack's selected items: counts by status, and the items that declare nothing, need review, or are limited to a scope.",
+      "required": ["counts", "missing", "review", "limited"],
+      "properties": {
+        "counts": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 1 }
+        },
+        "missing": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "review": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "limited": { "type": "array", "items": { "type": "string", "minLength": 1 } }
       },
       "additionalProperties": false
     },

@@ -1,6 +1,7 @@
 import type { Diagnostic, Severity } from "../contracts/diagnostic.ts";
 import type { Direction } from "../contracts/config.ts";
 import type { BlockReference, Page, Site } from "../contracts/content.ts";
+import type { KnowledgeScope, KnowledgeStatus } from "../contracts/knowledge.ts";
 import type { Output, OutputContext, OutputFile } from "../contracts/output.ts";
 import type { SourcePos } from "../contracts/source.ts";
 import { blockReference } from "../blocks/reference.ts";
@@ -12,6 +13,7 @@ import { trimPages, type TrimmedPage, type TrimResult } from "../packs/trim.ts";
 import { blockIdOf, formatSpan } from "../source/spans.ts";
 import { buildHashOf, hashOf } from "./build-hash.ts";
 import { trustReport, type TrustEntry, type TrustPageEntry } from "./trust.ts";
+import { knowledgeLine, packKnowledgeOf } from "../knowledge/pack.ts";
 
 /**
  * Writes one ready-to-paste context pack per configured topic: `pack/<topic>.md`, and its structured twin
@@ -139,6 +141,32 @@ export interface PackRank {
   readonly reasons: readonly RankReason[];
 }
 
+/** The knowledge status of one selected page, as a pack publishes it: status, scope, and public citations only. */
+export interface PackKnowledge {
+  /** How certain the page is. */
+  readonly status: KnowledgeStatus;
+  /** The dimensions the claim is limited to; empty means everywhere. */
+  readonly scope: readonly KnowledgeScope[];
+  /** Public citations a reader may follow; a private citation is left out rather than redacted in place. */
+  readonly citations?: readonly string[];
+  /** True when the declaration needs review against the pack's as-of date or current evidence. */
+  readonly review: boolean;
+  /** The declaration's span, `path:line:column-endLine:endColumn`. */
+  readonly span: string;
+}
+
+/** The knowledge a pack carries: counts by status and the items each limitation applies to. */
+export interface PackKnowledgeSummary {
+  /** The count of selected items by declared status; a status with no items is absent. */
+  readonly counts: Readonly<Partial<Record<KnowledgeStatus, number>>>;
+  /** Items that declare nothing, kept apart from every status. */
+  readonly missing: readonly string[];
+  /** Items whose declaration was marked for review. */
+  readonly review: readonly string[];
+  /** Items whose knowledge is not a definitive answer to the topic, because their scope limits it. */
+  readonly limited: readonly string[];
+}
+
 /** One selected page in the structured pack, with everything needed to trace its claims to the source. */
 export interface PackItem {
   /** The page's URL: stable while the page keeps its address, and unique within a pack. */
@@ -161,6 +189,8 @@ export interface PackItem {
   readonly rank: PackRank;
   /** The trust level, reasons, and per-signal evidence, or omitted when trust could not be read. */
   readonly trust?: TrustEntry;
+  /** The page's explicit knowledge status, scope, and public citations; absent when it declares none. */
+  readonly knowledge?: PackKnowledge;
   /** The kept top-level sections, in document order. */
   readonly sections: readonly PackSection[];
   /** The exact Markdown the human-readable pack shows for this page. */
@@ -317,6 +347,8 @@ export interface PackEvidence {
   readonly accounting: PackAccounting;
   /** What required evidence the pack covers, and what it explicitly cannot. */
   readonly coverage: PackCoverage;
+  /** The knowledge status of the selected pages: counts, missing declarations, review, and limited items. */
+  readonly knowledge: PackKnowledgeSummary;
   /** Every warning the pack's own compilation produced. */
   readonly warnings: readonly PackWarning[];
 }
@@ -424,9 +456,11 @@ function itemOf(
   versions: ReadonlyMap<string, string>,
   trust: ReadonlyMap<string, TrustEntry>,
   ranked: RankedPage,
+  asOf: string | undefined,
 ): PackItem {
   const source = sourceOf(page);
   const entry = trust.get(page.url);
+  const knowledge = packKnowledgeOf(page, asOf);
   return {
     id: page.url,
     title: page.title,
@@ -438,6 +472,7 @@ function itemOf(
     hash: hashOf(page.markdown),
     rank: { score: ranked.score, reasons: ranked.reasons },
     ...(entry === undefined ? {} : { trust: entry }),
+    ...(knowledge === undefined ? {} : { knowledge }),
     sections: (trimmed?.keptSections ?? []).map((section) => sectionOf(page, section)),
     content,
   };
@@ -467,15 +502,15 @@ function headerOfFacts(facts: HeaderFacts, site: Site): string {
 
 /** The header of one page section, without the body. */
 function headerOfPage(page: Page, site: Site, pageVersion: string | null): string {
-  return headerOfFacts(
+  return `${headerOfFacts(
     { title: page.title, url: page.url, origin: { source: sourceOf(page) }, version: pageVersion },
     site,
-  );
+  )}${knowledgeLine(packKnowledgeOf(page, site.config.asOf))}`;
 }
 
 /** The header of one structured item, so the Markdown and the JSON name the same origin. */
 function headerOfItem(item: PackItem, site: Site): string {
-  return headerOfFacts(item, site);
+  return `${headerOfFacts(item, site)}${knowledgeLine(item.knowledge)}`;
 }
 
 /** One candidate page's mandatory content: its lead and any mandatory section, with its token estimate. */
@@ -549,6 +584,29 @@ export function coverageOf(items: readonly PackItem[]): PackCoverage {
 /** The pack's title line. */
 function titleOf(topic: string): string {
   return `# Context pack: ${topic}`;
+}
+
+/**
+ * The knowledge summary of the selected items: counts by status, items that declare nothing, items to review, and
+ * items limited to a scope. A status with no items is absent from `counts`, so a reader never reads an unmade claim
+ * as zero. `limited` names items whose declaration does not cover the whole world: a scope limit makes the item a
+ * bounded answer, never an unconditional one.
+ */
+export function knowledgeSummaryOf(items: readonly PackItem[]): PackKnowledgeSummary {
+  const counts: Partial<Record<KnowledgeStatus, number>> = {};
+  const missing: string[] = [];
+  const review: string[] = [];
+  const limited: string[] = [];
+  for (const item of items) {
+    if (item.knowledge === undefined) {
+      missing.push(item.id);
+      continue;
+    }
+    counts[item.knowledge.status] = (counts[item.knowledge.status] ?? 0) + 1;
+    if (item.knowledge.review) review.push(item.id);
+    if (item.knowledge.scope.length > 0) limited.push(item.id);
+  }
+  return { counts, missing, review, limited };
 }
 
 /** One page section while the pack is assembled. */
@@ -823,7 +881,7 @@ export async function buildPack(
   const build = buildIdentityOf(site);
   const trust = options.trust ?? (await trustIndexOf(site));
   const items = chosen.map((page, index) =>
-    itemOf(page, bodies[index] ?? "", trim?.pages[index], build, versions, trust, rankOf(page, ranked)),
+    itemOf(page, bodies[index] ?? "", trim?.pages[index], build, versions, trust, rankOf(page, ranked), site.config.asOf),
   );
 
   // The human-readable pack is rendered from the same items, so the two files cannot name different evidence.
@@ -891,6 +949,7 @@ export async function buildPack(
     items,
     accounting,
     coverage: coverageOf(items),
+    knowledge: knowledgeSummaryOf(items),
     warnings: diagnostics.map(warningOf),
   };
 

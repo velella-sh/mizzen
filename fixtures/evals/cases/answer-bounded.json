@@ -1,0 +1,49 @@
+{
+  "version": 1,
+  "id": "answer.bounded-unknown",
+  "title": "Answer only within the evidence when the evidence says unknown",
+  "capability": "answer",
+  "goal": "Does the engine run on Windows, and what does the documentation establish?",
+  "fixture": "site",
+  "snapshot": "evals-site@1",
+  "permissions": {
+    "read": [
+      "*"
+    ],
+    "write": [],
+    "check": []
+  },
+  "budget": {
+    "maxTokens": 4000,
+    "maxToolCalls": 6
+  },
+  "criteria": [
+    {
+      "id": "bounded",
+      "statement": "The answer says the result is unknown for Windows instead of asserting it."
+    },
+    {
+      "id": "citation",
+      "statement": "The answer cites guide/windows.md line 12."
+    }
+  ],
+  "tools": [
+    {
+      "name": "context",
+      "version": "1"
+    }
+  ],
+  "inputs": {
+    "agent": "agents/answer-bounded.json"
+  },
+  "expected": {
+    "kind": "answer",
+    "answer": "unknown",
+    "citations": [
+      "guide/windows.md:12"
+    ],
+    "forbidden": [
+      "guide/deploy.md"
+    ]
+  }
+}

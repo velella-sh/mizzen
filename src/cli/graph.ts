@@ -29,6 +29,7 @@ export const graphUsage = `Usage: mizzen graph [dir] [options]
   --direction <out|in|both>  Which way edges are followed (default: out)
   --kinds <a,b>        Edge kinds to follow
   --allow <a,b>        Audiences the caller may read; without it only public nodes are visible
+  --scope <k:v,...>    The scope to ask about, such as platform:windows; a declaration that does not cover it is not definitive
   --json               Print JSON (the only format)
 `;
 
@@ -54,6 +55,14 @@ function parseGraph(args: readonly string[]): GraphArgs | { readonly error: stri
       else if (arg === "--to") options.to = next;
       else if (arg === "--cursor") options.cursor = next;
       else if (arg === "--allow") options.allow = list(next);
+      else if (arg === "--scope") {
+        const scope = list(next).map((entry) => {
+          const at = entry.indexOf(":");
+          return at <= 0 ? undefined : { kind: entry.slice(0, at).trim() as "surface" | "behavior" | "platform" | "version", value: entry.slice(at + 1).trim() };
+        });
+        if (scope.some((entry) => entry === undefined || entry.value === "")) return { error: "--scope needs kind:value pairs such as platform:windows" };
+        options.scope = scope as { kind: "surface" | "behavior" | "platform" | "version"; value: string }[];
+      }
       else if (arg === "--kinds") options.kinds = list(next) as GraphEdgeKind[];
       else if (arg === "--direction") {
         if (next !== "out" && next !== "in" && next !== "both") return { error: "--direction must be out, in, or both" };

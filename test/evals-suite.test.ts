@@ -14,8 +14,8 @@ test("the reference suite is deterministic and green with no recorded gap", asyn
   const first = await runEvalSuite({ suite: SUITE });
   const second = await runEvalSuite({ suite: SUITE });
 
-  assert.equal(first.report.totals.cases, 10);
-  assert.equal(first.report.totals.passed, 10);
+  assert.equal(first.report.totals.cases, 11);
+  assert.equal(first.report.totals.passed, 11);
   assert.equal(first.report.totals.failed, 0);
   assert.equal(first.report.totals.invalid, 0);
   assert.equal(first.report.totals.unavailable, 0);
@@ -70,13 +70,13 @@ test("an adapter without a pinned tool invalidates every case", async () => {
     { suite: SUITE },
     { ...referenceRunner, id: "missing-tools", tools: [] },
   );
-  assert.equal(report.totals.invalid, 10);
+  assert.equal(report.totals.invalid, 11);
   assert.equal(report.gate.passed, false);
   assert.ok(report.cases.every((item) => item.findings.some((finding) => finding.code === "eval.pin-tool")));
 });
 
 test("a package pin that differs from the suite invalidates the run", async () => {
   const { report } = await runEvalSuite({ suite: SUITE, package: "a-different-tarball" });
-  assert.equal(report.totals.invalid, 10);
+  assert.equal(report.totals.invalid, 11);
   assert.ok(report.cases.every((item) => item.findings.some((finding) => finding.code === "eval.pin-package")));
 });
