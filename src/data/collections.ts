@@ -15,6 +15,7 @@ import { isMap, isSeq, parseDocument, LineCounter, type Document, type Node } fr
 import type {
   Collection,
   DataRecord,
+  RecordPos,
   DataStats,
   Diagnostic,
   SiteConfig,
@@ -62,6 +63,27 @@ export interface LoadCollectionsOptions {
 /** True when a source is a URL or a package address rather than a path in the site. */
 function isAddress(source: string): boolean {
   return /^[a-z][a-z\d+.-]*:/i.test(source);
+}
+
+/** The position with the collection's configured source and whether `file` is a local file the author can edit. */
+function stamped(pos: RecordPos, source: string, editable: boolean): RecordPos {
+  return { ...pos, source, editable };
+}
+
+/**
+ * Names the configured source on every position of the records, so a theme can link to a file only when `editable`.
+ * The stored copy a download or extraction is read from stays in `file`.
+ */
+function withSource(records: readonly DataRecord[] | undefined, source: string, editable: boolean): readonly DataRecord[] | undefined {
+  if (records === undefined) return undefined;
+  return records.map((record) => ({
+    ...record,
+    position: stamped(record.position, source, editable),
+    fieldPositions: Object.fromEntries(Object.entries(record.fieldPositions).map(([field, pos]) => [field, stamped(pos, source, editable)])),
+    ...(record.keyPositions === undefined
+      ? {}
+      : { keyPositions: Object.fromEntries(Object.entries(record.keyPositions).map(([field, pos]) => [field, stamped(pos, source, editable)])) }),
+  }));
 }
 
 /** A position at the start of the config file, used when the exact source line cannot be found. */
@@ -532,6 +554,8 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
     let text: string | undefined;
     let lockedRecords: readonly DataRecord[] | undefined;
     let packageInfo: Collection["package"];
+    // Only a file in the site that the author edits is editable; a download, extraction, or package file is not.
+    let editable = false;
 
     if (source.startsWith("npm:")) {
       if (lockInvalid) continue;
@@ -627,11 +651,12 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
         continue;
       }
       display = rel.split(sep).join("/");
+      editable = true;
       text = await localBytes(name, file, display, limits, diagnostics, configPos);
       if (text === undefined) continue;
     }
 
-    const readRecords = lockedRecords ?? readText(name, source, display, text ?? "", idField, diagnostics, entry.records === undefined ? undefined : "json");
+    const readRecords = withSource(lockedRecords ?? readText(name, source, display, text ?? "", idField, diagnostics, entry.records === undefined ? undefined : "json"), source, editable);
     if (readRecords === undefined) continue;
     const records = applySchemaRenames(name, readRecords, entry.schemaRenames ?? {}, diagnostics);
     const tooMany = checkRecordCount(name, display, records.length, limits);

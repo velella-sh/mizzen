@@ -39,7 +39,7 @@ test("one page per record, with the record's position, URL, title, and template"
     assert.deepEqual(button.record, {
       collection: "components",
       id: "button",
-      position: { file: "_data/components.yml", startLine: 1, startColumn: 3, endLine: 2, endColumn: 15 },
+      position: { file: "_data/components.yml", startLine: 1, startColumn: 3, endLine: 2, endColumn: 15, source: "_data/components.yml", editable: true },
       template: "_templates/components.md",
       templateLine: 5,
       fallbacks: [],

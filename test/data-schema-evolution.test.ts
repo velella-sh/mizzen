@@ -130,8 +130,8 @@ test("schemaRenames moves an old field's value and spans before validation and w
     const result = await loadCollections({ root, config });
     const [a, b] = result.collections["items"]!.records;
     assert.deepEqual(a!.fields, { id: "a", title: "A", slug: "old-a" });
-    assert.deepEqual(a!.fieldPositions["slug"], { file: "_data/items.yml", startLine: 3, startColumn: 11, endLine: 3, endColumn: 15 });
-    assert.deepEqual(a!.keyPositions?.["slug"], { file: "_data/items.yml", startLine: 3, startColumn: 3, endLine: 3, endColumn: 8 });
+    assert.deepEqual(a!.fieldPositions["slug"], { file: "_data/items.yml", startLine: 3, startColumn: 11, endLine: 3, endColumn: 15, source: "_data/items.yml", editable: true });
+    assert.deepEqual(a!.keyPositions?.["slug"], { file: "_data/items.yml", startLine: 3, startColumn: 3, endLine: 3, endColumn: 8, source: "_data/items.yml", editable: true });
     assert.deepEqual(b!.fields, { id: "b", title: "B", slug: "new-b" });
     assert.deepEqual(
       result.diagnostics.filter((diagnostic) => diagnostic.id === "data.schema-rename-conflict").map(({ severity, pos }) => ({ severity, pos })),

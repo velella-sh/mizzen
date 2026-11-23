@@ -107,6 +107,13 @@ lock entry, and the same catalog.
 Extracted records carry their row in the locked result, so a schema error names both the record key and the row and
 points at that row. A row is the record's position in the sorted result, not a line in the database.
 
+For an NDJSON source the line is the line of the stored result, not of the source file: the result is sorted, has
+blank lines dropped, and has its keys sorted, so the two differ. The record's position therefore names the stored copy
+in `file` (`.mizzen/data/<sha256>`), the configured source in `source`, and `editable: false`, so a theme does not
+offer an "edit this record" link into a file whose line numbers it does not match. The same holds for a pinned `https:`
+source and a package source. A record read from a file in the site has `source` set to that file's path and
+`editable: true`.
+
 ## Errors
 
 | Id | What happened |

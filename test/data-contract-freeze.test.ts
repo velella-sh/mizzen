@@ -40,6 +40,8 @@ const FROZEN: Shape = {
     "startColumn": "number",
     "endLine": "number",
     "endColumn": "number",
+    "source": "?string",
+    "editable": "?boolean",
   },
   DataRecord: {
     "id": "string",
