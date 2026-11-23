@@ -81,6 +81,10 @@ test("generates bounded pages and byte-stable public JSON from the same model", 
   assert.deepEqual(JSON.parse(String(json?.contents)), site.checkReport);
   assert.deepEqual(await checkReport.run((await buildModel(root)).site, {} as never), [json]);
   assert.doesNotMatch(await readFile(join(root, "_data/report-set.json"), "utf8"), /jsonUrl/);
+  await writeFile(join(root, "_data/report-set.yml"), "title: Private output\n");
+  const shadowed = await buildModel(root);
+  assert.equal(shadowed.site.checkReport, undefined);
+  assert(shadowed.diagnostics.some(({ id }) => id === "report.input-conflict"));
 });
 
 test("the Mizzen producer collects a real doctor run and preserves skipped checks", async (t) => {

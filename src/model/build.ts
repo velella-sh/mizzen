@@ -249,8 +249,12 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   let checkReport: Site["checkReport"];
   if (config.outputs["check-report"] === true) {
     const exists = files.some(({ kind, path }) => kind === "data" && path === REPORT_SOURCE);
+    const shadow = files.find(({ kind, path }) => kind === "data"
+      && /^(?:_data\/report-set\.ya?ml$|_data\/report-set\/)/i.test(path));
     if (!exists) {
       diagnostics.error("report.missing", `Add ${REPORT_SOURCE} to publish check reports.`);
+    } else if (shadow !== undefined) {
+      diagnostics.error("report.input-conflict", `Only ${REPORT_SOURCE} may supply the public report. Move ${shadow.path} to a different data key.`, { pos: reportPos });
     } else if (Object.hasOwn(data.data, "report-set")) {
       const prepared = prepareReport(data.data["report-set"], config.base);
       checkReport = prepared.report;
