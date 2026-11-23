@@ -4,6 +4,8 @@ import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } fr
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { loadConfig } from "../config/load.ts";
 import { normalizeBase } from "../content/permalink.ts";
+import { EVIDENCE_REPORT_PATH, evidenceReport } from "../evidence/report.ts";
+import { loadLockedEvidence } from "../evidence/store.ts";
 import { discover } from "../content/discover.ts";
 import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, PreviewPolicy, Site } from "../contracts/index.ts";
 import { buildModel, repositoryFolder } from "../model/build.ts";
@@ -364,6 +366,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   };
   const sourceDir = resolve(root, loaded.config.source);
   assertOutOutsideSource(sourceDir, out);
+  const evidence = await loadLockedEvidence(root);
   const recordedExamples = loaded.config.examples?.pinned === true
     ? await readExamplesLock(root).catch((error: Error) => {
         diagnostics.error("examples.invalid-lock", `Cannot read ${EXAMPLES_LOCK_FILE}: ${error.message}`);
@@ -402,6 +405,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
       ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
       stale: JSON.stringify([...staleBySource]),
+      ...(evidence === undefined ? {} : { evidence: evidence.fingerprint }),
       examplesKey: recordedExamples?.digest,
       ...(pluginKey === undefined ? {} : { pluginKey }),
       ...(preview === undefined ? {} : { preview }),
@@ -471,6 +475,11 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           }),
         };
   for (const d of await placeholderDiagnostics(site)) diagnostics.report(d);
+  const externalEvidence = evidence === undefined ? undefined : evidenceReport(
+    evidence,
+    new Set(site.pages.filter((page) => page.kind === "doc").map((page) => page.url)),
+    site.config.asOf,
+  );
 
   // Trust and drift are computed once, from this build's pages, and handed to the theme through `site.data` before any
   // page renders. Outputs still run on the raw site, so `trust.json` and `drift.json` keep their own provenance; the
@@ -743,6 +752,11 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // anything is written.
   const produced: OutputFile[] = [];
   const owner = new Map<OutputFile, string>();
+  if (externalEvidence !== undefined) {
+    const file = { path: EVIDENCE_REPORT_PATH, contents: externalEvidence };
+    produced.push(file);
+    owner.set(file, "external-evidence");
+  }
   const outputsStartedAt = performance.now();
   /** Renders happen inside an output that asks for a page; that time belongs to rendering, not to the output. */
   const rendersBeforeOutputs = renderMs;

@@ -110,6 +110,8 @@ export interface CacheKeyOptions {
    * lock live outside the source folder, so without this a whole-build hit would restore an older state.
    */
   readonly stale?: string;
+  /** The verified external evidence lock digest; its pins identify the stored bytes. */
+  readonly evidence?: string;
   /** The digest of the site's plugin declarations and declared inputs; empty or absent for a site without plugins. */
   readonly pluginKey?: string;
   /** The preview policy; a preview build writes different head tags, so it never shares a normal build's entry. */
@@ -579,6 +581,7 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   hash.update(`repository\0${repositoryStateKey(options.root)}\0`);
   // A covered file or the review lock can change without a source file changing.
   hash.update(`stale\0${options.stale ?? ""}\0`);
+  if (options.evidence !== undefined) hash.update(`evidence\0${options.evidence}\0`);
   // The config values matter as well as the file: a missing config takes its title from the folder name.
   hash.update(`config\0${canonicalJson(options.config)}\0`);
   if (options.examplesKey !== undefined) hash.update(`examples\0${options.examplesKey}\0`);

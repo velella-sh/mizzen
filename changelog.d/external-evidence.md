@@ -1,0 +1,1 @@
+- Pin external test, CI, and benchmark evidence by SHA-256 and evaluate page claims and behaviors offline.

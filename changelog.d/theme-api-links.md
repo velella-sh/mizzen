@@ -1,0 +1,1 @@
+- Document how themes derive static data API links, including the deployment base, version policy, and publication rules, from the existing layout contract. Site builds are unchanged.

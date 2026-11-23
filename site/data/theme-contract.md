@@ -44,6 +44,33 @@ Set on a list page; unset on every other page.
 On the index page of an expanded list, each group's `records` is empty and its `count` and `url` are how the page
 links to every value.
 
+## Links to the static data API
+
+A layout can derive API links from `site.config` and its `list` or `record` prop. Start with
+`site.config.api`. If it is absent or `site.config.outputs.api === false`, omit API links.
+
+For the current version, use `api.version` and `api.collections`. Other versions are keyed by version under
+`api.versions`. Each has its own `collections` and optional `deprecated`, `sunset`, and `successor`.
+Link to a collection only when that version lists its name and it exists in `site.collections`. On a data page,
+the name is `list.collection` or `record.collection`.
+
+The prefix is `${site.config.base}/api/${version}`. For a site with `base: /docs` and `version: v2`, the
+index is `/docs/api/v2/index.json`. Append these paths to the prefix:
+
+| Path | When it is published |
+| --- | --- |
+| `/index.json` | For every enabled version. Lists the published collections, field names, and links. |
+| `/openapi.json` | For every enabled version. |
+| `/<collection>.json` and `/<collection>.ndjson` | For a collection named in that version. |
+| `/schemas/<collection>.json` | When the published collection has a valid schema in `site.config.collections[name].schema`. |
+| `/<collection>/<id>.json` | For a published record. Use `record.id`, URI-encoded as one path segment. |
+
+For record links, use the source record in `site.collections[name].records` to check the collection's lifecycle
+policy. A retired record is published only when `lifecycle.machine` is enabled. This matters for record layouts
+because their display fields can be filtered or localized. Use the API index for the authoritative list of
+published fields after the collection's `public` policy, rather than inferring it from the layout's display
+fields. See [Static data API](/data/api/) for the format and version policy.
+
 ## Files a theme reads
 
 | File | Read for |
