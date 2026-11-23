@@ -3,6 +3,7 @@ import type { Direction, SiteConfig } from "./config.ts";
 import type { Collection, ListProps, PageRecord } from "./data.ts";
 import type { NavTree } from "./nav.ts";
 import type { SiteNetwork } from "./network.ts";
+import type { PreparedReport, ReportView } from "./report.ts";
 import type { SourcePos } from "./source.ts";
 
 /** What a page is: Markdown or HTML content (`doc`), a page with its own program (`app`), or a file copied as is (`asset`). */
@@ -140,6 +141,8 @@ export interface ReferenceResolution {
 
 /** One page of the site model. */
 export interface Page {
+  /** Report view attached to a generated check report page. */
+  readonly reportView?: ReportView;
   /** Output URL including `base`, such as `/evergreen/guide/install/`. */
   readonly url: string;
   /** Where the page's content starts in its source file. */
@@ -230,6 +233,8 @@ export interface PreviewPolicy {
 
 /** The site model: everything a build knows, assembled once and read by rendering and outputs. */
 export interface Site {
+  /** Validated public check report and its build-time comparisons and series. */
+  readonly checkReport?: PreparedReport;
   /** The site config. */
   readonly config: SiteConfig;
   /** Every page, sorted by URL. */

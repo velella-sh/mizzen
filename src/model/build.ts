@@ -1,3 +1,5 @@
+import { buildReportPages } from "../reports/pages.ts";
+import { prepareReport, REPORT_SOURCE } from "../reports/prepare.ts";
 import { readFile } from "node:fs/promises";
 import { join, posix, relative, resolve } from "node:path";
 import type { Heading as MdHeading, Root } from "mdast";
@@ -242,6 +244,25 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
 
   const data = await loadData(sourceDir, files);
   for (const d of data.diagnostics) diagnostics.report(d);
+
+  const reportPos = { file: fileOf(REPORT_SOURCE), line: 1, column: 1, endLine: 1, endColumn: 1 };
+  let checkReport: Site["checkReport"];
+  if (config.outputs["check-report"] === true) {
+    const exists = files.some(({ kind, path }) => kind === "data" && path === REPORT_SOURCE);
+    const shadow = files.find(({ kind, path }) => kind === "data" && path !== REPORT_SOURCE
+      && /^_data\/report-set(?:\/|\.(?:json|ya?ml)$)/i.test(path));
+    if (!exists) {
+      diagnostics.error("report.missing", `Add ${REPORT_SOURCE} to publish check reports.`);
+    } else if (shadow !== undefined) {
+      diagnostics.error("report.input-conflict", `Only ${REPORT_SOURCE} may supply the public report. Move ${shadow.path} to a different data key.`, { pos: reportPos });
+    } else if (Object.hasOwn(data.data, "report-set")) {
+      const prepared = prepareReport(data.data["report-set"], config.base);
+      checkReport = prepared.report;
+      for (const { pointer, message } of prepared.problems) {
+        diagnostics.error("report.invalid", `${pointer || "/"}: ${message}`, { pos: reportPos });
+      }
+    }
+  }
 
   // The blog plans its routes from the posts' own front matter before any page is built, so each page knows its URL and
   // a draft or rejected post gets none. The post texts are read here; the planner never touches the filesystem.
@@ -556,6 +577,13 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     }
   }
 
+  if (checkReport !== undefined) {
+    for (const generated of buildReportPages(checkReport, config, reportPos)) {
+      const hooked = await hookPage(generated);
+      add(hooked, hooked.source.file, undefined, false);
+    }
+  }
+
   // The blog's archive and author pages list the plans the routes carry; they are not folder navigation entries.
   for (const generated of buildBlogPages({ routes: blogRoutes, config })) {
     const known = seen.get(generated.url);
@@ -805,6 +833,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       pages,
       nav,
       data: data.data,
+      ...(checkReport === undefined ? {} : { checkReport }),
       collections: allCollections,
       ...(gone.length === 0 ? {} : { removed: gone }),
       ...(retired.length === 0 ? {} : { retired }),
