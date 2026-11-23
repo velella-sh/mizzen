@@ -19,6 +19,7 @@ import { dataMigrate } from "../data/schema-migrate.ts";
 import { verifyData } from "../data/verify.ts";
 import { checkQuality } from "../data/quality.ts";
 import { dataChanges } from "../data/changes/write.ts";
+import { runEvidence } from "./evidence.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runSiteAttestation } from "./site-attestation.ts";
@@ -66,7 +67,7 @@ import type { ReadinessDimension } from "../contracts/readiness.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "evidence", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -141,6 +142,8 @@ Commands:
                             Restore only the files a transaction receipt names
   edit verify <proof.json>  Check an edit proof or a verification proof (--input <file> for public evidence)
   eval [suite]              Run a deterministic evaluation suite and print its report (--format, --out, --baseline)
+  evidence ingest <envelope.json> [dir] [--artifact <file>]
+                            Validate evidence and store it by SHA-256
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -443,6 +446,11 @@ type UrlsCheckOpts = {
   readonly format: "text" | "json";
 };
 
+type EvidenceOpts = {
+  readonly command: "evidence";
+  readonly args: readonly string[];
+};
+
 type NetworkOpts = {
   readonly command: "network";
   readonly args: readonly string[];
@@ -612,6 +620,7 @@ type Parsed =
         | ImportOpts
         | InputsOpts
         | McpOpts
+        | EvidenceOpts
         | NetworkOpts
         | PublishedSiteOpts
         | ReferencesOpts
@@ -1537,6 +1546,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (subcommand === "rollback") return parseEditRollback(rest);
     return parseEditApply(rest);
   }
+  if (command === "evidence") {
+    if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
+    return { options: { command, args: rest } };
+  }
   if (command === "network") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "network", args: rest } };
@@ -2009,6 +2022,8 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
       return 2;
     }
   }
+
+  if (options.command === "evidence") return runEvidence(options.args, { log, error });
 
   if (options.command === "network") {
     try {

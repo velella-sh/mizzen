@@ -144,6 +144,58 @@ for (const command of ["mizzen agent capabilities", "mizzen agent schema", "mizz
 console.log("the installed agent CLI discovers, registers, runs, recovers, and cancels a task with public JSON");
 JS
 
+# Ingest evidence with the installed bin and reproduce the site with only the lock and local store.
+mkdir -p evidence-site evidence-theme/src evidence-theme/layouts
+printf 'title: Evidence smoke\n' > evidence-site/mizzen.yml
+printf '# Home\n' > evidence-site/index.md
+printf 'export const theme = { name: "test", folders: ["layouts"] };\n' > evidence-theme/src/index.ts
+printf 'export default () => "<html><head></head><body>Evidence</body></html>";\n' > evidence-theme/layouts/doc.ts
+cat > block-network.mjs <<'JS'
+import { Socket } from "node:net";
+function offline() { throw new Error("Network unavailable in evidence smoke test"); }
+Socket.prototype.connect = offline;
+globalThis.fetch = offline;
+JS
+node <<'JS'
+const { createHash } = require("node:crypto");
+const { execFileSync } = require("node:child_process");
+const { readFileSync, unlinkSync, writeFileSync } = require("node:fs");
+const assert = require("node:assert/strict");
+const bin = "node_modules/@velella/mizzen/bin/mizzen.js";
+const cli = (...args) => execFileSync(process.execPath, ["--import", "./block-network.mjs", bin, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+const sha = (text) => createHash("sha256").update(text).digest("hex");
+const commit = "a".repeat(40);
+const configSha256 = sha("workflow configuration");
+const artifact = "job result";
+const artifactSha256 = sha(artifact);
+const target = { behavior: "install", surface: "cli:install" };
+// The payload and target keys are in canonical order for hashing.
+const payload = { artifactSha256, commit, configSha256, outcome: "passed", runId: "42",
+  schema: "ci-run@1", targets: [target], workflow: "ci.yml" };
+const envelope = { version: 1, kind: "ci", id: "ci", origin: "https://ci.example/runs/42", snapshot: "v1",
+  executedAt: "2026-11-20T00:00:00Z", payloadSha256: sha(JSON.stringify(payload)), payload };
+writeFileSync("evidence-envelope.json", JSON.stringify(envelope));
+writeFileSync("evidence-artifact", artifact);
+const digest = cli("evidence", "ingest", "evidence-envelope.json", "evidence-site", "--artifact", "evidence-artifact").trim();
+unlinkSync("evidence-envelope.json");
+unlinkSync("evidence-artifact");
+writeFileSync("evidence-site/evidence.lock.json", JSON.stringify({
+  version: 1, snapshot: { id: "v1", commit, configSha256 }, maxAgeDays: 7,
+  pins: { ci: { sha256: digest, artifactSha256 } }, surfaces: [target.surface],
+  claims: [{ id: "install", subject: { kind: "page", id: "/" }, ...target, evidence: ["ci"] }],
+}));
+const build = (out) => cli("build", "evidence-site", "--theme", "evidence-theme", "--out", out, "--as-of", "2026-11-23");
+build("evidence-out");
+const report = readFileSync("evidence-out/.mizzen/evidence.json", "utf8");
+assert.equal(JSON.parse(report).claims[0].status, "verified");
+build("evidence-replay");
+assert.equal(readFileSync("evidence-replay/.mizzen/evidence.json", "utf8"), report);
+const pinned = `evidence-site/.mizzen/evidence/${artifactSha256}.artifact`;
+writeFileSync(pinned, "altered artifact");
+assert.throws(() => build("evidence-replay"), /artifact SHA-256 does not match/);
+console.log("the installed Mizzen tarball verifies pinned evidence offline");
+JS
+
 # The data contract types must be importable from the tarball alone, in an empty folder with no Lateen and no
 # checkout, so a theme can typecheck against a published pre-release.
 mkdir "$work/contract"
