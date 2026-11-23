@@ -14,6 +14,7 @@ import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { loadConfig } from "../config/load.ts";
 import { discover } from "../content/discover.ts";
 import { canonicalJson } from "../data/lock.ts";
+import { EVIDENCE_LOCK_FILE } from "../evidence/store.ts";
 import { version } from "../index.ts";
 import { fingerprint, hashOf, isIdentityPath } from "../outputs/build-hash.ts";
 import type { SiteConfig } from "../contracts/index.ts";
@@ -225,7 +226,7 @@ export function environmentOf(): BuildEnvironment {
 }
 
 /** Lock files whose bytes change what a build reads. */
-const LOCK_FILES = ["mizzen.lock.json", "urls.lock.json", "blocks.lock.json"] as const;
+const LOCK_FILES = ["mizzen.lock.json", "urls.lock.json", "blocks.lock.json", EVIDENCE_LOCK_FILE] as const;
 
 /**
  * Reads the site and the built folder and returns the report. The site root and output folder are only read, never

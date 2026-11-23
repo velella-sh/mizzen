@@ -50,6 +50,7 @@
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
+    "@rgrove/parse-xml": "^5.2.0",
     "ajv": "^8.20.0",
     "lightningcss": "^1.33.0",
     "pagefind": "^1.6.0",
