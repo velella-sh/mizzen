@@ -58,6 +58,9 @@ import type {
   QualityRuleKind,
   SnapshotConfig,
   StaleConfig,
+  SurfaceAdapterConfig,
+  SurfaceConfig,
+  SurfaceExclusionConfig,
   RepositoryConfig,
   SearchConfig,
   SiteConfig,
@@ -643,6 +646,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const dates = datesFrom(raw.dates);  const social = socialFrom(raw.social);
   const stale = staleFrom(raw.stale);
   const drift = driftFrom(raw.drift);
+  const surface = surfaceFrom(raw.surface);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -680,6 +684,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(blog === undefined ? {} : { blog }),
     ...(stale === undefined ? {} : { stale }),
     ...(drift === undefined ? {} : { drift }),
+    ...(surface === undefined ? {} : { surface }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -888,6 +893,45 @@ function driftFrom(value: unknown): DriftConfig | undefined {
   if (!isPlainObject(value)) return undefined;
   const severity = value.severity;
   return severity === "info" || severity === "warning" || severity === "error" ? { severity } : undefined;
+}
+
+/** The surface key, keeping only known areas and non-empty paths; the schema check reports an invalid one. */
+function surfaceFrom(value: unknown): SurfaceConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const areas = ["api", "cli", "config", "openapi", "data", "version"] as const;
+  const adapters: SurfaceAdapterConfig[] = [];
+  if (Array.isArray(value.adapters)) {
+    for (const entry of value.adapters) {
+      if (!isPlainObject(entry)) continue;
+      if (typeof entry.source !== "string" || entry.source.trim() === "") continue;
+      const area = areas.find((candidate) => candidate === entry.area);
+      if (area === undefined) continue;
+      adapters.push({ area, source: entry.source.trim() });
+    }
+  }
+  const docs = Array.isArray(value.docs)
+    ? value.docs.filter((item): item is string => typeof item === "string" && item.trim() !== "").map((item) => item.trim())
+    : ["."];
+  const exclude: SurfaceExclusionConfig[] = [];
+  if (Array.isArray(value.exclude)) {
+    for (const entry of value.exclude) {
+      if (!isPlainObject(entry)) continue;
+      if (typeof entry.id !== "string" || entry.id.trim() === "") continue;
+      if (typeof entry.reason !== "string" || entry.reason.trim() === "") continue;
+      exclude.push({ id: entry.id.trim(), reason: entry.reason.trim() });
+    }
+  }
+  const minCoverage = typeof value.minCoverage === "number" && Number.isFinite(value.minCoverage)
+    ? value.minCoverage
+    : undefined;
+  const packageEntry = typeof value.package === "string" && value.package.trim() !== "" ? value.package.trim() : undefined;
+  return {
+    ...(packageEntry === undefined ? {} : { package: packageEntry }),
+    adapters,
+    docs,
+    exclude,
+    ...(minCoverage === undefined ? {} : { minCoverage }),
+  };
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

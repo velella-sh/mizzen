@@ -204,6 +204,70 @@
       },
       "additionalProperties": false,
       "description": "The page's covered files that changed since it was last reviewed. Absent for a page without `covers` and for a current page."
+    },
+    "surface": {
+      "type": "object",
+      "required": ["coverage", "gaps", "exclusions"],
+      "properties": {
+        "coverage": {
+          "type": "object",
+          "required": ["counts", "documentedPercent", "undocumentedPercent", "areas"],
+          "additionalProperties": false,
+          "properties": {
+            "counts": {
+              "type": "object",
+              "required": ["documented", "partial", "undocumented", "excluded", "total"],
+              "additionalProperties": false,
+              "properties": {
+                "documented": { "type": "integer", "minimum": 0 },
+                "partial": { "type": "integer", "minimum": 0 },
+                "undocumented": { "type": "integer", "minimum": 0 },
+                "excluded": { "type": "integer", "minimum": 0 },
+                "total": { "type": "integer", "minimum": 0 }
+              }
+            },
+            "documentedPercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+            "undocumentedPercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+            "areas": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["area", "counts", "documentedPercent", "undocumentedPercent"],
+                "additionalProperties": false,
+                "properties": {
+                  "area": { "enum": ["api", "cli", "config", "openapi", "data", "version"] },
+                  "counts": {
+                    "type": "object",
+                    "required": ["documented", "partial", "undocumented", "excluded", "total"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "documented": { "type": "integer", "minimum": 0 },
+                      "partial": { "type": "integer", "minimum": 0 },
+                      "undocumented": { "type": "integer", "minimum": 0 },
+                      "excluded": { "type": "integer", "minimum": 0 },
+                      "total": { "type": "integer", "minimum": 0 }
+                    }
+                  },
+                  "documentedPercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+                  "undocumentedPercent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 }
+                }
+              }
+            }
+          }
+        },
+        "gaps": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many documentation gaps the surface report found."
+        },
+        "exclusions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How many documented exclusions the surface report holds."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The public-surface coverage counts. Present only when the site config declares a `surface` key."
     }
   },
   "additionalProperties": false

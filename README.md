@@ -128,6 +128,7 @@ Commands:
   verify [dir]              Check a built folder against the hash in its manifest
   versions snapshot <vN> [dir]
                             Copy the current pages and navigation into a new version folder
+  surface [dir]             Report public-surface documentation coverage and gaps (--json, --baseline, --min)
   watch [dir]               Rebuild the site whenever a source or theme file changes
   inputs export [dir]       Write selected collection sources to one transferable package (--collections, --out)
   inputs inspect <file>     Print a package's format, inputs, sizes, and hashes (--json); changes nothing
@@ -196,6 +197,9 @@ Options:
   --dry-run            For edit apply: print the diff without writing; for versions snapshot: print the files without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
   --proof <path>       Proof record for edit apply (default: <patch>.proof.json)
+  --baseline <file>    For surface: compare against an earlier report written by this command
+  --min <percent>      For surface: exit 1 when the documented percentage is below this, 0 to 100
+  --version <version>  For surface: the product version to inventory, recorded on every item
   -h, --help           Show this help
 
 Exit codes: 0 ok, 1 errors, 2 usage.
@@ -269,6 +273,7 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen diff <a> <b>` | Compares two built folders by their manifests and prints the pages, files, and records that changed, the moved pages, and the URLs that stopped answering. `--base <ref>` builds a git ref and compares it with the current site. `--format text\|json\|markdown`; exits `0` unless `--fail-on removed-pages,broken-urls,render-only` finds one (`1`). See [Compare two builds](/site-diff/). |
 | `mizzen verify [dir] --hash <hex>` | Hashes a built folder by the same rule the build used and compares it with `.mizzen/manifest.json` (or `--hash`). Exits `1` on a mismatch. |
 | `mizzen versions snapshot <vN> [dir]` | Copies every current page and the navigation into a new `vN/` folder and prints the files it wrote. `--dry-run` prints the same list and writes nothing. A name that exists, an invalid name, or a version that is not newer is refused and nothing is written; exits `1` on a refusal and `2` on a usage problem. |
+| `mizzen surface [dir] --json --baseline <file> --min <percent> --version <v>` | Inventories the public surface — TypeScript symbols, CLI commands and flags, config keys, OpenAPI operations, data fields, and versions — matches it to documentation evidence, and prints the versioned report: counts and percentages by area, the items with complete, partial, or no documentation, and every gap with its kind, id, source, and introduction version. A documented exclusion is counted apart from a gap. `--baseline` compares two reports and reports added, removed, and newly documented items without a file rename counting as a regression; `--min` exits `1` below the documented percentage. Writes nothing but the report. See [Public surface coverage](docs/public-surface.md). |
 | `mizzen watch [dir] --out <dir> --theme <dir>` | Builds `dir` once, then rebuilds whenever a source or theme file changes. Changes are debounced and builds run one at a time, in order; an unchanged build is restored from `.mizzen/cache`. Ctrl-C stops the watcher. |
 
 `--out` is resolved from the current working directory, not from the site root, for `build`, `dev`, `pack`, and `watch`; `dev`'s default is `<site>/.mizzen/dev` and `watch`'s is `<site>/.mizzen/watch`. `check` is the command to use in CI: it never touches `dist`. `pack` reads the site model and never the theme, so it needs no theme root.
@@ -438,6 +443,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `site-files` | No files: names the root files a site may own (`llms.txt`, `llms-full.txt`, `robots.txt`, `sitemap.xml`) so its own copy wins. |
 | `sitemap` | `sitemap.xml`. |
 | `sourcemap` | `sourcemap.json`, the line-exact source map (format). |
+| `surface` | `surface.json`, the public-surface coverage report: each item's documentation state, the gaps, the documented exclusions, and the counts by area. Written only when the config declares `surface`. |
 | `translations` | `translations.json`, each page's status in every configured language. |
 | `trust` | `trust.json`, each doc page's trust level, reasons, and last reviewer. |
 | `twins` | One Markdown twin per document page: the same URL with `.md` in place of the HTML file. |
