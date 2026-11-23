@@ -21,6 +21,7 @@ Front matter is a YAML block between two `---` lines at the top of a `.md` or `.
 | `description` | string |  | One sentence for the meta description, the `llms.txt` entry, and the search excerpt. |
 | `dir` | `ltr` or `rtl` |  | Text direction. Unset, it comes from the page's `lang`. |
 | `image` | string | `^(/\|https://)[^\s"<>]*$` | The page's social image: a path on this site or an `https` URL. `og:image` uses it. |
+| `knowledge` | object | `status`, `scope`, `rationale`, `citation`, `expires`, `evidence`, `public` | An explicit statement of what the page does not establish. `status` is one of `unknown`, `unsupported`, `unverified`, `not-applicable`, or `out-of-scope`; a value outside those is an error. See [Explicit unknowns](/explicit-unknowns/). |
 | `lang` | string | `^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$` | Language of the page as a BCP 47 tag, such as `en` or `fa`. Unset, it comes from the language prefix of its folder, then from `lang` in `mizzen.yml`. |
 | `last_modified_at` | string | `^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2}(\.\d+)?)?( ?(Z\|[+-]\d{2}:?\d{2}))?)?$` | The date the page last changed; the page's `<url>/index.json` reports it as `lastModified`. |
 | `layout` | string | not empty | The theme layout that renders the page. Unset, it comes from `defaults`, then the theme's default layout. An unknown name is an error. |

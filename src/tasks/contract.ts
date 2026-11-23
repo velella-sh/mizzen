@@ -79,6 +79,8 @@ interface RawCriterion {
   readonly statement: string;
   readonly check?: string;
   readonly review?: true;
+  readonly knowledge?: "unknown" | "unverified";
+  readonly needs?: { readonly evidence?: string; readonly review?: boolean };
 }
 
 /** A contract as validation leaves it: optional fields are still optional. */
@@ -232,11 +234,37 @@ function acceptanceOf(
       });
     }
 
+    // A criterion that rests on an unknown or unverified claim must say what would settle it: the check cannot prove
+    // what the claim itself declares it does not know. The needs sentence is kept so the proof can name it.
+    const knowledge = criterion.knowledge;
+    const needs = criterion.needs === undefined ? undefined : {
+      ...(criterion.needs.evidence === undefined ? {} : { evidence: criterion.needs.evidence.trim() }),
+      ...(criterion.needs.review === undefined ? {} : { review: criterion.needs.review }),
+    };
+    if (knowledge !== undefined) {
+      if (needs === undefined || (needs.evidence === undefined && needs.review !== true)) {
+        problems.push({
+          path: `/acceptance/${index}/needs`,
+          code: "task.acceptance-needs-missing",
+          message: `Criterion \`${criterion.id}\` rests on an ${knowledge} claim, so it needs the evidence or review that would settle it.`,
+        });
+      }
+      if (check !== undefined && criterion.review === true) {
+        problems.push({
+          path: `/acceptance/${index}/knowledge`,
+          code: "task.acceptance-knowledge-conflict",
+          message: `Criterion \`${criterion.id}\` names both a check and human review, which excludes the other; a knowledge criterion needs one path to settle it.`,
+        });
+      }
+    }
+
     return {
       id: criterion.id,
       statement: criterion.statement.trim(),
       ...(check === undefined ? {} : { check }),
       ...(criterion.review === undefined ? {} : { review: true }),
+      ...(knowledge === undefined ? {} : { knowledge }),
+      ...(needs === undefined ? {} : { needs }),
     };
   });
 }

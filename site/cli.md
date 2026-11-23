@@ -54,6 +54,7 @@ Commands:
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
+  knowledge [dir]           Report explicit unknowns, documentation gaps, and unsupported cases (--json, --baseline)
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
@@ -197,6 +198,7 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen inputs import <file> [dir] --accept <ids\|all>` | Validates the package, every destination path and size, and the destination lock, then installs the declared inputs and merges their lock entries. A differing file or lock entry changes nothing until its input is named by `--accept`; the same package installed twice changes nothing. Exits `1` on a conflict or bad package. A package holds raw source bytes: keep it private. See `docs/input-pack.md`. |
 | `mizzen init --starter <name> [dir] --theme <dir> --lang <a,b>` | Copies the theme's `starters/<name>/` folder into `dir` (default `.`), resolving the theme the way `build` does. `--list` prints each starter with its title and description from `starter.json`; `--lang` keeps only the named optional languages. It refuses a folder that is not empty and names a missing theme or starter. |
 | `mizzen mcp [dir] [--allow-edits] [--print-config <client>]` | Serves the site to an AI client over MCP on stdio. Read-only unless `--allow-edits` adds `apply_edit`. Logs go to stderr. See [MCP server](/mcp/). |
+| `mizzen knowledge [dir] --json --format <text\|json> --as-of <date> --baseline <file> --out <file> --fail-on <status>` | Reports every page and record with its declared knowledge status (unknown, unsupported, unverified, not-applicable, or out-of-scope) or an explicit `missing`, and lists the gaps while keeping an explicit unknown, a documentation gap, and an unsupported case apart. `--as-of` measures review against a fixed date; `--baseline` compares with an earlier report; `--fail-on` exits `1` on a named status or a documentation gap. See [Explicit unknowns](/explicit-unknowns/). |
 | `mizzen network check <file>` | Checks the shared network file: ids, paths, and titles. See [Several projects](/network/). |
 | `mizzen network update [dir]` | Fetches the network and writes `network.lock.json`; `--check` compares without writing and `--accept` takes a changed project. |
 | `mizzen network sitemap [dir]` | Writes the organization's sitemap index; `--url <origin>` names the host and `--out <dir>` the folder. |

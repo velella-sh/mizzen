@@ -19,6 +19,8 @@ import type {
   GraphEdgeKind,
   GraphIncludeInput,
   GraphInput,
+  GraphKnowledge,
+  GraphKnowledgeInput,
   GraphLinkInput,
   GraphNode,
   GraphProblem,
@@ -671,6 +673,26 @@ function includeUnit(input: GraphInput): Unit {
   return { nodes, edges: [], diagnostics: [] };
 }
 
+/** The public knowledge a node carries: status, scope, public citations, and whether it needs review. */
+function knowledgeOf(entry: GraphKnowledgeInput): GraphKnowledge {
+  const scope = entry.scope.map((limit) => ({ kind: limit.kind, value: limit.value })).sort(
+    (a, b) => byCodePoint(a.kind, b.kind) || byCodePoint(a.value, b.value),
+  );
+  const citations = entry.citations === undefined ? undefined : [...new Set(entry.citations)].sort(byCodePoint);
+  return {
+    status: entry.status,
+    scope,
+    ...(citations === undefined || citations.length === 0 ? {} : { citations }),
+    ...(entry.review === undefined ? {} : { review: entry.review }),
+    ...(entry.expires === undefined ? {} : { expires: entry.expires }),
+  };
+}
+
+/** Sorts knowledge entries by node id, then status, so a stable graph is built from any input order. */
+function sortKnowledge(entries: readonly GraphKnowledgeInput[]): GraphKnowledgeInput[] {
+  return [...entries].sort((a, b) => byCodePoint(a.node, b.node) || byCodePoint(a.status, b.status));
+}
+
 /** Merges unit nodes and edges, then rejects every edge with a missing end. */
 function assemble(input: GraphInput, units: readonly Unit[], snapshotLabel: string | undefined): GraphBuildResult {
   const nodeMap = new Map<string, GraphNode>();
@@ -681,8 +703,24 @@ function assemble(input: GraphInput, units: readonly Unit[], snapshotLabel: stri
     for (const edge of unit.edges) addEdge(edges, edge);
     diagnostics.push(...unit.diagnostics);
   }
+  // Knowledge is attached after every unit, so a declaration reaches a node whichever unit wrote it. A declaration
+  // that names a node this snapshot does not hold is reported rather than silently dropped.
+  const known = new Set(nodeMap.keys());
+  for (const entry of sortKnowledge(input.knowledge ?? [])) {
+    const node = nodeMap.get(entry.node);
+    if (node === undefined) {
+      diagnostics.push({
+        code: "graph.knowledge-unknown-node",
+        severity: "warning",
+        message: `The knowledge declaration names node "${entry.node}", which this snapshot does not hold.`,
+        ...(entry.pos === undefined ? {} : { pos: entry.pos }),
+      });
+      continue;
+    }
+    if (node.knowledge !== undefined) continue;
+    nodeMap.set(entry.node, { ...node, knowledge: knowledgeOf(entry) });
+  }
   const nodes = sortNodes(nodeMap.values());
-  const known = new Set(nodes.map((node) => node.id));
   const validEdges: GraphEdge[] = [];
   for (const edge of edges) {
     if (!known.has(edge.from) || !known.has(edge.to)) {

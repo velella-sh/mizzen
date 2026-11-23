@@ -57,8 +57,8 @@ test("the built package runs the reference suite offline and writes no fixture",
     });
     assert.equal(run.status, 0, run.stderr);
     const report = JSON.parse(run.stdout) as EvalReport;
-    assert.equal(report.totals.cases, 10);
-    assert.equal(report.totals.passed, 10);
+    assert.equal(report.totals.cases, 11);
+    assert.equal(report.totals.passed, 11);
     assert.equal(report.totals.invalid, 0);
     assert.equal(report.totals.unavailable, 0);
     assert.equal(report.gate.passed, true);
@@ -71,7 +71,7 @@ test("the built package runs the reference suite offline and writes no fixture",
     );
     assert.equal(mismatched.status, 1);
     const refused = JSON.parse(mismatched.stdout) as EvalReport;
-    assert.equal(refused.totals.invalid, 10);
+    assert.equal(refused.totals.invalid, 11);
     assert.ok(refused.cases.every((item) => item.findings.some((finding) => finding.code === "eval.pin-package")));
     assert.deepEqual(hashes(checkout), before);
   } finally {

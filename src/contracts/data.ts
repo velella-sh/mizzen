@@ -88,6 +88,11 @@ export interface DataRecord {
   readonly derived?: Readonly<Record<string, unknown>>;
   /** For a joined record: its key values, and why each output field holds its value. */
   readonly joined?: JoinedOutput;
+  /**
+   * The record's explicit knowledge declaration, when its `knowledge` field holds one; absent reads as `missing`.
+   * Parsed from the named field, so it never reaches the public fields as a value.
+   */
+  readonly knowledge?: import("./knowledge.ts").KnowledgeDeclaration;
 }
 
 /** What a build read from the collections a site declares. */

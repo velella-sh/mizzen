@@ -50,6 +50,20 @@ export type GraphEdgeKind =
 /** A scalar or list a node publishes as structured metadata. */
 export type GraphValue = string | number | boolean | readonly string[];
 
+/**
+ * The knowledge a node carries: its status, the scope that limits it, the public citations a reader may follow, and
+ * whether it needs review. A private rationale or citation value is never carried here.
+ */
+export interface GraphKnowledge {
+  readonly status: import("./knowledge.ts").KnowledgeStatus;
+  readonly scope: readonly GraphKnowledgeScope[];
+  /** Public citations only; a private citation is left out rather than redacted in place. */
+  readonly citations?: readonly string[];
+  /** True when the declaration needs review. */
+  readonly review?: boolean;
+  readonly expires?: string;
+}
+
 /** One node of a snapshot, with the source position and audience that make it inspectable. */
 export interface GraphNode {
   /** Stable identity within the site: a page is named by its source path, a block by its block id. */
@@ -63,6 +77,8 @@ export interface GraphNode {
   readonly url?: string;
   /** The node's structured metadata, already public: no secret values or machine-local paths. */
   readonly data?: Readonly<Record<string, GraphValue>>;
+  /** The node's explicit knowledge status, when it declares one; absent means no limitation is declared. */
+  readonly knowledge?: GraphKnowledge;
   /** Audiences allowed to see the node. Absent means public. */
   readonly audience?: readonly string[];
   /** The builder unit that owns the node, so a refresh reuses every unchanged unit. */
@@ -192,6 +208,30 @@ export interface GraphClaimInput {
   readonly pos?: SourcePos;
 }
 
+/** One scope limit a graph node carries, in the same `kind:value` shape a declaration writes. */
+export interface GraphKnowledgeScope {
+  readonly kind: import("./knowledge.ts").KnowledgeScopeKind;
+  readonly value: string;
+}
+
+/**
+ * The public knowledge of one node: its status, the scope that limits it, and the citations a reader may follow.
+ * A private rationale or citation value is never carried here; it is left out or replaced with a placeholder, so a
+ * graph never leaks a private value.
+ */
+export interface GraphKnowledgeInput {
+  /** The node whose knowledge this is, such as a page id or a claim id. */
+  readonly node: string;
+  readonly status: import("./knowledge.ts").KnowledgeStatus;
+  readonly scope: readonly GraphKnowledgeScope[];
+  /** Public citations only; a private citation is left out rather than redacted in place. */
+  readonly citations?: readonly string[];
+  /** True when the declaration needs review, so a query marks it as not definitive. */
+  readonly review?: boolean;
+  readonly expires?: string;
+  readonly pos?: SourcePos;
+}
+
 /** Everything {@link buildGraph} reads. Nothing here is reread from disk. */
 export interface GraphInput {
   /** The site model, for pages, blocks, headings, collections, records, and config. */
@@ -206,6 +246,8 @@ export interface GraphInput {
   readonly symbols?: readonly GraphSymbolInput[];
   /** Claims, checks, and lineage the collector read beyond the site model. */
   readonly evidence?: readonly GraphClaimInput[];
+  /** Knowledge declarations the collector read, by node id, so a query can publish a status a node carries. */
+  readonly knowledge?: readonly GraphKnowledgeInput[];
   /** A caller-supplied snapshot label; without it the snapshot id is a hash of the graph's own contents. */
   readonly snapshot?: string;
   /** Extra audiences by node id or unit, merged over the ones read from front matter and record fields. */

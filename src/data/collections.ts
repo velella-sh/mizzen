@@ -38,6 +38,7 @@ import { compileSchemas, validateRecords } from "./schema.ts";
 import { compareSchemas } from "./schema-evolution.ts";
 import type { SourceFormat } from "./schema-fix.ts";
 import { transformRecords, type TransformEvent } from "./transform.ts";
+import { applyCollectionKnowledge } from "../knowledge/records.ts";
 
 /** What {@link loadCollections} read. */
 export interface CollectionsResult {
@@ -734,6 +735,11 @@ export async function loadCollections(options: LoadCollectionsOptions): Promise<
   checkReferences(collections, config, diagnostics);
   const summary = skippedSummary(skipped);
   if (summary !== undefined) diagnostics.push(summary);
+
+  // A collection's named knowledge field is read once its records are final. The field is dropped from the record's
+  // fields here, so no page, feed, API response, or download carries it; only the parsed declaration remains.
+  const withKnowledge = applyCollectionKnowledge(collections, config.collections, diagnostics);
+  for (const name of Object.keys(withKnowledge)) collections[name] = withKnowledge[name]!;
 
   return {
     collections,

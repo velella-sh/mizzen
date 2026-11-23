@@ -43,6 +43,16 @@ export interface VerificationPlanEntry {
   readonly fixture: string;
   /** The evidence a passing result must contain, in one sentence. */
   readonly expected: string;
+  /**
+   * The criterion's own knowledge status, when it rests on an `unknown` or `unverified` claim. Such a criterion is
+   * never proved, whatever its check reports, and its claim names what would settle it.
+   */
+  readonly knowledge?: "unknown" | "unverified";
+  /** What a knowledge criterion still needs: the evidence to supply, or a required human review. */
+  readonly needs?: {
+    readonly evidence?: string;
+    readonly review?: boolean;
+  };
 }
 
 /** Why a criterion could not be planned. A plan with any problem cannot prove its task. */

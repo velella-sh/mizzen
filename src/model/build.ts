@@ -23,6 +23,8 @@ import { buildApiReferencePagesFor } from "../content/api-reference.ts";
 import { buildBlogPages } from "../content/blog/pages.ts";
 import { buildBlogRoutes, type BlogPostSource, type BlogRoute } from "../content/blog/routes.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
+import { declaresKnowledge, parseKnowledge, KNOWLEDGE_KEY } from "../knowledge/parse.ts";
+import { frontMatterKeySpan } from "../knowledge/span.ts";
 import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
@@ -392,6 +394,21 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     let frontMatter = withDefaults(fm.data, file.path, config.defaults);
     if (frontMatter.published === false) continue;
 
+    // The page's explicit knowledge status is read here, before the Markdown stage, so a bad value is reported at
+    // the exact `knowledge` key. A page without one stays `missing`, which the report keeps apart from the five.
+    const knowledgeSpan = frontMatterKeySpan(text, rel, KNOWLEDGE_KEY);
+    const knowledge = declaresKnowledge(frontMatter.knowledge)
+      ? parseKnowledge(frontMatter.knowledge, {
+          file: rel,
+          span: knowledgeSpan ?? posOf(rel, 1),
+          idPrefix: "page.knowledge",
+        })
+      : undefined;
+    for (const d of knowledge?.diagnostics ?? []) diagnostics.report(d);
+    // The raw key is kept in front matter for the layout, but the parsed declaration is what the graph, packs, and
+    // report read, so every consumer agrees on the same normalized shape.
+    const pageKnowledge = knowledge?.declaration;
+
     const isMarkdown = /\.(md|markdown)$/i.test(file.path);
     // Includes expand before the Markdown stage: only here is the site root known, so a Markdown plugin cannot read
     // the included file. The expanded body is the page's Markdown from then on, so twins, search, and links see it.
@@ -478,6 +495,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       html,
       markdown: directives.markdown,
       kind: "doc",
+      ...(pageKnowledge === undefined ? {} : { knowledge: pageKnowledge }),
     };
     // A page that declares a list is hooked once its list pages exist, so each generated page, including page one, gets
     // exactly one `content` hook and the declaring page is never hooked twice.

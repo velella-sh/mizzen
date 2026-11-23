@@ -12,6 +12,7 @@ import { parseFrontMatter } from "../content/frontmatter.ts";
 import { codeRefsOf } from "../drift/code-refs.ts";
 import { contractRefsOf } from "../drift/contract-refs.ts";
 import { exportedSymbols } from "../drift/symbols.ts";
+import { collectGraphKnowledge } from "../knowledge/graph.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 
 /** What {@link collectGraphInput} can add beyond the site model. */
@@ -22,6 +23,8 @@ export interface CollectOptions {
   readonly site: Site;
   /** Extra claims, checks, and lineage the caller already read. */
   readonly evidence?: GraphInput["evidence"];
+  /** Knowledge declarations to attach; read from the site when absent. */
+  readonly knowledge?: GraphInput["knowledge"];
   /** A snapshot label for the graph. */
   readonly snapshot?: string;
   /** Extra audiences by node id or unit. */
@@ -224,6 +227,7 @@ export async function collectGraphInput(options: CollectOptions): Promise<GraphI
     includes,
     codeRefs: refs,
     symbols,
+    knowledge: options.knowledge ?? collectGraphKnowledge(options.site),
     ...(options.evidence === undefined ? {} : { evidence: options.evidence }),
     ...(options.snapshot === undefined ? {} : { snapshot: options.snapshot }),
     ...(options.audience === undefined ? {} : { audience: options.audience }),

@@ -90,6 +90,13 @@ function entryOf(
     });
   }
 
+  const knowledge = criterion.knowledge;
+  const needs = criterion.needs;
+  const knowledgeProps = {
+    ...(knowledge === undefined ? {} : { knowledge }),
+    ...(needs === undefined ? {} : { needs }),
+  } as const;
+
   if (human) {
     return {
       criterion: criterion.id,
@@ -97,6 +104,7 @@ function entryOf(
       mode: "human",
       fixture,
       expected: spec?.expected.trim() || "an approved human review recorded for this criterion",
+      ...knowledgeProps,
     };
   }
 
@@ -114,6 +122,7 @@ function entryOf(
       ...(spec === undefined ? {} : { check: spec.check }),
       fixture,
       expected: spec?.expected.trim() ?? "",
+      ...knowledgeProps,
     };
   }
 
@@ -138,6 +147,7 @@ function entryOf(
     check,
     fixture,
     expected: spec?.expected.trim() ?? "",
+    ...knowledgeProps,
   };
 }
 

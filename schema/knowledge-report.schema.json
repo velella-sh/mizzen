@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/knowledge-report.schema.json",
+  "title": "Knowledge status report",
+  "description": "The versioned report `mizzen knowledge` prints: every page and record with its declared status or an explicit `missing`, the gaps split into explicit unknowns, documentation gaps, and unsupported cases, and counts. A subject with no declaration is never counted as one of the five statuses.",
+  "type": "object",
+  "required": ["version", "source", "entries", "gaps", "counts"],
+  "properties": {
+    "version": { "const": 1, "description": "The report version." },
+    "source": { "$ref": "#/$defs/source" },
+    "entries": {
+      "type": "array",
+      "description": "Every subject, sorted by kind then id.",
+      "items": { "$ref": "#/$defs/entry" }
+    },
+    "gaps": {
+      "type": "array",
+      "description": "Every gap, in report order: explicit unknowns and unsupported cases first, then documentation gaps.",
+      "items": { "$ref": "#/$defs/gap" }
+    },
+    "counts": { "$ref": "#/$defs/counts" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "status": {
+      "enum": ["unknown", "unsupported", "unverified", "not-applicable", "out-of-scope"],
+      "description": "One of the five declared statuses."
+    },
+    "presenceStatus": {
+      "enum": ["unknown", "unsupported", "unverified", "not-applicable", "out-of-scope", "missing"],
+      "description": "A declared status, or `missing` for a subject that declares none."
+    },
+    "scopeKind": {
+      "enum": ["surface", "behavior", "platform", "version"],
+      "description": "One scope dimension."
+    },
+    "scope": {
+      "type": "object",
+      "required": ["kind", "value"],
+      "properties": {
+        "kind": { "$ref": "#/$defs/scopeKind" },
+        "value": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "review": {
+      "type": "object",
+      "required": ["required", "reasons"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "reasons": {
+          "type": "array",
+          "items": { "enum": ["expired", "evidence-changed"] }
+        }
+      },
+      "additionalProperties": false
+    },
+    "publicDeclaration": {
+      "type": "object",
+      "required": ["status", "scope", "review", "span", "redacted"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "scope": { "type": "array", "items": { "$ref": "#/$defs/scope" } },
+        "rationale": { "type": "string", "minLength": 1 },
+        "citation": { "type": "string", "minLength": 1 },
+        "review": { "$ref": "#/$defs/review" },
+        "span": { "type": "string", "minLength": 1 },
+        "expires": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "redacted": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "subject": {
+      "type": "object",
+      "required": ["kind", "id"],
+      "properties": {
+        "kind": { "enum": ["page", "record"] },
+        "id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "entry": {
+      "type": "object",
+      "required": ["subject", "span"],
+      "properties": {
+        "subject": { "$ref": "#/$defs/subject" },
+        "declaration": { "$ref": "#/$defs/publicDeclaration" },
+        "span": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "gap": {
+      "type": "object",
+      "required": ["subject", "kind", "status", "span", "review"],
+      "properties": {
+        "subject": { "$ref": "#/$defs/subject" },
+        "kind": { "enum": ["unknown", "documentation-gap", "unsupported"] },
+        "status": { "$ref": "#/$defs/presenceStatus" },
+        "span": { "type": "string", "minLength": 1 },
+        "review": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "counts": {
+      "type": "object",
+      "required": ["unknown", "unsupported", "unverified", "not-applicable", "out-of-scope", "missing"],
+      "properties": {
+        "unknown": { "type": "integer", "minimum": 0 },
+        "unsupported": { "type": "integer", "minimum": 0 },
+        "unverified": { "type": "integer", "minimum": 0 },
+        "not-applicable": { "type": "integer", "minimum": 0 },
+        "out-of-scope": { "type": "integer", "minimum": 0 },
+        "missing": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "object",
+      "properties": {
+        "build": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "asOf": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

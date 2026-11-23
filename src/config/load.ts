@@ -974,6 +974,7 @@ function collectionsFrom(value: unknown): Readonly<Record<string, CollectionConf
       ...(isPlainObject(entry) && typeof entry.llms === "boolean" ? { llms: entry.llms } : {}),
       ...(json === undefined ? {} : { json }),
       ...(typeof entry.evidence === "string" ? { evidence: entry.evidence } : {}),
+      ...(typeof entry.knowledge === "string" ? { knowledge: entry.knowledge } : {}),
       ...(entry.onInvalid === "error" || entry.onInvalid === "skip" ? { onInvalid: entry.onInvalid } : {}),
       ...(onRemoved === undefined ? {} : { onRemoved }),
       ...(lifecycle === undefined ? {} : { lifecycle }),

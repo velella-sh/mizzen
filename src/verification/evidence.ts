@@ -63,6 +63,36 @@ function fixtureMissing(entry: VerificationPlanEntry): string {
   return `the fixture "${entry.fixture}" has no recorded result in the transaction`;
 }
 
+/** The sentence naming what a knowledge criterion still needs. */
+function knowledgeMissing(entry: VerificationPlanEntry): string {
+  const evidence = entry.needs?.evidence;
+  const review = entry.needs?.review === true;
+  const parts: string[] = [];
+  if (evidence !== undefined) parts.push(`the evidence "${evidence}"`);
+  if (review) parts.push(`a human review of criterion "${entry.criterion}"`);
+  return parts.length === 0
+    ? `evidence or a human review that settles the ${entry.knowledge} claim for "${entry.criterion}"`
+    : `the ${entry.knowledge} claim cannot be proved; it needs ${parts.join(" and ")}`;
+}
+
+/**
+ * A knowledge criterion is never proved: an `unknown` or `unverified` claim cannot become `verified` because a check
+ * passed. This runs before the check logic, so the verdict is withheld and the claim names what would settle it.
+ */
+function knowledgeClaim(
+  entry: VerificationPlanEntry,
+  evidenceItems: readonly VerificationEvidence[],
+): VerificationClaim {
+  return {
+    id: entry.criterion,
+    criterion: entry.criterion,
+    statement: entry.statement,
+    status: entry.needs?.review === true ? "needs-review" : "unproven",
+    evidence: evidenceItems,
+    missing: [knowledgeMissing(entry)],
+  };
+}
+
 /** A claim for a check criterion. */
 function checkClaim(
   entry: VerificationPlanEntry,
@@ -94,6 +124,9 @@ function checkClaim(
   ];
   const fixture = fixtureEvidence(entry, evidence, check);
   if (fixture !== undefined) evidenceItems.push(fixture);
+
+  // A claim the criterion itself declares unknown or unverified is never proved, even when its check passed.
+  if (entry.knowledge !== undefined) return knowledgeClaim(entry, evidenceItems);
 
   if (check.status === "failed" || check.status === "timed-out" || check.status === "rejected") {
     return { ...base, status: "failed", evidence: evidenceItems, missing: [] };
@@ -137,6 +170,10 @@ function humanClaim(
       ...(evidence.humanReview.reviewer === undefined ? {} : { reviewer: evidence.humanReview.reviewer }),
     });
   }
+
+  // A knowledge criterion is never proved, even by an approval: the claim itself says the answer is not established,
+  // so the task stays actionable by naming the evidence or review it still needs.
+  if (entry.knowledge !== undefined && !rejected) return knowledgeClaim(entry, evidenceItems);
 
   const missing: string[] = [];
   if (!approved && !rejected) missing.push(`a human review decision for criterion "${entry.criterion}"`);

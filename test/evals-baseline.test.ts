@@ -18,7 +18,7 @@ test("a report compared with itself has no changes", async () => {
   assert.equal(comparison.comparable, true);
   assert.deepEqual(comparison.reasons, []);
   assert.deepEqual(comparison.regressed, []);
-  assert.equal(comparison.cases.filter((item) => item.status === "unchanged").length, 10);
+  assert.equal(comparison.cases.filter((item) => item.status === "unchanged").length, 11);
   assert.ok(comparison.cases.every((item) => item.status !== "incomparable"));
 });
 

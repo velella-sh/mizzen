@@ -25,6 +25,8 @@ main:
         url: /cli/
       - title: Outputs
         url: /outputs/
+      - title: Explicit unknowns
+        url: /explicit-unknowns/
       - title: Analytics and verification
         url: /analytics/
       - title: Several projects

@@ -211,6 +211,25 @@
         "review": {
           "const": true,
           "description": "Explicitly requires human review; the criterion is never proved automatically."
+        },
+        "knowledge": {
+          "enum": ["unknown", "unverified"],
+          "description": "The claim's own knowledge status. A criterion resting on an unknown or unverified claim is never proved, whatever a check reports."
+        },
+        "needs": {
+          "type": "object",
+          "description": "What would settle a knowledge criterion: the evidence to supply, or a required human review.",
+          "properties": {
+            "evidence": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "\\S"
+            },
+            "review": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         }
       },
       "oneOf": [

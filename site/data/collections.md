@@ -46,6 +46,7 @@ collections:
 | `llms` | boolean | `true` | `false` keeps the collection's record pages out of `llms-full.txt`. |
 | `json` | object | every field | `json.fields` lists the record fields the page JSON publishes, in order; an empty list publishes none. |
 | `evidence` | string | | Top-level field that maps a record's fields to the claims that back them. Each claim has an `id`, `title`, and `url`, and the page JSON publishes the same claims. |
+| `knowledge` | string | | Top-level field that holds an explicit knowledge declaration: `status`, `scope`, `rationale`, `citation`, `expires`, `evidence`, and `public`. The field is read once, then dropped from the record, so no output publishes it raw. See [Explicit unknowns](/explicit-unknowns/). |
 | `onInvalid` | `error` or `skip` | `error` | What an invalid record does: `error` fails the build, `skip` leaves it out of the site with a warning. |
 | `onRemoved` | `error`, `gone`, or `{redirect}` | `error` once `urls.lock.json` exists | What a record that was published and is no longer in the collection does. See [Stable URLs](/data/urls/). |
 | `lifecycle` | object | | A record's state and what retirement does: `lifecycle.field` (default `state`), `lifecycle.states`, `lifecycle.retired`, `lifecycle.replacement`, `lifecycle.url` (`retain` or `redirect`), and `lifecycle.machine`. Unset, every record is published. |

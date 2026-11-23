@@ -1140,6 +1140,11 @@
           "minLength": 1,
           "description": "Top-level record field that maps the record's other fields to the claims that back them, each with an id, title, and url; absent keeps evidence off."
         },
+        "knowledge": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Top-level record field that holds an explicit knowledge declaration (status, scope, rationale, citation, expires, evidence, public); absent keeps knowledge off."
+        },
         "onInvalid": {
           "enum": [
             "error",

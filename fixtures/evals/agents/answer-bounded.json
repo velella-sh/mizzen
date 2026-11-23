@@ -1,0 +1,28 @@
+{
+  "pages": [
+    "guide/windows.md"
+  ],
+  "symbols": [],
+  "answer": {
+    "text": "The documentation does not establish whether the engine runs on Windows; the result is unknown and the page declares that limitation.",
+    "citations": [
+      "guide/windows.md:12"
+    ]
+  },
+  "toolCalls": [
+    {
+      "name": "context",
+      "version": "1",
+      "ok": true
+    }
+  ],
+  "usage": {
+    "inputTokens": 700,
+    "outputTokens": 40
+  },
+  "trace": {
+    "toolCalls": 1,
+    "inputTokens": 700,
+    "outputTokens": 40
+  }
+}
