@@ -71,6 +71,8 @@ function toComponent(node: AnyDirective): void {
   const props: Record<string, string> = {};
   for (const [key, value] of Object.entries(node.attributes ?? {})) props[key] = value ?? "";
   const hProperties: Record<string, string> = { name: node.name, "data-props": JSON.stringify(props) };
+  // A text directive sits inside a paragraph; the render step tells the component through `inline`.
+  if (node.type === "textDirective") hProperties["data-inline"] = "";
   const data = (node.data ??= {}) as Record<string, unknown>;
   data.hName = "sl-component";
   data.hProperties = hProperties;

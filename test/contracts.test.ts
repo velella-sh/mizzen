@@ -136,7 +136,7 @@ test("example values of every contract type type-check and carry what the contra
   assert.equal(plain.snapshot, undefined);
   assert.deepEqual(site.network?.projects.filter((p) => p.current).map((p) => p.id), ["docs"]);
   assert.deepEqual(chrome({ site, page, trail, pager }), { type: "header", title: "Example" });
-  assert.deepEqual(component({ props: { kind: "note" }, page, site, html: "", renderComponent }), { type: "aside", kind: "note" });
+  assert.deepEqual(component({ props: { kind: "note" }, page, site, html: "", inline: false, renderComponent }), { type: "aside", kind: "note" });
   const reported: Diagnostic[] = [];
   const files = await output.run(site, { renderPage: async () => "", report: (d) => reported.push(d) });
   assert.deepEqual(files, [{ path: "example.txt", contents: page.url }]);

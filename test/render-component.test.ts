@@ -1,6 +1,6 @@
 /**
  * A unit renders another component by name through the registry, so a site's override applies and the component's CSS
- * and island follow it onto the page.
+ * and island follow it onto the page; and a component learns whether it was written inline.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -25,6 +25,7 @@ const plain: Layout = ({ page: p, islands }) =>
 const components: Record<string, ThemeComponent> = {
   inner: { component: ({ props }) => `<b>${String(props.text ?? "")}</b>`, css: "components/inner/style.css", island: { name: "inner", src: "/inner.js" } },
   outer: { component: ({ renderComponent }) => `<p>${renderComponent("inner", { text: "hi" })}</p>` },
+  probe: { component: ({ inline }) => `<u>${inline}</u>` },
   loop: { component: ({ renderComponent }) => renderComponent("loop") },
 };
 
@@ -50,6 +51,15 @@ test("units that render each other without end stop with a diagnostic", () => {
   assert.deepEqual(result.diagnostics.map((d) => d.id), ["render.component-depth"]);
 });
 
+test("inline is true for a text directive and false for leaf, container, and alert", () => {
+  const html = [
+    '<sl-component name="probe" data-props="{}" data-inline></sl-component>',
+    '<sl-component name="probe" data-props="{}"></sl-component>',
+  ].join("");
+  const result = renderPage({ site, page: page(html), layout: plain, components, trail: [], pager: {}, head });
+  assert.deepEqual([...result.html.matchAll(/<u[^>]*>(\w+)<\/u>/g)].map((m) => m[1]), ["true", "false"]);
+});
+
 function tree(root: string, files: Record<string, string>): void {
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
@@ -57,7 +67,7 @@ function tree(root: string, files: Record<string, string>): void {
   }
 }
 
-test("a build renders the site's override of a component named from another", async () => {
+test("a build renders the site's override of a component named from another, and marks directives inline", async () => {
   const parent = mkdtempSync(join(tmpdir(), "render-component-"));
   try {
     tree(join(parent, "theme"), {
@@ -66,16 +76,18 @@ test("a build renders the site's override of a component named from another", as
       "components/badge/index.ts": 'export const directive = "badge";\nexport default () => "theme badge";\n',
       "components/badge/style.css": ".theme-badge { color: red; }\n",
       "components/card/index.ts": 'export const directive = "card";\nexport default (p: any) => `<div>${p.renderComponent("badge")}</div>`;\n',
+      "components/probe/index.ts": 'export const directive = "probe";\nexport default (p: any) => `<u>${p.inline}</u>`;\n',
     });
     tree(join(parent, "site"), {
       "mizzen.yml": "title: T\ntheme:\n  overrides:\n    components:\n      badge: theme/badge.ts\n",
       "theme/badge.ts": 'export const directive = "badge";\nexport default () => "site badge";\n',
-      "index.md": "---\ntitle: Home\n---\n\n::card\n",
+      "index.md": "---\ntitle: Home\n---\n\n::card\n\nText :probe[x] here.\n\n::probe\n",
     });
     const out = join(parent, "out");
     await build({ root: join(parent, "site"), out, themeRoot: join(parent, "theme"), defaultLayout: "doc" });
     const text = readFileSync(join(out, "index.html"), "utf8");
     assert.match(text, /<div[^>]*>site badge<\/div>/, "the override, not the theme's unit");
+    assert.deepEqual([...text.matchAll(/<u[^>]*>(\w+)<\/u>/g)].map((m) => m[1]), ["true", "false"]);
   } finally {
     rmSync(parent, { recursive: true, force: true });
   }

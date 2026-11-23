@@ -229,6 +229,7 @@ function resolveComponents(
       page,
       site,
       html: nested.html,
+      inline: attrs["data-inline"] !== undefined,
       renderComponent,
     });
     const rendered = stringOf(node);
@@ -300,7 +301,7 @@ export function renderPage(options: RenderOptions): RenderResult {
     requested.add(name);
     depth += 1;
     try {
-      return stringOf(entry.component({ props, page, site, html, renderComponent }));
+      return stringOf(entry.component({ props, page, site, html, inline: false, renderComponent }));
     } finally {
       depth -= 1;
     }

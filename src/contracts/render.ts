@@ -132,6 +132,12 @@ export interface ComponentProps<P extends Readonly<Record<string, unknown>> = Re
   readonly site: Site;
   /** The component's body, already rendered to HTML. */
   readonly html: string;
+  /**
+   * True when the component was written as a text directive (`:name[label]{...}`), so it sits inside a paragraph;
+   * false for a leaf (`::name`) or container (`:::name`) directive, an alert, a component the engine adds, and one
+   * rendered through {@link ComponentProps.renderComponent}.
+   */
+  readonly inline: boolean;
   /** Renders another component by name through the site's registry; see {@link RenderComponent}. */
   readonly renderComponent: RenderComponent;
 }
