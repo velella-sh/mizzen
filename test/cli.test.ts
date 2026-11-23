@@ -226,7 +226,7 @@ test("every command usage names is dispatched", async () => {
         .map((line) => line.trim().split(/\s+/)[0]!),
     ),
   ];
-  assert.deepEqual(commands, ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"]);
+  assert.deepEqual(commands, ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "examples", "graph", "import", "init", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"]);
   for (const command of commands) {
     const { errors, io } = capture();
     const status = await main([command, "--help"], io);
