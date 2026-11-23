@@ -38,8 +38,8 @@ test("uses gaps for missing dates, missing metrics, incomplete coverage and inco
   const { report } = prepareReport(input([
     run("first", [finding("warning")], { date: "2026-11-20", metrics: [{ id: "size", unit: "B", value: 10 }] }),
     run("no-date", [], { metrics: [{ id: "size", unit: "B", value: 20 }] }),
-    run("different-unit", [], { date: "2026-11-21", metrics: [{ id: "size", unit: "KiB", value: 1 }] }),
-    run("partial", [], { date: "2026-11-22", coverage: "partial" }),
+    run("different-unit", [], { date: "2026-11-21T14:00:00.123Z", metrics: [{ id: "size", unit: "KiB", value: 1 }] }),
+    run("partial", [], { date: "2026-11-22T14:00:00Z", coverage: "partial" }),
     run("empty", [], { date: "2026-11-23" }),
   ]), "");
   assert.deepEqual(report?.series.find(({ id }) => id === "warning")?.points.map(({ value }) => value), [1, null, 0, null, 0]);

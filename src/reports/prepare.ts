@@ -35,7 +35,9 @@ function canonical(value: unknown): unknown {
 function instantOf(date: string): number | undefined {
   const instant = Date.parse(date);
   if (!Number.isFinite(instant)) return undefined;
-  const expected = date.length === 10 ? `${date}T00:00:00.000Z` : date.replace(/(\d\d)Z$/, "$1.000Z");
+  const expected = date.length === 10 ? `${date}T00:00:00.000Z`
+    : date.includes(".") ? date
+    : `${date.slice(0, -1)}.000Z`;
   return new Date(instant).toISOString() === expected ? instant : undefined;
 }
 
