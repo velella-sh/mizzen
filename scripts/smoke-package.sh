@@ -146,6 +146,7 @@ JS
 
 # Ingest evidence with the installed bin and reproduce the site with only the lock and local store.
 mkdir -p evidence-site evidence-theme/src evidence-theme/layouts
+printf '{"type":"module"}\n' > evidence-theme/package.json
 printf 'title: Evidence smoke\n' > evidence-site/mizzen.yml
 printf '# Home\n' > evidence-site/index.md
 printf 'export const theme = { name: "test", folders: ["layouts"] };\n' > evidence-theme/src/index.ts
@@ -190,6 +191,9 @@ const report = readFileSync("evidence-out/.mizzen/evidence.json", "utf8");
 assert.equal(JSON.parse(report).claims[0].status, "verified");
 build("evidence-replay");
 assert.equal(readFileSync("evidence-replay/.mizzen/evidence.json", "utf8"), report);
+const identity = (out) => JSON.parse(readFileSync(`${out}/.mizzen/manifest.json`, "utf8")).build.hash;
+assert.equal(identity("evidence-replay"), identity("evidence-out"));
+cli("verify", "evidence-replay");
 const pinned = `evidence-site/.mizzen/evidence/${artifactSha256}.artifact`;
 writeFileSync(pinned, "altered artifact");
 assert.throws(() => build("evidence-replay"), /artifact SHA-256 does not match/);
