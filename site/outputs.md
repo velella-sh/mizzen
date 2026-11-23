@@ -16,6 +16,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `code-meta-check` | No files: reports fence meta that names lines the fence does not have. |
 | `collection-index` | `data/<collection>.index.json` for each collection with `index`: a column layout of its records and page URLs, split into numbered chunks over the byte budget. |
 | `collection-csv` | `data/<collection>.csv` and `data/<collection>.sha256` for every collection: its records as CSV and the checksums of its raw files. `collections.<name>.raw: false` turns it off. |
+| `check-report` | Public `data.json` at the configured report route when `outputs.check-report` is enabled. |
 | `collection-json` | `data/<collection>.json` for every collection: each record's id, URL, and page JSON address, and `data/<collection>.raw.json` with every record and its snapshot. |
 | `context-pack` | `pack/<topic>.md` for each topic in `_data/context-packs.yml`: the best pages for the topic, trimmed to its token budget, with each page's URL and source path. |
 | `data-changelog` | `feeds/<collection>-changes.xml`, an Atom feed of a collection's change history, when its `changelog` pages are on and the site has `url`. |
