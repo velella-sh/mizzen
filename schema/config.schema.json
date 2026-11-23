@@ -261,6 +261,10 @@
         "failOnFailure": {
           "type": "boolean",
           "description": "Report a failed example as an error at its fence, so `mizzen check` exits 1. Default false."
+        },
+        "pinned": {
+          "type": "boolean",
+          "description": "Read .mizzen-examples.json and leave example execution to mizzen examples record. Default false."
         }
       },
       "description": "How the examples-report output treats a failing example. Default: a warning that never fails the build."

@@ -20,7 +20,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `context-pack` | `pack/<topic>.md` for each topic in `_data/context-packs.yml`: the best pages for the topic, trimmed to its token budget, with each page's URL and source path. |
 | `data-changelog` | `feeds/<collection>-changes.xml`, an Atom feed of a collection's change history, when its `changelog` pages are on and the site has `url`. |
 | `drift-report` | `drift.json`, every drift finding grouped by page URL. |
-| `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. |
+| `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. [Pinned mode](/example-results/) also includes current recorded results keyed by page URL and fence ID. |
 | `feed` | `changes.xml`, an Atom feed of the 30 most recently changed doc pages, when the config has `url`. |
 | `feeds` | `feeds/<name>.xml`, `feeds/<name>.rss.xml`, and `feeds/<name>.json` for each feed the config declares, in the formats it names. |
 | `footnote-check` | No files: reports footnote references with no definition. |

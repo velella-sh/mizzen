@@ -98,6 +98,7 @@ Commands:
   eval [suite]              Run a deterministic evaluation suite and print its report (--format, --out, --baseline)
   evidence ingest <envelope.json> [dir] [--artifact <file>]
                             Validate evidence and store it by SHA-256
+  examples record [dir]     Run and record fences (--date YYYY-MM-DD --commit <full SHA>)
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -260,6 +261,7 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen published-site verify <bundle> <attestation.json> <trust-policy.json>` | Verifies the site bundle and its evidence offline against a local trust policy and prints a JSON report. Exits `1` if verification fails. |
 | `mizzen published-site check --sitemap <url> [--domain <host>] [--redirects <file>]` | Fetches every URL in a sitemap or sitemap index and reports each page's status code, canonical URL, and redirect destination. `--domain` is the only host it may request; `--redirects` names a JSON map of expected sources to final addresses. `--format text\|json`; writes nothing and exits `1` on an error. |
 | `mizzen readiness [built] --report <file> --badge <file> --compare <file> --min-overall <n> --min <section>=<n> --fail-on-unknown` | Scores a built folder against the [public readiness rubric](docs/readiness.md): structure, navigation, context, examples, verification, permissions, and maintenance, with weights, unknowns, located findings, and remediation. Writes a versioned JSON report whose digest verifies, an SVG or Markdown badge, and an optional comparison with an earlier report. Exits `1` on a failed critical rule, a failed threshold, or a failing report. |
+| `mizzen examples record [dir] --date YYYY-MM-DD --commit <full SHA>` | Records per-fence results in `.mizzen-examples.json`. Requires `examples.pinned: true`. See [Pinned example results](site/example-results.md). |
 | `mizzen graph [dir] [--from <id>] [--to <id>]` | Answers one query against the knowledge graph: a node's neighbors and the shortest path to another node, with the same JSON and node ids as the `query_graph` MCP tool. `--depth`, `--nodes`, and `--max-output` bound the answer; a bounded answer is `partial` and carries `--cursor`. `--allow` names the audiences the caller may read. |
 | `mizzen references check <file\|-> [dir]` | Resolves a JSON array of stored block references (`{"version": 1, "page": "<source>", "block": "<id>"}`) against the site's current build. Prints one JSON array of resolutions; a reference is `resolved` with its current URL, `removed` when `blocks.lock.json` recorded it, or `unknown`. Exits `1` when any reference is not resolved. |
 | `mizzen diff <a> <b>` | Compares two built folders by their manifests and prints the pages, files, and records that changed, the moved pages, and the URLs that stopped answering. `--base <ref>` builds a git ref and compares it with the current site. `--format text\|json\|markdown`; exits `0` unless `--fail-on removed-pages,broken-urls,render-only` finds one (`1`). See [Compare two builds](/site-diff/). |
@@ -302,7 +304,7 @@ A site's settings live in `mizzen.yml` at its root; every path in the file is re
 | `repository` | `{url, branch, dir}` | | Where the source lives, for "Edit this page" links and the "Edit with your agent" prompt. `branch` defaults to `main`; `dir` is the site root's folder in the repository, default `""`. |
 | `theme` | `{name, options}` | | The theme package or folder, and the options handed to it unread. The theme validates its own options. |
 | `search` | `false` or `{text}` | `{}` | `false` builds no search index. `text` is the most characters of a page's body the index keeps (default `300`); titles and headings are always indexed. |
-| `examples` | `{failOnFailure}` | none | Runs fences marked `test` and writes `examples.json`. `failOnFailure: true` reports a failed example as an error at its fence, so `mizzen check` exits `1`; unset, a failure is a warning and the build succeeds. |
+| `examples` | `{failOnFailure, pinned}` | none | Runs fences marked `test` and writes `examples.json`. `failOnFailure: true` reports failed examples as errors. `pinned: true` uses [recorded results](site/example-results.md) during the build. |
 | `social` | `{template, fonts}` | none | Turns on a generated share image for every page. `template` names `_templates/social/<template>.svg` in the source folder (1200 by 630, text slots marked `data-slot`); `fonts` lists the `.ttf`, `.otf`, or `.woff` files, relative to the site root, the images are drawn with. No system font is used. A page sets `social: <name>` in its front matter for another template, `social: false` for none, and its own `image` always wins. Without the key no image is written. The engine ships no template; the theme or the site provides one. |
 | `redirects` | map of path to path or URL | `{}` | Redirect pages: each key is an old path under `base`, each value a path on the site or an `https` URL. |
 | `outputs` | map of name to boolean | every output on | Turns one output off by its name, such as `twins: false`. The names are in [Outputs](#outputs). |
@@ -398,7 +400,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `context-pack` | `pack/<topic>.md` for each topic in `_data/context-packs.yml`: the best pages for the topic, trimmed to its token budget, with each page's URL and source path. |
 | `data-changelog` | `feeds/<collection>-changes.xml`, an Atom feed of a collection's change history, when its `changelog` pages are on and the site has `url`. |
 | `drift-report` | `drift.json`, every drift finding grouped by page URL. |
-| `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. |
+| `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. [Pinned mode](site/example-results.md) also includes current recorded results keyed by page URL and fence ID. |
 | `feed` | `changes.xml`, an Atom feed of the 30 most recently changed doc pages, when the config has `url`. |
 | `feeds` | `feeds/<name>.xml`, `feeds/<name>.rss.xml`, and `feeds/<name>.json` for each feed the config declares, in the formats it names. |
 | `footnote-check` | No files: reports footnote references with no definition. |

@@ -1,10 +1,11 @@
-import type { Diagnostic, Page, Site, SourcePos } from "../contracts/index.ts";
+import type { Diagnostic, ExampleRunStatus, Page, RecordedExampleResult, Site, SourcePos } from "../contracts/index.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
-import { examplesOf, type MarkdownExample } from "../markdown/plugins/example-fence.ts";
+import { type MarkdownExample } from "../markdown/plugins/example-fence.ts";
 import { cachedRun, exampleCache, exampleCacheDirOf, type ExampleCache } from "../pipeline/examples/cache.ts";
 import { exampleFailed, exampleSandboxUnavailable } from "../pipeline/examples/diagnostic.ts";
 import { runNodeExample, type ExampleLang } from "../pipeline/examples/run-node.ts";
 import { runShellExample, sandboxAvailable } from "../pipeline/examples/run-shell.ts";
+import { exampleHash, exampleRoute, pageExamples, type ExamplesLock, type RecordedExamples } from "../examples/pinned.ts";
 
 /**
  * Writes `examples.json`: one entry per page with how many runnable examples it declares, how many passed, how many
@@ -27,9 +28,8 @@ import { runShellExample, sandboxAvailable } from "../pipeline/examples/run-shel
  *
  * Running an example makes the build depend on the machine it runs on: the installed Node version, `PATH`, the
  * process limit, and whatever the example reads from the network. A build has to be deterministic,
- * so `examples.json` itself never records a duration, a timestamp, a machine name, or a run order: only counts, in a
- * fixed key order, sorted by page URL. The counts are stable when the examples are, and a flaky example shows up as a
- * diff in `examples.json`. A site that wants no execution can switch the output off with
+ * so the legacy `examples.json` records only counts, in a fixed key order, sorted by page URL. Pinned mode reports
+ * provenance from an earlier explicit run. A site can switch the output off with
  * `outputs: { examples-report: false }`.
  *
  * ## Cache
@@ -106,9 +106,6 @@ const NODE_LANGS: ReadonlySet<string> = new Set(["js", "mjs", "ts"]);
 
 /** Languages `runShellExample` runs. */
 const SHELL_LANGS: ReadonlySet<string> = new Set(["bash", "sh"]);
-
-/** The bare meta token that marks an example, used as a cheap pre-filter before a page is parsed again. */
-const TEST_TOKEN = "test";
 
 /** Compares by code point, never by locale. */
 function byCodePoint(a: string, b: string): number {
@@ -221,29 +218,40 @@ function diagnosticOf(
 }
 
 /**
- * Runs a site's examples and returns the `examples.json` file: one entry per page, sorted by URL, with `total`,
- * `passed`, `failed`, and `skipped` counts in a fixed key order. Pages without examples are present with zeros.
+ * Runs a site's examples and returns page totals and optional per-fence evidence. Pages without examples
+ * are present with zero totals.
  *
  * Only doc pages are parsed and run: an app page has no Markdown body of its own, so it is present with zeros. The
  * runner, the cache folder, and the report sink are options, so a test can use a fake runner and a temp cache.
  */
-export async function examplesReport(
+async function runExamples(
   site: Site,
-  options: ExamplesReportOptions = {},
-): Promise<readonly OutputFile[]> {
+  options: ExamplesReportOptions,
+  recording?: Pick<RecordedExampleResult, "date" | "commit">,
+): Promise<{ readonly pages: readonly PageExamples[]; readonly examples: RecordedExamples }> {
   const runner = options.runner ?? defaultRunner(options);
   const cache = options.cacheDir === undefined ? undefined : exampleCache({ dir: options.cacheDir });
   const failOnFailure = site.config.examples?.failOnFailure === true;
   const pages: PageExamples[] = [];
   // Probed only when the default runners are about to run a real example, so a fake runner stays sandbox-free.
-  let trustChecked = false;
+  let hasSandbox: boolean | undefined;
+  const recorded: Record<string, Record<string, RecordedExampleResult>> = {};
+  const save = (page: Page, example: MarkdownExample, status: ExampleRunStatus): void => {
+    if (recording === undefined) return;
+    const route = exampleRoute(page.url, site.config.base);
+    (recorded[route] ??= {})[example.id] = {
+      status,
+      file: example.pos.file ?? page.source.file,
+      line: example.pos.line,
+      language: example.lang,
+      ...recording,
+      sha256: exampleHash(example),
+    };
+  };
 
   const allPages = [...site.pages].sort((a, b) => byCodePoint(a.url, b.url));
   for (const page of allPages) {
-    // Every example's meta contains the token, so a page without the substring cannot carry one and is not parsed
-    // again. This keeps a large site without examples from paying for a second parse per page.
-    const examples =
-      page.kind === "doc" && page.markdown.includes(TEST_TOKEN) ? await examplesOf(page) : [];
+    const examples = await pageExamples(page, recording !== undefined);
     let passedCount = 0;
     let failedCount = 0;
     let skipped = 0;
@@ -253,19 +261,27 @@ export async function examplesReport(
       const kind = kindOf(lang);
       if (kind === undefined) {
         skipped += 1;
+        save(page, example, "skipped");
         continue;
       }
       // One explicit finding when the host cannot confine examples, so a passing example never silently implies
       // isolation the platform did not provide. Only the default runners are subject to the host's sandbox.
-      if (options.runner === undefined && !trustChecked) {
-        trustChecked = true;
-        if (!sandboxAvailable()) options.report?.(exampleSandboxUnavailable(process.platform));
+      if (options.runner === undefined && hasSandbox === undefined) {
+        hasSandbox = sandboxAvailable();
+        if (!hasSandbox && recording === undefined) options.report?.(exampleSandboxUnavailable(process.platform));
+      }
+      if (recording !== undefined && hasSandbox === false) {
+        skipped += 1;
+        save(page, example, "sandbox-unavailable");
+        continue;
       }
       const outcome = await runOne(cache, runner, { code: example.code, lang, kind });
       if (passed(example, outcome)) {
         passedCount += 1;
+        save(page, example, "passed");
       } else {
         failedCount += 1;
+        save(page, example, "failed");
         options.report?.(diagnosticOf(page, example, outcome, failOnFailure));
       }
     }
@@ -273,8 +289,59 @@ export async function examplesReport(
     pages.push({ url: page.url, total: examples.length, passed: passedCount, failed: failedCount, skipped });
   }
 
-  const body: ExamplesJson = { pages };
+  return { pages, examples: recorded };
+}
+
+/** Explicitly run examples without the cache and capture their provenance. */
+export async function recordExamples(
+  site: Site,
+  provenance: Pick<RecordedExampleResult, "date" | "commit">,
+  report: (diagnostic: Diagnostic) => void,
+): Promise<ExamplesLock> {
+  const { examples } = await runExamples(site, { report }, provenance);
+  return { version: 1, examples };
+}
+
+function reportFile(body: ExamplesJson & Partial<ExamplesLock>): readonly OutputFile[] {
   return [{ path: "examples.json", contents: `${JSON.stringify(body, null, 2)}\n` }];
+}
+
+/** A pinned report counts stale or missing evidence as skipped and publishes only current results. */
+async function pinnedReport(site: Site, report: ExamplesReportOptions["report"]): Promise<readonly OutputFile[]> {
+  const pages: PageExamples[] = [];
+  const current: Record<string, Record<string, RecordedExampleResult>> = {};
+  for (const page of [...site.pages].sort((a, b) => byCodePoint(a.url, b.url))) {
+    const examples = await pageExamples(page, true);
+    let passedCount = 0;
+    let failedCount = 0;
+    for (const example of examples) {
+      const result = page.examples?.[example.id];
+      if (result === undefined || result.status === "stale") continue;
+      (current[page.url] ??= {})[example.id] = result;
+      if (result.status === "passed") passedCount += 1;
+      if (result.status === "failed") {
+        failedCount += 1;
+        report?.({
+          id: "example-failed",
+          severity: site.config.examples?.failOnFailure === true ? "error" : "warning",
+          message: `The recorded run of ${example.id} failed on ${result.date}.`,
+          pos: posOf(page, example),
+        });
+      }
+    }
+    const total = examples.length;
+    pages.push({ url: page.url, total, passed: passedCount, failed: failedCount, skipped: total - passedCount - failedCount });
+  }
+  return reportFile({ pages, version: 1, examples: current });
+}
+
+export async function examplesReport(
+  site: Site,
+  options: ExamplesReportOptions = {},
+): Promise<readonly OutputFile[]> {
+  if (site.config.examples?.pinned === true) return pinnedReport(site, options.report);
+  const { pages } = await runExamples(site, options);
+  return reportFile({ pages });
 }
 
 /**
@@ -295,8 +362,8 @@ export function examplesCacheDir(env: NodeJS.ProcessEnv = process.env): string |
 }
 
 /**
- * The output that writes `examples.json`. It runs the site's examples unless it is switched off with
- * `outputs: { examples-report: false }`, and it caches them only when `MIZZEN_EXAMPLES_CACHE` is set.
+ * The output that writes `examples.json`. In pinned mode it only reads recorded results. The legacy runner
+ * caches examples only when `MIZZEN_EXAMPLES_CACHE` is set.
  */
 export const examplesReportOutput: Output = {
   name: "examples-report",

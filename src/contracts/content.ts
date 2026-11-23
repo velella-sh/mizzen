@@ -1,3 +1,4 @@
+import type { FenceExampleResult } from "./code.ts";
 import type { Direction, SiteConfig } from "./config.ts";
 import type { Collection, ListProps, PageRecord } from "./data.ts";
 import type { NavTree } from "./nav.ts";
@@ -156,6 +157,8 @@ export interface Page {
    * `blocks.lock.json`, so a site that does not use block ids keeps its model and output unchanged.
    */
   readonly blocks?: readonly Block[];
+  /** Recorded test results keyed by the HTML code element’s `data-example-id`. Unrecorded fences have no entry. */
+  readonly examples?: Readonly<Record<string, FenceExampleResult>>;
   /** The rendered body, with `data-source` on every block. */
   readonly html: string;
   /** The Markdown body without front matter, as the page's Markdown twin is written. */

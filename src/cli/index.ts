@@ -20,6 +20,7 @@ import { verifyData } from "../data/verify.ts";
 import { checkQuality } from "../data/quality.ts";
 import { dataChanges } from "../data/changes/write.ts";
 import { runEvidence } from "./evidence.ts";
+import { runExamplesRecord } from "./examples.ts";
 import { runNetwork } from "./network.ts";
 import { runPublishedSite } from "./published-site.ts";
 import { runSiteAttestation } from "./site-attestation.ts";
@@ -144,6 +145,7 @@ Commands:
   eval [suite]              Run a deterministic evaluation suite and print its report (--format, --out, --baseline)
   evidence ingest <envelope.json> [dir] [--artifact <file>]
                             Validate evidence and store it by SHA-256
+  examples record [dir]     Run and record fences (--date YYYY-MM-DD --commit <full SHA>)
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -486,6 +488,11 @@ type AgentOpts = {
   readonly args: readonly string[];
 };
 
+type ExamplesOpts = {
+  readonly command: "examples";
+  readonly args: readonly string[];
+};
+
 type GraphOpts = {
   readonly command: "graph";
   readonly args: readonly string[];
@@ -624,6 +631,7 @@ type Parsed =
         | NetworkOpts
         | PublishedSiteOpts
         | ReferencesOpts
+        | ExamplesOpts
         | GraphOpts
         | StaleOpts
         | TraceOpts
@@ -1578,6 +1586,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "agent", args: rest } };
   }
+  if (command === "examples") {
+    if (rest.includes("--help") || rest.includes("-h")) return { help: true };
+    return { options: { command: "examples", args: rest } };
+  }
   if (command === "graph") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "graph", args: rest } };
@@ -2028,6 +2040,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "network") {
     try {
       return await runNetwork(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "examples") {
+    try {
+      return await runExamplesRecord(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;

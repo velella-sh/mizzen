@@ -77,10 +77,12 @@ export interface ApiReferenceConfig {
   readonly path?: string;
 }
 
-/** How the `examples-report` output treats a failing example. */
+/** How the build obtains and reports example results. */
 export interface ExamplesConfig {
   /** Report a failed example as an error at its fence, so `mizzen check` exits `1`. Default `false`. */
   readonly failOnFailure?: boolean;
+  /** Read recorded results from `.mizzen-examples.json` instead of executing examples during a build. */
+  readonly pinned?: boolean;
 }
 
 /** How a paginated API hands out its next page. */

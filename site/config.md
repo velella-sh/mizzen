@@ -48,7 +48,7 @@ The site config file. Every key is optional; an unknown key is an error.
 | `theme.overrides.components` | object |  | Component name → the site module that replaces it. |
 | `search` | `false` or object | `{}` | false builds no search index. As an object, text sets how much of each page's body the index keeps. |
 | `search.text` | integer | `300` | The most characters of a page's body the index keeps. Titles and headings are always indexed. |
-| `examples` | object | none | How the `examples-report` output treats a failed example. |
+| `examples` | object | none | Controls failed-example diagnostics and [pinned results](/example-results/). |
 | `examples.failOnFailure` | boolean | `false` | true reports a failed example as an error at its fence, so `mizzen check` exits 1; false keeps it a warning and the build succeeds. |
 | `analytics` | object | none | A cookieless analytics tool, written as one script tag. See [Analytics and verification](/analytics/). |
 | `verify` | object | none | Search engine verification tags and files. See [Analytics and verification](/analytics/). |
