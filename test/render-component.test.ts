@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { h } from "preact";
-import type { Head, Layout, Page, Site } from "../src/contracts/index.ts";
+import type { Head, Island, Layout, Page, Site } from "../src/contracts/index.ts";
 import { build } from "../src/pipeline/build.ts";
 import { renderPage } from "../src/render/render.ts";
 import type { ThemeComponent } from "../src/render/render.ts";
@@ -44,6 +44,15 @@ test("a layout renders a component by name, and an unknown name is a warning wit
   assert.deepEqual(result.css, ["components/inner/style.css"]);
   assert.deepEqual(result.islands.map((island) => island.src), ["/inner.js"]);
   assert.deepEqual(result.diagnostics.map((d) => d.id), ["render.unknown-component"]);
+});
+
+test("a layout's client remains registered alongside components rendered by name", () => {
+  const layout: Layout = ({ renderComponent, islands }) => {
+    (islands as Island[]).push({ name: "layout", src: "/layout.js" });
+    return renderComponent("inner");
+  };
+  const result = renderPage({ site, page: page(""), layout, components, trail: [], pager: {}, head });
+  assert.deepEqual(result.islands.map(({ src }) => src), ["/inner.js", "/layout.js"]);
 });
 
 test("units that render each other without end stop with a diagnostic", () => {

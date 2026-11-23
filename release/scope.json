@@ -2,6 +2,13 @@
   "version": "0.2.6",
   "features": [
     {
+      "id": "check-reports",
+      "title": "Publish check report pages and JSON",
+      "status": "shipped",
+      "case": "check-reports",
+      "test": "test/check-reports.test.ts"
+    },
+    {
       "id": "discover-installed-capabilities",
       "title": "Discover installed capabilities",
       "status": "shipped",

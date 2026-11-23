@@ -38,6 +38,10 @@
       "types": "./dist/contracts/index.d.ts",
       "default": "./dist/contracts/index.js"
     },
+    "./reports": {
+      "types": "./dist/reports/doctor.d.ts",
+      "default": "./dist/reports/doctor.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {

@@ -92,8 +92,8 @@ export type Publishing = [ApiConfig, CalendarConfig, CalendarLink, ChangeEvent, 
   }
 });
 
-test("package.json exposes only the two public entries and the manifest, all built", () => {
-  assert.deepEqual(Object.keys(manifest.exports).sort(), [".", "./contracts", "./package.json"].sort());
+test("package.json exposes only the public entries and the manifest, all built", () => {
+  assert.deepEqual(Object.keys(manifest.exports).sort(), [".", "./contracts", "./package.json", "./reports"].sort());
   assert.ok(manifest.files.includes("dist"), "dist is packed");
   for (const [subpath, target] of Object.entries(manifest.exports)) {
     if (subpath === "./package.json") {
