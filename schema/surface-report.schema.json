@@ -1,0 +1,185 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/surface-report.schema.json",
+  "title": "Public surface coverage report",
+  "description": "The versioned report `mizzen surface` prints and the `surface` output writes: every public-surface item, its documentation state, the gaps, the documented exclusions, and the counts and percentages by area. A private data field is never an item, and a documented exclusion is counted apart from a gap.",
+  "type": "object",
+  "required": ["version", "source", "items", "matches", "gaps", "exclusions", "coverage", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1, "description": "The report version." },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "description": "The product version the adapters inventoried, when one was known." }
+      },
+      "description": "Where the report came from."
+    },
+    "items": {
+      "type": "array",
+      "description": "Every public-surface item, sorted by area then id.",
+      "items": { "$ref": "#/$defs/item" }
+    },
+    "matches": {
+      "type": "array",
+      "description": "One documentation match per item, in item order.",
+      "items": { "$ref": "#/$defs/match" }
+    },
+    "gaps": {
+      "type": "array",
+      "description": "Every documentation gap, sorted by area then id, with excluded items left out.",
+      "items": { "$ref": "#/$defs/gap" }
+    },
+    "exclusions": {
+      "type": "array",
+      "description": "The documented exclusions, sorted by id.",
+      "items": {
+        "type": "object",
+        "required": ["id", "reason"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "findings": {
+      "type": "array",
+      "description": "Findings the adapters made, sorted by code then message.",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "area": { "enum": ["api", "cli", "config", "openapi", "data", "version"] },
+    "kind": {
+      "enum": ["symbol", "command", "argument", "flag", "config-key", "operation", "parameter", "response", "collection", "field", "version"]
+    },
+    "stability": { "enum": ["stable", "experimental", "deprecated", "removed"] },
+    "state": { "enum": ["complete", "partial", "missing"] },
+    "span": {
+      "type": "object",
+      "required": ["file", "line", "column", "endLine", "endColumn"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endColumn": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "versionInfo": {
+      "type": "object",
+      "required": ["introduced"],
+      "additionalProperties": false,
+      "properties": {
+        "introduced": { "type": "string", "minLength": 1 },
+        "deprecated": { "type": "string", "minLength": 1 },
+        "removed": { "type": "string", "minLength": 1 },
+        "successor": { "type": "string", "minLength": 1 }
+      }
+    },
+    "item": {
+      "type": "object",
+      "required": ["id", "area", "kind", "name", "source", "stability"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "area": { "$ref": "#/$defs/area" },
+        "kind": { "$ref": "#/$defs/kind" },
+        "name": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/span" },
+        "stability": { "$ref": "#/$defs/stability" },
+        "signature": { "type": "string" },
+        "parent": { "type": "string", "minLength": 1 },
+        "version": { "$ref": "#/$defs/versionInfo" }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["kind", "file", "line", "column", "text"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["link", "code-reference", "directive"] },
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "text": { "type": "string" }
+      }
+    },
+    "match": {
+      "type": "object",
+      "required": ["item", "area", "state", "evidence"],
+      "additionalProperties": false,
+      "properties": {
+        "item": { "type": "string", "minLength": 1 },
+        "area": { "$ref": "#/$defs/area" },
+        "state": { "$ref": "#/$defs/state" },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } }
+      }
+    },
+    "gap": {
+      "type": "object",
+      "required": ["item", "area", "kind", "source", "introduced", "gap"],
+      "additionalProperties": false,
+      "properties": {
+        "item": { "type": "string", "minLength": 1 },
+        "area": { "$ref": "#/$defs/area" },
+        "kind": { "$ref": "#/$defs/kind" },
+        "source": { "$ref": "#/$defs/span" },
+        "introduced": { "type": "string", "minLength": 1 },
+        "gap": { "enum": ["undocumented", "partial"] }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": ["documented", "partial", "undocumented", "excluded", "total"],
+      "additionalProperties": false,
+      "properties": {
+        "documented": { "type": "integer", "minimum": 0 },
+        "partial": { "type": "integer", "minimum": 0 },
+        "undocumented": { "type": "integer", "minimum": 0 },
+        "excluded": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "percent": { "type": ["number", "null"], "minimum": 0, "maximum": 100 },
+    "coverage": {
+      "type": "object",
+      "required": ["counts", "documentedPercent", "undocumentedPercent", "areas"],
+      "additionalProperties": false,
+      "properties": {
+        "counts": { "$ref": "#/$defs/counts" },
+        "documentedPercent": { "$ref": "#/$defs/percent" },
+        "undocumentedPercent": { "$ref": "#/$defs/percent" },
+        "areas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["area", "counts", "documentedPercent", "undocumentedPercent"],
+            "additionalProperties": false,
+            "properties": {
+              "area": { "$ref": "#/$defs/area" },
+              "counts": { "$ref": "#/$defs/counts" },
+              "documentedPercent": { "$ref": "#/$defs/percent" },
+              "undocumentedPercent": { "$ref": "#/$defs/percent" }
+            }
+          }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["code", "severity", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["error", "warning", "info"] },
+        "message": { "type": "string", "minLength": 1 },
+        "pos": { "$ref": "#/$defs/span" }
+      }
+    }
+  }
+}

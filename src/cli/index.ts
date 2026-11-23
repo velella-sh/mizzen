@@ -30,6 +30,7 @@ import { runKnowledge } from "./knowledge.ts";
 import { referencesUsage, runReferences } from "./references.ts";
 import { runTrace, traceUsage } from "./trace.ts";
 import { runDocsVersion } from "./docs-version.ts";
+import { runSurface } from "./surface.ts";
 import { runImport } from "./import.ts";
 import { runInputs } from "./inputs.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
@@ -69,7 +70,7 @@ import type { ReadinessDimension } from "../contracts/readiness.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "evidence", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -176,6 +177,7 @@ Commands:
   verify [dir]              Check a built folder against the hash in its manifest
   versions snapshot <vN> [dir]
                             Copy the current pages and navigation into a new version folder
+  surface [dir]             Report public-surface documentation coverage and gaps (--json, --baseline, --min)
   watch [dir]               Rebuild the site whenever a source or theme file changes
   inputs export [dir]       Write selected collection sources to one transferable package (--collections, --out)
   inputs inspect <file>     Print a package's format, inputs, sizes, and hashes (--json); changes nothing
@@ -244,6 +246,9 @@ Options:
   --dry-run            For edit apply: print the diff without writing; for versions snapshot: print the files without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
   --proof <path>       Proof record for edit apply (default: <patch>.proof.json)
+  --baseline <file>    For surface: compare against an earlier report written by this command
+  --min <percent>      For surface: exit 1 when the documented percentage is below this, 0 to 100
+  --version <version>  For surface: the product version to inventory, recorded on every item
   -h, --help           Show this help
 
 Exit codes: 0 ok, 1 errors, 2 usage.`;
@@ -510,6 +515,11 @@ type VersionsOpts = {
   readonly args: readonly string[];
 };
 
+type SurfaceOpts = {
+  readonly command: "surface";
+  readonly args: readonly string[];
+};
+
 type EditApplyOpts = {
   readonly command: "edit-apply";
   readonly root: string;
@@ -645,7 +655,8 @@ type Parsed =
         | TraceOpts
         | EvalOpts
         | AgentOpts
-        | VersionsOpts;
+        | VersionsOpts
+        | SurfaceOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -1610,6 +1621,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "versions", args: rest } };
   }
+  if (command === "surface") {
+    if (rest.includes("--help") || rest.includes("-h")) return { help: true };
+    return { options: { command: "surface", args: rest } };
+  }
   if (command === "inputs") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "inputs", args: rest } };
@@ -2050,6 +2065,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "versions") {
     try {
       return await runDocsVersion(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "surface") {
+    try {
+      return await runSurface(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;

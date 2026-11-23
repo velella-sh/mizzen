@@ -1933,6 +1933,86 @@
       "test": "test/knowledge-eval.test.ts",
       "epic": 1318,
       "issue": 1374
+    },
+    {
+      "id": "define-public-surface-adapter-contract",
+      "title": "Define the public surface adapter contract",
+      "status": "shipped",
+      "test": "test/surface-contract.test.ts",
+      "epic": 1315,
+      "issue": 1337
+    },
+    {
+      "id": "discover-public-typescript-exports",
+      "title": "Discover public TypeScript exports",
+      "status": "shipped",
+      "test": "test/surface-adapters.test.ts",
+      "epic": 1315,
+      "issue": 1338
+    },
+    {
+      "id": "discover-cli-commands-and-flags",
+      "title": "Discover CLI commands and flags",
+      "status": "shipped",
+      "test": "test/surface-adapters.test.ts",
+      "epic": 1315,
+      "issue": 1339
+    },
+    {
+      "id": "discover-public-configuration-and-schemas",
+      "title": "Discover public configuration and schemas",
+      "status": "shipped",
+      "test": "test/surface-adapters.test.ts",
+      "epic": 1315,
+      "issue": 1340
+    },
+    {
+      "id": "discover-openapi-operations",
+      "title": "Discover OpenAPI operations",
+      "status": "shipped",
+      "test": "test/surface-adapters.test.ts",
+      "epic": 1315,
+      "issue": 1341
+    },
+    {
+      "id": "discover-public-data-fields",
+      "title": "Discover public data fields",
+      "status": "shipped",
+      "test": "test/surface-adapters.test.ts",
+      "epic": 1315,
+      "issue": 1342
+    },
+    {
+      "id": "match-public-surface-to-documentation",
+      "title": "Match the public surface to documentation references",
+      "status": "shipped",
+      "test": "test/surface-coverage.test.ts",
+      "epic": 1315,
+      "issue": 1343
+    },
+    {
+      "id": "report-documentation-gaps",
+      "title": "Report documentation gaps",
+      "status": "shipped",
+      "test": "test/surface-coverage.test.ts",
+      "epic": 1315,
+      "issue": 1344
+    },
+    {
+      "id": "compare-coverage-across-versions",
+      "title": "Compare documentation coverage across versions",
+      "status": "shipped",
+      "test": "test/surface-coverage.test.ts",
+      "epic": 1315,
+      "issue": 1345
+    },
+    {
+      "id": "expose-coverage-and-test-the-workflow",
+      "title": "Expose coverage results and test the full workflow",
+      "status": "shipped",
+      "test": "test/surface-coverage.test.ts",
+      "epic": 1315,
+      "issue": 1346
     }
   ]
 }

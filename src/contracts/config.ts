@@ -864,6 +864,36 @@ export interface SocialConfig {
   readonly fonts: readonly string[];
 }
 
+/** One public-surface adapter the site points at, by area. */
+export interface SurfaceAdapterConfig {
+  /** The area the adapter reads; at most one adapter per area. */
+  readonly area: "api" | "cli" | "config" | "openapi" | "data" | "version";
+  /** The file that exports the adapter, relative to the site root. */
+  readonly source: string;
+}
+
+/** One item whose documentation is deliberately elsewhere, or deliberately absent. */
+export interface SurfaceExclusionConfig {
+  /** The item id, such as `command:build`. */
+  readonly id: string;
+  /** Why the item is excluded, so a reader can tell an exclusion from a forgotten item. */
+  readonly reason: string;
+}
+
+/** The `surface` key: inventory the public surface and report documentation coverage. */
+export interface SurfaceConfig {
+  /** The package entry point whose public exports are the `api` area, relative to the site root. Default `src/index.ts`. */
+  readonly package?: string;
+  /** Adapter modules to read beside the built-in areas. Default `[]`, so only the built-in areas are read. */
+  readonly adapters: readonly SurfaceAdapterConfig[];
+  /** Folders, relative to the site root, whose pages are documentation evidence. Default `["."]`. */
+  readonly docs: readonly string[];
+  /** Items kept out of the coverage with a reason, counted apart from a gap. Default `[]`. */
+  readonly exclude: readonly SurfaceExclusionConfig[];
+  /** Fail the build when a documented item's percentage falls below this, `0` to `100`. Default: none. */
+  readonly minCoverage?: number;
+}
+
 /**
  * The site config: exactly the keys of the site config file, after the loader has checked them.
  * Every key is optional in the file; the loader fills the defaults, so the keys marked required here are always present.
@@ -933,6 +963,8 @@ export interface SiteConfig {
   readonly drift?: DriftConfig;
   /** Generated social share images. Default: none, and no image is written. */
   readonly social?: SocialConfig;
+  /** Public-surface coverage. Default: none, and no surface report is written. */
+  readonly surface?: SurfaceConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */
   readonly redirects: Readonly<Record<string, string>>;
   /** Turns an output off by its name (`false`). Default: every output on. */

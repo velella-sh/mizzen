@@ -1,5 +1,6 @@
 import type { Page, PageStale, Site } from "../contracts/content.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
+import type { SurfaceCoverage } from "../contracts/surface.ts";
 import { publicEvidenceOf } from "../data/evidence/public.ts";
 import type { EvidenceClaims } from "../data/evidence/validate.ts";
 import { localizeFields } from "../data/record-context.ts";
@@ -7,6 +8,12 @@ import { publicFields } from "../data/public.ts";
 
 /** Characters per token the estimator assumes, until a tokenizer is chosen. */
 const CHARS_PER_TOKEN = 4;
+
+/** The per-page surface summary, loaded only for a site that declares `surface`, so no other build loads the adapters. */
+async function surfaceSummary(root: string, site: Site): Promise<PageJson["surface"]> {
+  const { pageSurfaceOf, surfaceReportOf } = await import("../surface/report.ts");
+  return pageSurfaceOf((await surfaceReportOf({ root, site })).report);
+}
 
 /** Compares by code point, never by locale. */
 function byCodePoint(a: string, b: string): number {
@@ -152,6 +159,12 @@ interface PageJson {
   readonly list?: PageJsonList;
   /** The covered files that changed since the last review; absent on a page without `covers` and on a current page. */
   readonly stale?: PageStale;
+  /** The public-surface coverage counts; present only when the site config declares a `surface` key. */
+  readonly surface?: {
+    readonly coverage: SurfaceCoverage;
+    readonly gaps: number;
+    readonly exclusions: number;
+  };
 }
 
 /**
@@ -169,8 +182,13 @@ interface PageJson {
  */
 export const pageJson: Output = {
   name: "page-json",
-  async run(site: Site): Promise<readonly OutputFile[]> {
+  async run(site: Site, ctx): Promise<readonly OutputFile[]> {
     const files: OutputFile[] = [];
+    const root = ctx.build?.root;
+    const pageSurface =
+      site.config.surface !== undefined && root !== undefined
+        ? await surfaceSummary(root, site)
+        : undefined;
     for (const page of site.pages) {
       if (page.kind !== "doc") continue;
       const path = jsonPath(page.url, site.config.base);
@@ -188,6 +206,7 @@ export const pageJson: Output = {
         ...(record === undefined ? {} : { record }),
         ...(list === undefined ? {} : { list }),
         ...(page.stale === undefined ? {} : { stale: page.stale }),
+        ...(pageSurface === undefined ? {} : { surface: pageSurface }),
       };
       files.push({
         path,

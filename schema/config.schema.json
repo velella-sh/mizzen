@@ -619,6 +619,49 @@
         "type": "boolean"
       },
       "description": "Turns an output off by its name (false), such as twins or llms. The loader checks the names against the output registry; an unknown name is an error."
+    },
+    "surface": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "package": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The package entry point whose public exports are the api area, relative to the site root. Default src/index.ts."
+        },
+        "adapters": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/surfaceAdapter"
+          },
+          "description": "Adapter modules that read a public-surface area beside the built-in ones. Default []."
+        },
+        "docs": {
+          "type": "array",
+          "default": ["."],
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Folders, relative to the site root, whose pages are documentation evidence. Default [\".\"] (the whole site)."
+        },
+        "exclude": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/surfaceExclusion"
+          },
+          "description": "Items kept out of the coverage with a reason, counted apart from a gap. Default []."
+        },
+        "minCoverage": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Fail the build when a documented item's percentage falls below this, 0 to 100. Default: no gate."
+        }
+      },
+      "description": "Public-surface coverage: the adapter modules, documentation folders, exclusions, and coverage gate. Without the key no surface report is written."
     }
   },
   "$defs": {
@@ -2043,6 +2086,47 @@
           "description": "Most times one request is retried after a transient failure. Default 2."
         }
       }
+    },
+    "surfaceAdapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "area",
+        "source"
+      ],
+      "properties": {
+        "area": {
+          "enum": ["api", "cli", "config", "openapi", "data", "version"],
+          "description": "The public-surface area the adapter reads."
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The file that exports the adapter, relative to the site root."
+        }
+      },
+      "description": "One adapter module that reads a public-surface area."
+    },
+    "surfaceExclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "reason"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The item id kept out of the coverage, such as command:build."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Why the item is excluded, so a reader can tell it from a forgotten item."
+        }
+      },
+      "description": "One item kept out of the coverage with a reason."
     },
     "apiVersion": {
       "type": "object",
