@@ -128,6 +128,8 @@ test("build resolves pinned evidence offline and rejects changed envelopes and a
   assert.match((await cli(buildArgs.slice(0, -2))).err, /explicit as-of/);
   const built = await cli(buildArgs);
   assert.equal(built.code, 0, built.err || built.out);
+  const verifiedBuild = await cli(["verify", out]);
+  assert.equal(verifiedBuild.code, 0, verifiedBuild.err);
   const reportPath = join(out, ".mizzen", "evidence.json");
   const bytes = await readFile(reportPath, "utf8");
   const report = JSON.parse(bytes);

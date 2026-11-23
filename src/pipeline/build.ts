@@ -857,7 +857,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       await writeFile(abs, previewReport(site, preview, findings, recordsHash ? baseline?.hash : undefined));
       written.push(PREVIEW_REPORT_PATH);
     }
-    const usesAsOf = evidence !== undefined || site.pages.some((page) => page.dates === true);
+    const usesAsOf = site.pages.some((page) => page.dates === true);
     if (recordsHash) {
       await recordBuildHash(staging, usesAsOf ? site.config.asOf : undefined);
       // The report names the build it compared, so it is written after the hash and left out of it (#843): the
