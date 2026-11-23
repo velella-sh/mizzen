@@ -30,6 +30,7 @@ import { buildDependencyGraph } from "./dependency-graph.ts";
 import { planInvalidation, formatInvalidationReport, type InvalidationPlan } from "./invalidation.ts";
 import { pruneRenderCache, pruneRenderEntries, readRenderInputs, recordKeyOf, recordShapeOf, renderCache, renderPageKey, writeRenderInputs, type RenderCache, type RenderCacheEntry } from "./render-cache.ts";
 import { moduleName } from "../runtime/modules.ts";
+import { EXAMPLES_LOCK_FILE, pinnedExamplesOf, readExamplesLock } from "../examples/pinned.ts";
 import { plannedSocialImages } from "../social/plan.ts";
 import { createRenderPool, renderOnePage, type RenderPool } from "./parallel.ts";
 import { placeholderDiagnostics } from "./placeholder-diagnostic.ts";
@@ -363,6 +364,12 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   };
   const sourceDir = resolve(root, loaded.config.source);
   assertOutOutsideSource(sourceDir, out);
+  const recordedExamples = loaded.config.examples?.pinned === true
+    ? await readExamplesLock(root).catch((error: Error) => {
+        diagnostics.error("examples.invalid-lock", `Cannot read ${EXAMPLES_LOCK_FILE}: ${error.message}`);
+        return undefined;
+      })
+    : undefined;
 
   // Stale state compares each page's covered files with the committed review lock, never with git or a clock. It is
   // read before the cache key because a covered file or the lock can change while every source file stays the same.
@@ -380,7 +387,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const pluginKey = codeFailed ? undefined : await pluginInputs(code.plugins, root).catch(() => undefined);
 
   const cacheRoot =
-    options.cache === true && options.updateUrls !== true && options.updateBlocks !== true && pluginKey !== undefined
+    options.cache === true && options.updateUrls !== true && options.updateBlocks !== true && pluginKey !== undefined && !diagnostics.hasErrors
       ? resolve(options.cacheDir ?? cacheRootOf(root))
       : undefined;
   let key: string | undefined;
@@ -395,6 +402,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),
       ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
       stale: JSON.stringify([...staleBySource]),
+      examplesKey: recordedExamples?.digest,
       ...(pluginKey === undefined ? {} : { pluginKey }),
       ...(preview === undefined ? {} : { preview }),
       ...(baseline === undefined ? {} : { baseline: baseline.hash }),
@@ -438,7 +446,14 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   // current docs stay out of the output while a release is default. The model keeps one page per source file.
   const versioned = applyVersionRouting(hookedModel.value.pages, hookedModel.value.data.versions, hookedModel.value.config.base);
   for (const d of versioned.diagnostics) diagnostics.report(d);
-  const hookedSite: Site = versioned.pages === hookedModel.value.pages ? hookedModel.value : { ...hookedModel.value, pages: versioned.pages };
+  let hookedSite: Site = versioned.pages === hookedModel.value.pages ? hookedModel.value : { ...hookedModel.value, pages: versioned.pages };
+  if (recordedExamples !== undefined) {
+    const pages = await Promise.all(hookedSite.pages.map(async (page) => {
+      const examples = await pinnedExamplesOf(page, hookedSite.config.base, recordedExamples.lock);
+      return examples === undefined ? page : { ...page, examples };
+    }));
+    hookedSite = { ...hookedSite, pages };
+  }
   // Attach the state and subscription links before hashing or handing pages to a render worker.
   const site: Site =
     staleByRepositorySource.size === 0 && Object.keys(hookedSite.config.calendars ?? {}).length === 0
@@ -501,6 +516,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
           root,
           sourceDir,
           config: loaded.config,
+          examplesKey: recordedExamples?.digest,
           themeRoot,
           outputsDir,
           ...(options.defaultLayout === undefined ? {} : { defaultLayout: options.defaultLayout }),

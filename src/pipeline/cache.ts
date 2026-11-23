@@ -89,6 +89,8 @@ export interface CacheKeyOptions {
   readonly sourceDir: string;
   /** The site config as loaded from the root. */
   readonly config: SiteConfig;
+  /** Digest of the pinned example results read by this build. */
+  readonly examplesKey?: string | undefined;
   /** Absolute theme root. */
   readonly themeRoot: string;
   /** Absolute folder the outputs are read from. */
@@ -579,6 +581,7 @@ export async function cacheKey(options: CacheKeyOptions): Promise<string> {
   hash.update(`stale\0${options.stale ?? ""}\0`);
   // The config values matter as well as the file: a missing config takes its title from the folder name.
   hash.update(`config\0${canonicalJson(options.config)}\0`);
+  if (options.examplesKey !== undefined) hash.update(`examples\0${options.examplesKey}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
   // A preview changes every page's robots and canonical, so its pages are never the ones a normal build rendered. The
   // commit names the report the entry holds, so a preview of another commit is never answered by this one.
@@ -640,6 +643,8 @@ export interface RenderSettingsOptions {
   readonly root: string;
   readonly sourceDir: string;
   readonly config: SiteConfig;
+  /** Digest of the pinned example results read by this build. */
+  readonly examplesKey?: string | undefined;
   readonly themeRoot: string;
   readonly outputsDir: string;
   readonly defaultLayout?: string | undefined;
@@ -756,6 +761,7 @@ export async function renderSettingsKey(options: RenderSettingsOptions): Promise
   // The as-of date is per page: a page that reads it puts it in its own render key, so a date move retires those pages
   // and no other.
   hash.update(`config\0${canonicalJson({ ...options.config, asOf: undefined })}\0`);
+  if (options.examplesKey !== undefined) hash.update(`examples\0${options.examplesKey}\0`);
   hash.update(`defaultLayout\0${options.defaultLayout ?? ""}\0`);
   hash.update(`preview\0${options.preview?.canonicalBase ?? ""}\0`);
   if (options.recordShape !== undefined) hash.update(`recordShape\0${options.recordShape}\0`);

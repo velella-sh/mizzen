@@ -31,3 +31,27 @@ export interface CodeMeta {
   /** `annotations={…}`: notes on 1-based lines, in line order. */
   readonly annotations: readonly CodeAnnotation[];
 }
+
+/** What happened in a recorded run of a fence marked `test`. */
+export type ExampleRunStatus = "passed" | "failed" | "skipped" | "sandbox-unavailable";
+
+/** One result from the recorded run. File and line refer to the source at that commit. */
+export interface RecordedExampleResult {
+  readonly status: ExampleRunStatus;
+  readonly file: string;
+  readonly line: number;
+  readonly language: string;
+  /** The UTC run date, as YYYY-MM-DD. */
+  readonly date: string;
+  /** The full Git commit ID supplied by the recorder. */
+  readonly commit: string;
+  /** SHA-256 of the JSON array [language, code, expected output or null]. */
+  readonly sha256: string;
+}
+
+/** A recorded result, or evidence from an earlier version of this fence. */
+export type FenceExampleResult = RecordedExampleResult
+  | (Omit<RecordedExampleResult, "status"> & {
+      readonly status: "stale";
+      readonly recordedStatus: ExampleRunStatus;
+    });

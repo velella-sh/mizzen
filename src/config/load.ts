@@ -731,10 +731,15 @@ function analyticsFrom(value: unknown): AnalyticsConfig | undefined {
   };
 }
 
-/** The examples key, keeping only a boolean `failOnFailure`; the schema check reports an invalid one. */
+/** The examples key; the schema check reports invalid settings. */
 function examplesFrom(value: unknown): ExamplesConfig | undefined {
-  if (!isPlainObject(value) || typeof value.failOnFailure !== "boolean") return undefined;
-  return { failOnFailure: value.failOnFailure };
+  if (!isPlainObject(value)) return undefined;
+  const { failOnFailure, pinned } = value;
+  if (typeof failOnFailure !== "boolean" && typeof pinned !== "boolean") return undefined;
+  return {
+    ...(typeof failOnFailure === "boolean" ? { failOnFailure } : {}),
+    ...(typeof pinned === "boolean" ? { pinned } : {}),
+  };
 }
 
 /** The network key, kept only when it names a source and a project; the schema check reports an invalid one. */
