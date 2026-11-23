@@ -24,11 +24,15 @@ export function buildBlogPages(options: BlogPagesOptions): Page[] {
   for (const route of options.routes) {
     if (route.kind === "post") continue;
     const title = route.kind === "archive" ? "Archive" : route.author.name;
+    const count = route.posts.length;
+    const noun = count === 1 ? "post" : "posts";
+    const description = route.kind === "archive" ? `All ${count} ${noun}.` : `${count} ${noun} by ${route.author.name}.`;
     pages.push({
       url: route.url,
       source: CONFIG_POS,
       frontMatter: {
         title,
+        description,
         layout: "list",
         blog: route.kind === "archive"
           ? { kind: "archive", posts: route.posts }
