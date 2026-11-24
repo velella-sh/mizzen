@@ -1,3 +1,5 @@
+import type { AnalyticsConfig } from "./config.ts";
+
 /** One project of the shared network, as a theme sees it. */
 export interface NetworkProject {
   /** The project's id in the network file. */
@@ -18,6 +20,8 @@ export interface SiteNetwork {
   readonly current: string;
   /** SHA-256 of `network.lock.json`'s bytes: what this build was made against. */
   readonly lock: string;
+  /** This project's analytics setting in the locked network; a site's own `analytics` wins over it. */
+  readonly analytics?: AnalyticsConfig;
   /** The public projects, in the network file's order. */
   readonly projects: readonly NetworkProject[];
 }

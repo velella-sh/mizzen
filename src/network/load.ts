@@ -26,9 +26,11 @@ export interface LoadedNetwork {
 
 /** The `Site.network` value of a lock: the public projects, in the network file's order. */
 export function siteNetwork(lock: NetworkLock, current: string, hash: string): SiteNetwork {
+  const analytics = lock.projects.find((project) => project.id === current)?.analytics;
   return {
     current,
     lock: hash,
+    ...(analytics === undefined ? {} : { analytics }),
     projects: publicProjects(lock.projects)
       .map((project) => ({
         id: project.id,
