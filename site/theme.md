@@ -19,7 +19,7 @@ npx mizzen build . --out dist
 
 Commit `package.json` and `package-lock.json`. Lateen `0.2.5` needs no change to `mizzen.yml`; every option below is opt-in.
 
-## What changes without any setting
+## What changes by default
 
 A site that only bumps the package gets these. They are CSS and chrome changes: the HTML of the article, the Markdown twins, and `llms.txt` are the same.
 

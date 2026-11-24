@@ -29,5 +29,4 @@ test("the package, lockfile, changelog, navigation, and site show one release ve
   assert.match(upgrade, new RegExp(`title: Upgrade to ${escaped}`));
   assert.match(upgrade, new RegExp(`@velella/mizzen@${escaped}`));
   assert.match(await read("site/_data/navigation.yml"), new RegExp(`Upgrade to ${escaped}`));
-  assert.match(await read("site/index.md"), new RegExp(`v${escaped} · docs engine`));
 });

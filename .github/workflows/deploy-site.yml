@@ -32,6 +32,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: velella-sh/lateen
+          ref: v0.2.5
           path: lateen
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -42,6 +43,8 @@ jobs:
           set -euo pipefail
           (cd mizzen && npm install --no-audit --no-fund && npm run build)
           (cd lateen && npm install --no-audit --no-fund --no-save ../mizzen)
+          # styles/generated.css is not committed; without this build the site has no sailcloth stylesheet.
+          (cd lateen && npm run ui:build)
       - name: Build the site
         run: node mizzen/bin/mizzen.ts build mizzen/site --out "$RUNNER_TEMP/site"
       - name: Check the site
