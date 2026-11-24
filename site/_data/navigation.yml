@@ -39,6 +39,10 @@ main:
         url: /site-diff/
       - title: Performance at scale
         url: /performance/
+      - title: Lateen 0.2.5
+        url: /theme/
+      - title: Presets and Theme Studio
+        url: /presets/
       - title: Plugins
         url: /plugins/
       - title: Programmatic API

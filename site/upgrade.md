@@ -28,7 +28,9 @@ npx mizzen verify dist
 ```
 
 Commit `package.json` and `package-lock.json`. Keep your existing theme; Lateen `0.2.3` is the published theme the
-release was checked against, and Lateen `0.2.2` still builds. Node 24 or later is still required.
+release was checked against, and Lateen `0.2.2` still builds. Lateen `0.2.5` is the current published theme: it
+changes the page chrome and body size and adds opt-in presets, so read [Lateen 0.2.5](/theme/) before you bump it and
+refresh any visual baselines once. Node 24 or later is still required.
 
 ## What stays the same
 

@@ -1,0 +1,1 @@
+- Update the docs site for Lateen 0.2.5: new pages [Lateen 0.2.5](/theme/) and [Presets and Theme Studio](/presets/), the site now uses the `mizzen` preset, and the upgrade, configuration, data API, and public fields pages mention what the theme adds.

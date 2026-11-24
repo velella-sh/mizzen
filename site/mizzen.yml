@@ -10,6 +10,7 @@ repository:
   dir: site
 theme:
   options:
+    preset: mizzen
     logo:
       light: /brand/mark-light.svg
       dark: /brand/mark-dark.svg
