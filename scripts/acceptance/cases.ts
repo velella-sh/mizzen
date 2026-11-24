@@ -1509,9 +1509,108 @@ const executableExamples: AcceptanceCase = {
   },
 };
 
+const coverageDrivenAuthoring: AcceptanceCase = {
+  id: "coverage-driven-authoring",
+  title: "A surface gap becomes an approved page, a proposal, and closed coverage",
+  run(ctx) {
+    const site = join(ctx.dir, "authoring-site");
+    cpSync(join(ROOT, "fixtures/authoring/site"), site, { recursive: true });
+    const draft = join(ROOT, "fixtures/authoring/draft.json");
+    const version = "0.2.7";
+
+    const tasks = JSON.parse(
+      output(ctx.mizzen(["author", "tasks", site, "--version", version, "--item", "symbol:parseWidget", "--json"], ctx.dir), "author tasks"),
+    ) as {
+      tasks: readonly {
+        item: string;
+        surface: { introduced: string };
+        requiredEvidence: readonly { kind: string; ref: string }[];
+        conflicts: readonly unknown[];
+      }[];
+      skipped: readonly unknown[];
+    };
+    check(tasks.tasks.length === 1, "the fixture gap did not become exactly one task");
+    check(tasks.tasks[0]?.item === "symbol:parseWidget", "the task names another item");
+    check(tasks.tasks[0]?.surface.introduced === version, "the task lost the introduction version");
+    check((tasks.tasks[0]?.requiredEvidence ?? []).some((entry) => entry.kind === "surface" && entry.ref === "symbol:parseWidget"), "the task lost the surface evidence");
+    check((tasks.tasks[0]?.requiredEvidence ?? []).some((entry) => entry.kind === "behavior"), "the task lost the behavior evidence");
+    check((tasks.tasks[0]?.conflicts ?? []).length === 0, "the fixture location conflicts");
+    check(tasks.skipped.length === 0, "the fixture gap was skipped");
+
+    const exported = JSON.parse(
+      output(ctx.mizzen(["author", "export", "symbol:parseWidget", site, "--version", version], ctx.dir), "author export"),
+    ) as { pack: { markdown: string; evidence: readonly { kind: string; file?: string }[] } };
+    check(exported.pack.markdown.length > 0, "the export has no context pack");
+    check(exported.pack.evidence.some((entry) => entry.kind === "surface" && entry.file === "src/index.ts"), "the export lacks the declaration");
+
+    const validation = JSON.parse(
+      output(ctx.mizzen(["author", "draft", draft, site, "--version", version, "--json"], ctx.dir), "author draft"),
+    ) as { ok: boolean; citations: readonly unknown[]; uncited: readonly unknown[] };
+    check(validation.ok === true, "the fixture draft is not valid");
+    check(validation.citations.length > 0, "the draft has no citations");
+    check(validation.uncited.length === 0, "the draft has an uncited normative claim");
+
+    const preview = JSON.parse(
+      output(ctx.mizzen(["author", "preview", draft, site, "--version", version, "--json"], ctx.dir), "author preview"),
+    ) as {
+      page?: { html: string };
+      diff: string;
+      citations: readonly unknown[];
+      write: string;
+      uncited: readonly unknown[];
+    };
+    check(preview.page?.html.includes("parseWidget") === true, "the preview did not build the page");
+    check(preview.diff.includes("+# parseWidget {#parse-widget}"), "the preview has no source diff");
+    check(preview.citations.length > 0, "the preview lost the citations");
+    check(preview.uncited.length === 0, "the preview shows an uncited claim");
+    check(preview.write === "requires-approval", "the preview wrote without an approval");
+
+    const verification = JSON.parse(
+      output(ctx.mizzen(["author", "verify", draft, site, "--version", version, "--json"], ctx.dir), "author verify"),
+    ) as { verdict: string; ready: boolean; checks: readonly { status: string }[]; proof?: { hash: string } };
+    check(verification.verdict === "proved" && verification.ready === true, "the fixture draft is not proved");
+    check(verification.checks.every((entry) => entry.status === "passed"), "a required check did not pass");
+    check(/^[0-9a-f]{64}$/.test(verification.proof?.hash ?? ""), "the verification has no proof hash");
+
+    const proposal = JSON.parse(
+      output(ctx.mizzen(["author", "propose", draft, site, "--version", version, "--json"], ctx.dir), "author propose"),
+    ) as {
+      noop: boolean;
+      files: readonly { path: string; sha256: string }[];
+      permissions: { publish: boolean; merge: boolean };
+      remainingQuestions: readonly unknown[];
+    };
+    check(proposal.noop === false, "a proved draft prepared a no-op proposal");
+    check(proposal.files[0]?.path === "docs/reference/parse-widget.md", "the proposal names another file");
+    check(/^[0-9a-f]{64}$/.test(proposal.files[0]?.sha256 ?? ""), "the proposal file has no hash");
+    check(proposal.permissions.publish === false && proposal.permissions.merge === false, "the proposal may publish or merge");
+    check(proposal.remainingQuestions.length > 0, "the proposal dropped the reviewer questions");
+
+    const written = JSON.parse(
+      output(ctx.mizzen(["author", "write", draft, site, "--version", version, "--json", "--approve"], ctx.dir), "author write"),
+    ) as { written: boolean; path: string };
+    check(written.written === true, "the approved write did not happen");
+    check(written.path === "docs/reference/parse-widget.md", "the write landed elsewhere");
+
+    const surface = JSON.parse(
+      output(ctx.mizzen(["surface", site, "--version", version, "--json"], ctx.dir), "surface after the merge"),
+    ) as {
+      gaps: readonly { item: string }[];
+      matches: readonly { item: string; state: string }[];
+    };
+    check(!surface.gaps.some((entry) => entry.item === "symbol:parseWidget"), "the merge did not close the gap");
+    check(surface.matches.find((entry) => entry.item === "symbol:parseWidget")?.state === "complete", "the merged page is not complete evidence");
+
+    const out = join(ctx.dir, "authoring-out");
+    ok(ctx.mizzen(["build", site, "--out", out], ctx.dir), "build the authored site");
+    check(existsSync(join(out, "reference/parse-widget/index.html")), "the authored page was not built");
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   checkReports,
+  coverageDrivenAuthoring,
   blog,
   apiReference,
   annotations,

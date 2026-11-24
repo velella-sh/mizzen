@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "item": "symbol:parseWidget",
+  "pageType": "reference",
+  "title": "parseWidget",
+  "description": "Return the lowercase widget id for a name.",
+  "slug": "/reference/parse-widget/",
+  "block": "parse-widget",
+  "body": "# parseWidget {#parse-widget}\n\n`parseWidget` returns the lowercase widget id for a name. [[surface:symbol:parseWidget]]\n\n## Behavior\n\n`parseWidget` requires a non-empty name and returns its lowercase id. [[behavior:parseWidget.returns-id]]\n\n## Prerequisites\n\nThe package is installed, and `parseWidget` is imported from `src/index.ts`. [[source:src/index.ts:6]]\n\n## Example\n\n```js test\nimport { parseWidget } from \"@site/src/index.ts\";\nconsole.log(parseWidget(\"Bolt\").id);\n```\n\n```output\nbolt\n```\n\n## Limitations\n\nThe name is trimmed, so two names that differ only in surrounding spaces share an id. [[behavior:parseWidget.returns-id]]\n\n## References\n\n- The declaration is at `src/index.ts:6`. [[source:src/index.ts:6]]\n- The behavior contract is `parseWidget.returns-id`. [[behavior:parseWidget.returns-id]]\n- Evidence: https://example.org/evidence/parse-widget [[evidence:https://example.org/evidence/parse-widget]]\n",
+  "limitations": [
+    "The name is trimmed, so two names that differ only in surrounding spaces share an id."
+  ],
+  "unknowns": [],
+  "questions": [
+    {
+      "id": "audience-version",
+      "question": "Which audience and product version should the page for `symbol:parseWidget` target?"
+    }
+  ]
+}
