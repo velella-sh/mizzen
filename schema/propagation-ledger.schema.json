@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/propagation-ledger.schema.json",
+  "title": "Mizzen propagation receipt ledger",
+  "description": "The deterministic receipts a consumer has for upstream snapshots. A receipt is keyed by the consumer, the upstream snapshot, and the change set, so reprocessing the same snapshots returns the earlier receipt instead of creating another task or pull request. The ledger holds no timestamp.",
+  "type": "object",
+  "required": ["version", "receipts"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1, "description": "The contract version." },
+    "receipts": {
+      "type": "array",
+      "description": "Every receipt, sorted by id.",
+      "items": { "$ref": "#/$defs/receipt" }
+    }
+  },
+  "$defs": {
+    "upstream": {
+      "type": "object",
+      "required": ["project", "snapshot", "version", "change"],
+      "additionalProperties": false,
+      "properties": {
+        "project": { "type": "string", "minLength": 1 },
+        "snapshot": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "change": { "type": "string", "pattern": "^[a-f0-9]{64}$", "description": "SHA-256 over the change set the receipt reacts to." }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "required": ["version", "id", "consumer", "upstream", "severity", "action", "status", "tasks", "requiresApproval", "approvedBy", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "const": 1 },
+        "id": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "consumer": { "type": "string", "minLength": 1 },
+        "upstream": { "$ref": "#/$defs/upstream" },
+        "severity": { "enum": ["compatible", "breaking", "review"] },
+        "action": { "enum": ["none", "acknowledge", "task", "pull-request", "review"] },
+        "status": { "enum": ["proposed", "pending-approval", "applied", "verified", "noop", "failed"] },
+        "tasks": { "type": "array", "items": { "type": "string", "pattern": "^[a-f0-9]{64}$" } },
+        "pullRequest": { "type": "string", "minLength": 1 },
+        "requiresApproval": { "type": "boolean" },
+        "approvedBy": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "reason": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

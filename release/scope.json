@@ -2482,6 +2482,87 @@
       "epic": 1322,
       "issue": 1416,
       "case": "coverage-driven-authoring"
+    },
+    {
+      "id": "declare-consumer-dependencies",
+      "title": "Declare consumer dependencies",
+      "status": "shipped",
+      "test": "test/propagation-contract.test.ts",
+      "epic": 1320,
+      "issue": 1389
+    },
+    {
+      "id": "emit-semantic-change-events",
+      "title": "Emit semantic change events",
+      "status": "shipped",
+      "test": "test/propagation-contract.test.ts",
+      "epic": 1320,
+      "issue": 1390
+    },
+    {
+      "id": "match-changes-to-affected-dependencies",
+      "title": "Match changes to affected dependencies",
+      "status": "shipped",
+      "test": "test/propagation-contract.test.ts",
+      "epic": 1320,
+      "issue": 1391
+    },
+    {
+      "id": "preview-downstream-impact-before-release",
+      "title": "Preview downstream impact before upstream release",
+      "status": "shipped",
+      "test": "test/propagation-e2e.test.ts",
+      "epic": 1320,
+      "issue": 1392
+    },
+    {
+      "id": "propose-downstream-tasks",
+      "title": "Propose downstream tasks",
+      "status": "shipped",
+      "test": "test/propagation-e2e.test.ts",
+      "epic": 1320,
+      "issue": 1393
+    },
+    {
+      "id": "apply-version-policy-and-change-severity",
+      "title": "Apply version policy and change severity",
+      "status": "shipped",
+      "test": "test/propagation-contract.test.ts",
+      "epic": 1320,
+      "issue": 1394
+    },
+    {
+      "id": "carry-evidence-and-context-into-impact-tasks",
+      "title": "Carry evidence and context into impact tasks",
+      "status": "shipped",
+      "test": "test/propagation-e2e.test.ts",
+      "epic": 1320,
+      "issue": 1395
+    },
+    {
+      "id": "deduplicate-downstream-work-and-handle-no-ops",
+      "title": "Deduplicate downstream work and handle no-ops",
+      "status": "shipped",
+      "test": "test/propagation-e2e.test.ts",
+      "epic": 1320,
+      "issue": 1396
+    },
+    {
+      "id": "report-partial-results-and-propagation-failures",
+      "title": "Report partial results and propagation failures",
+      "status": "shipped",
+      "test": "test/propagation-e2e.test.ts",
+      "epic": 1320,
+      "issue": 1397
+    },
+    {
+      "id": "test-an-upstream-change-through-task-verification",
+      "title": "Test an upstream change through task verification",
+      "status": "shipped",
+      "test": "test/propagation-e2e.test.ts",
+      "epic": 1320,
+      "issue": 1398,
+      "case": "change-propagation"
     }
   ]
 }

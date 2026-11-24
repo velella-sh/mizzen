@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/propagation-manifest.schema.json",
+  "title": "Mizzen consumer propagation manifest",
+  "description": "The consumers of an upstream project and what each one accepts: the dependencies it declares, the version range and channel its policy accepts, the evidence it is authorized to read, and who must approve a change. An invalid dependency or version policy is refused whole, at its own JSON Pointer.",
+  "type": "object",
+  "required": [
+    "version",
+    "consumers"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The contract version."
+    },
+    "consumers": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Every consumer, in manifest order.",
+      "items": {
+        "$ref": "#/$defs/consumer"
+      }
+    }
+  },
+  "$defs": {
+    "dependency": {
+      "type": "object",
+      "required": [
+        "kind",
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "surface",
+            "behavior",
+            "collection",
+            "page",
+            "symbol",
+            "decision",
+            "evidence"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A stable id such as api:greet, install.runs, guide/install.md, or ADR-0001."
+        },
+        "pages": {
+          "type": "array",
+          "description": "Consumer page paths or URLs the dependency affects.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "files": {
+          "type": "array",
+          "description": "Consumer files the dependency affects, with forward slashes.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "range": {
+          "type": "string",
+          "minLength": 1,
+          "description": "An inclusive range such as >=1.2.0 <2.0.0."
+        },
+        "channel": {
+          "enum": [
+            "pinned",
+            "compatible"
+          ],
+          "description": "pinned accepts the locked snapshot; compatible also needs a range."
+        },
+        "onCompatible": {
+          "$ref": "#/$defs/action"
+        },
+        "onBreaking": {
+          "$ref": "#/$defs/action"
+        },
+        "onReview": {
+          "$ref": "#/$defs/action"
+        }
+      }
+    },
+    "action": {
+      "enum": [
+        "none",
+        "acknowledge",
+        "task",
+        "pull-request",
+        "review"
+      ]
+    },
+    "approval": {
+      "type": "object",
+      "required": [
+        "mode",
+        "approvers"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "automatic",
+            "required"
+          ]
+        },
+        "approvers": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Evidence ids the consumer may receive; * allows every public id."
+        },
+        "deny": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Evidence ids withheld; deny wins over allow."
+        }
+      }
+    },
+    "consumer": {
+      "type": "object",
+      "required": [
+        "id",
+        "project",
+        "policy",
+        "approval",
+        "consumes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The upstream project id this consumer depends on."
+        },
+        "namespace": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "approval": {
+          "$ref": "#/$defs/approval"
+        },
+        "evidence": {
+          "$ref": "#/$defs/evidence"
+        },
+        "consumes": {
+          "type": "array",
+          "minItems": 1,
+          "description": "Every dependency whose change affects this consumer.",
+          "items": {
+            "$ref": "#/$defs/dependency"
+          }
+        }
+      }
+    }
+  }
+}

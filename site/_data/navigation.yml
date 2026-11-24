@@ -33,6 +33,8 @@ main:
         url: /analytics/
       - title: Several projects
         url: /network/
+      - title: Downstream changes
+        url: /change-propagation/
       - title: Compare two builds
         url: /site-diff/
       - title: Performance at scale

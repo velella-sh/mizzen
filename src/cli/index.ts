@@ -34,6 +34,7 @@ import { runDocsVersion } from "./docs-version.ts";
 import { runSurface } from "./surface.ts";
 import { runBehavior } from "./behavior.ts";
 import { runFederation } from "./federation.ts";
+import { runPropagation } from "./propagation.ts";
 import { runAuthor } from "./author.ts";
 import { runImport } from "./import.ts";
 import { runInputs } from "./inputs.ts";
@@ -74,7 +75,7 @@ import type { ReadinessDimension } from "../contracts/readiness.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["agent", "api", "author", "behavior", "build", "check", "compare", "data", "decisions", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "federation", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["agent", "api", "author", "behavior", "build", "check", "compare", "data", "decisions", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "federation", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "propagate", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -162,6 +163,13 @@ Commands:
   federation pack [dir]     Compile one context pack across projects (--goal, --budget, --from)
   federation chain [dir]    Trace a claim's evidence chain across projects (--claim, --project, --json)
   federation resolve [dir]  Resolve a stable reference to a pinned snapshot or a compatible channel (--reference)
+  propagate check [dir]     Validate consumer dependencies and version policies (--manifest, --json)
+  propagate diff [dir]      Diff two locked snapshots into semantic change events (--baseline, --current, --json)
+  propagate preview [dir]   Show downstream snapshots, pages, and proposed tasks (--baseline, --current)
+  propagate propose [dir]   Print downstream task proposals with scope, evidence, and acceptance
+  propagate apply [dir]     Record receipts under each consumer's approval policy (--approve, --dry-run)
+  propagate receipt <id>    Read back a stored receipt by id
+  propagate verify <id>     Mark a receipt verified after its downstream task passes
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -565,6 +573,11 @@ type FederationOpts = {
   readonly args: readonly string[];
 };
 
+type PropagationOpts = {
+  readonly command: "propagate";
+  readonly args: readonly string[];
+};
+
 type AuthorOpts = {
   readonly command: "author";
   readonly args: readonly string[];
@@ -710,6 +723,7 @@ type Parsed =
         | DecisionsOpts
         | BehaviorOpts
         | FederationOpts
+        | PropagationOpts
         | AuthorOpts;
     };
 
@@ -1691,6 +1705,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest.includes("--help") || rest.includes("-h")) return { help: true };
     return { options: { command: "federation", args: rest } };
   }
+  if (command === "propagate") {
+    if (rest.includes("--help") || rest.includes("-h")) return { help: true };
+    return { options: { command: "propagate", args: rest } };
+  }
   if (command === "author") {
     if (rest.includes("--help") || rest.includes("-h")) return { help: true };
     return { options: { command: "author", args: rest } };
@@ -2180,6 +2198,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "federation") {
     try {
       return await runFederation(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "propagate") {
+    try {
+      return await runPropagation(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
