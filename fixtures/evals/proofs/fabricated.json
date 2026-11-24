@@ -55,8 +55,8 @@
   "outputs": {
     "inputHash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
     "tool": {
-      "expected": "0.2.6",
-      "actual": "0.2.6"
+      "expected": "0.2.7",
+      "actual": "0.2.7"
     },
     "expectedHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "actualHash": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
@@ -118,5 +118,5 @@
     "issues": []
   },
   "verdict": "proved",
-  "proofHash": "6bd2ea23fca3dc653dea408aadbae3c8cc063cc9a80338c7a6fd4b06681705b2"
+  "proofHash": "52f7586ba02209663c7f8664e4513c01489b05a7e637725a4969a080de2e5f8d"
 }

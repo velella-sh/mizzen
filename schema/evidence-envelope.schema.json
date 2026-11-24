@@ -1,0 +1,399 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/evidence-envelope.schema.json",
+  "title": "Mizzen evidence envelope",
+  "description": "The versioned envelope `mizzen evidence ingest` validates: kind, HTTPS origin, snapshot, actual execution time, the SHA-256 of the canonical JSON payload, and a payload of one of four schemas. Ingestion also checks the digest, which a JSON Schema cannot compute.",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "id",
+        "kind",
+        "origin",
+        "snapshot",
+        "executedAt",
+        "payloadSha256",
+        "payload"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "const": "test"
+        },
+        "origin": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "snapshot": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "executedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$"
+        },
+        "payloadSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "payload": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": [
+                "schema",
+                "results",
+                "catalog"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "schema": {
+                  "const": "test-json@1"
+                },
+                "results": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "suite",
+                      "name",
+                      "outcome"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "suite": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      "outcome": {
+                        "enum": [
+                          "passed",
+                          "failed",
+                          "skipped"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "catalog": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "suite",
+                      "name",
+                      "surface",
+                      "behavior"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "suite": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      "surface": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      "behavior": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  "minItems": 1
+                }
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "schema",
+                "results",
+                "catalog"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "schema": {
+                  "const": "junit@1"
+                },
+                "results": {
+                  "type": "string",
+                  "pattern": "\\S"
+                },
+                "catalog": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "suite",
+                      "name",
+                      "surface",
+                      "behavior"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "suite": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      "surface": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      },
+                      "behavior": {
+                        "type": "string",
+                        "pattern": "\\S"
+                      }
+                    }
+                  },
+                  "minItems": 1
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "id",
+        "kind",
+        "origin",
+        "snapshot",
+        "executedAt",
+        "payloadSha256",
+        "payload"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "const": "ci"
+        },
+        "origin": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "snapshot": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "executedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$"
+        },
+        "payloadSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "schema",
+            "runId",
+            "commit",
+            "configSha256",
+            "workflow",
+            "artifactSha256",
+            "outcome",
+            "targets"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "schema": {
+              "const": "ci-run@1"
+            },
+            "runId": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+            },
+            "configSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "workflow": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "artifactSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "outcome": {
+              "enum": [
+                "passed",
+                "failed",
+                "skipped"
+              ]
+            },
+            "targets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "surface",
+                  "behavior"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "surface": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              "minItems": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "id",
+        "kind",
+        "origin",
+        "snapshot",
+        "executedAt",
+        "payloadSha256",
+        "payload"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "kind": {
+          "const": "benchmark"
+        },
+        "origin": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "snapshot": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "executedAt": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{3})?Z$"
+        },
+        "payloadSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "payload": {
+          "type": "object",
+          "required": [
+            "schema",
+            "metric",
+            "unit",
+            "value",
+            "environment",
+            "raw",
+            "run",
+            "targets"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "schema": {
+              "const": "benchmark@1"
+            },
+            "metric": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "unit": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "value": {
+              "type": "number"
+            },
+            "environment": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            },
+            "raw": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 1
+            },
+            "run": {
+              "type": "string",
+              "pattern": "^https://"
+            },
+            "targets": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "surface",
+                  "behavior"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "surface": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  },
+                  "behavior": {
+                    "type": "string",
+                    "pattern": "\\S"
+                  }
+                }
+              },
+              "minItems": 1
+            }
+          }
+        }
+      }
+    }
+  ]
+}

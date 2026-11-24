@@ -1,5 +1,5 @@
 {
-  "version": "0.2.6",
+  "version": "0.2.7",
   "features": [
     {
       "id": "check-reports",
@@ -2563,6 +2563,78 @@
       "epic": 1320,
       "issue": 1398,
       "case": "change-propagation"
+    },
+    {
+      "id": "define-a-versioned-evidence-envelope",
+      "title": "Define a versioned evidence envelope",
+      "status": "shipped",
+      "case": "external-evidence",
+      "test": "test/external-evidence.test.ts",
+      "epic": 1321,
+      "issue": 1399
+    },
+    {
+      "id": "ingest-test-results",
+      "title": "Ingest test results",
+      "status": "shipped",
+      "case": "external-evidence",
+      "test": "test/external-evidence.test.ts",
+      "epic": 1321,
+      "issue": 1400
+    },
+    {
+      "id": "ingest-ci-evidence",
+      "title": "Ingest CI evidence",
+      "status": "shipped",
+      "case": "external-evidence",
+      "test": "test/external-evidence.test.ts",
+      "epic": 1321,
+      "issue": 1401
+    },
+    {
+      "id": "ingest-benchmarks-and-measurements",
+      "title": "Ingest benchmarks and measurements",
+      "status": "shipped",
+      "case": "external-evidence",
+      "test": "test/external-evidence.test.ts",
+      "epic": 1321,
+      "issue": 1402
+    },
+    {
+      "id": "link-evidence-to-claims-and-behaviors",
+      "title": "Link evidence to claims and behaviors",
+      "status": "shipped",
+      "case": "external-evidence",
+      "test": "test/external-evidence.test.ts",
+      "epic": 1321,
+      "issue": 1403
+    },
+    {
+      "id": "evaluate-evidence-freshness-and-validity",
+      "title": "Evaluate evidence freshness and validity",
+      "status": "shipped",
+      "case": "external-evidence",
+      "test": "test/external-evidence.test.ts",
+      "epic": 1321,
+      "issue": 1404
+    },
+    {
+      "id": "lock-evidence-for-offline-builds",
+      "title": "Lock evidence for offline builds",
+      "status": "shipped",
+      "case": "external-evidence",
+      "test": "test/external-evidence.test.ts",
+      "epic": 1321,
+      "issue": 1405
+    },
+    {
+      "id": "test-evidence-integrity-and-provenance",
+      "title": "Test evidence integrity and provenance",
+      "status": "shipped",
+      "case": "external-evidence",
+      "test": "test/external-evidence.test.ts",
+      "epic": 1321,
+      "issue": 1406
     }
   ]
 }

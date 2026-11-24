@@ -1,1 +1,0 @@
-- Add detached site attestations, Ed25519 signing, and offline verification of bundle files and public evidence against a consumer trust policy.

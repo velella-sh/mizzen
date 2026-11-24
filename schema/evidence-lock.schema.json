@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/evidence-lock.schema.json",
+  "title": "Mizzen evidence lock",
+  "description": "`evidence.lock.json`: the product snapshot, the freshness window, every pinned envelope digest, the declared surfaces, and the page and behavior claims that cite evidence.",
+  "type": "object",
+  "required": [
+    "version",
+    "snapshot",
+    "maxAgeDays",
+    "pins",
+    "surfaces",
+    "claims"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "snapshot": {
+      "type": "object",
+      "required": [
+        "id",
+        "commit",
+        "configSha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "\\S"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "configSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "maxAgeDays": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pins": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "\\S"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "sha256"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "artifactSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "surfaces": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "\\S"
+      },
+      "uniqueItems": true
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "surface",
+          "behavior",
+          "id",
+          "subject",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "surface": {
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "behavior": {
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "subject": {
+            "type": "object",
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "page",
+                  "behavior"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "\\S"
+            },
+            "minItems": 1,
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  }
+}

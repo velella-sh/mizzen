@@ -89,7 +89,7 @@ test("#1376 a bundle carries its graph, surface, behaviors, evidence, tool versi
   const [product] = projects();
   const bundle = product!.bundle;
   assert.equal(bundle.version, 1);
-  assert.equal(bundle.tool, "0.2.6");
+  assert.equal(bundle.tool, "0.2.7");
   assert.equal(bundle.project, "product");
   assert.equal(bundle.namespace, "velella-product");
   assert.deepEqual(bundle.snapshot, { id: "snap-1", version: "1.2.0" });

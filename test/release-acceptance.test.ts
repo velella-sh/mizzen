@@ -123,11 +123,28 @@ test("a shipped library feature needs an existing test file, not a guess", () =>
   assert.deepEqual(validateScope(present, [], "## Unreleased\n", known), []);
 });
 
-test("the committed scope records all 282 release issues with a proof", () => {
+test("the committed scope records all 290 release issues with a proof", () => {
   const parsed = parseScope(readFileSync(join(ROOT, "release/scope.json"), "utf8"));
   assert.ok(parsed.scope);
   const mapped = parsed.scope.features.filter((feature) => feature.issue !== undefined);
-  assert.equal(mapped.length, 282);
+  assert.equal(mapped.length, 290);
   const files = new Set(readdirSync(join(ROOT, "test")).filter((name) => name.endsWith(".test.ts")).map((name) => `test/${name}`));
   assert.deepEqual(validateScope(parsed.scope, CASE_IDS, CHANGELOG, files), []);
+});
+
+test("the 0.2.7 matrix has exactly 100 features: each epic ships its roadmap count, each with a public case and a test", () => {
+  const parsed = parseScope(readFileSync(join(ROOT, "release/scope.json"), "utf8"));
+  assert.ok(parsed.scope);
+  const expected: Record<number, number> = {
+    1314: 12, 1315: 10, 1316: 10, 1317: 10, 1318: 8, 1319: 14, 1320: 10, 1321: 8, 1322: 10, 1323: 8,
+  };
+  const counts: Record<number, number> = {};
+  for (const feature of parsed.scope.features) {
+    if (feature.epic === undefined || expected[feature.epic] === undefined) continue;
+    counts[feature.epic] = (counts[feature.epic] ?? 0) + 1;
+    assert.equal(feature.status, "shipped", `${feature.id} is not shipped`);
+    assert.ok(feature.case !== undefined || feature.test !== undefined, `${feature.id} has no public test id`);
+  }
+  assert.deepEqual(counts, expected);
+  assert.equal(Object.values(counts).reduce((sum, count) => sum + count, 0), 100);
 });
