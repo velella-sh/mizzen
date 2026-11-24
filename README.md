@@ -109,6 +109,13 @@ Commands:
   federation pack [dir]     Compile one context pack across projects (--goal, --budget, --from)
   federation chain [dir]    Trace a claim's evidence chain across projects (--claim, --project, --json)
   federation resolve [dir]  Resolve a stable reference to a pinned snapshot or a compatible channel (--reference)
+  propagate check [dir]     Validate consumer dependencies and version policies (--manifest, --json)
+  propagate diff [dir]      Diff two locked snapshots into semantic change events (--baseline, --current, --json)
+  propagate preview [dir]   Show downstream snapshots, pages, and proposed tasks (--baseline, --current)
+  propagate propose [dir]   Print downstream task proposals with scope, evidence, and acceptance
+  propagate apply [dir]     Record receipts under each consumer's approval policy (--approve, --dry-run)
+  propagate receipt <id>    Read back a stored receipt by id
+  propagate verify <id>     Mark a receipt verified after its downstream task passes
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -305,6 +312,13 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen federation pack [dir] --goal <text> --budget <tokens> --from <ids> --per-project <n>` | Compiles one context pack across projects under a single shared budget, attributing every fragment to its project and reporting omissions per project. A missing bundle is a `missing` omission and makes the pack `partial`. |
 | `mizzen federation chain [dir] --claim <id> --project <id> --json` | Follows a claim from one project's page to another project's test or data, preserving every link's digest and marking one that no longer matches. Exits `1` when the chain is incomplete. |
 | `mizzen federation resolve [dir] --reference <file>` | Resolves a stable reference to the pinned snapshot or a compatible channel. A removed target is reported `removed` with its version, a mismatched one `incompatible`, and a withheld project never leaks its name. |
+| `mizzen propagate check [dir] --manifest <file> --json` | Validates the consumer manifest: every declared surface, behavior, collection, page, symbol, decision, or evidence dependency and its version policy. An invalid dependency is refused at its own JSON Pointer. See [Downstream change propagation](docs/change-propagation.md). |
+| `mizzen propagate diff [dir] --baseline <path> --current <path> --json` | Diffs two locked snapshots of one project into versioned semantic events for surface, behavior, decision, and evidence changes, each with its source span and SHA-256. A page body or graph-label change emits no external event. |
+| `mizzen propagate preview [dir] --baseline <path> --current <path> --json` | Shows the downstream snapshots, pages, and task proposal ids a proposed release reaches, with the severity and action each consumer's version policy gives it. |
+| `mizzen propagate propose [dir] --baseline <path> --current <path> --json` | Prints one task proposal per affected consumer: scope, executable acceptance criteria, change rationale, decision links, and only the evidence that consumer is authorized to read. The upstream source is never written. |
+| `mizzen propagate apply [dir] --baseline <path> --current <path> --approve <a,b> --json` | Records deterministic receipts and creates only the tasks the consumer's approval policy permits. A required approval yields `pending-approval` until an accepted approver is named. |
+| `mizzen propagate receipt <id> [dir] --json` | Reads back an earlier receipt by id. |
+| `mizzen propagate verify <id> [dir]` | Marks a receipt verified after its downstream task passes. Reprocessing the same snapshots after verification is a no-op and returns the verified receipt. |
 | `mizzen graph [dir] [--from <id>] [--to <id>]` | Answers one query against the knowledge graph: a node's neighbors and the shortest path to another node, with the same JSON and node ids as the `query_graph` MCP tool. `--depth`, `--nodes`, and `--max-output` bound the answer; a bounded answer is `partial` and carries `--cursor`. `--allow` names the audiences the caller may read. |
 | `mizzen references check <file\|-> [dir]` | Resolves a JSON array of stored block references (`{"version": 1, "page": "<source>", "block": "<id>"}`) against the site's current build. Prints one JSON array of resolutions; a reference is `resolved` with its current URL, `removed` when `blocks.lock.json` recorded it, or `unknown`. Exits `1` when any reference is not resolved. |
 | `mizzen diff <a> <b>` | Compares two built folders by their manifests and prints the pages, files, and records that changed, the moved pages, and the URLs that stopped answering. `--base <ref>` builds a git ref and compares it with the current site. `--format text\|json\|markdown`; exits `0` unless `--fail-on removed-pages,broken-urls,render-only` finds one (`1`). See [Compare two builds](/site-diff/). |

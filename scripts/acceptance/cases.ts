@@ -1705,6 +1705,135 @@ const coverageDrivenAuthoring: AcceptanceCase = {
   },
 };
 
+
+const changePropagation: AcceptanceCase = {
+  id: "change-propagation",
+  title: "Propagate an upstream API change to its declared consumers, and reprocess as a no-op",
+  run(ctx) {
+    const root = join(ctx.dir, "propagation");
+    const canonical = (value: unknown): string => {
+      if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+      if (typeof value === "object" && value !== null) {
+        const record = value as Record<string, unknown>;
+        return `{${Object.keys(record).filter((key) => record[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`;
+      }
+      return JSON.stringify(value) ?? "null";
+    };
+    const digestOf = (value: unknown): string => createHash("sha256").update(canonical(value)).digest("hex");
+    const publish = (body: Record<string, unknown>): Record<string, unknown> => {
+      const { digest: _digest, ...rest } = body;
+      return { ...rest, digest: digestOf(rest) };
+    };
+    const pos = { file: "src/index.ts", line: 1, column: 1, endLine: 1, endColumn: 1 };
+    const page = { file: "guide/install.md", line: 1, column: 1, endLine: 1, endColumn: 1 };
+    const bundleBody = (version: string, signature: string, normative: string): Record<string, unknown> => ({
+      version: 1,
+      tool: "0.2.7",
+      project: "product",
+      namespace: "velella-product",
+      role: "product",
+      snapshot: { id: `snap-${version}`, version },
+      policy: { public: true, audiences: [] },
+      graph: { format: 1, snapshot: { format: 1, id: `product-${version}` }, nodes: [], edges: [] },
+      surface: [{ id: "api:greet", area: "api", kind: "symbol", name: "greet", source: pos, stability: "stable", signature }],
+      behaviors: [{
+        id: "greet.returns-name",
+        title: "Greeting returns the name",
+        normative,
+        source: page,
+        page: { url: "/guide/install/", source: "guide/install.md" },
+        status: "supported",
+        versions: { introduced: "1.0.0" },
+        environments: [],
+        surface: [{ item: "api:greet", state: "linked" }],
+        tests: [],
+        evidence: [],
+        verification: { status: "verified", reasons: [], required: { tests: 0, evidence: 0, kinds: [] } },
+      }],
+      evidence: { version: 1, claims: [], links: [] },
+      references: [],
+      removed: [],
+    });
+    const baseline = publish(bundleBody("1.0.0", "greet(name)", "A greeting returns the name."));
+    const current = publish(bundleBody("1.1.0", "greet(name, options)", "A greeting returns the name, padded."));
+    const internal = publish({
+      ...current,
+      graph: {
+        format: 1,
+        snapshot: { format: 1, id: "product-1.1.1" },
+        nodes: [{ id: "page:guide/install.md", kind: "page", label: "Edited label" }],
+        edges: [],
+      },
+    });
+    tree(root, {
+      "baseline/product.bundle.json": JSON.stringify(baseline),
+      "current/product.bundle.json": JSON.stringify(current),
+      "internal/product.bundle.json": JSON.stringify(internal),
+      "propagation.json": JSON.stringify({
+        version: 1,
+        consumers: [{
+          id: "docs",
+          project: "product",
+          policy: { range: ">=1.0.0 <2.0.0", channel: "compatible" },
+          approval: { mode: "automatic", approvers: [] },
+          evidence: { allow: ["*"], deny: [] },
+          consumes: [
+            { kind: "surface", id: "api:greet", pages: ["guide/install.md"], files: ["src/setup.ts"] },
+            { kind: "behavior", id: "greet.returns-name" },
+          ],
+        }],
+      }),
+    });
+
+    const checked = JSON.parse(output(ctx.mizzen(["propagate", "check", root, "--json"], ctx.dir), "propagate check")) as { valid: boolean };
+    check(checked.valid === true, "the consumer manifest is not valid");
+
+    const changed = JSON.parse(
+      output(ctx.mizzen(["propagate", "diff", root, "--baseline", join(root, "baseline"), "--current", join(root, "current"), "--json"], ctx.dir), "propagate diff"),
+    ) as { events: { ref: string; external: boolean }[] };
+    check(changed.events.some((event) => event.ref === "api:greet" && event.external), "the API signature change was not emitted");
+    check(changed.events.some((event) => event.ref === "behavior:greet.returns-name"), "the behavior change was not emitted");
+
+    const internalOnly = JSON.parse(
+      output(ctx.mizzen(["propagate", "diff", root, "--baseline", join(root, "current"), "--current", join(root, "internal"), "--json"], ctx.dir), "propagate internal diff"),
+    ) as { events: unknown[] };
+    check(internalOnly.events.length === 0, "an internal change emitted an external event");
+
+    const preview = JSON.parse(
+      output(ctx.mizzen(["propagate", "preview", root, "--baseline", join(root, "baseline"), "--current", join(root, "current"), "--json"], ctx.dir), "propagate preview"),
+    ) as { consumers: { consumer: string; pages: string[]; tasks: string[] }[] };
+    check(preview.consumers.length === 1 && preview.consumers[0]?.consumer === "docs", "the preview named another consumer");
+    check(preview.consumers[0]?.pages.includes("guide/install.md") === true, "the preview lost the affected page");
+    check((preview.consumers[0]?.tasks ?? []).length === 1, "the preview named no task");
+
+    const before = read(root, "current/product.bundle.json");
+    const applied = JSON.parse(
+      output(ctx.mizzen(["propagate", "apply", root, "--baseline", join(root, "baseline"), "--current", join(root, "current"), "--json"], ctx.dir), "propagate apply"),
+    ) as { receipts: { id: string; status: string }[]; tasks: unknown[] };
+    check(applied.receipts[0]?.status === "proposed", "the receipt is not proposed");
+    check(applied.tasks.length === 1, "the apply created no task");
+    check(read(root, "current/product.bundle.json") === before, "the apply wrote the upstream bundle");
+    const receipt = applied.receipts[0]!.id;
+
+    const again = JSON.parse(
+      output(ctx.mizzen(["propagate", "apply", root, "--baseline", join(root, "baseline"), "--current", join(root, "current"), "--json"], ctx.dir), "propagate apply again"),
+    ) as { reused: string[]; tasks: unknown[] };
+    check(again.reused.includes(receipt) && again.tasks.length === 0, "reprocessing created another task");
+
+    const readBack = JSON.parse(output(ctx.mizzen(["propagate", "receipt", receipt, root, "--json"], ctx.dir), "propagate receipt")) as { status: string };
+    check(readBack.status === "proposed", "the earlier receipt was not retrievable");
+
+    const verified = JSON.parse(output(ctx.mizzen(["propagate", "verify", receipt, root, "--json"], ctx.dir), "propagate verify")) as { receipt: { status: string } };
+    check(verified.receipt.status === "verified", "the receipt was not verified");
+
+    const afterVerify = JSON.parse(
+      output(ctx.mizzen(["propagate", "apply", root, "--baseline", join(root, "baseline"), "--current", join(root, "current"), "--json"], ctx.dir), "propagate apply after verify"),
+    ) as { reused: string[]; tasks: unknown[]; receipts: { status: string }[] };
+    check(afterVerify.reused.includes(receipt) && afterVerify.tasks.length === 0, "verification did not make reprocessing a no-op");
+    check(afterVerify.receipts[0]?.status === "verified", "the verified receipt was lost");
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   checkReports,
@@ -1738,6 +1867,7 @@ export const CASES: readonly AcceptanceCase[] = [
   decisions,
   behaviorContracts,
   federatedKnowledge,
+  changePropagation,
   mcp,
   traces,
   permissions,
