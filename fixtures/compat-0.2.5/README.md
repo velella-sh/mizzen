@@ -11,9 +11,10 @@ node scripts/release-compat.ts --baseline @velella/mizzen@0.2.5 \
   --write-baseline fixtures/compat-0.2.5/baseline.json
 ```
 
-`test/compat-0.2.5.test.ts` builds the same site from this checkout and requires every byte to match. The release
-workflow also installs the published `0.2.5` package beside the candidate tarball and compares them live, with the
-published `@velella/lateen@0.2.3` theme.
+`test/compat-0.2.5.test.ts` builds the same site from this checkout and requires every byte to match. The 0.2.6 release
+workflow also installed the published `0.2.5` package beside the candidate tarball and compared them live, with the
+published `@velella/lateen@0.2.3` theme. From 0.2.7 the workflow's default baseline is `0.2.6`; the
+`0.2.6` baseline and its preliminary review live in `../compat-0.2.6`.
 
 The only normalizations are the engine version stamp in `agent.json` and the two `pagefind/wasm.*.pagefind` binaries,
 which Pagefind builds per platform and are compared by presence only.

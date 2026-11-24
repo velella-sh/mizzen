@@ -3,14 +3,17 @@
  *
  * It installs the baseline and the candidate packages into separate empty projects, builds the
  * site fixture with the fixed test theme, and compares every public output byte, the
- * canonical links, the `_redirects` file, and the sitemap URLs. Then it builds the same site with
- * the published theme package and checks the base path, its assets, the canonical links, and a
+ * canonical links, the `_redirects` file, and the sitemap URLs. It also reports the URL surface,
+ * the effective configuration, the CLI inventory and probes, and the exported contract surface, so
+ * a compatibility review covers behavior beyond the rendered files. Then it builds the same site
+ * with the published theme package and checks the base path, its assets, the canonical links, and a
  * rendered Mermaid diagram.
  *
  * Usage:
- *   node scripts/release-compat.ts --candidate <tarball> [--baseline @velella/mizzen@0.2.5]
+ *   node scripts/release-compat.ts --candidate <tarball> [--baseline @velella/mizzen@0.2.6]
  *     [--theme @velella/lateen@0.2.3] [--report compat-report.json] [--skip-theme]
- *   node scripts/release-compat.ts --write-baseline fixtures/compat-0.2.5/baseline.json
+ *   node scripts/release-compat.ts --baseline @velella/mizzen@0.2.6 \
+ *     --write-baseline fixtures/compat-0.2.6/baseline.json
  *
  * `--write-baseline` only builds the baseline package and records its snapshot. Do not regenerate
  * the committed baseline to make the test pass: review the difference and record it in the fixture
@@ -20,12 +23,13 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, sep } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const DEFAULT_FIXTURE = join(ROOT, "fixtures/compat-0.2.4");
 const TEST_THEME = join(ROOT, "fixtures/compat-0.2/theme");
+const PACKAGE = "@velella/mizzen";
 const TEXT = new Set([".html", ".json", ".md", ".txt", ".xml", ".csv", ".ndjson", ".yml", ".js", ".css"]);
 /** Pagefind's wasm is built per platform, so the same source produces different bytes on macOS and Linux. */
 const PLATFORM_BINARY = /^pagefind\/wasm\.[^.]+\.pagefind$/;
@@ -79,10 +83,11 @@ export const hasDifferences = (diff: ReleaseDiff): boolean =>
   diff.canonicals.length > 0 || diff.redirects || diff.sitemap.length > 0;
 
 /**
- * The head tags 0.2.6 added to every page, so a candidate can be compared with a pre-0.2.6 baseline: Open Graph and
- * Twitter meta tags, JSON-LD scripts, a canonical link on a page the baseline gave none, and the description meta on
- * the pages named in `descriptions` (the site-description fallback). Nothing else is removed, so any other head or body
- * change still fails the comparison. `trust.json`'s `build.id` is a hash of the rendered HTML and moves with it.
+ * The head tags the build prints for a baseline that predates the head wiring, so a candidate can be compared with
+ * every published baseline through 0.2.6: Open Graph and Twitter meta tags, JSON-LD scripts, a canonical link on a page
+ * the baseline gave none, and the description meta on the pages named in `descriptions` (the site-description
+ * fallback). Nothing else is removed, so any other head or body change still fails the comparison. `trust.json`'s
+ * `build.id` is a hash of the rendered HTML and moves with it.
  */
 export interface AddedHead {
   readonly baseline: ReleaseSnapshot;
@@ -154,6 +159,234 @@ function sha256(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+/** The addresses one build publishes: pages, sitemap entries, canonicals, redirect rules, and record URLs. */
+export interface UrlSurface {
+  /** Every HTML path relative to the output folder. */
+  readonly pages: readonly string[];
+  /** The absolute URLs in `sitemap.xml`. */
+  readonly sitemap: readonly string[];
+  /** Each HTML page's canonical link. */
+  readonly canonicals: Readonly<Record<string, string>>;
+  /** The normalized lines of `_redirects`. */
+  readonly redirects: readonly string[];
+  /** `collection.record` to its published URL, from `urls.json`. */
+  readonly records: Readonly<Record<string, string>>;
+}
+
+/** What changed between two URL surfaces. Every list is sorted; an empty diff means the same addresses are served. */
+export interface UrlDiff {
+  readonly pages: readonly string[];
+  readonly sitemap: readonly string[];
+  readonly canonicals: readonly string[];
+  readonly redirects: readonly string[];
+  readonly records: readonly string[];
+}
+
+/** Reads the URL surface of a build, reusing the files and links `snapshot` already collected. */
+export function readUrlSurface(out: string, snapshot: ReleaseSnapshot): UrlSurface {
+  const records: Record<string, string> = {};
+  const urlsFile = join(out, "urls.json");
+  if (existsSync(urlsFile)) {
+    const parsed = JSON.parse(readFileSync(urlsFile, "utf8")) as { collections?: Record<string, Record<string, unknown>> };
+    for (const [collection, entries] of Object.entries(parsed.collections ?? {})) {
+      for (const [id, url] of Object.entries(entries)) {
+        if (typeof url === "string") records[`${collection}.${id}`] = url;
+      }
+    }
+  }
+  return {
+    pages: Object.keys(snapshot.files).filter((path) => path.endsWith(".html")).sort(),
+    sitemap: [...snapshot.sitemap].sort(),
+    canonicals: snapshot.canonicals,
+    redirects: snapshot.redirects.split("\n").map((line) => line.trim()).filter(Boolean).sort(),
+    records,
+  };
+}
+
+/** Compares two URL surfaces, marking a removed value with `-` and an added one with `+`. */
+export function compareUrls(baseline: UrlSurface, candidate: UrlSurface): UrlDiff {
+  return {
+    pages: addedOrRemoved(baseline.pages, candidate.pages),
+    sitemap: addedOrRemoved(baseline.sitemap, candidate.sitemap),
+    canonicals: changedValues(baseline.canonicals, candidate.canonicals),
+    redirects: addedOrRemoved(baseline.redirects, candidate.redirects),
+    records: changedValues(baseline.records, candidate.records),
+  };
+}
+
+function addedOrRemoved(baseline: readonly string[], candidate: readonly string[]): readonly string[] {
+  const removed = baseline.filter((value) => !candidate.includes(value)).map((value) => `-${value}`);
+  const added = candidate.filter((value) => !baseline.includes(value)).map((value) => `+${value}`);
+  return [...removed, ...added];
+}
+
+function changedValues(baseline: Readonly<Record<string, string>>, candidate: Readonly<Record<string, string>>): readonly string[] {
+  const keys = [...new Set([...Object.keys(baseline), ...Object.keys(candidate)])].sort();
+  return keys.flatMap((key) => {
+    const before = baseline[key];
+    const after = candidate[key];
+    if (before === after) return [];
+    if (before === undefined) return [`+${key} ${after}`];
+    if (after === undefined) return [`-${key} ${before}`];
+    return [`~${key} ${before} -> ${after}`];
+  });
+}
+
+/** One effective configuration value that differs between the two builds. */
+export interface ConfigDifference {
+  readonly path: string;
+  readonly baseline: string;
+  readonly candidate: string;
+}
+
+/** Compares the effective configuration from two `build-report.json` files by path. */
+export function compareConfig(baseline: unknown, candidate: unknown): readonly ConfigDifference[] {
+  const differences: ConfigDifference[] = [];
+  const walk = (path: string, before: unknown, after: unknown): void => {
+    if (isRecord(before) && isRecord(after)) {
+      const keys = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
+      for (const key of keys) walk(path === "" ? key : `${path}.${key}`, before[key], after[key]);
+      return;
+    }
+    const left = valueText(before);
+    const right = valueText(after);
+    if (left !== right) differences.push({ path: path === "" ? "<root>" : path, baseline: left, candidate: right });
+  };
+  walk("", baseline, candidate);
+  return differences;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function valueText(value: unknown): string {
+  return value === undefined ? "<missing>" : JSON.stringify(value);
+}
+
+/** One CLI command run against an installed package. */
+export interface CliProbe {
+  readonly name: string;
+  readonly exit: number;
+  readonly output: string;
+}
+
+/** The part of a CLI that a compatibility review compares: its inventory and a few fixed probes. */
+export interface CliSurface {
+  readonly commands: readonly string[];
+  readonly options: readonly string[];
+  readonly probes: readonly CliProbe[];
+}
+
+/** What changed in the CLI inventory and probe results. */
+export interface CliDiff {
+  readonly commands: { readonly added: readonly string[]; readonly removed: readonly string[] };
+  readonly options: { readonly added: readonly string[]; readonly removed: readonly string[] };
+  readonly probes: readonly {
+    readonly name: string;
+    readonly baselineExit: number;
+    readonly candidateExit: number;
+    readonly output: "same" | "changed";
+  }[];
+}
+
+/** The commands and long options `mizzen` prints in its usage text. */
+export function helpInventory(help: string): { commands: readonly string[]; options: readonly string[] } {
+  const commands: string[] = [];
+  const options: string[] = [];
+  for (const line of help.split("\n")) {
+    const option = /^ {2}(--[a-z][a-z0-9-]*)/.exec(line);
+    if (option !== null) options.push(option[1]!);
+    const command = /^ {2}([a-z][a-z0-9-]*(?: [a-z][a-z0-9-]*)*)/.exec(line);
+    if (command !== null) commands.push(command[1]!);
+  }
+  return { commands: [...new Set(commands)].sort(), options: [...new Set(options)].sort() };
+}
+
+/** Compares two CLI surfaces. A removed command or option is a break; an added one is reported only. */
+export function compareCli(baseline: CliSurface, candidate: CliSurface): CliDiff {
+  const probes = baseline.probes.map((probe) => {
+    const other = candidate.probes.find((entry) => entry.name === probe.name);
+    return {
+      name: probe.name,
+      baselineExit: probe.exit,
+      candidateExit: other?.exit ?? -1,
+      output: (other?.output === probe.output ? "same" : "changed") as "same" | "changed",
+    };
+  });
+  return {
+    commands: inventoryDiff(baseline.commands, candidate.commands),
+    options: inventoryDiff(baseline.options, candidate.options),
+    probes,
+  };
+}
+
+function inventoryDiff(
+  baseline: readonly string[],
+  candidate: readonly string[],
+): { readonly added: readonly string[]; readonly removed: readonly string[] } {
+  return {
+    added: candidate.filter((value) => !baseline.includes(value)).sort(),
+    removed: baseline.filter((value) => !candidate.includes(value)).sort(),
+  };
+}
+
+/** The package surface a consumer depends on: its export map, shipped schemas, and exported contract names. */
+export interface ContractSurface {
+  readonly exports: Record<string, unknown>;
+  /** Each `schema/*.json` file and the SHA-256 of its bytes. */
+  readonly schemas: Readonly<Record<string, string>>;
+  /** Every type the package re-exports from `./contracts`. */
+  readonly types: readonly string[];
+}
+
+/** What changed in the contract surface. */
+export interface ContractDiff {
+  readonly exports: boolean;
+  readonly schemas: { readonly added: readonly string[]; readonly removed: readonly string[]; readonly changed: readonly string[] };
+  readonly types: { readonly added: readonly string[]; readonly removed: readonly string[] };
+}
+
+/** Reads the contract surface of an installed package. */
+export function readContractSurface(packageDir: string): ContractSurface {
+  const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8")) as { exports?: Record<string, unknown> };
+  const schemas: Record<string, string> = {};
+  const schemaDir = join(packageDir, "schema");
+  if (existsSync(schemaDir)) {
+    for (const name of readdirSync(schemaDir).filter((entry) => entry.endsWith(".json")).sort()) {
+      schemas[name] = createHash("sha256").update(readFileSync(join(schemaDir, name))).digest("hex");
+    }
+  }
+  const declarations = join(packageDir, "dist", "contracts", "index.d.ts");
+  const text = existsSync(declarations) ? readFileSync(declarations, "utf8") : "";
+  const types = new Set<string>();
+  for (const match of text.matchAll(/export type \{([^}]*)\}/g)) {
+    for (const name of match[1]!.split(",")) {
+      const trimmed = name.trim();
+      if (trimmed !== "") types.add(trimmed);
+    }
+  }
+  for (const match of text.matchAll(/export (?:interface|type|class|const|function) ([A-Za-z0-9_]+)/g)) types.add(match[1]!);
+  return { exports: manifest.exports ?? {}, schemas, types: [...types].sort() };
+}
+
+/** Compares two contract surfaces. A removed type or schema is a break; an added one is reported only. */
+export function compareContracts(baseline: ContractSurface, candidate: ContractSurface): ContractDiff {
+  const schemaNames = [...new Set([...Object.keys(baseline.schemas), ...Object.keys(candidate.schemas)])].sort();
+  return {
+    exports: JSON.stringify(baseline.exports) !== JSON.stringify(candidate.exports),
+    schemas: {
+      added: schemaNames.filter((name) => baseline.schemas[name] === undefined),
+      removed: schemaNames.filter((name) => candidate.schemas[name] === undefined),
+      changed: schemaNames.filter((name) => baseline.schemas[name] !== undefined && candidate.schemas[name] !== undefined && baseline.schemas[name] !== candidate.schemas[name]),
+    },
+    types: {
+      added: candidate.types.filter((name) => !baseline.types.includes(name)),
+      removed: baseline.types.filter((name) => !candidate.types.includes(name)),
+    },
+  };
+}
+
 function run(command: string, args: readonly string[], cwd: string): void {
   const result = spawnSync(command, args, { cwd, stdio: ["ignore", "inherit", "inherit"] });
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed in ${cwd}`);
@@ -182,8 +415,54 @@ function buildSite(dir: string, themeName?: string): string {
   }
   const bin = join(dir, "node_modules", "@velella", "mizzen", "bin", "mizzen.js");
   const theme = themeName === undefined ? ["--theme", TEST_THEME] : [];
-  run(process.execPath, [bin, "build", "site", "--out", "out", ...theme], dir);
+  run(process.execPath, [bin, "build", "site", "--out", "out", "--diagnose", ...theme], dir);
   return join(dir, "out");
+}
+
+/** The effective configuration `build --diagnose` recorded, or undefined for a package without a build report. */
+function buildConfig(dir: string): unknown {
+  const file = join(dir, "site", ".mizzen", "build-report.json");
+  if (!existsSync(file)) return undefined;
+  const report = JSON.parse(readFileSync(file, "utf8")) as { config?: unknown };
+  return report.config;
+}
+
+/** Runs the fixed CLI probes in one installed project and normalizes the project paths out of their output. */
+function probeCli(dir: string): CliSurface {
+  const bin = join(dir, "node_modules", "@velella", "mizzen", "bin", "mizzen.js");
+  const normalize = (text: string): string =>
+    text.replaceAll(dir, "<project>").replaceAll(TEST_THEME, "<theme>").replaceAll(tempRoot, "<temp>");
+  const help = capture(dir, bin, ["--help"]);
+  const inventory = helpInventory(help.output);
+  const probes: CliProbe[] = [
+    { name: "--help", ...help },
+    { name: "agent capabilities", ...normalizeCapabilities(capture(dir, bin, ["agent", "capabilities"])) },
+    { name: "check site", ...capture(dir, bin, ["check", "site", "--theme", TEST_THEME, "--format", "json"]) },
+    { name: "doctor site", ...capture(dir, bin, ["doctor", "site", "--theme", TEST_THEME, "--format", "json"]) },
+    { name: "urls check site", ...capture(dir, bin, ["urls", "check", "site", "--format", "json"]) },
+  ];
+  return {
+    ...inventory,
+    probes: probes.map((probe) => ({ ...probe, output: normalize(probe.output) })),
+  };
+  function capture(cwd: string, executable: string, args: readonly string[]): { readonly exit: number; readonly output: string } {
+    const result = spawnSync(process.execPath, [executable, ...args], {
+      cwd,
+      encoding: "utf8",
+      timeout: 120_000,
+      env: { ...process.env, NO_COLOR: "1" },
+    });
+    return { exit: result.status ?? 1, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+  }
+  function normalizeCapabilities(result: { readonly exit: number; readonly output: string }): { readonly exit: number; readonly output: string } {
+    try {
+      const value = JSON.parse(result.output) as Record<string, unknown>;
+      if (typeof value === "object" && value !== null) value.package = "<version>";
+      return { exit: result.exit, output: JSON.stringify(value) };
+    } catch {
+      return result;
+    }
+  }
 }
 
 let tempRoot = "";
@@ -199,7 +478,7 @@ function parseArgs(argv: readonly string[]): {
   fixture: string;
 } {
   const options: { baseline: string; candidate?: string; theme: string; report?: string; writeBaseline?: string; skipTheme: boolean; fixture: string } = {
-    baseline: "@velella/mizzen@0.2.5",
+    baseline: "@velella/mizzen@0.2.6",
     theme: "@velella/lateen@0.2.3",
     skipTheme: false,
     fixture: DEFAULT_FIXTURE,
@@ -233,7 +512,7 @@ function main(argv: readonly string[]): void {
   tempRoot = mkdtempSync(join(tmpdir(), "mizzen-release-compat-"));
   try {
     const baselineProject = project("baseline", [options.baseline]);
-    const baselineVersion = installedVersion(baselineProject, "@velella/mizzen");
+    const baselineVersion = installedVersion(baselineProject, PACKAGE);
     const baselineOut = buildSite(baselineProject);
     const baseline = snapshotOutput(baselineOut, baselineVersion);
     const baselineEvidence = {
@@ -251,18 +530,35 @@ function main(argv: readonly string[]): void {
       return;
     }
 
+    const baselineUrls = readUrlSurface(baselineOut, baseline);
+    const baselineConfig = buildConfig(baselineProject);
+    const baselineContracts = readContractSurface(join(baselineProject, "node_modules", PACKAGE));
+    const baselineCli = probeCli(baselineProject);
+
     const candidatePath = options.candidate!;
     const candidateProject = project("candidate", [candidatePath]);
-    const candidateVersion = installedVersion(candidateProject, "@velella/mizzen");
-    // A pre-0.2.6 baseline gets the 0.2.6 head tags removed from the candidate (see AddedHead); a later one is exact.
+    const candidateVersion = installedVersion(candidateProject, PACKAGE);
+    // A baseline through 0.2.6 predates the head wiring: remove exactly the head tags the candidate adds (see
+    // AddedHead); a later baseline is compared exactly.
     const trustId = /"build":\s*\{\s*"algorithm":\s*"sha256",\s*"id":\s*"([0-9a-f]+)"/.exec(
       existsSync(join(baselineOut, "trust.json")) ? readFileSync(join(baselineOut, "trust.json"), "utf8") : "",
     )?.[1];
-    const added: AddedHead | undefined = /^0\.2\.[0-5]$/.test(baselineVersion) && trustId !== undefined
+    const added: AddedHead | undefined = /^0\.2\.[0-6]$/.test(baselineVersion) && trustId !== undefined
       ? { baseline, descriptions: ["index.html"], buildId: trustId }
       : undefined;
-    const candidate = snapshotOutput(buildSite(candidateProject), candidateVersion, added);
+    const candidateOut = buildSite(candidateProject);
+    const candidate = snapshotOutput(candidateOut, candidateVersion, added);
     const diff = compareSnapshots(baseline, candidate);
+    const urls = compareUrls(baselineUrls, readUrlSurface(candidateOut, candidate));
+    const configuration = compareConfig(baselineConfig, buildConfig(candidateProject));
+    const contracts = compareContracts(baselineContracts, readContractSurface(join(candidateProject, "node_modules", PACKAGE)));
+    const cli = compareCli(baselineCli, probeCli(candidateProject));
+    const compatibilityProblems = [
+      ...cli.commands.removed.map((command) => `CLI command removed: ${command}`),
+      ...cli.options.removed.map((option) => `CLI option removed: ${option}`),
+      ...contracts.types.removed.map((type) => `contract type removed: ${type}`),
+      ...contracts.schemas.removed.map((schema) => `schema removed: ${schema}`),
+    ];
     let themeOk = true;
     let themeEvidence: Record<string, unknown> = {};
     if (!options.skipTheme) {
@@ -306,23 +602,31 @@ function main(argv: readonly string[]): void {
 
     const evidence = {
       baseline: baselineEvidence,
-      candidate: { package: candidatePath, version: candidateVersion, sha256: checksum(candidatePath) },
+      candidate: { package: basename(candidatePath), version: candidateVersion, sha256: checksum(candidatePath) },
       compared: {
         files: Object.keys(baseline.files).length,
         canonicals: Object.keys(baseline.canonicals).length,
         redirects: baseline.redirects.split("\n").filter(Boolean).length,
         sitemap: baseline.sitemap.length,
+        commands: baselineCli.commands.length,
+        contractTypes: baselineContracts.types.length,
+        schemas: Object.keys(baselineContracts.schemas).length,
       },
+      review: { urls, configuration, cli, contracts },
       differences: diff,
+      compatibility: compatibilityProblems,
       theme: themeEvidence,
     };
     if (options.report !== undefined) writeFileSync(options.report, `${JSON.stringify(evidence, null, 2)}\n`);
     process.stdout.write(
-      `${options.baseline} vs ${candidatePath}: ${diff.missing.length} missing, ${diff.changed.length} changed, ` +
+      `${options.baseline} vs ${basename(candidatePath)}: ${diff.missing.length} missing, ${diff.changed.length} changed, ` +
         `${diff.added.length} added, ${diff.canonicals.length} canonical, redirects ${diff.redirects ? "changed" : "same"}, ` +
-        `${diff.sitemap.length} sitemap differences\n`,
+        `${diff.sitemap.length} sitemap; urls ${urls.pages.length} page, ${urls.records.length} record; ` +
+        `config ${configuration.length}; cli -${cli.commands.removed.length}/+${cli.commands.added.length} commands; ` +
+        `contracts -${contracts.types.removed.length}/+${contracts.types.added.length} types\n`,
     );
-    if (hasDifferences(diff) || !themeOk) {
+    if (compatibilityProblems.length > 0) process.stderr.write(`${compatibilityProblems.join("\n")}\n`);
+    if (hasDifferences(diff) || !themeOk || compatibilityProblems.length > 0) {
       if (hasDifferences(diff)) process.stderr.write(`${JSON.stringify(diff, null, 2)}\n`);
       process.exitCode = 1;
     }
