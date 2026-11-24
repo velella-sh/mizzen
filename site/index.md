@@ -5,7 +5,6 @@ layout: home
 home:
   style: showpiece
 hero:
-  eyebrow: v0.2.6 · docs engine
   lead: Mizzen turns a folder of Markdown into a fast, RTL-ready static site. The same input gives the same bytes, and every page keeps its exact source positions.
 actions:
   - label: Install and quickstart
