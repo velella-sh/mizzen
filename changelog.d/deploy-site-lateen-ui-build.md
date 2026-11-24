@@ -1,0 +1,1 @@
+- Fix the docs site deploy: build Lateen's stylesheet (`npm run ui:build`) and pin Lateen to `v0.2.5`, so the published site is no longer unstyled. The home page now uses Lateen's showpiece layout.
