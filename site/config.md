@@ -42,7 +42,7 @@ The site config file. Every key is optional; an unknown key is an error.
 | `repository.dir` | string | `` | The site root's folder inside the repository, such as docs. |
 | `theme` | object |  | The theme that builds the site and the options handed to it. |
 | `theme.name` | string |  | Theme package or folder. Default: the theme that ships with the engine. |
-| `theme.options` | object |  | Handed to the theme unread; the theme validates it against its own schema. |
+| `theme.options` | object |  | Handed to the theme unread; the theme validates it against its own schema. Lateen reads `preset` and `brand` here; see [Presets and Theme Studio](/presets/). |
 | `theme.overrides` | object |  | Site modules that replace selected theme units. The path is relative to the site root; a missing file, a path outside the root, or a name the theme does not have is an error. A replacement may add a `<file>.css` sidecar beside it; it brings no client island. Every unit not named here stays the theme's. |
 | `theme.overrides.layouts` | object |  | Layout name → the site module that replaces it. |
 | `theme.overrides.components` | object |  | Component name → the site module that replaces it. |

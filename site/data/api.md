@@ -118,6 +118,12 @@ const node = await (await fetch(`${base}/packages/node.json`)).json();
 console.log(node.fields.eol);
 ```
 
+## Links on the pages
+
+With Lateen `0.2.5`, list and record pages link to the collection files, the record JSON, the JSON Schema, and the
+OpenAPI document of the version the page belongs to. The links follow what the build published: a collection or schema
+the version does not list gets no link. See [Lateen 0.2.5](/theme/).
+
 ## Size
 
 A collection file holds every record. When one passes `maxFileBytes`, the build warns and the advice is to read the

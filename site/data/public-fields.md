@@ -22,6 +22,11 @@ collections:
 `id` is the record's identity and is always public. A collection without `public` publishes every field, as earlier
 versions did. `public: []` is an empty allowlist: only `id` is published, and every other field stays internal.
 
+## On the pages
+
+Collection and record pages show each public field's type, whether it is required, and its allowed values, read from
+the recorded schema. A field outside the policy is not shown. This needs Lateen `0.2.5`; see [Lateen 0.2.5](/theme/).
+
 ## Nested paths
 
 An entry is a dot path. It names one leaf (`author.name`) or a whole subtree (`author`). A container of a named leaf is
