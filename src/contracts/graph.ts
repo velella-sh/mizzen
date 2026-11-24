@@ -28,7 +28,8 @@ export type GraphNodeKind =
   | "claim"
   | "evidence"
   | "check"
-  | "lineage";
+  | "lineage"
+  | "decision";
 
 /** How one node relates to another. */
 export type GraphEdgeKind =
@@ -45,7 +46,10 @@ export type GraphEdgeKind =
   | "derives"
   | "reads"
   | "writes"
-  | "joins";
+  | "joins"
+  | "decides"
+  | "supersedes"
+  | "cites";
 
 /** A scalar or list a node publishes as structured metadata. */
 export type GraphValue = string | number | boolean | readonly string[];
@@ -248,8 +252,29 @@ export interface GraphInput {
   readonly evidence?: readonly GraphClaimInput[];
   /** Knowledge declarations the collector read, by node id, so a query can publish a status a node carries. */
   readonly knowledge?: readonly GraphKnowledgeInput[];
+  /** Decision records the collector read, so a query can reach the decision behind a behavior or a page. */
+  readonly decisions?: readonly GraphDecisionInput[];
   /** A caller-supplied snapshot label; without it the snapshot id is a hash of the graph's own contents. */
   readonly snapshot?: string;
   /** Extra audiences by node id or unit, merged over the ones read from front matter and record fields. */
   readonly audience?: Readonly<Record<string, readonly string[]>>;
+}
+
+/** One decision record as the graph carries it: its identity, links, evidence, and lifecycle, never its private text. */
+export interface GraphDecisionInput {
+  /** The decision id, such as `ADR-0001`. */
+  readonly id: string;
+  readonly title: string;
+  readonly status: import("./decisions.ts").DecisionStatus;
+  readonly date: string;
+  /** The stable ids this decision affects, as `kind:id`, so the graph can draw an edge to each. */
+  readonly links: readonly { readonly kind: import("./decisions.ts").DecisionLinkKind; readonly id: string; readonly raw: string; readonly resolved: boolean }[];
+  /** The decisions this one replaces, by id. */
+  readonly supersedes: readonly string[];
+  /** How many rejected alternatives the record keeps, so a query can show a decision had a history without its text. */
+  readonly alternatives: number;
+  /** Where the record was read from. */
+  readonly pos?: SourcePos;
+  /** Audiences allowed to see the decision. Absent means public. */
+  readonly audience?: readonly string[];
 }

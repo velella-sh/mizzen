@@ -1,0 +1,7 @@
+title: Decision memory fixture
+description: A site with two successive decisions about the cache.
+decisions:
+  dir: docs/decisions
+  behaviors:
+    - cache-hit
+    - cache-miss

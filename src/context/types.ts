@@ -197,6 +197,8 @@ export interface CompiledContext {
   readonly answerability: ContextAnswerability;
   readonly requests: readonly ContextRequestAction[];
   readonly cache: ContextCache;
+  /** The decisions in effect for this task, as active rules, and the history that is not active. */
+  readonly decisions?: import("../decisions/context.ts").ContextDecisions;
   /** The ready-to-paste Markdown pack. */
   readonly markdown: string;
 }

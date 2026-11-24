@@ -20,6 +20,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `collection-json` | `data/<collection>.json` for every collection: each record's id, URL, and page JSON address, and `data/<collection>.raw.json` with every record and its snapshot. |
 | `context-pack` | `pack/<topic>.md` for each topic in `_data/context-packs.yml`: the best pages for the topic, trimmed to its token budget, with each page's URL and source path. |
 | `data-changelog` | `feeds/<collection>-changes.xml`, an Atom feed of a collection's change history, when its `changelog` pages are on and the site has `url`. |
+| `decisions` | `decisions.json`, the versioned public decision report, and `decisions/index.html`, a matrix of every decision by status, date, and supersession, from the records under `decisions.dir`. |
 | `drift-report` | `drift.json`, every drift finding grouped by page URL. |
 | `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. [Pinned mode](/example-results/) also includes current recorded results keyed by page URL and fence ID. |
 | `feed` | `changes.xml`, an Atom feed of the 30 most recently changed doc pages, when the config has `url`. |

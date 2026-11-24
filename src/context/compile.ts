@@ -23,6 +23,7 @@ import { contextGraphOf, selectFromGraph, type ContextSelection } from "./select
 import { fragmentsOf, taskReferences } from "./sources.ts";
 import { packContext } from "./budget.ts";
 import { requestForTask, type CriterionEvidence } from "./request.ts";
+import { contextDecisionsOf, type ContextDecisions } from "../decisions/context.ts";
 import type {
   CompiledContext,
   ContextAccounting,
@@ -203,6 +204,29 @@ function mergeOmissions(...lists: readonly (readonly ContextOmission[])[]): read
   return out;
 }
 
+/**
+ * The Markdown a pack shows for its decisions: one active rule per decision, with its citation and rejected
+ * alternatives. A pack with no active rule adds nothing, so a site without decisions is unchanged.
+ */
+export function renderDecisions(decisions: ContextDecisions | undefined): string {
+  if (decisions === undefined || decisions.rules.length === 0) return "";
+  const parts = ["## Decisions in effect"];
+  for (const rule of decisions.rules) {
+    parts.push(`### ${rule.title} (${rule.decision}, ${rule.status})`);
+    if (rule.rule !== "") parts.push(rule.rule);
+    if (rule.rationale !== undefined && rule.rationale !== "") parts.push(`Why: ${rule.rationale}`);
+    if (rule.alternatives.length > 0) {
+      const lines = ["Rejected alternatives:"];
+      for (const alternative of rule.alternatives) {
+        lines.push(`- ${alternative.name}${alternative.rejectedBecause === undefined ? "" : ` — ${alternative.rejectedBecause}`}`);
+      }
+      parts.push(lines.join("\n"));
+    }
+    parts.push(`Citation: \`${rule.citation}\` at \`${rule.span}\``);
+  }
+  return `${parts.join("\n\n")}\n`;
+}
+
 /** The omissions and shortages as concrete requests, never as a guess. */
 function requestsOf(
   omitted: readonly ContextOmission[],
@@ -374,6 +398,11 @@ export async function compileTaskContext(
   const omitted = mergeOmissions(selection.omitted, packed.omitted);
   const accounting = accountingOf(request, packed);
   const cache = cacheOf(request, task, build.id, packed.fragments);
+  const decisions = contextDecisionsOf(site, task, {
+    ...(options.allow === undefined ? {} : { allow: options.allow }),
+  });
+  const decisionsMarkdown = renderDecisions(decisions);
+  const markdown = decisionsMarkdown === "" ? packed.markdown : `${packed.markdown.replace(/\n$/, "")}\n\n${decisionsMarkdown}`;
 
   return {
     version: 1,
@@ -391,7 +420,8 @@ export async function compileTaskContext(
     answerability,
     requests: requestsOf(omitted, answerability, accounting),
     cache,
-    markdown: packed.markdown,
+    ...(decisions.rules.length === 0 && decisions.history.length === 0 && decisions.withheld.length === 0 ? {} : { decisions }),
+    markdown,
   };
 }
 

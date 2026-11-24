@@ -27,6 +27,7 @@ import { runSiteAttestation } from "./site-attestation.ts";
 import { runStale } from "./stale.ts";
 import { runGraph } from "./graph.ts";
 import { runKnowledge } from "./knowledge.ts";
+import { runDecisions } from "./decisions.ts";
 import { referencesUsage, runReferences } from "./references.ts";
 import { runTrace, traceUsage } from "./trace.ts";
 import { runDocsVersion } from "./docs-version.ts";
@@ -70,7 +71,7 @@ import type { ReadinessDimension } from "../contracts/readiness.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["agent", "api", "build", "check", "compare", "data", "decisions", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -152,6 +153,7 @@ Commands:
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   knowledge [dir]           Report explicit unknowns, documentation gaps, and unsupported cases (--json, --baseline)
+  decisions [dir]           Report versioned decisions and answer why a behavior or page exists (why <subject>, --json)
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
@@ -520,6 +522,11 @@ type SurfaceOpts = {
   readonly args: readonly string[];
 };
 
+type DecisionsOpts = {
+  readonly command: "decisions";
+  readonly args: readonly string[];
+};
+
 type EditApplyOpts = {
   readonly command: "edit-apply";
   readonly root: string;
@@ -656,7 +663,8 @@ type Parsed =
         | EvalOpts
         | AgentOpts
         | VersionsOpts
-        | SurfaceOpts;
+        | SurfaceOpts
+        | DecisionsOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -1617,6 +1625,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "knowledge", args: rest } };
   }
+  if (command === "decisions") {
+    if (rest.includes("--help") || rest.includes("-h")) return { help: true };
+    return { options: { command: "decisions", args: rest } };
+  }
   if (command === "versions") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "versions", args: rest } };
@@ -2056,6 +2068,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "knowledge") {
     try {
       return await runKnowledge(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "decisions") {
+    try {
+      return await runDecisions(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;

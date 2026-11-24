@@ -55,6 +55,7 @@ Commands:
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
   knowledge [dir]           Report explicit unknowns, documentation gaps, and unsupported cases (--json, --baseline)
+  decisions [dir]           Report versioned decisions and answer why a behavior or page exists (why <subject>, --json)
   mcp [dir]                 Serve the site to an AI client over MCP on stdio (read-only; --allow-edits adds apply_edit)
   network check <file>      Check the shared network file: ids, paths, titles
   network update [dir]      Fetch the network and write network.lock.json (--check, --accept)
@@ -203,6 +204,7 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen init --starter <name> [dir] --theme <dir> --lang <a,b>` | Copies the theme's `starters/<name>/` folder into `dir` (default `.`), resolving the theme the way `build` does. `--list` prints each starter with its title and description from `starter.json`; `--lang` keeps only the named optional languages. It refuses a folder that is not empty and names a missing theme or starter. |
 | `mizzen mcp [dir] [--allow-edits] [--print-config <client>]` | Serves the site to an AI client over MCP on stdio. Read-only unless `--allow-edits` adds `apply_edit`. Logs go to stderr. See [MCP server](/mcp/). |
 | `mizzen knowledge [dir] --json --format <text\|json> --as-of <date> --baseline <file> --out <file> --fail-on <status>` | Reports every page and record with its declared knowledge status (unknown, unsupported, unverified, not-applicable, or out-of-scope) or an explicit `missing`, and lists the gaps while keeping an explicit unknown, a documentation gap, and an unsupported case apart. `--as-of` measures review against a fixed date; `--baseline` compares with an earlier report; `--fail-on` exits `1` on a named status or a documentation gap. See [Explicit unknowns](/explicit-unknowns/). |
+| `mizzen decisions [dir]` and `mizzen decisions why <subject> [dir]` | Reads versioned decision records (ADRs) and reports their lifecycle, rejecting a supersession cycle. `why` answers why a behavior or page exists: the current decision, its rationale, the rejected alternatives, and the decisions it superseded, each with a citation. `--version` or `--snapshot` resolves the decision in effect then; `--policy` applies an access policy to records and citations. A private rationale, source, or alternative is redacted. See [Decision memory](/decisions/). |
 | `mizzen network check <file>` | Checks the shared network file: ids, paths, and titles. See [Several projects](/network/). |
 | `mizzen network update [dir]` | Fetches the network and writes `network.lock.json`; `--check` compares without writing and `--accept` takes a changed project. |
 | `mizzen network sitemap [dir]` | Writes the organization's sitemap index; `--url <origin>` names the host and `--out <dir>` the folder. |

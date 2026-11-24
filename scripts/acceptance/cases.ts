@@ -1035,6 +1035,47 @@ const knowledge: AcceptanceCase = {
   },
 };
 
+const decisions: AcceptanceCase = {
+  id: "decisions",
+  title: "Versioned decisions answer why before and after supersession, and a private rationale is withheld",
+  run: (ctx) => {
+    const site = join(ctx.dir, "decisions-site");
+    tree(site, {
+      "mizzen.yml": "title: Decisions\ndecisions:\n  dir: docs/decisions\n  behaviors: [cache-hit]\n",
+      "index.md": "---\ntitle: Home\n---\n\n# Home\n\nSee the [cache guide](/guide/caching/).\n",
+      "guide/caching.md": "---\ntitle: Caching\n---\n\n# Caching\n\nHits come from memory.\n",
+      "docs/decisions/0001.md":
+        "---\nid: ADR-0001\ntitle: In-memory cache\nstatus: superseded\ndate: 2025-01-10\nsource: https://example.test/rfcs/1\npages: [guide/caching.md]\nvalidity:\n  versions: [v1]\npublic: true\n---\n\n## Decision\n\nCache every hit in a map.\n\n## Rationale\n\nThe working set was small.\n\n## Alternatives\n\n- **Redis** — rejected because the team ran no extra service.\n",
+      "docs/decisions/0002.md":
+        "---\nid: ADR-0002\ntitle: Redis cache\nstatus: accepted\ndate: 2025-03-02\nsource: https://example.test/rfcs/2\nsupersedes: [ADR-0001]\nbehaviors: [cache-hit]\npages: [guide/caching.md]\nvalidity:\n  versions: [v2]\n---\n\n## Decision\n\nCache hits in Redis.\n\n## Rationale\n\nsecret-reason-898\n\n## Alternatives\n\n- **Keep the map** — rejected because workers disagreed.\n",
+    });
+
+    const report = JSON.parse(output(ctx.mizzen(["decisions", site, "--json"], ctx.dir), "decisions")) as {
+      counts: Record<string, number>;
+      entries: readonly { id: string; rationale?: string; redacted?: boolean }[];
+    };
+    check(report.counts.accepted === 1 && report.counts.superseded === 1, "the lifecycle counts are wrong");
+    check(!JSON.stringify(report).includes("secret-reason-898"), "the report leaks a private rationale");
+
+    const before = JSON.parse(
+      output(ctx.mizzen(["decisions", "why", "behavior:cache-hit", site, "--version", "v1", "--json"], ctx.dir), "why v1"),
+    ) as { current?: { id: string }; history: readonly { id: string }[] };
+    check(before.current?.id === "ADR-0001", "the v1 answer is not the first decision");
+    check(before.history.length === 0, "the v1 answer has history it should not");
+
+    const after = JSON.parse(
+      output(ctx.mizzen(["decisions", "why", "behavior:cache-hit", site, "--version", "v2", "--json"], ctx.dir), "why v2"),
+    ) as { current?: { id: string; rationale?: string; alternatives: readonly { name: string }[] }; history: readonly { id: string }[] };
+    check(after.current?.id === "ADR-0002", "the v2 answer is not the replacement");
+    check(after.history.length === 1 && after.history[0]?.id === "ADR-0001", "the v2 history does not name the first decision");
+    check(after.current?.alternatives.length === 1, "the v2 answer lost the rejected alternative");
+    check(!JSON.stringify(after).includes("secret-reason-898"), "the answer leaks a private rationale");
+
+    const text = output(ctx.mizzen(["decisions", "why", "/guide/caching/", site, "--version", "v2"], ctx.dir), "why text");
+    check(/History: ADR-0001/.test(text), "the text answer does not name the history");
+  },
+};
+
 const mcp: AcceptanceCase = {
   id: "mcp",
   title: "The MCP handshake, tool list, search, and client report work over stdio",
@@ -1280,6 +1321,7 @@ export const CASES: readonly AcceptanceCase[] = [
   edits,
   graph,
   knowledge,
+  decisions,
   mcp,
   traces,
   permissions,

@@ -253,4 +253,6 @@ export interface Site {
   readonly network?: SiteNetwork;
   /** The preview policy, from `--preview-canonical` and `--commit`; unset for a normal build. */
   readonly preview?: PreviewPolicy;
+  /** The site's decision records, with `supersededBy` filled and the lifecycle applied; unset when the site has none. */
+  readonly decisions?: import("./decisions.ts").DecisionRecord[];
 }

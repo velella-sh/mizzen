@@ -27,6 +27,8 @@ main:
         url: /outputs/
       - title: Explicit unknowns
         url: /explicit-unknowns/
+      - title: Decision memory
+        url: /decisions/
       - title: Analytics and verification
         url: /analytics/
       - title: Several projects

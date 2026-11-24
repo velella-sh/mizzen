@@ -123,11 +123,11 @@ test("a shipped library feature needs an existing test file, not a guess", () =>
   assert.deepEqual(validateScope(present, [], "## Unreleased\n", known), []);
 });
 
-test("the committed scope records all 216 release issues with a proof", () => {
+test("the committed scope records all 226 release issues with a proof", () => {
   const parsed = parseScope(readFileSync(join(ROOT, "release/scope.json"), "utf8"));
   assert.ok(parsed.scope);
   const mapped = parsed.scope.features.filter((feature) => feature.issue !== undefined);
-  assert.equal(mapped.length, 216);
+  assert.equal(mapped.length, 226);
   const files = new Set(readdirSync(join(ROOT, "test")).filter((name) => name.endsWith(".test.ts")).map((name) => `test/${name}`));
   assert.deepEqual(validateScope(parsed.scope, CASE_IDS, CHANGELOG, files), []);
 });
