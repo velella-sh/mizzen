@@ -26,6 +26,8 @@ import { buildBlogPages } from "../content/blog/pages.ts";
 import { buildBlogRoutes, type BlogPostSource, type BlogRoute } from "../content/blog/routes.ts";
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { declaresKnowledge, parseKnowledge, KNOWLEDGE_KEY } from "../knowledge/parse.ts";
+import { loadDecisions } from "../decisions/load.ts";
+import { parseSpan } from "../source/spans.ts";
 import { frontMatterKeySpan } from "../knowledge/span.ts";
 import { BEHAVIOR_KEY, parseBehaviors } from "../behavior/parse.ts";
 import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
@@ -857,7 +859,29 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
   for (const d of applied.diagnostics) diagnostics.report(d);
 
   const settled = network?.site === undefined ? applied.site : { ...applied.site, network: network.site };
-  const site = options.preview === undefined ? settled : { ...settled, preview: options.preview };
+  // Decision records are read last: their links resolve against the final pages and collections, so a record that names
+  // a page the site builds reaches it, and one that names a missing page is reported instead of assumed.
+  let decisions: import("../contracts/decisions.ts").DecisionRecord[] | undefined;
+  if (config.decisions !== undefined) {
+    const loaded = await loadDecisions({
+      root: siteRoot,
+      site: settled,
+      dir: config.decisions.dir,
+    });
+    for (const d of loaded.diagnostics) diagnostics.report(d);
+    for (const problem of loaded.problems) {
+      const span = problem.span === undefined ? undefined : parseSpan(problem.span);
+      diagnostics.report({
+        id: problem.id,
+        severity: problem.severity,
+        message: problem.message,
+        ...(span === undefined ? {} : { pos: span }),
+      });
+    }
+    if (loaded.records.length > 0) decisions = [...loaded.records];
+  }
+  const withDecisions = decisions === undefined ? settled : { ...settled, decisions };
+  const site = options.preview === undefined ? withDecisions : { ...withDecisions, preview: options.preview };
   return {
     site,
     diagnostics: sortDiagnostics(diagnostics.all),

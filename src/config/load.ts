@@ -40,6 +40,7 @@ import type {
   DefaultsEntry,
   DerivedBandConfig,
   DerivedRuleConfig,
+  DecisionsConfig,
   Diagnostic,
   Direction,
   DriftConfig,
@@ -647,6 +648,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const stale = staleFrom(raw.stale);
   const drift = driftFrom(raw.drift);
   const surface = surfaceFrom(raw.surface);
+  const decisions = decisionsFrom(raw.decisions);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -685,6 +687,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(stale === undefined ? {} : { stale }),
     ...(drift === undefined ? {} : { drift }),
     ...(surface === undefined ? {} : { surface }),
+    ...(decisions === undefined ? {} : { decisions }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -956,6 +959,14 @@ function surfaceFrom(value: unknown): SurfaceConfig | undefined {
     exclude,
     ...(minCoverage === undefined ? {} : { minCoverage }),
   };
+}
+
+/** The decisions key: on when the block names a folder or sets `publish`; the defaults fill the rest. */
+function decisionsFrom(value: unknown): DecisionsConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const dir = typeof value.dir === "string" && value.dir.trim() !== "" ? value.dir.trim().replace(/\\/g, "/") : "docs/decisions";
+  const publish = value.publish !== false;
+  return { dir, publish };
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

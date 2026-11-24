@@ -184,6 +184,11 @@ export function lineageNodeId(collection: string, record: string, field: string)
   return `lineage:${collection}/${record}/${field}`;
 }
 
+/** The id of a decision node. */
+export function decisionNodeId(id: string): string {
+  return `decision:${id}`;
+}
+
 /** The id of an include node. */
 export function includeNodeId(path: string): string {
   return `include:${path}`;
@@ -637,6 +642,68 @@ function collectionUnit(input: GraphInput, name: string, collection: Collection)
   return { nodes, edges, diagnostics };
 }
 
+/** Decision nodes for every collected decision, with an edge to each thing it affects and to each decision it replaces. */
+function decisionUnit(input: GraphInput, known: ReadonlySet<string>): Unit {
+  const nodes: GraphNode[] = [];
+  const edges: GraphEdge[] = [];
+  const seen = new Set<string>();
+  for (const decision of input.decisions ?? []) {
+    const id = decisionNodeId(decision.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    nodes.push({
+      id,
+      kind: "decision",
+      label: decision.title,
+      ...(decision.pos === undefined ? {} : { pos: decision.pos }),
+      data: {
+        decision: decision.id,
+        status: decision.status,
+        date: decision.date,
+        alternatives: decision.alternatives,
+      },
+      ...(decision.audience === undefined || decision.audience.length === 0 ? {} : { audience: decision.audience }),
+      unit: "decisions",
+    });
+  }
+  // An edge is written only when both ends are nodes of this snapshot; a link to a page or collection the site does not
+  // have is already reported as `decision.link-unresolved` by the loader, so the graph never names a missing node.
+  const decisionNodes = new Set(nodes.map((node) => node.id));
+  for (const decision of input.decisions ?? []) {
+    const from = decisionNodeId(decision.id);
+    if (!decisionNodes.has(from)) continue;
+    for (const link of decision.links) {
+      if (!link.resolved) continue;
+      const to = decisionLinkNodeId(link.kind, link.id);
+      if (to === undefined || !known.has(to)) continue;
+      edges.push({ from, to, kind: "decides", ...(decision.pos === undefined ? {} : { pos: decision.pos }), unit: "decisions" });
+    }
+    for (const target of decision.supersedes) {
+      if (!decisionNodes.has(decisionNodeId(target))) continue;
+      edges.push({ from, to: decisionNodeId(target), kind: "supersedes", ...(decision.pos === undefined ? {} : { pos: decision.pos }), unit: "decisions" });
+    }
+  }
+  return { nodes, edges, diagnostics: [] };
+}
+
+/** The node id a decision link names, matching how the builder names each kind of node. */
+function decisionLinkNodeId(kind: import("../contracts/decisions.ts").DecisionLinkKind, id: string): string | undefined {
+  switch (kind) {
+    case "page":
+      return `page:${id.replace(/^\/+/, "")}`;
+    case "collection":
+      return `collection:${id}`;
+    case "behavior":
+      return `behavior:${id}`;
+    case "api":
+      return `api:${id}`;
+    case "surface":
+      return `surface:${id}`;
+    default:
+      return undefined;
+  }
+}
+
 /** Symbol nodes for every collected symbol, in file and line order. */
 function symbolUnit(input: GraphInput): Unit {
   const nodes: GraphNode[] = [];
@@ -775,17 +842,22 @@ function collectionUnits(input: GraphInput): Map<string, Unit> {
 
 /** Builds every unit of a full snapshot. */
 function allUnits(input: GraphInput): Unit[] {
-  return [
+  const units = [
     ...pageUnits(input).values(),
     ...collectionUnits(input).values(),
     symbolUnit(input),
     includeUnit(input),
   ];
+  return units;
 }
 
 /** Builds a complete graph snapshot from the model and the collected references. */
 export function buildGraph(input: GraphInput): GraphBuildResult {
-  return assemble(input, allUnits(input), input.snapshot);
+  const units = allUnits(input);
+  // Decisions attach after every unit, so a `decides` edge can name any node this snapshot holds.
+  const known = new Set(units.flatMap((unit) => unit.nodes.map((node) => node.id)));
+  units.push(decisionUnit(input, known));
+  return assemble(input, units, input.snapshot);
 }
 
 /** What changed since {@link refreshGraph}'s previous snapshot. */
@@ -824,6 +896,8 @@ export function refreshGraph(previous: Graph, input: GraphInput, changes: GraphC
     symbolUnit(input),
     includeUnit(input),
   ];
+  const known = new Set(units.flatMap((unit) => unit.nodes.map((node) => node.id)));
+  units.push(decisionUnit(input, known));
   return assemble(input, units, input.snapshot);
 }
 

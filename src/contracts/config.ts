@@ -911,6 +911,14 @@ export interface SurfaceConfig {
   readonly minCoverage?: number;
 }
 
+/** The `decisions` key: where versioned decision records (ADRs) live and how they are published. */
+export interface DecisionsConfig {
+  /** Folder under the site root that holds the records. Default `docs/decisions`; a missing folder means no decisions. */
+  readonly dir: string;
+  /** Publish the decision matrix page and `decisions.json`; default `true`. */
+  readonly publish: boolean;
+}
+
 /**
  * The site config: exactly the keys of the site config file, after the loader has checked them.
  * Every key is optional in the file; the loader fills the defaults, so the keys marked required here are always present.
@@ -982,6 +990,8 @@ export interface SiteConfig {
   readonly social?: SocialConfig;
   /** Public-surface coverage. Default: none, and no surface report is written. */
   readonly surface?: SurfaceConfig;
+  /** Versioned decision records (ADRs). Default: none, and no decision is read or published. */
+  readonly decisions?: DecisionsConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */
   readonly redirects: Readonly<Record<string, string>>;
   /** Turns an output off by its name (`false`). Default: every output on. */

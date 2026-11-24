@@ -694,6 +694,24 @@
         }
       },
       "description": "Public-surface coverage: the adapter modules, documentation folders, exclusions, and coverage gate. Without the key no surface report is written."
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "type": "string",
+          "minLength": 1,
+          "default": "docs/decisions",
+          "description": "Folder under the site root that holds versioned decision records (ADRs). Default docs/decisions; a missing folder means no decisions."
+        },
+        "publish": {
+          "type": "boolean",
+          "default": true,
+          "description": "Publish the decision matrix page and decisions.json. Default true."
+        }
+      },
+      "description": "Read versioned decision records (ADRs) and publish their current and historical decisions. A decision's behavior: link resolves against the behaviors the site's pages declare."
     }
   },
   "$defs": {

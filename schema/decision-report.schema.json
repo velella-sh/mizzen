@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/decision-report.schema.json",
+  "title": "Mizzen decision report",
+  "description": "The versioned report `mizzen decisions` prints and the `decisions` output writes: every decision record in public form, the counts by status, the evidence a build could not resolve, and the lifecycle problems. A record whose audience the caller may not read is left out entirely, and a private source, rationale, or alternative is replaced with a placeholder.",
+  "type": "object",
+  "required": ["version", "source", "entries", "counts", "unresolvedEvidence", "problems"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": { "type": "string", "minLength": 1, "description": "The documentation build identity, when the report comes from a build." }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "description": "Every decision in public form, sorted by id.",
+      "items": { "$ref": "#/$defs/entry" }
+    },
+    "counts": {
+      "type": "object",
+      "required": ["proposed", "accepted", "superseded", "deprecated", "rejected"],
+      "additionalProperties": false,
+      "properties": {
+        "proposed": { "type": "integer", "minimum": 0 },
+        "accepted": { "type": "integer", "minimum": 0 },
+        "superseded": { "type": "integer", "minimum": 0 },
+        "deprecated": { "type": "integer", "minimum": 0 },
+        "rejected": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "unresolvedEvidence": {
+      "type": "array",
+      "description": "Evidence references this build could not resolve, by decision id.",
+      "items": {
+        "type": "object",
+        "required": ["decision", "value", "kind"],
+        "additionalProperties": false,
+        "properties": {
+          "decision": { "type": "string", "minLength": 1 },
+          "value": { "type": "string", "minLength": 1 },
+          "kind": { "$ref": "#/$defs/evidenceKind" }
+        }
+      }
+    },
+    "problems": {
+      "type": "array",
+      "description": "Lifecycle problems, in stable order.",
+      "items": { "$ref": "#/$defs/problem" }
+    }
+  },
+  "$defs": {
+    "status": { "enum": ["proposed", "accepted", "superseded", "deprecated", "rejected"] },
+    "linkKind": { "enum": ["api", "behavior", "surface", "collection", "page"] },
+    "evidenceKind": { "enum": ["commit", "pull-request", "rfc", "test"] },
+    "validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "versions": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "from": { "type": "string", "minLength": 1 },
+        "until": { "type": "string", "minLength": 1 },
+        "snapshots": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["kind", "id", "raw"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "#/$defs/linkKind" },
+        "id": { "type": "string", "minLength": 1 },
+        "raw": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["kind", "value", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "#/$defs/evidenceKind" },
+        "value": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["resolved", "unknown"] }
+      }
+    },
+    "alternative": {
+      "type": "object",
+      "required": ["name", "span"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "rejectedBecause": { "type": "string" },
+        "span": { "type": "string", "minLength": 1 }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["id", "title", "status", "date", "source", "supersedes", "supersededBy", "validity", "links", "evidence", "alternatives", "redacted", "span"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/status" },
+        "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "source": { "type": "string", "minLength": 1 },
+        "supersedes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "supersededBy": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "validity": { "$ref": "#/$defs/validity" },
+        "links": { "type": "array", "items": { "$ref": "#/$defs/link" } },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+        "alternatives": { "type": "array", "items": { "$ref": "#/$defs/alternative" } },
+        "rationale": { "type": "string" },
+        "context": { "type": "string" },
+        "decision": { "type": "string" },
+        "redacted": { "type": "boolean" },
+        "span": { "type": "string", "minLength": 1 }
+      }
+    },
+    "problem": {
+      "type": "object",
+      "required": ["id", "severity", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["error", "warning"] },
+        "message": { "type": "string", "minLength": 1 },
+        "span": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

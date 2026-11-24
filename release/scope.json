@@ -1942,6 +1942,91 @@
       "issue": 1374
     },
     {
+      "id": "read-versioned-decision-records",
+      "title": "Read versioned decision records",
+      "status": "shipped",
+      "test": "test/decisions-parse.test.ts",
+      "epic": 1317,
+      "issue": 1357,
+      "case": "decisions"
+    },
+    {
+      "id": "capture-decision-rationale-and-alternatives",
+      "title": "Capture rationale and alternatives",
+      "status": "shipped",
+      "test": "test/decisions-parse.test.ts",
+      "epic": 1317,
+      "issue": 1358
+    },
+    {
+      "id": "model-the-decision-lifecycle",
+      "title": "Model the decision lifecycle",
+      "status": "shipped",
+      "test": "test/decisions-lifecycle.test.ts",
+      "epic": 1317,
+      "issue": 1359,
+      "case": "decisions"
+    },
+    {
+      "id": "link-decisions-to-surfaces-and-behaviors",
+      "title": "Link decisions to surfaces and behaviors",
+      "status": "shipped",
+      "test": "test/decisions-parse.test.ts",
+      "epic": 1317,
+      "issue": 1360
+    },
+    {
+      "id": "track-when-a-decision-applies",
+      "title": "Track when a decision applies",
+      "status": "shipped",
+      "test": "test/decisions-lifecycle.test.ts",
+      "epic": 1317,
+      "issue": 1361,
+      "case": "decisions"
+    },
+    {
+      "id": "link-decisions-to-evidence-and-source-changes",
+      "title": "Link decisions to evidence and source changes",
+      "status": "shipped",
+      "test": "test/decisions-parse.test.ts",
+      "epic": 1317,
+      "issue": 1362
+    },
+    {
+      "id": "query-why-a-behavior-exists",
+      "title": "Query why a behavior exists",
+      "status": "shipped",
+      "test": "test/decisions-why.test.ts",
+      "epic": 1317,
+      "issue": 1363,
+      "case": "decisions"
+    },
+    {
+      "id": "include-decisions-in-agent-context",
+      "title": "Include relevant decisions in agent context",
+      "status": "shipped",
+      "test": "test/decisions-context.test.ts",
+      "epic": 1317,
+      "issue": 1364
+    },
+    {
+      "id": "enforce-access-controls-for-decision-memory",
+      "title": "Enforce access controls for decision memory",
+      "status": "shipped",
+      "test": "test/decisions-access.test.ts",
+      "epic": 1317,
+      "issue": 1365
+    },
+    {
+      "id": "test-supersession-and-historical-queries",
+      "title": "Test supersession and historical queries",
+      "status": "shipped",
+      "test": "test/decisions-e2e.test.ts",
+      "epic": 1317,
+      "issue": 1366,
+      "case": "decisions"
+    },
+    {
       "id": "define-public-surface-adapter-contract",
       "title": "Define the public surface adapter contract",
       "status": "shipped",

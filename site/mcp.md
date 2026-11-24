@@ -57,6 +57,7 @@ Without `--allow-edits` the server cannot change a file. Every tool below reads,
 | `get_record` | On a site with collections: one record's fields, page URL, and place in its data file. |
 | `query_records` | On a site with collections: records filtered and sorted with the list rules, one page at a time. |
 | `query_graph` | The knowledge graph: a node's neighbors and the shortest path to another node, with the same ids and JSON as `mizzen graph`. |
+| `why_decision` | Why a behavior or page exists: the current decision, its rationale, the rejected alternatives, and the decisions it superseded, each with a citation; `version` or `snapshot` resolves the decision in effect then. |
 
 The server also offers `llms.txt`, `AGENTS.md`, and each page's Markdown twin as resources at `mizzen://site/<path>`.
 

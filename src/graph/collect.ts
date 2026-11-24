@@ -13,6 +13,7 @@ import { codeRefsOf } from "../drift/code-refs.ts";
 import { contractRefsOf } from "../drift/contract-refs.ts";
 import { exportedSymbols } from "../drift/symbols.ts";
 import { collectGraphKnowledge } from "../knowledge/graph.ts";
+import { decisionsAsGraph } from "../decisions/graph.ts";
 import { parseMarkdown } from "../markdown/parse.ts";
 
 /** What {@link collectGraphInput} can add beyond the site model. */
@@ -25,6 +26,8 @@ export interface CollectOptions {
   readonly evidence?: GraphInput["evidence"];
   /** Knowledge declarations to attach; read from the site when absent. */
   readonly knowledge?: GraphInput["knowledge"];
+  /** Decision records to attach; the caller passes the loaded records, since reading them needs the folder. */
+  readonly decisions?: GraphInput["decisions"];
   /** A snapshot label for the graph. */
   readonly snapshot?: string;
   /** Extra audiences by node id or unit. */
@@ -228,6 +231,9 @@ export async function collectGraphInput(options: CollectOptions): Promise<GraphI
     codeRefs: refs,
     symbols,
     knowledge: options.knowledge ?? collectGraphKnowledge(options.site),
+    // A decision with an audience is not in the graph unless the caller names that audience; the CLI and MCP pass
+    // `decisions` themselves when they have one. Public decisions are the default.
+    decisions: options.decisions ?? decisionsAsGraph(options.site.decisions ?? []),
     ...(options.evidence === undefined ? {} : { evidence: options.evidence }),
     ...(options.snapshot === undefined ? {} : { snapshot: options.snapshot }),
     ...(options.audience === undefined ? {} : { audience: options.audience }),
