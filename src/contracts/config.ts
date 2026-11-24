@@ -898,8 +898,6 @@ export interface SurfaceConfig {
 export interface DecisionsConfig {
   /** Folder under the site root that holds the records. Default `docs/decisions`; a missing folder means no decisions. */
   readonly dir: string;
-  /** Behavior ids this build knows, so a `behavior:` link can resolve; default `[]`, which leaves them unknown. */
-  readonly behaviors: readonly string[];
   /** Publish the decision matrix page and `decisions.json`; default `true`. */
   readonly publish: boolean;
 }

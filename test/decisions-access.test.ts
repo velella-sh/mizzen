@@ -77,14 +77,14 @@ private-reason-77
 
 test("#1365 a record with an audience is left out unless the caller may read it", async () => {
   const root = tree({
-    "mizzen.yml": "title: T\ndecisions:\n  dir: docs/decisions\n  behaviors: [rotate-key, changelog]\n",
+    "mizzen.yml": "title: T\ndecisions:\n  dir: docs/decisions\n",
     "index.md": "# Home\n",
     "docs/decisions/0009.md": STAFF_RECORD,
     "docs/decisions/0010.md": PUBLIC_RECORD,
   });
   try {
     const { site } = await buildModel(root);
-    const loaded = await loadDecisions({ root, site, dir: "docs/decisions", behaviors: () => true });
+    const loaded = await loadDecisions({ root, site, dir: "docs/decisions" });
 
     const anonymous = decisionReportOf(loaded.records);
     assert.equal(anonymous.entries.some((entry) => entry.id === "ADR-9"), false, "a staff record is not public");
@@ -148,14 +148,14 @@ test("#1365 the same read policy covers the citation a record carries", async ()
 
 test("the report conforms to its schema and never leaks a private value", async () => {
   const root = tree({
-    "mizzen.yml": "title: T\ndecisions:\n  dir: docs/decisions\n  behaviors: [rotate-key]\n",
+    "mizzen.yml": "title: T\ndecisions:\n  dir: docs/decisions\n",
     "index.md": "# Home\n",
     "docs/decisions/0009.md": STAFF_RECORD,
     "docs/decisions/0010.md": PUBLIC_RECORD,
   });
   try {
     const { site } = await buildModel(root);
-    const loaded = await loadDecisions({ root, site, dir: "docs/decisions", behaviors: () => true });
+    const loaded = await loadDecisions({ root, site, dir: "docs/decisions" });
     const report = decisionReportOf(loaded.records, { allow: ["staff"], problems: loaded.problems });
     const validate = new Ajv2020({ strict: true, allErrors: true }).compile(reportSchema);
     assert.equal(validate(report), true, JSON.stringify(validate.errors));

@@ -1041,9 +1041,10 @@ const decisions: AcceptanceCase = {
   run: (ctx) => {
     const site = join(ctx.dir, "decisions-site");
     tree(site, {
-      "mizzen.yml": "title: Decisions\ndecisions:\n  dir: docs/decisions\n  behaviors: [cache-hit]\n",
+      "mizzen.yml": "title: Decisions\ndecisions:\n  dir: docs/decisions\n",
       "index.md": "---\ntitle: Home\n---\n\n# Home\n\nSee the [cache guide](/guide/caching/).\n",
-      "guide/caching.md": "---\ntitle: Caching\n---\n\n# Caching\n\nHits come from memory.\n",
+      "guide/caching.md":
+        "---\ntitle: Caching\nbehavior:\n  - id: cache-hit\n    title: A hit is answered from the cache\n    normative: A cache hit is answered without reading the origin.\n    status: supported\n    versions:\n      introduced: 1.0.0\n---\n\n# Caching\n\nHits come from memory.\n",
       "docs/decisions/0001.md":
         "---\nid: ADR-0001\ntitle: In-memory cache\nstatus: superseded\ndate: 2025-01-10\nsource: https://example.test/rfcs/1\npages: [guide/caching.md]\nvalidity:\n  versions: [v1]\npublic: true\n---\n\n## Decision\n\nCache every hit in a map.\n\n## Rationale\n\nThe working set was small.\n\n## Alternatives\n\n- **Redis** — rejected because the team ran no extra service.\n",
       "docs/decisions/0002.md":
@@ -1073,6 +1074,94 @@ const decisions: AcceptanceCase = {
 
     const text = output(ctx.mizzen(["decisions", "why", "/guide/caching/", site, "--version", "v2"], ctx.dir), "why text");
     check(/History: ADR-0001/.test(text), "the text answer does not name the history");
+  },
+};
+
+const behaviorContracts: AcceptanceCase = {
+  id: "behavior-contracts",
+  title: "Behavior contracts link a normative statement to the public surface, tests, evidence, and a version query",
+  run: (ctx) => {
+    const site = join(ctx.dir, "behavior-site");
+    tree(site, {
+      "mizzen.yml": "title: Behavior\nexclude: [test]\nsurface:\n  package: pkg/index.ts\n  docs: [docs]\n",
+      "pkg/index.ts": "/** greet. */\nexport function greet(name: string): string { return name; }\n",
+      "test/greet.test.ts": 'import { test } from "node:test";\ntest("greet returns the name", () => {});\n',
+      "docs/api.md": [
+        "---",
+        "title: API",
+        "behavior:",
+        "  - id: greet.returns-name",
+        "    title: Greeting returns the name",
+        "    normative: A greeting includes the supplied name.",
+        "    status: supported",
+        "    versions:",
+        "      introduced: 1.0.0",
+        '    surface: ["symbol:greet"]',
+        "    tests:",
+        "      - file: test/greet.test.ts",
+        "        name: greet returns the name",
+        "        outcome: passed",
+        "    evidence:",
+        "      - url: https://ci.example.org/run",
+        "        kind: ci",
+        "  - id: greet.no-evidence",
+        "    title: Greeting without its CI evidence",
+        "    normative: A greeting includes the supplied name.",
+        "    status: supported",
+        "    versions:",
+        "      introduced: 1.0.0",
+        '    surface: ["symbol:greet"]',
+        "    tests:",
+        "      - file: test/greet.test.ts",
+        "        name: greet returns the name",
+        "        outcome: passed",
+        "  - id: greet.private",
+        "    title: An internal behavior",
+        "    normative: Not published.",
+        "    status: supported",
+        "    versions:",
+        "      introduced: 1.0.0",
+        '    surface: ["symbol:greet"]',
+        "    public: false",
+        "---",
+        "",
+        "# API",
+        "",
+        "Call `greet`.",
+        "",
+      ].join("\n"),
+    });
+
+    const json = JSON.parse(
+      output(ctx.mizzen(["behavior", site, "--json", "--version", "1.0.0"], ctx.dir), "behavior"),
+    ) as {
+      version: number;
+      source: { version?: string };
+      behaviors: readonly {
+        id: string;
+        statusAtVersion?: string;
+        surface: readonly { state: string }[];
+        tests: readonly { state: string; digest?: string }[];
+        verification: { status: string; reasons: readonly string[] };
+      }[];
+      coverage: { private: number; verified: number; unverified: number };
+    };
+    check(json.version === 1, "the behavior report has no version");
+    check(json.source.version === "1.0.0", "the version query was not recorded");
+    check(json.coverage.private === 1, "the private behavior was not kept out of public data");
+    check(json.behaviors.length === 2, "a private behavior reached the report");
+    const verified = json.behaviors.find((entry) => entry.id === "greet.returns-name");
+    check(verified?.verification.status === "verified", "the evidenced behavior is not verified");
+    check(verified?.surface[0]?.state === "linked", "the behavior did not link to symbol:greet");
+    check(verified?.tests[0]?.state === "found" && /^[0-9a-f]{64}$/.test(verified.tests[0].digest ?? ""), "the test link did not resolve");
+    check(verified?.statusAtVersion === "supported", "the versioned query did not return the contract");
+    const unverified = json.behaviors.find((entry) => entry.id === "greet.no-evidence");
+    check(unverified?.verification.status === "unverified", "a behavior without its required evidence was verified");
+    check(unverified?.verification.reasons.includes("missing-evidence") === true, "the missing evidence reason was not reported");
+    check(!JSON.stringify(json).includes("greet.private"), "a private behavior leaked into the report");
+
+    const gated = ctx.mizzen(["behavior", site, "--min-verified", "100"], ctx.dir);
+    check(gated.status === 1, "the verified gate did not fail on an unverified behavior");
   },
 };
 
@@ -1322,6 +1411,7 @@ export const CASES: readonly AcceptanceCase[] = [
   graph,
   knowledge,
   decisions,
+  behaviorContracts,
   mcp,
   traces,
   permissions,

@@ -38,7 +38,6 @@ export const tool: Tool<Input> = {
       root: site.root,
       site: site.site,
       dir: config?.dir ?? "docs/decisions",
-      ...(config === undefined ? {} : { behaviors: (id: string) => config.behaviors.includes(id) }),
     });
     const answer = why(input.subject, loaded.records, {
       lifecycle: loaded.lifecycle,

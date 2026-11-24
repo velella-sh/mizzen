@@ -58,6 +58,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `sitemap` | `sitemap.xml`. |
 | `sourcemap` | `sourcemap.json`, the line-exact source map (format). |
 | `surface` | `surface.json`, the public-surface coverage report: each item's documentation state, the gaps, the documented exclusions, and the counts by area. Written only when the config declares `surface`. |
+| `behavior` | `behavior.json` and `behavior/index.html`, the public behavior contracts: each behavior's normative statement, source span, status, versions, environments, surface links, tests, public evidence links, and verification. Written only when a page declares a behavior; private behaviors and evidence values are omitted. |
 | `translations` | `translations.json`, each page's status in every configured language. |
 | `trust` | `trust.json`, each doc page's trust level, reasons, and last reviewer. |
 | `twins` | One Markdown twin per document page: the same URL with `.md` in place of the HTML file. |

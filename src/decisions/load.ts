@@ -26,8 +26,17 @@ export interface LoadDecisionsOptions {
   readonly site: Site;
   /** The folder the decision records live in, relative to the site root. Default `docs/decisions`. */
   readonly dir?: string;
-  /** Behavior ids this build knows, so a `behavior:` link can resolve; absent leaves every behavior link unknown. */
+  /** Behavior ids this build knows, so a `behavior:` link can resolve; defaults to every behavior a page declares. */
   readonly behaviors?: (id: string) => boolean;
+}
+
+/** Every behavior id the site's pages declare, so a decision's `behavior:` link resolves against the real inventory. */
+export function declaredBehaviorIds(site: Site): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const page of site.pages) {
+    for (const behavior of page.behaviors ?? []) ids.add(behavior.id);
+  }
+  return ids;
 }
 
 /** The result of loading a site's decisions. */
@@ -156,6 +165,11 @@ export async function loadDecisions(options: LoadDecisionsOptions): Promise<Deci
   }
 
   const pages = pageIndex(options.site);
+  // A behavior link resolves against every behavior the site declares, unless the caller narrows it: the behavior
+  // inventory is the engine's own, so a decision reaches a real behavior id and not a hand-kept list.
+  const behaviors = options.behaviors ?? (() => false);
+  const declared = declaredBehaviorIds(options.site);
+  const resolves = (id: string): boolean => declared.has(id) || behaviors(id);
   const diagnostics: Diagnostic[] = [];
   const records: DecisionRecord[] = [];
   for (const file of found.files) {
@@ -168,7 +182,7 @@ export async function loadDecisions(options: LoadDecisionsOptions): Promise<Deci
     const parsed = parseDecision(text, { file });
     diagnostics.push(...parsed.diagnostics);
     if (parsed.record === undefined) continue;
-    const links = resolveLinks(parsed.record, pages, options.site, options.behaviors);
+    const links = resolveLinks(parsed.record, pages, options.site, resolves);
     diagnostics.push(...links.diagnostics);
     const evidence = await resolveEvidence(parsed.record, options.root);
     records.push({ ...parsed.record, links: links.links, evidence });

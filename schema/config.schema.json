@@ -673,22 +673,13 @@
           "default": "docs/decisions",
           "description": "Folder under the site root that holds versioned decision records (ADRs). Default docs/decisions; a missing folder means no decisions."
         },
-        "behaviors": {
-          "type": "array",
-          "default": [],
-          "items": {
-            "type": "string",
-            "minLength": 1
-          },
-          "description": "Behavior ids this build knows, so a decision's behavior: link can resolve. Default [], which leaves every behavior link unknown."
-        },
         "publish": {
           "type": "boolean",
           "default": true,
           "description": "Publish the decision matrix page and decisions.json. Default true."
         }
       },
-      "description": "Read versioned decision records (ADRs) and publish their current and historical decisions."
+      "description": "Read versioned decision records (ADRs) and publish their current and historical decisions. A decision's behavior: link resolves against the behaviors the site's pages declare."
     }
   },
   "$defs": {

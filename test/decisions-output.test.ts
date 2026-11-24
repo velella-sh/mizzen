@@ -63,7 +63,7 @@ test("the output writes nothing without a decisions config or publish false", as
   try {
     const { site } = await buildModel(root);
     assert.deepEqual(await decisionsOutput.run(site, { report: () => {} } as never), []);
-    const off = { ...site, config: { ...site.config, decisions: { dir: "docs/decisions", behaviors: [], publish: false } } };
+    const off = { ...site, config: { ...site.config, decisions: { dir: "docs/decisions", publish: false } } };
     assert.deepEqual(await decisionsOutput.run(off, { report: () => {} } as never), []);
   } finally {
     rmSync(root, { recursive: true, force: true });

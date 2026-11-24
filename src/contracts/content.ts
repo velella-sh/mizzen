@@ -56,6 +56,8 @@ export interface FrontMatter {
   readonly translation_key?: string;
   /** An explicit statement of how certain this page is, and the scope that limits it. */
   readonly knowledge?: unknown;
+  /** Product behaviors this page documents, with their public surface, tests, evidence, and versions. */
+  readonly behavior?: unknown;
   /** Any other key, kept for the layout. */
   readonly [key: string]: unknown;
 }
@@ -194,6 +196,11 @@ export interface Page {
    * `missing`, which is not one of the five statuses. Its span points at the exact `knowledge` key.
    */
   readonly knowledge?: import("./knowledge.ts").KnowledgeDeclaration;
+  /**
+   * The product behaviors this page documents, when it wrote any. Each declaration carries its own exact span, the
+   * public surface it describes, its tests and expected outcomes, its evidence, versions, status, and environment.
+   */
+  readonly behaviors?: readonly import("./behavior.ts").BehaviorDeclaration[];
 }
 
 /** A record the URL lock published that its collection no longer holds. */

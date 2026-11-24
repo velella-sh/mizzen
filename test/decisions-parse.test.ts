@@ -127,7 +127,7 @@ test("#1362 evidence is recorded and an unresolved reference stays unknown", () 
 
 test("#1360 a link to a page or collection the site lacks is reported, and its edge is not drawn", async () => {
   const root = tree({
-    "mizzen.yml": "title: T\ndecisions:\n  dir: docs/decisions\n  behaviors: [cache-hit]\n",
+    "mizzen.yml": "title: T\ndecisions:\n  dir: docs/decisions\n",
     "index.md": "# Home\n",
     "docs/decisions/0001.md": COMPLETE.replace("pages: [guide/caching.md]", "pages: [guide/missing.md]\ncollections: [nope]"),
   });
@@ -135,7 +135,7 @@ test("#1360 a link to a page or collection the site lacks is reported, and its e
     const { site, diagnostics } = await buildModel(root);
     // The build reports the unresolved links it read.
     assert.ok(diagnostics.some((diagnostic) => diagnostic.id === "decision.link-unresolved"));
-    const loaded = await loadDecisions({ root, site, dir: "docs/decisions", behaviors: (id) => id === "cache-hit" });
+    const loaded = await loadDecisions({ root, site, dir: "docs/decisions" });
     const record = loaded.records.find((candidate) => candidate.id === "ADR-0001")!;
     const page = record.links.find((link) => link.kind === "page")!;
     const collection = record.links.find((link) => link.kind === "collection")!;

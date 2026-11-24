@@ -2105,6 +2105,87 @@
       "test": "test/surface-coverage.test.ts",
       "epic": 1315,
       "issue": 1346
+    },
+    {
+      "id": "define-behavior-records-and-stable-ids",
+      "title": "Define behavior records and stable IDs",
+      "status": "shipped",
+      "test": "test/behavior-contract.test.ts",
+      "epic": 1316,
+      "issue": 1347
+    },
+    {
+      "id": "link-behaviors-to-the-public-surface",
+      "title": "Link behaviors to the public surface",
+      "status": "shipped",
+      "test": "test/behavior-report.test.ts",
+      "epic": 1316,
+      "issue": 1348
+    },
+    {
+      "id": "link-behaviors-to-tests",
+      "title": "Link behaviors to tests",
+      "status": "shipped",
+      "test": "test/behavior-report.test.ts",
+      "epic": 1316,
+      "issue": 1349
+    },
+    {
+      "id": "version-behavior-contracts",
+      "title": "Version behavior contracts",
+      "status": "shipped",
+      "test": "test/behavior-report.test.ts",
+      "epic": 1316,
+      "issue": 1350
+    },
+    {
+      "id": "record-support-status-and-replacements",
+      "title": "Record support status and replacements",
+      "status": "shipped",
+      "test": "test/behavior-contract.test.ts",
+      "epic": 1316,
+      "issue": 1351
+    },
+    {
+      "id": "represent-platform-and-environment-differences",
+      "title": "Represent platform and environment differences",
+      "status": "shipped",
+      "test": "test/behavior-report.test.ts",
+      "epic": 1316,
+      "issue": 1352
+    },
+    {
+      "id": "define-evidence-policy-for-behavior-claims",
+      "title": "Define evidence policy for behavior claims",
+      "status": "shipped",
+      "test": "test/behavior-report.test.ts",
+      "epic": 1316,
+      "issue": 1353
+    },
+    {
+      "id": "detect-behavior-drift",
+      "title": "Detect behavior drift",
+      "status": "shipped",
+      "test": "test/behavior-drift.test.ts",
+      "epic": 1316,
+      "issue": 1354
+    },
+    {
+      "id": "publish-a-public-behavior-matrix",
+      "title": "Publish a public behavior matrix",
+      "status": "shipped",
+      "test": "test/behavior-matrix.test.ts",
+      "case": "behavior-contracts",
+      "epic": 1316,
+      "issue": 1355
+    },
+    {
+      "id": "test-a-real-behavior-change-end-to-end",
+      "title": "Test a real behavior change end to end",
+      "status": "shipped",
+      "test": "test/behavior-drift.test.ts",
+      "epic": 1316,
+      "issue": 1356
     }
   ]
 }

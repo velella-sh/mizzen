@@ -207,7 +207,6 @@ export async function runDecisions(args: readonly string[], io: DecisionsIo): Pr
     root,
     site: model.site,
     dir: config?.dir ?? "docs/decisions",
-    ...(config === undefined ? {} : { behaviors: (id: string) => config.behaviors.includes(id) }),
   });
 
   let policy: AccessPolicy | undefined;

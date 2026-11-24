@@ -22,7 +22,6 @@ async function load() {
     root: FIXTURE,
     site,
     dir: "docs/decisions",
-    behaviors: (id) => ["cache-hit", "cache-miss"].includes(id),
   });
   return { site, loaded };
 }

@@ -941,11 +941,8 @@ function surfaceFrom(value: unknown): SurfaceConfig | undefined {
 function decisionsFrom(value: unknown): DecisionsConfig | undefined {
   if (!isPlainObject(value)) return undefined;
   const dir = typeof value.dir === "string" && value.dir.trim() !== "" ? value.dir.trim().replace(/\\/g, "/") : "docs/decisions";
-  const behaviors = Array.isArray(value.behaviors)
-    ? value.behaviors.filter((item): item is string => typeof item === "string" && item.trim() !== "").map((item) => item.trim())
-    : [];
   const publish = value.publish !== false;
-  return { dir, behaviors, publish };
+  return { dir, publish };
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

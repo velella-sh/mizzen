@@ -14,9 +14,9 @@ Name the folder that holds the records. The defaults read `docs/decisions`.
 ```yaml
 decisions:
   dir: docs/decisions
-  behaviors:
-    - cache-hit
 ```
+
+A decision's `behavior:` link resolves against the behaviors the site's pages declare, so it reaches a real behavior id rather than a hand-kept list.
 
 ## Write a record
 

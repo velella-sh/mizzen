@@ -106,3 +106,28 @@ test("#1360 a decision with an audience is not in the default graph projection",
   ]);
   assert.deepEqual(input, []);
 });
+
+test("#1360 a decision's behavior link resolves against a behavior a page really declares", async () => {
+  const root = tree({
+    "mizzen.yml": "title: T\ndecisions:\n  dir: docs/decisions\n",
+    "index.md": "# Home\n",
+    "guide/caching.md":
+      "---\ntitle: Caching\nbehavior:\n  - id: cache-hit\n    title: A hit is answered from the cache\n    normative: A hit is answered without reading the origin.\n    status: supported\n    versions:\n      introduced: 1.0.0\n---\n\n# Caching\n",
+    "docs/decisions/0001.md":
+      "---\nid: ADR-0001\ntitle: Cache in Redis\nstatus: accepted\ndate: 2025-03-02\nsource: x\nbehaviors: [cache-hit, cache-unknown]\n---\n\n## Decision\n\nCache in Redis.\n",
+  });
+  try {
+    const { site } = await buildModel(root);
+    // The behavior inventory is the engine's own: no config list supplies it.
+    assert.equal(site.pages.find((page) => page.source.file === "guide/caching.md")?.behaviors?.[0]?.id, "cache-hit");
+    const loaded = await loadDecisions({ root, site, dir: "docs/decisions" });
+    const record = loaded.records.find((candidate) => candidate.id === "ADR-0001")!;
+    const hit = record.links.find((link) => link.id === "cache-hit");
+    const unknown = record.links.find((link) => link.id === "cache-unknown");
+    assert.equal(hit?.resolved, true, "a real behavior id resolves");
+    assert.equal(unknown?.resolved, false, "a behavior no page declares stays unresolved");
+    assert.ok(loaded.diagnostics.some((diagnostic) => diagnostic.id === "decision.link-unresolved"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
