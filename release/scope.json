@@ -2401,6 +2401,87 @@
       "epic": 1319,
       "issue": 1388,
       "case": "federated-knowledge"
+    },
+    {
+      "id": "create-authoring-tasks-from-gaps",
+      "title": "Turn documentation gaps into authoring tasks",
+      "status": "shipped",
+      "test": "test/authoring-tasks.test.ts",
+      "epic": 1322,
+      "issue": 1407
+    },
+    {
+      "id": "recommend-an-authoring-page-type",
+      "title": "Recommend the appropriate page type",
+      "status": "shipped",
+      "test": "test/authoring-page-type.test.ts",
+      "epic": 1322,
+      "issue": 1408
+    },
+    {
+      "id": "build-an-evidence-first-outline",
+      "title": "Build an evidence-first outline",
+      "status": "shipped",
+      "test": "test/authoring-outline.test.ts",
+      "epic": 1322,
+      "issue": 1409
+    },
+    {
+      "id": "export-an-authoring-task-and-context-pack",
+      "title": "Request a draft from an external agent",
+      "status": "shipped",
+      "test": "test/authoring-export.test.ts",
+      "epic": 1322,
+      "issue": 1410
+    },
+    {
+      "id": "require-citations-for-normative-claims",
+      "title": "Require citations for normative draft claims",
+      "status": "shipped",
+      "test": "test/authoring-citations.test.ts",
+      "epic": 1322,
+      "issue": 1411
+    },
+    {
+      "id": "preserve-explicit-unknowns-and-limitations",
+      "title": "Preserve explicit unknowns and limitations in drafts",
+      "status": "shipped",
+      "test": "test/authoring-unknowns.test.ts",
+      "epic": 1322,
+      "issue": 1412
+    },
+    {
+      "id": "propose-stable-urls-and-navigation",
+      "title": "Propose stable URLs and navigation",
+      "status": "shipped",
+      "test": "test/authoring-location.test.ts",
+      "epic": 1322,
+      "issue": 1413
+    },
+    {
+      "id": "preview-authoring-drafts",
+      "title": "Preview drafts for human review",
+      "status": "shipped",
+      "test": "test/authoring-preview.test.ts",
+      "epic": 1322,
+      "issue": 1414
+    },
+    {
+      "id": "verify-authoring-pages-and-propose-a-pull-request",
+      "title": "Verify the page and prepare a pull request proposal",
+      "status": "shipped",
+      "test": "test/authoring-verify.test.ts",
+      "epic": 1322,
+      "issue": 1415
+    },
+    {
+      "id": "test-authoring-a-page-for-a-new-api",
+      "title": "Test authoring a page for a new API",
+      "status": "shipped",
+      "test": "test/authoring-e2e.test.ts",
+      "epic": 1322,
+      "issue": 1416,
+      "case": "coverage-driven-authoring"
     }
   ]
 }

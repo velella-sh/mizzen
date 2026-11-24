@@ -20,6 +20,7 @@ Commands:
   agent task resume <id> [dir]  Resume a waiting or blocked task; --approve <ids|all>
   agent task cancel <id> [dir]  Cancel a task; --reason <text>
   api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
+  author <subcommand> [dir]  Turn surface gaps into tasks, validate a draft, preview it, verify it, propose a PR, or write it
   behavior [dir]            Report behavior contracts, surface/test/evidence links, and drift (--json, --version, --status)
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
@@ -99,8 +100,8 @@ Commands:
                             Install a package's inputs and lock entries (--accept on a conflict)
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
-  --theme <dir>        Theme root folder (layouts/, chrome/, components/)
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project), author preview (a folder; other author commands write a file here); pack writes a file here instead of stdout; inputs export writes the package here
+  --theme <dir>        Theme root folder (layouts/, chrome/, components/); author preview, verify, propose, and write build with it
   --diagnose           For build: write .mizzen/build-report.json after the build
   --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for compare, reproduce, readiness, data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
@@ -116,7 +117,7 @@ Options:
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure; for reproduce: preflight only
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
-  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for data explain: print the versioned lineage report; for inputs inspect: print the report as JSON
+  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for data explain: print the versioned lineage report; for inputs inspect: print the report as JSON; for author: print the task list, validation, preview, verification, proposal, or write result
   --field <path>       For data explain: the field to trace, such as title or author.name
   --public             For data explain: print only permitted metadata, with no values or internal paths
   --limit <n>          For data transform: records to show per collection (default: 5)
@@ -128,7 +129,7 @@ Options:
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --task <file>        JSON task contract for pack; compiles task-aware context against the site
   --topic <name>       Topic for pack (default: the site's only topic); not with --request or --task
-  --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
+  --budget <tokens>    Token budget for pack, overriding the topic's; for author tasks or export: the task or pack budget
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
   --commit <sha>       For build: record this commit in a preview's manifest (default: GITHUB_SHA)
@@ -168,11 +169,15 @@ Options:
   --per-project <n>    For federation pack: the most fragments one project may contribute
   --claim <id>         For federation chain: the claim to start from
   --reference <file>   For federation resolve: a JSON file holding one stable reference
-  --version <version>  For surface or behavior: the product version to inventory or query
+  --version <version>  For surface or behavior: the product version to inventory or query; for author: the version the gap is inventoried at
   --status <status>    For behavior: only supported, experimental, deprecated, or removed
   --os <name>          For behavior: only behaviors that cover this operating system
   --language <name>    For behavior: only behaviors that cover this language
   --runtime <name>     For behavior: only behaviors that cover this runtime
+  --policy <file>      For author preview or write: the repository access policy the write must satisfy
+  --approval <file>    For author preview or write: an approval made under that policy and snapshot
+  --approve            For author preview or write: approve the write on the command line
+  --item <id>          For author tasks: only this public surface item, such as symbol:parseWidget
   -h, --help           Show this help
 
 Exit codes: 0 ok, 1 errors, 2 usage.
@@ -191,6 +196,7 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen agent task resume <id> [dir] --approve <ids\|all>` | Moves a `waiting` or `blocked` task back to `ready`, optionally recording human-review approvals. A finished task refuses with the same `task.transition` problem every time (exit `1`). |
 | `mizzen agent task cancel <id> [dir] --reason <text>` | Moves a task to `canceled` and keeps its events; a repeated cancel on a finished task returns the same conflict (exit `1`). |
 | `mizzen api check [dir] --against <folder\|ref>` | Builds the site and compares its data API with the one at `--against`, a built folder or a git ref; exits `1` when a collection, a field, or a version is gone or a field changed type, and prints the file, the field, and a fix. Added fields pass. |
+| `mizzen author` | Turns surface gaps into registered authoring tasks (`tasks`), exports a task and context pack (`export`), validates a returned draft and its citations (`draft`), builds a preview with the diff and write gate (`preview`), checks examples, behaviors, links, coverage, and the build (`verify`), prepares a pull-request proposal (`propose`), or writes an approved page (`write`). Draft generation happens in an external agent; no model runs here. See [Coverage-driven authoring](https://github.com/velella-sh/mizzen/blob/main/docs/coverage-driven-authoring.md). |
 | `mizzen behavior [dir] --json --version <v> --status <s> --os <os> --language <lang> --runtime <rt> --baseline <file> --min-verified <percent>` | Reads the `behavior` front matter of authored pages and reports every public behavior: its stable id, title, normative statement, and source span; the public surface items it describes; the tests and expected outcomes; the evidence links or pinned ids; its status, versions, replacement, and environments; and a `verified` or `unverified` verdict from the published evidence policy. A missing surface item, test file, evidence pin, or a test not expected to pass is unverified. `--version` returns the contract at that product version, the environment flags scope the result, `--baseline` reports drift for a changed signature, test, or evidence, and `--min-verified` exits `1` below the verified percentage. Private behaviors and private evidence values are withheld. Writes nothing but the report. See [Product behavior contracts](https://github.com/velella-sh/mizzen/blob/main/docs/behavior-contracts.md). |
 | `mizzen build [dir] --out <dir> --theme <dir>` | Builds `dir` (default `.`) into `--out` (default `dist`). Prints diagnostics as text. A build with an error still writes the site and exits `1`. |
 | `mizzen build [dir] --diagnose` | Writes `.mizzen/build-report.json`: a versioned record of the lock, data, and content inputs, the effective config hash, rules, and reference date, the Mizzen, Node, and theme versions, the time zone and locale, and every publishable output file with its relative path and SHA-256. Moving the checkout changes nothing. See [Diagnose and reproduce builds](https://github.com/velella-sh/mizzen/blob/main/docs/reproduce.md). |
@@ -258,6 +264,10 @@ From a site that installed the package, run it as `mizzen` (or `npx mizzen`). Fr
 | `mizzen versions snapshot <vN> [dir]` | Copies every current page and the navigation into a new `vN/` folder and prints the files it wrote. `--dry-run` prints the same list and writes nothing. A name that exists, an invalid name, or a version that is not newer is refused and nothing is written; exits `1` on a refusal and `2` on a usage problem. |
 | `mizzen surface [dir] --json --baseline <file> --min <percent> --version <v>` | Inventories the public surface — TypeScript symbols, CLI commands and flags, config keys, OpenAPI operations, data fields, and versions — matches it to documentation evidence, and prints the versioned report: counts and percentages by area, the items with complete, partial, or no documentation, and every gap with its kind, id, source, and introduction version. A documented exclusion is counted apart from a gap. `--baseline` compares two reports and reports added, removed, and newly documented items without a file rename counting as a regression; `--min` exits `1` below the documented percentage. Writes nothing but the report. See [Public surface coverage](https://github.com/velella-sh/mizzen/blob/main/docs/public-surface.md). |
 | `mizzen watch [dir] --out <dir> --theme <dir>` | Builds `dir` once, then rebuilds whenever a source or theme file changes. Changes are debounced and builds run one at a time, in order; an unchanged build is restored from `.mizzen/cache`. Ctrl-C stops the watcher. |
+
+### Authoring a page from a gap
+
+`mizzen author` turns the gaps in the public-surface report into reviewable work. The subcommands are `author tasks` (create one registered task per gap, with `--item <id>` to narrow the run), `author export <item>` (write the task and its context pack for an external agent), `author draft <draft.json>` (validate the returned draft through the public schema), `author preview <draft.json>` (build the page in a temporary copy and show the HTML, diff, and citations), `author verify <draft.json>` (run examples, behaviors, links, coverage, and the build), `author propose <draft.json>` (prepare the pull-request proposal only with a proof), and `author write <draft.json>` (write an approved page). A draft marks each normative claim with `[[surface:<id>]]`, `[[behavior:<id>]]`, `[[test:<file>]]`, `[[evidence:<id-or-url>]]`, or `[[source:<file>:<line>]]`. `--policy <file>` names the repository access policy, `--approval <file>` supplies an approval made under that policy and snapshot, and `--approve` records a person's explicit approval on the command line. The engine never calls a model and never merges a pull request. See [Coverage-driven authoring](https://github.com/velella-sh/mizzen/blob/main/docs/coverage-driven-authoring.md).
 
 `--out` is resolved from the current working directory, not from the site root, for `build`, `dev`, `pack`, and `watch`; `dev`'s default is `<site>/.mizzen/dev` and `watch`'s is `<site>/.mizzen/watch`. `check` is the command to use in CI: it never touches `dist`. `pack` reads the site model and never the theme, so it needs no theme root.
 

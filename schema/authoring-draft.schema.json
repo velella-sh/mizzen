@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/authoring-draft.schema.json",
+  "title": "Authoring draft",
+  "description": "A page draft an external agent returns for one documentation gap. The body carries [[kind:ref]] citation markers, and every explicit unknown and reviewer question the task names is repeated here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "item", "pageType", "title", "slug", "block", "body", "limitations", "unknowns", "questions"],
+  "properties": {
+    "version": {
+      "const": 1,
+      "description": "The only draft version this engine reads."
+    },
+    "item": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The public surface id the draft documents, such as symbol:parseWidget."
+    },
+    "pageType": {
+      "enum": ["reference", "guide", "example", "runbook"],
+      "description": "The page type the task recommended."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The page title, written to front matter."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The meta description, written to front matter when present."
+    },
+    "slug": {
+      "type": "string",
+      "pattern": "^/(?!.*\\.\\.)(?:[a-z0-9][a-z0-9-]*/)+$",
+      "description": "The stable output URL, under the site base, with a trailing slash."
+    },
+    "block": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+      "description": "The block id the first heading declares."
+    },
+    "body": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The Markdown body, with [[kind:ref]] citation markers on its normative claims."
+    },
+    "limitations": {
+      "type": "array",
+      "description": "The limitations the page states; the task's limitations must survive here.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "unknowns": {
+      "type": "array",
+      "description": "The explicit unknowns carried forward from the task.",
+      "items": { "$ref": "#/$defs/unknown" }
+    },
+    "questions": {
+      "type": "array",
+      "description": "The questions a human reviewer must answer.",
+      "items": { "$ref": "#/$defs/question" }
+    }
+  },
+  "$defs": {
+    "unknown": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "statement": { "type": "string", "minLength": 1 },
+        "evidence": { "type": "string", "minLength": 1 }
+      }
+    },
+    "question": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "question"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "question": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

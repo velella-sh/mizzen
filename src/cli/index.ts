@@ -34,6 +34,7 @@ import { runDocsVersion } from "./docs-version.ts";
 import { runSurface } from "./surface.ts";
 import { runBehavior } from "./behavior.ts";
 import { runFederation } from "./federation.ts";
+import { runAuthor } from "./author.ts";
 import { runImport } from "./import.ts";
 import { runInputs } from "./inputs.ts";
 import { staleDiagnostics } from "../stale/diagnostics.ts";
@@ -73,7 +74,7 @@ import type { ReadinessDimension } from "../contracts/readiness.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["agent", "api", "behavior", "build", "check", "compare", "data", "decisions", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "federation", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["agent", "api", "author", "behavior", "build", "check", "compare", "data", "decisions", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "federation", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -120,6 +121,7 @@ Commands:
   agent task resume <id> [dir]  Resume a waiting or blocked task; --approve <ids|all>
   agent task cancel <id> [dir]  Cancel a task; --reason <text>
   api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
+  author <subcommand> [dir]  Turn surface gaps into tasks, validate a draft, preview it, verify it, propose a PR, or write it
   behavior [dir]            Report behavior contracts, surface/test/evidence links, and drift (--json, --version, --status)
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
@@ -199,8 +201,8 @@ Commands:
                             Install a package's inputs and lock entries (--accept on a conflict)
 
 Options:
-  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project); pack writes a file here instead of stdout; inputs export writes the package here
-  --theme <dir>        Theme root folder (layouts/, chrome/, components/)
+  --out <path>         Output folder: build (default: dist), dev (default: .mizzen/dev), watch (default: .mizzen/watch), import (the generated project), author preview (a folder; other author commands write a file here); pack writes a file here instead of stdout; inputs export writes the package here
+  --theme <dir>        Theme root folder (layouts/, chrome/, components/); author preview, verify, propose, and write build with it
   --diagnose           For build: write .mizzen/build-report.json after the build
   --format <format>    text, json, or sarif (check and doctor; default: text); text, json, or markdown for diff; text or json for compare, reproduce, readiness, data schema, data transform-diff, edit apply, edit verify, urls check, and published-site check; markdown or json for pack
   --sitemap <url>      Sitemap or sitemap index URL for published-site check
@@ -216,7 +218,7 @@ Options:
   --workers <n|auto>   Render pages in n worker threads; auto is the CPU count minus one (default: 1)
   --check              For data fetch: compare with mizzen.lock.json without writing; for data transform-diff: exit 1 on a change, 2 on a failure; for reproduce: preflight only
   --allow-dirty        For data snapshot: record the last commit although the file has uncommitted changes
-  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for data explain: print the versioned lineage report; for inputs inspect: print the report as JSON
+  --json               For data quality: print the findings and scopes as JSON; for data refresh: print the report; for data explain: print the versioned lineage report; for inputs inspect: print the report as JSON; for author: print the task list, validation, preview, verification, proposal, or write result
   --field <path>       For data explain: the field to trace, such as title or author.name
   --public             For data explain: print only permitted metadata, with no values or internal paths
   --limit <n>          For data transform: records to show per collection (default: 5)
@@ -228,7 +230,7 @@ Options:
   --request <file|->   Versioned JSON context request for pack; - reads stdin
   --task <file>        JSON task contract for pack; compiles task-aware context against the site
   --topic <name>       Topic for pack (default: the site's only topic); not with --request or --task
-  --budget <tokens>    Token budget for pack, overriding the topic's; not with --request
+  --budget <tokens>    Token budget for pack, overriding the topic's; for author tasks or export: the task or pack budget
   --against <x>        For api check: a built folder or a git ref holding the API consumers rely on
   --base <path>        For build: write the site under this base path (such as /preview/pr-1); for diff: build this git ref and compare it with the current site (one dir)
   --commit <sha>       For build: record this commit in a preview's manifest (default: GITHUB_SHA)
@@ -268,11 +270,15 @@ Options:
   --per-project <n>    For federation pack: the most fragments one project may contribute
   --claim <id>         For federation chain: the claim to start from
   --reference <file>   For federation resolve: a JSON file holding one stable reference
-  --version <version>  For surface or behavior: the product version to inventory or query
+  --version <version>  For surface or behavior: the product version to inventory or query; for author: the version the gap is inventoried at
   --status <status>    For behavior: only supported, experimental, deprecated, or removed
   --os <name>          For behavior: only behaviors that cover this operating system
   --language <name>    For behavior: only behaviors that cover this language
   --runtime <name>     For behavior: only behaviors that cover this runtime
+  --policy <file>      For author preview or write: the repository access policy the write must satisfy
+  --approval <file>    For author preview or write: an approval made under that policy and snapshot
+  --approve            For author preview or write: approve the write on the command line
+  --item <id>          For author tasks: only this public surface item, such as symbol:parseWidget
   -h, --help           Show this help
 
 Exit codes: 0 ok, 1 errors, 2 usage.`;
@@ -559,6 +565,11 @@ type FederationOpts = {
   readonly args: readonly string[];
 };
 
+type AuthorOpts = {
+  readonly command: "author";
+  readonly args: readonly string[];
+};
+
 type EditApplyOpts = {
   readonly command: "edit-apply";
   readonly root: string;
@@ -698,7 +709,8 @@ type Parsed =
         | SurfaceOpts
         | DecisionsOpts
         | BehaviorOpts
-        | FederationOpts;
+        | FederationOpts
+        | AuthorOpts;
     };
 
 async function exists(path: string): Promise<boolean> {
@@ -1679,6 +1691,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest.includes("--help") || rest.includes("-h")) return { help: true };
     return { options: { command: "federation", args: rest } };
   }
+  if (command === "author") {
+    if (rest.includes("--help") || rest.includes("-h")) return { help: true };
+    return { options: { command: "author", args: rest } };
+  }
   if (command === "inputs") {
     if (rest[0] === "-h" || rest[0] === "--help") return { help: true };
     return { options: { command: "inputs", args: rest } };
@@ -2146,6 +2162,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "behavior") {
     try {
       return await runBehavior(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "author") {
+    try {
+      return await runAuthor(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;

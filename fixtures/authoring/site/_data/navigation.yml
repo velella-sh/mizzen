@@ -1,0 +1,7 @@
+docs:
+  - title: Documentation
+    url: /docs/
+  - title: Reference
+    children:
+      - title: documented
+        url: /reference/documented/

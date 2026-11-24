@@ -1,0 +1,8 @@
+title: Authoring fixture
+description: A single-repository site with one documented export and one undocumented API.
+url: https://example.org
+theme:
+  name: theme
+surface:
+  package: src/index.ts
+  docs: [docs]
