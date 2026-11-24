@@ -102,6 +102,13 @@ Commands:
                             Validate evidence and store it by SHA-256
   examples lock [dir]       Record .mizzen-env.json: runtime, packages, fixtures, limits
   examples record [dir]     Run and record fences (--date YYYY-MM-DD --commit <full SHA>)
+  federation fetch [dir]    Fetch and pin every project's bundle in federation.lock.json (--check compares)
+  federation status [dir]   Report the pinned bundles and every missing bundle (--json)
+  federation graph [dir]    Print the composed graph over every visible project (--json)
+  federation query [dir]    Answer one cross-repository query (--from, --to, --project, --json)
+  federation pack [dir]     Compile one context pack across projects (--goal, --budget, --from)
+  federation chain [dir]    Trace a claim's evidence chain across projects (--claim, --project, --json)
+  federation resolve [dir]  Resolve a stable reference to a pinned snapshot or a compatible channel (--reference)
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -204,6 +211,12 @@ Options:
   --baseline <file>    For surface or behavior: compare against an earlier report written by this command
   --min <percent>      For surface: exit 1 when the documented percentage is below this, 0 to 100
   --min-verified <pct> For behavior: exit 1 when the verified percentage is below this, 0 to 100
+  --manifest <file>    For federation fetch: read this manifest instead of the config's federation.manifest
+  --goal <text>        For federation pack: the topic the pack is about
+  --budget <tokens>    For federation pack: the one shared budget
+  --per-project <n>    For federation pack: the most fragments one project may contribute
+  --claim <id>         For federation chain: the claim to start from
+  --reference <file>   For federation resolve: a JSON file holding one stable reference
   --version <version>  For surface or behavior: the product version to inventory or query; for author: the version the gap is inventoried at
   --status <status>    For behavior: only supported, experimental, deprecated, or removed
   --os <name>          For behavior: only behaviors that cover this operating system
@@ -285,6 +298,13 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen readiness [built] --report <file> --badge <file> --compare <file> --min-overall <n> --min <section>=<n> --fail-on-unknown` | Scores a built folder against the [public readiness rubric](docs/readiness.md): structure, navigation, context, examples, verification, permissions, and maintenance, with weights, unknowns, located findings, and remediation. Writes a versioned JSON report whose digest verifies, an SVG or Markdown badge, and an optional comparison with an earlier report. Exits `1` on a failed critical rule, a failed threshold, or a failing report. |
 | `mizzen examples lock [dir] --check` | Records `.mizzen-env.json`: the runtime, the packages examples import, the fixture folders under `fixtures/`, and the effective limits (`timeoutMs`, `memoryMb`, network, shell). `--check` compares the host with the lock without writing and exits `1` on a difference. See [Executable examples](site/example-results.md). |
 | `mizzen examples record [dir] --date YYYY-MM-DD --commit <full SHA> --no-lock` | Runs the opt-in fences and writes `.mizzen-examples.json` with one result per fence: status, exit code, the environment hash, and portable evidence. Requires `examples.pinned` or `examples.execute`. The environment lock is enforced unless `--no-lock` is given; a missing or changed lock exits `1` and runs nothing. See [Executable examples](site/example-results.md). |
+| `mizzen federation fetch [dir] --manifest <file> --check` | Reads the federation manifest and pins every project's bundle in `federation.lock.json`; `--check` compares without writing. It is the only federation command that reads the network. A required bundle that is missing or fails its digest stops the write; an optional one is pinned as absent, so a later build is `partial` and keeps every snapshot it already had. See [Federated knowledge](docs/federated-knowledge.md). |
+| `mizzen federation status [dir] --json` | Reports the manifest hash, every pinned bundle with its snapshot and digest, and every project whose bundle is missing; `--json` prints the versioned report. |
+| `mizzen federation graph [dir] --json` | Composes every visible project's graph into one, with fully qualified ids and cross-project edges only where a bundle declared an explicit reference. The composed digest does not depend on the order the bundles were read in. |
+| `mizzen federation query [dir] --from <id> --to <id> --project <id> --depth <n> --allow <a,b>` | Answers one cross-repository query: a citation's visible neighbors and the shortest path to another, with namespaced citations. A project the caller may not read is left out, and a bounded or partial answer says so. |
+| `mizzen federation pack [dir] --goal <text> --budget <tokens> --from <ids> --per-project <n>` | Compiles one context pack across projects under a single shared budget, attributing every fragment to its project and reporting omissions per project. A missing bundle is a `missing` omission and makes the pack `partial`. |
+| `mizzen federation chain [dir] --claim <id> --project <id> --json` | Follows a claim from one project's page to another project's test or data, preserving every link's digest and marking one that no longer matches. Exits `1` when the chain is incomplete. |
+| `mizzen federation resolve [dir] --reference <file>` | Resolves a stable reference to the pinned snapshot or a compatible channel. A removed target is reported `removed` with its version, a mismatched one `incompatible`, and a withheld project never leaks its name. |
 | `mizzen graph [dir] [--from <id>] [--to <id>]` | Answers one query against the knowledge graph: a node's neighbors and the shortest path to another node, with the same JSON and node ids as the `query_graph` MCP tool. `--depth`, `--nodes`, and `--max-output` bound the answer; a bounded answer is `partial` and carries `--cursor`. `--allow` names the audiences the caller may read. |
 | `mizzen references check <file\|-> [dir]` | Resolves a JSON array of stored block references (`{"version": 1, "page": "<source>", "block": "<id>"}`) against the site's current build. Prints one JSON array of resolutions; a reference is `resolved` with its current URL, `removed` when `blocks.lock.json` recorded it, or `unknown`. Exits `1` when any reference is not resolved. |
 | `mizzen diff <a> <b>` | Compares two built folders by their manifests and prints the pages, files, and records that changed, the moved pages, and the URLs that stopped answering. `--base <ref>` builds a git ref and compares it with the current site. `--format text\|json\|markdown`; exits `0` unless `--fail-on removed-pages,broken-urls,render-only` finds one (`1`). See [Compare two builds](/site-diff/). |
@@ -330,6 +350,7 @@ A site's settings live in `mizzen.yml` at its root; every path in the file is re
 | `search` | `false` or `{text}` | `{}` | `false` builds no search index. `text` is the most characters of a page's body the index keeps (default `300`); titles and headings are always indexed. |
 | `examples` | `{failOnFailure, pinned, execute, lock, timeoutMs, memoryMb, network, typeCheck, allowlist}` | none | Runs fences marked `test` and writes `examples.json`. `failOnFailure: true` reports failed examples as errors. `pinned: true` uses [recorded results](site/example-results.md) during the build. `execute: true` runs the fences during the build; `lock`, `timeoutMs`, `memoryMb`, `network`, `typeCheck`, and `allowlist` bound and lock that run. |
 | `social` | `{template, fonts}` | none | Turns on a generated share image for every page. `template` names `_templates/social/<template>.svg` in the source folder (1200 by 630, text slots marked `data-slot`); `fonts` lists the `.ttf`, `.otf`, or `.woff` files, relative to the site root, the images are drawn with. No system font is used. A page sets `social: <name>` in its front matter for another template, `social: false` for none, and its own `image` always wins. Without the key no image is written. The engine ships no template; the theme or the site provides one. |
+| `federation` | `{manifest, project, bundle, compatible}` | none | Reads knowledge from other independent projects: `manifest` names the federation manifest, `project` names this site's id, `bundle` names where this site publishes its own, and `compatible` names a version or range it accepts. A normal build reads only `federation.lock.json` and the locally locked bundles. See [Federated knowledge](docs/federated-knowledge.md). |
 | `redirects` | map of path to path or URL | `{}` | Redirect pages: each key is an old path under `base`, each value a path on the site or an `https` URL. |
 | `outputs` | map of name to boolean | every output on | Turns one output off by its name, such as `twins: false`. The names are in [Outputs](#outputs). |
 
@@ -427,6 +448,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `decisions` | `decisions.json`, the versioned public decision report, and `decisions/index.html`, a matrix of every decision by status, date, and supersession, from the records under `decisions.dir`. |
 | `drift-report` | `drift.json`, every drift finding grouped by page URL. |
 | `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. [Pinned mode](site/example-results.md) also includes current recorded results keyed by page URL and fence ID; executable examples publish per-fence evidence with exit code and output comparison. |
+| `federation` | `.mizzen/federation.json`, the lock's hash, every pinned bundle with its snapshot and digest, the composed graph's digest, and every missing bundle. Written only when the config declares `federation`. |
 | `feed` | `changes.xml`, an Atom feed of the 30 most recently changed doc pages, when the config has `url`. |
 | `feeds` | `feeds/<name>.xml`, `feeds/<name>.rss.xml`, and `feeds/<name>.json` for each feed the config declares, in the formats it names. |
 | `footnote-check` | No files: reports footnote references with no definition. |

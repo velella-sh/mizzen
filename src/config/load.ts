@@ -38,6 +38,7 @@ import type {
   CollectionViewConfig,
   DatesConfig,
   DefaultsEntry,
+  FederationConfig,
   DerivedBandConfig,
   DerivedRuleConfig,
   DecisionsConfig,
@@ -649,6 +650,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
   const drift = driftFrom(raw.drift);
   const surface = surfaceFrom(raw.surface);
   const decisions = decisionsFrom(raw.decisions);
+  const federation = federationFrom(raw.federation);
   const theme: ThemeConfig = isPlainObject(raw.theme) ? (raw.theme as ThemeConfig) : {};
 
   return {
@@ -688,6 +690,7 @@ function applyDefaults(raw: Record<string, unknown>, folderTitle: string): SiteC
     ...(drift === undefined ? {} : { drift }),
     ...(surface === undefined ? {} : { surface }),
     ...(decisions === undefined ? {} : { decisions }),
+    ...(federation === undefined ? {} : { federation }),
     ...(social === undefined ? {} : { social }),
     redirects: isPlainObject(raw.redirects) ? (raw.redirects as Record<string, string>) : {},
     outputs: isPlainObject(raw.outputs) ? (raw.outputs as Record<string, boolean>) : {},
@@ -967,6 +970,19 @@ function decisionsFrom(value: unknown): DecisionsConfig | undefined {
   const dir = typeof value.dir === "string" && value.dir.trim() !== "" ? value.dir.trim().replace(/\\/g, "/") : "docs/decisions";
   const publish = value.publish !== false;
   return { dir, publish };
+}
+
+/** The federation key: kept only when it names a manifest and a project; the schema check reports a bad shape. */
+function federationFrom(value: unknown): FederationConfig | undefined {
+  if (!isPlainObject(value)) return undefined;
+  if (typeof value.manifest !== "string" || value.manifest.trim() === "") return undefined;
+  if (typeof value.project !== "string" || value.project.trim() === "") return undefined;
+  return {
+    manifest: value.manifest.trim(),
+    project: value.project.trim(),
+    ...(typeof value.bundle === "string" && value.bundle.trim() !== "" ? { bundle: value.bundle.trim() } : {}),
+    ...(typeof value.compatible === "string" && value.compatible.trim() !== "" ? { compatible: value.compatible.trim() } : {}),
+  };
 }
 
 /** The verify key, keeping only string values; `undefined` when none is set. */

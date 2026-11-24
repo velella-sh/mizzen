@@ -6,6 +6,7 @@ import { loadConfig } from "../config/load.ts";
 import { normalizeBase } from "../content/permalink.ts";
 import { EVIDENCE_REPORT_PATH, evidenceReport } from "../evidence/report.ts";
 import { loadLockedEvidence } from "../evidence/store.ts";
+import { loadFederation } from "../federation/lock.ts";
 import { discover } from "../content/discover.ts";
 import type { Diagnostic, Output, OutputContext, OutputFile, Page, PageStale, PreviewPolicy, Site } from "../contracts/index.ts";
 import { buildModel, repositoryFolder } from "../model/build.ts";
@@ -367,6 +368,10 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
   const sourceDir = resolve(root, loaded.config.source);
   assertOutOutsideSource(sourceDir, out);
   const evidence = await loadLockedEvidence(root);
+  // Federated knowledge is a build input: a changed lock or bundle is a different key, and a normal build reads only the
+  // local lock and bytes. A site without the key loads nothing.
+  const federationInput =
+    loaded.config.federation === undefined ? undefined : await loadFederation(root).catch(() => undefined);
   const recordedExamples = loaded.config.examples?.pinned === true
     ? await readExamplesLock(root).catch((error: Error) => {
         diagnostics.error("examples.invalid-lock", `Cannot read ${EXAMPLES_LOCK_FILE}: ${error.message}`);
@@ -406,6 +411,7 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
       ...(options.themeFiles === undefined ? {} : { themeFiles: options.themeFiles }),
       stale: JSON.stringify([...staleBySource]),
       ...(evidence === undefined ? {} : { evidence: evidence.fingerprint }),
+      ...(federationInput?.loaded.fingerprint === undefined ? {} : { federation: federationInput.loaded.fingerprint }),
       examplesKey: recordedExamples?.digest,
       ...(pluginKey === undefined ? {} : { pluginKey }),
       ...(preview === undefined ? {} : { preview }),

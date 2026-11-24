@@ -33,6 +33,7 @@ import { runTrace, traceUsage } from "./trace.ts";
 import { runDocsVersion } from "./docs-version.ts";
 import { runSurface } from "./surface.ts";
 import { runBehavior } from "./behavior.ts";
+import { runFederation } from "./federation.ts";
 import { runAuthor } from "./author.ts";
 import { runImport } from "./import.ts";
 import { runInputs } from "./inputs.ts";
@@ -73,7 +74,7 @@ import type { ReadinessDimension } from "../contracts/readiness.ts";
 export const NAME = "mizzen";
 
 /** Every command the parser registers, in the order the help lists them. */
-export const COMMANDS = ["agent", "api", "author", "behavior", "build", "check", "compare", "data", "decisions", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
+export const COMMANDS = ["agent", "api", "author", "behavior", "build", "check", "compare", "data", "decisions", "dev", "diff", "doctor", "edit", "eval", "evidence", "examples", "federation", "graph", "import", "init", "knowledge", "mcp", "network", "pack", "published-site", "readiness", "references", "reproduce", "stale", "surface", "trace", "urls", "verify", "versions", "watch", "inputs"] as const;
 
 const FORMATS = ["text", "json", "sarif"] as const;
 type Format = (typeof FORMATS)[number];
@@ -154,6 +155,13 @@ Commands:
                             Validate evidence and store it by SHA-256
   examples lock [dir]       Record .mizzen-env.json: runtime, packages, fixtures, limits
   examples record [dir]     Run and record fences (--date YYYY-MM-DD --commit <full SHA>)
+  federation fetch [dir]    Fetch and pin every project's bundle in federation.lock.json (--check compares)
+  federation status [dir]   Report the pinned bundles and every missing bundle (--json)
+  federation graph [dir]    Print the composed graph over every visible project (--json)
+  federation query [dir]    Answer one cross-repository query (--from, --to, --project, --json)
+  federation pack [dir]     Compile one context pack across projects (--goal, --budget, --from)
+  federation chain [dir]    Trace a claim's evidence chain across projects (--claim, --project, --json)
+  federation resolve [dir]  Resolve a stable reference to a pinned snapshot or a compatible channel (--reference)
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items
   init [dir]                Start a site from a theme starter: --starter <name> copies it, --list names them
@@ -256,6 +264,12 @@ Options:
   --baseline <file>    For surface or behavior: compare against an earlier report written by this command
   --min <percent>      For surface: exit 1 when the documented percentage is below this, 0 to 100
   --min-verified <pct> For behavior: exit 1 when the verified percentage is below this, 0 to 100
+  --manifest <file>    For federation fetch: read this manifest instead of the config's federation.manifest
+  --goal <text>        For federation pack: the topic the pack is about
+  --budget <tokens>    For federation pack: the one shared budget
+  --per-project <n>    For federation pack: the most fragments one project may contribute
+  --claim <id>         For federation chain: the claim to start from
+  --reference <file>   For federation resolve: a JSON file holding one stable reference
   --version <version>  For surface or behavior: the product version to inventory or query; for author: the version the gap is inventoried at
   --status <status>    For behavior: only supported, experimental, deprecated, or removed
   --os <name>          For behavior: only behaviors that cover this operating system
@@ -546,6 +560,11 @@ type BehaviorOpts = {
   readonly args: readonly string[];
 };
 
+type FederationOpts = {
+  readonly command: "federation";
+  readonly args: readonly string[];
+};
+
 type AuthorOpts = {
   readonly command: "author";
   readonly args: readonly string[];
@@ -690,6 +709,7 @@ type Parsed =
         | SurfaceOpts
         | DecisionsOpts
         | BehaviorOpts
+        | FederationOpts
         | AuthorOpts;
     };
 
@@ -1667,6 +1687,10 @@ export function parseArgs(args: readonly string[]): Parsed {
     if (rest.includes("--help") || rest.includes("-h")) return { help: true };
     return { options: { command: "behavior", args: rest } };
   }
+  if (command === "federation") {
+    if (rest.includes("--help") || rest.includes("-h")) return { help: true };
+    return { options: { command: "federation", args: rest } };
+  }
   if (command === "author") {
     if (rest.includes("--help") || rest.includes("-h")) return { help: true };
     return { options: { command: "author", args: rest } };
@@ -2147,6 +2171,15 @@ export async function main(args: readonly string[], io: Io = {}): Promise<number
   if (options.command === "author") {
     try {
       return await runAuthor(options.args, { log, error });
+    } catch (err) {
+      error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
+      return 2;
+    }
+  }
+
+  if (options.command === "federation") {
+    try {
+      return await runFederation(options.args, { log, error });
     } catch (err) {
       error(`${NAME}: ${err instanceof Error ? err.message : String(err)}`);
       return 2;
