@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/behavior-report.schema.json",
+  "title": "Product behavior contracts report",
+  "description": "The versioned report `mizzen behavior` prints and the `behavior` output writes: every public behavior with its normative statement, source span, support status, versions, environments, linked surface items, tests and expected outcomes, public evidence links, and the verification verdict. Private behaviors and private evidence values are omitted, and a behavior whose required evidence is missing is `unverified`.",
+  "type": "object",
+  "required": ["version", "source", "policy", "behaviors", "coverage", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1, "description": "The report format version." },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "version": { "type": "string", "minLength": 1, "description": "The product version the report was queried or inventoried at, when one was named." }
+      },
+      "description": "Where the report came from."
+    },
+    "policy": { "$ref": "#/$defs/policy" },
+    "behaviors": {
+      "type": "array",
+      "description": "Every public behavior, sorted by id.",
+      "items": { "$ref": "#/$defs/behavior" }
+    },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "findings": {
+      "type": "array",
+      "description": "Structural findings, sorted by code, position, then message.",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "status": { "enum": ["supported", "experimental", "deprecated", "removed"] },
+    "testOutcome": { "enum": ["passed", "failed", "skipped"] },
+    "evidenceKind": { "enum": ["test", "ci", "benchmark", "document"] },
+    "verification": { "enum": ["verified", "unverified"] },
+    "reason": {
+      "enum": ["missing-surface", "missing-test", "nonpassing-test", "missing-evidence", "unresolved-evidence", "invalid-replacement"]
+    },
+    "span": {
+      "type": "object",
+      "required": ["file", "line", "column", "endLine", "endColumn"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "endLine": { "type": "integer", "minimum": 1 },
+        "endColumn": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "requirement": {
+      "type": "object",
+      "required": ["tests", "evidence", "kinds"],
+      "additionalProperties": false,
+      "properties": {
+        "tests": { "type": "integer", "minimum": 0 },
+        "evidence": { "type": "integer", "minimum": 0 },
+        "kinds": { "type": "array", "items": { "$ref": "#/$defs/evidenceKind" } }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": ["supported", "experimental", "deprecated", "removed"],
+      "additionalProperties": false,
+      "properties": {
+        "supported": { "$ref": "#/$defs/requirement" },
+        "experimental": { "$ref": "#/$defs/requirement" },
+        "deprecated": { "$ref": "#/$defs/requirement" },
+        "removed": { "$ref": "#/$defs/requirement" }
+      }
+    },
+    "versions": {
+      "type": "object",
+      "required": ["introduced"],
+      "additionalProperties": false,
+      "properties": {
+        "introduced": { "type": "string", "minLength": 1 },
+        "changed": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "deprecated": { "type": "string", "minLength": 1 },
+        "removed": { "type": "string", "minLength": 1 }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "os": { "type": "string", "minLength": 1 },
+        "language": { "type": "string", "minLength": 1 },
+        "runtime": { "type": "string", "minLength": 1 }
+      }
+    },
+    "surfaceLink": {
+      "type": "object",
+      "required": ["item", "state"],
+      "additionalProperties": false,
+      "properties": {
+        "item": { "type": "string", "minLength": 1 },
+        "state": { "enum": ["linked", "missing"] },
+        "area": { "enum": ["api", "cli", "config", "openapi", "data", "version"] },
+        "kind": { "enum": ["symbol", "command", "argument", "flag", "config-key", "operation", "parameter", "response", "collection", "field", "version"] },
+        "name": { "type": "string", "minLength": 1 },
+        "stability": { "enum": ["stable", "experimental", "deprecated", "removed"] },
+        "signature": { "type": "string" },
+        "source": { "$ref": "#/$defs/span" }
+      }
+    },
+    "testLink": {
+      "type": "object",
+      "required": ["file", "outcome", "state"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "outcome": { "$ref": "#/$defs/testOutcome" },
+        "state": { "enum": ["found", "missing"] },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "redacted": { "type": "boolean" }
+      }
+    },
+    "evidenceLink": {
+      "type": "object",
+      "required": ["kind", "state"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "$ref": "#/$defs/evidenceKind" },
+        "state": { "enum": ["resolved", "unresolved"] },
+        "id": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "pattern": "^(?:https://[^\\s]+|/(?!/)[^\\s]*)$" },
+        "title": { "type": "string", "minLength": 1 },
+        "digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "redacted": { "type": "boolean" }
+      }
+    },
+    "verificationState": {
+      "type": "object",
+      "required": ["status", "reasons", "required"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "$ref": "#/$defs/verification" },
+        "reasons": { "type": "array", "items": { "$ref": "#/$defs/reason" } },
+        "required": { "$ref": "#/$defs/requirement" }
+      }
+    },
+    "page": {
+      "type": "object",
+      "required": ["url", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "url": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "minLength": 1 }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "required": ["id", "title", "normative", "source", "page", "status", "versions", "environments", "surface", "tests", "evidence", "verification"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "title": { "type": "string", "minLength": 1 },
+        "normative": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/span" },
+        "page": { "$ref": "#/$defs/page" },
+        "status": { "$ref": "#/$defs/status" },
+        "statusAtVersion": { "$ref": "#/$defs/status" },
+        "versions": { "$ref": "#/$defs/versions" },
+        "replacement": { "type": "string", "minLength": 1 },
+        "environments": { "type": "array", "items": { "$ref": "#/$defs/environment" } },
+        "surface": { "type": "array", "items": { "$ref": "#/$defs/surfaceLink" } },
+        "tests": { "type": "array", "items": { "$ref": "#/$defs/testLink" } },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidenceLink" } },
+        "verification": { "$ref": "#/$defs/verificationState" }
+      }
+    },
+    "statusCounts": {
+      "type": "object",
+      "required": ["supported", "experimental", "deprecated", "removed"],
+      "additionalProperties": false,
+      "properties": {
+        "supported": { "type": "integer", "minimum": 0 },
+        "experimental": { "type": "integer", "minimum": 0 },
+        "deprecated": { "type": "integer", "minimum": 0 },
+        "removed": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "required": ["total", "verified", "unverified", "private", "byStatus", "surface"],
+      "additionalProperties": false,
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "verified": { "type": "integer", "minimum": 0 },
+        "unverified": { "type": "integer", "minimum": 0 },
+        "private": { "type": "integer", "minimum": 0 },
+        "byStatus": { "$ref": "#/$defs/statusCounts" },
+        "surface": {
+          "type": "object",
+          "required": ["linked", "missing"],
+          "additionalProperties": false,
+          "properties": {
+            "linked": { "type": "integer", "minimum": 0 },
+            "missing": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "required": ["code", "severity", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "severity": { "enum": ["error", "warning", "info"] },
+        "message": { "type": "string", "minLength": 1 },
+        "pos": { "$ref": "#/$defs/span" },
+        "locations": { "type": "array", "items": { "$ref": "#/$defs/span" } }
+      }
+    }
+  }
+}

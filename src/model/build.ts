@@ -27,6 +27,7 @@ import { buildBlogRoutes, type BlogPostSource, type BlogRoute } from "../content
 import { parseFrontMatter } from "../content/frontmatter.ts";
 import { declaresKnowledge, parseKnowledge, KNOWLEDGE_KEY } from "../knowledge/parse.ts";
 import { frontMatterKeySpan } from "../knowledge/span.ts";
+import { BEHAVIOR_KEY, parseBehaviors } from "../behavior/parse.ts";
 import { sourceSpanOf, type IncludeSpan } from "../content/include-spans.ts";
 import { expandIncludes } from "../content/includes.ts";
 import { pageLang } from "../content/lang.ts";
@@ -430,6 +431,17 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
     // report read, so every consumer agrees on the same normalized shape.
     const pageKnowledge = knowledge?.declaration;
 
+    // Behaviors are read here for the same reason: a bad declaration is reported at the exact `behavior` key or entry,
+    // and the report, the public matrix, and the CLI all read one normalized shape from the model.
+    const behaviorSpan = frontMatterKeySpan(text, rel, BEHAVIOR_KEY);
+    const behaviors = parseBehaviors({
+      text,
+      file: rel,
+      raw: frontMatter.behavior,
+      span: behaviorSpan ?? posOf(rel, 1),
+    });
+    for (const d of behaviors.diagnostics) diagnostics.report(d);
+
     const isMarkdown = /\.(md|markdown)$/i.test(file.path);
     // Includes expand before the Markdown stage: only here is the site root known, so a Markdown plugin cannot read
     // the included file. The expanded body is the page's Markdown from then on, so twins, search, and links see it.
@@ -517,6 +529,7 @@ export async function buildModel(root: string, options: BuildModelOptions = {}):
       markdown: directives.markdown,
       kind: "doc",
       ...(pageKnowledge === undefined ? {} : { knowledge: pageKnowledge }),
+      ...(behaviors.declarations.length === 0 ? {} : { behaviors: behaviors.declarations }),
     };
     // A page that declares a list is hooked once its list pages exist, so each generated page, including page one, gets
     // exactly one `content` hook and the declaring page is never hooked twice.
