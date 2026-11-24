@@ -1381,6 +1381,134 @@ const checkReports: AcceptanceCase = {
   },
 };
 
+const executableExamples: AcceptanceCase = {
+  id: "executable-examples",
+  title: "Run executable examples and publish their evidence",
+  run(ctx) {
+    const site = join(ctx.dir, "examples");
+    tree(site, {
+      "mizzen.yml": [
+        "title: Executable examples",
+        "examples:",
+        "  execute: true",
+        "  lock: false",
+        "  failOnFailure: true",
+        "  timeoutMs: 15000",
+        "  allowlist:",
+        "    - echo",
+        "    - test",
+        "",
+      ].join("\n"),
+      "guide.md": [
+        "---",
+        "title: Guide",
+        "---",
+        "",
+        "# Failing then corrected",
+        "",
+        "```js test id=\"greet\"",
+        'console.log("hello");',
+        "```",
+        "```output",
+        "goodbye",
+        "```",
+        "",
+        "# Passing",
+        "",
+        "```js test id=\"passes\"",
+        'console.log("ok");',
+        "```",
+        "```output",
+        "ok",
+        "```",
+        "",
+        "# Hidden setup",
+        "",
+        "```js test id=\"setup\" role=\"setup\" hidden",
+        'import { writeFileSync } from "node:fs";',
+        'writeFileSync("prepared.txt", "ready");',
+        "```",
+        "```js test id=\"read\"",
+        'import { readFileSync } from "node:fs";',
+        'console.log(readFileSync("prepared.txt", "utf8"));',
+        "```",
+        "```output",
+        "ready",
+        "```",
+        "",
+        "# Shared session",
+        "",
+        "```js test id=\"write\" session=\"run\"",
+        'import { writeFileSync } from "node:fs";',
+        'writeFileSync("state.txt", "shared");',
+        "```",
+        "```js test id=\"read-state\" session=\"run\"",
+        'import { readFileSync } from "node:fs";',
+        'console.log(readFileSync("state.txt", "utf8"));',
+        "```",
+        "```output",
+        "shared",
+        "```",
+        "",
+        "# Runbook",
+        "",
+        "```bash test id=\"one\" role=\"step\" runbook=\"checks\"",
+        "echo first",
+        "```",
+        "```output",
+        "first",
+        "```",
+        "```bash test id=\"two\" role=\"step\" runbook=\"checks\"",
+        "echo second",
+        "```",
+        "```output",
+        "second",
+        "```",
+        "",
+      ].join("\n"),
+    });
+    const themeRoot = theme(ctx.dir);
+
+    // The committed page fails one example: the build reports it and exits 1.
+    const failing = join(ctx.dir, "failing");
+    const first = ctx.mizzen(["build", site, "--out", failing, "--theme", themeRoot], ctx.dir);
+    check(first.status === 1, "a failing example must fail the build");
+    check(`${first.stdout}${first.stderr}`.includes("example-failed"), "the failure must be named");
+    check(`${first.stdout}${first.stderr}`.includes("greet"), "the failing fence must be located");
+
+    // Correct the expected output only; the same run passes and publishes evidence.
+    tree(site, { "guide.md": readFileSync(join(site, "guide.md"), "utf8").replace("```output\ngoodbye\n```", "```output\nhello\n```") });
+    const out = join(ctx.dir, "passing");
+    ok(ctx.mizzen(["build", site, "--out", out, "--theme", themeRoot], ctx.dir), "build the corrected site");
+    const report = JSON.parse(read(out, "examples.json")) as {
+      version: number;
+      pages: Array<{ url: string; total: number; passed: number; failed: number; skipped: number }>;
+      examples: Record<string, Record<string, { status: string; evidence?: { session?: string } }>>;
+    };
+    check(report.version === 1, "examples.json is version 1");
+    const page = report.pages.find((entry) => entry.url === "/guide/");
+    check(page?.total === 8 && page.passed === 8 && page.failed === 0, "all 8 blocks pass");
+    const entries = report.examples["/guide/"]!;
+    for (const id of ["greet", "passes", "setup", "read", "write", "read-state", "one", "two"]) {
+      check(entries[id]?.status === "passed", `${id} must pass`);
+    }
+    check(entries["read-state"]?.evidence?.session === "run", "the shared session is recorded");
+    const pageJson = JSON.parse(read(out, "guide/index.json")) as { examples?: Record<string, { status: string }> };
+    check(pageJson.examples?.greet?.status === "passed", "page JSON carries the example status");
+    const html = read(out, "guide/index.html");
+    check(!html.includes('data-example-id="setup"'), "the hidden setup block is not public text");
+    check(read(out, "guide/index.md").includes('role="setup" hidden'), "the Markdown twin keeps the hidden contract");
+
+    // The environment lock, once recorded, is required; a changed host is refused.
+    writeFileSync(
+      join(site, "mizzen.yml"),
+      readFileSync(join(site, "mizzen.yml"), "utf8").replace("lock: false", "lock: true"),
+    );
+    ok(ctx.mizzen(["examples", "lock", site], ctx.dir), "record the environment lock");
+    check(ctx.mizzen(["build", site, "--out", join(ctx.dir, "locked"), "--theme", themeRoot], ctx.dir).status === 0, "a prepared lock builds");
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   checkReports,
@@ -1418,4 +1546,5 @@ export const CASES: readonly AcceptanceCase[] = [
   evals,
   readiness,
   verifiablePublishing,
+  executableExamples,
 ];

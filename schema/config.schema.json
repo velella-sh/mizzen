@@ -265,9 +265,41 @@
         "pinned": {
           "type": "boolean",
           "description": "Read .mizzen-examples.json and leave example execution to mizzen examples record. Default false."
+        },
+        "execute": {
+          "type": "boolean",
+          "description": "Run opt-in examples during the build and check their output and type errors. Default false."
+        },
+        "lock": {
+          "type": "boolean",
+          "description": "Require .mizzen-env.json and fail a run whose host differs from it. Default true when execute is set."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Milliseconds each block may run. Default the runner's 10000."
+        },
+        "memoryMb": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "V8 old-space limit in MiB; 0 keeps V8's default. Default 0."
+        },
+        "network": {
+          "enum": ["deny", "allow"],
+          "description": "Whether a block may reach the network. Default deny."
+        },
+        "typeCheck": {
+          "type": "boolean",
+          "description": "Type-check visible ts/js blocks against their imports before running them. Default true."
+        },
+        "allowlist": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true,
+          "description": "Commands a runbook's shell steps may run. Default [], so a runbook refuses every step until it is allowlisted."
         }
       },
-      "description": "How the examples-report output treats a failing example. Default: a warning that never fails the build."
+      "description": "How the examples-report output treats a failing example, and how opt-in executable examples run. Default: a warning that never fails the build, and no example runs."
     },
     "network": {
       "type": "object",

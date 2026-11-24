@@ -2186,6 +2186,108 @@
       "test": "test/behavior-drift.test.ts",
       "epic": 1316,
       "issue": 1356
+    },
+    {
+      "id": "mark-executable-markdown-blocks",
+      "title": "Mark executable Markdown blocks",
+      "test": "test/example-syntax.test.ts",
+      "issue": 1325,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "lock-example-execution-environments",
+      "title": "Lock example execution environments",
+      "test": "test/example-environment.test.ts",
+      "issue": 1326,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "type-check-javascript-and-typescript-examples",
+      "title": "Type-check JavaScript and TypeScript examples",
+      "test": "test/example-type-check.test.ts",
+      "issue": 1327,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "execute-blocks-and-record-results",
+      "title": "Execute blocks and record results",
+      "test": "test/example-run.test.ts",
+      "case": "executable-examples",
+      "issue": 1328,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "check-expected-stdout-and-stderr",
+      "title": "Check expected stdout and stderr",
+      "test": "test/example-match.test.ts",
+      "issue": 1329,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "share-state-across-example-blocks",
+      "title": "Share state across example blocks",
+      "test": "test/example-run.test.ts",
+      "case": "executable-examples",
+      "issue": 1330,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "support-hidden-setup-and-teardown",
+      "title": "Support hidden setup and teardown",
+      "test": "test/example-run.test.ts",
+      "case": "executable-examples",
+      "issue": 1331,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "execute-snippets-imported-from-files",
+      "title": "Execute snippets imported from files",
+      "test": "test/example-snippet-runbook.test.ts",
+      "case": "executable-examples",
+      "issue": 1332,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "run-multi-step-runbooks",
+      "title": "Run multi-step runbooks",
+      "test": "test/example-snippet-runbook.test.ts",
+      "case": "executable-examples",
+      "issue": 1333,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "sandbox-examples-and-enforce-resource-limits",
+      "title": "Sandbox examples and enforce resource limits",
+      "test": "test/example-session.test.ts",
+      "issue": 1334,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "cache-and-replay-example-runs",
+      "title": "Cache and replay example runs",
+      "test": "test/example-run.test.ts",
+      "issue": 1335,
+      "status": "shipped",
+      "epic": 1314
+    },
+    {
+      "id": "publish-example-results-and-test-the-package",
+      "title": "Publish example results and test the package",
+      "test": "test/example-executable-docs.test.ts",
+      "case": "executable-examples",
+      "issue": 1336,
+      "status": "shipped",
+      "epic": 1314
     }
   ]
 }

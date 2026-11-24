@@ -142,6 +142,8 @@ test("valid configs pass", () => {
     { search: { text: 120 } },
     { redirects: { "/old/": "/new/", "/gone/": "https://example.com/" } },
     { outputs: { twins: false, llms: true } },
+    { examples: { failOnFailure: true, pinned: false } },
+    { examples: { execute: true, timeoutMs: 5000, memoryMb: 64, network: "deny", typeCheck: false, allowlist: ["echo"] } },
   ];
   for (const config of valid) assert.equal(validate(config), true, `${JSON.stringify(config)}: ${ajv.errorsText(validate.errors)}`);
 });
@@ -209,6 +211,11 @@ test("invalid configs fail", () => {
     ["a freshness rule with a zero maxAgeDays", { quality: { rules: [{ kind: "freshness", collection: "items", field: "updated", maxAgeDays: 0 }] } }],
     ["a freshness rule with an empty field", { quality: { rules: [{ kind: "freshness", collection: "items", field: "", maxAgeDays: 30 }] } }],
     ["a rule severity other than warning or error", { quality: { rules: [{ kind: "completeness", collection: "items", severity: "warn" }] } }],
+    ["an example network policy other than deny or allow", { examples: { network: "maybe" } }],
+    ["an example timeout of zero", { examples: { timeoutMs: 0 } }],
+    ["an example memory limit below zero", { examples: { memoryMb: -1 } }],
+    ["an example allowlist with an empty command", { examples: { allowlist: [""] } }],
+    ["an example key that does not exist", { examples: { runner: "node" } }],
     ["the whole config a list", []],
   ];
   for (const [name, config] of invalid) assert.equal(validate(config), false, name);

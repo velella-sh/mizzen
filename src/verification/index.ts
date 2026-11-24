@@ -23,5 +23,6 @@ export {
   type ReferenceSnapshot,
 } from "./references.ts";
 export { inputHashOf, reproductionEvidence, type ReproductionInput } from "./reproduce.ts";
+export { exampleChecks, type ExampleProofInput } from "../examples/proof.ts";
 export { changeOf, scopeAllows, scopeHash, scopeMessage, scopeProof, type ScopeInput } from "./scope.ts";
 export { independentlyVerify, type IndependentVerifyOptions } from "./verify.ts";

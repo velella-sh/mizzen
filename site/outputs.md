@@ -22,7 +22,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `data-changelog` | `feeds/<collection>-changes.xml`, an Atom feed of a collection's change history, when its `changelog` pages are on and the site has `url`. |
 | `decisions` | `decisions.json`, the versioned public decision report, and `decisions/index.html`, a matrix of every decision by status, date, and supersession, from the records under `decisions.dir`. |
 | `drift-report` | `drift.json`, every drift finding grouped by page URL. |
-| `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. [Pinned mode](/example-results/) also includes current recorded results keyed by page URL and fence ID. |
+| `examples-report` | `examples.json`, per page: the runnable examples and how many passed, failed, or were skipped. [Pinned mode](/example-results/) also includes current recorded results keyed by page URL and fence ID; [executable examples](/example-results/) publish per-fence evidence with exit code and output comparison. |
 | `feed` | `changes.xml`, an Atom feed of the 30 most recently changed doc pages, when the config has `url`. |
 | `feeds` | `feeds/<name>.xml`, `feeds/<name>.rss.xml`, and `feeds/<name>.json` for each feed the config declares, in the formats it names. |
 | `footnote-check` | No files: reports footnote references with no definition. |

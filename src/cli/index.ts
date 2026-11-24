@@ -150,6 +150,7 @@ Commands:
   eval [suite]              Run a deterministic evaluation suite and print its report (--format, --out, --baseline)
   evidence ingest <envelope.json> [dir] [--artifact <file>]
                             Validate evidence and store it by SHA-256
+  examples lock [dir]       Record .mizzen-env.json: runtime, packages, fixtures, limits
   examples record [dir]     Run and record fences (--date YYYY-MM-DD --commit <full SHA>)
   graph [dir]               Query the knowledge graph: neighbors and the shortest path (--from, --to)
   import <name> <dir>         Preview a migration; --out <dir> writes it, --fail-on-manual gates on manual items

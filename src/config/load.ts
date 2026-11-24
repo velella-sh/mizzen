@@ -742,11 +742,35 @@ function analyticsFrom(value: unknown): AnalyticsConfig | undefined {
 /** The examples key; the schema check reports invalid settings. */
 function examplesFrom(value: unknown): ExamplesConfig | undefined {
   if (!isPlainObject(value)) return undefined;
-  const { failOnFailure, pinned } = value;
-  if (typeof failOnFailure !== "boolean" && typeof pinned !== "boolean") return undefined;
+  const { failOnFailure, pinned, execute, lock, timeoutMs, memoryMb, network, typeCheck, allowlist } = value;
+  const known =
+    typeof failOnFailure === "boolean" ||
+    typeof pinned === "boolean" ||
+    typeof execute === "boolean" ||
+    typeof lock === "boolean" ||
+    typeof timeoutMs === "number" ||
+    typeof memoryMb === "number" ||
+    typeof network === "string" ||
+    typeof typeCheck === "boolean" ||
+    Array.isArray(allowlist);
+  if (!known) return undefined;
+  const positive = (entry: unknown): number | undefined =>
+    typeof entry === "number" && Number.isSafeInteger(entry) && entry > 0 ? entry : undefined;
+  const whole = (entry: unknown): number | undefined =>
+    typeof entry === "number" && Number.isSafeInteger(entry) && entry >= 0 ? entry : undefined;
+  const commands = Array.isArray(allowlist)
+    ? allowlist.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "")
+    : undefined;
   return {
     ...(typeof failOnFailure === "boolean" ? { failOnFailure } : {}),
     ...(typeof pinned === "boolean" ? { pinned } : {}),
+    ...(typeof execute === "boolean" ? { execute } : {}),
+    ...(typeof lock === "boolean" ? { lock } : {}),
+    ...(positive(timeoutMs) === undefined ? {} : { timeoutMs: positive(timeoutMs)! }),
+    ...(whole(memoryMb) === undefined ? {} : { memoryMb: whole(memoryMb)! }),
+    ...(network === "deny" || network === "allow" ? { network } : {}),
+    ...(typeof typeCheck === "boolean" ? { typeCheck } : {}),
+    ...(commands === undefined ? {} : { allowlist: commands }),
   };
 }
 

@@ -1,5 +1,6 @@
 import type { Page, PageStale, Site } from "../contracts/content.ts";
 import type { Output, OutputFile } from "../contracts/output.ts";
+import type { FenceExampleResult } from "../contracts/code.ts";
 import type { SurfaceCoverage } from "../contracts/surface.ts";
 import { publicEvidenceOf } from "../data/evidence/public.ts";
 import type { EvidenceClaims } from "../data/evidence/validate.ts";
@@ -165,6 +166,55 @@ interface PageJson {
     readonly gaps: number;
     readonly exclusions: number;
   };
+  /** The page's recorded example results, keyed by fence id; absent when the page has no recorded evidence. */
+  readonly examples?: Readonly<Record<string, PageJsonExample>> | undefined;
+}
+
+/** One recorded example, as page JSON publishes it: its state, provenance, and a summary of what it checked. */
+interface PageJsonExample {
+  readonly status: FenceExampleResult["status"];
+  readonly file: string;
+  readonly line: number;
+  readonly language: string;
+  /** The recorded run's UTC date, `YYYY-MM-DD`; present for a current or stale result. */
+  readonly date?: string;
+  /** The commit the run was recorded at. */
+  readonly commit?: string;
+  /** The evidence hash of the run, when it was recorded. */
+  readonly sha256?: string;
+  /** The prior state a stale result replaced. */
+  readonly recordedStatus?: Exclude<FenceExampleResult["status"], "stale">;
+  /** The exit code, when the run reported one. */
+  readonly exitCode?: number | null;
+  /** The environment hash the run used, when it was locked. */
+  readonly environment?: string;
+  /** One entry per expected output compared: `stdout`, `stderr`, and whether it matched. */
+  readonly outputs?: readonly { readonly stream: "stdout" | "stderr"; readonly ok: boolean }[];
+}
+
+/** The page's examples as page JSON writes them: a stable key order, provenance kept, output comparison summarized. */
+function examplesOf(page: Page): PageJson["examples"] | undefined {
+  const results = page.examples;
+  if (results === undefined || Object.keys(results).length === 0) return undefined;
+  const out: Record<string, PageJsonExample> = {};
+  for (const id of Object.keys(results).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))) {
+    const result = results[id]!;
+    const stale = result.status === "stale";
+    out[id] = {
+      status: result.status,
+      file: result.file,
+      line: result.line,
+      language: result.language,
+      ...(stale ? {} : { ...(result.date === "" ? {} : { date: result.date }), ...(result.commit === "" ? {} : { commit: result.commit }), sha256: result.sha256 }),
+      ...(stale ? { recordedStatus: result.recordedStatus } : {}),
+      ...(result.exitCode === undefined ? {} : { exitCode: result.exitCode }),
+      ...(result.environment === undefined ? {} : { environment: result.environment }),
+      ...(result.evidence === undefined
+        ? {}
+        : { outputs: result.evidence.outputs.map((output) => ({ stream: output.stream, ok: output.ok })) }),
+    };
+  }
+  return out;
 }
 
 /**
@@ -207,6 +257,7 @@ export const pageJson: Output = {
         ...(list === undefined ? {} : { list }),
         ...(page.stale === undefined ? {} : { stale: page.stale }),
         ...(pageSurface === undefined ? {} : { surface: pageSurface }),
+        ...(examplesOf(page) === undefined ? {} : { examples: examplesOf(page) }),
       };
       files.push({
         path,

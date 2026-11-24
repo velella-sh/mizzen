@@ -268,6 +268,43 @@
       },
       "additionalProperties": false,
       "description": "The public-surface coverage counts. Present only when the site config declares a `surface` key."
+    },
+    "examples": {
+      "type": "object",
+      "description": "The page's recorded example results, keyed by the fence's `data-example-id`, sorted by id. Present only when the page has recorded evidence.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["status", "file", "line", "language"],
+        "properties": {
+          "status": {
+            "enum": ["passed", "failed", "skipped", "sandbox-unavailable", "stale"],
+            "description": "The recorded run's state; `stale` means the fence changed since the run."
+          },
+          "file": { "type": "string", "description": "The source file the fence sits in, relative to the site root." },
+          "line": { "type": "integer", "minimum": 1, "description": "The 1-based line of the fence." },
+          "language": { "type": "string", "description": "The fence's language." },
+          "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "The UTC run date; present for a current or stale result." },
+          "commit": { "type": "string", "description": "The commit the run was recorded at." },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The evidence hash of the run." },
+          "recordedStatus": { "enum": ["passed", "failed", "skipped", "sandbox-unavailable"], "description": "The prior state a stale result replaced." },
+          "exitCode": { "type": ["integer", "null"], "description": "The exit code, when the run reported one." },
+          "environment": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "The environment hash the run used, when it was locked." },
+          "outputs": {
+            "type": "array",
+            "description": "One entry per expected output compared, in stdout then stderr order.",
+            "items": {
+              "type": "object",
+              "required": ["stream", "ok"],
+              "additionalProperties": false,
+              "properties": {
+                "stream": { "enum": ["stdout", "stderr"], "description": "Which stream was compared." },
+                "ok": { "type": "boolean", "description": "Whether the produced output matched." }
+              }
+            }
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false
