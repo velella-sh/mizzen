@@ -38,7 +38,7 @@ test("the built package runs the reference suite offline and writes no fixture",
     cpSync(join(PACKAGE, "bin"), join(installed, "bin"), { recursive: true });
     cpSync(join(PACKAGE, "schema"), join(installed, "schema"), { recursive: true });
     cpSync(join(PACKAGE, "fixtures", "evals"), join(checkout, "evals"), { recursive: true });
-    writeFileSync(join(installed, "package.json"), `${JSON.stringify({ name: "@velella/mizzen", version: "0.2.6", type: "module" }, null, 2)}\n`, "utf8");
+    writeFileSync(join(installed, "package.json"), `${JSON.stringify({ name: "@velella/mizzen", version: "0.2.7", type: "module" }, null, 2)}\n`, "utf8");
     symlinkSync(join(PACKAGE, "node_modules"), join(installed, "node_modules"), "dir");
 
     const env = {

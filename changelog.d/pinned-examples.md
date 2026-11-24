@@ -1,1 +1,0 @@
-- Add opt-in pinned example results. `mizzen examples record` captures dated per-fence evidence in `.mizzen-examples.json`, and builds expose it through `Page.examples` with stale detection and publish matching entries in `examples.json`. Existing sites keep their totals-only report and output bytes.

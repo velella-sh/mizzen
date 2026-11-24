@@ -90,7 +90,7 @@ export function matchingOutputs(): VerificationOutputs {
   const hash = "e".repeat(64);
   return {
     inputHash: "f".repeat(64),
-    tool: { expected: "0.2.6", actual: "0.2.6" },
+    tool: { expected: "0.2.7", actual: "0.2.7" },
     expectedHash: hash,
     actualHash: hash,
     match: true,

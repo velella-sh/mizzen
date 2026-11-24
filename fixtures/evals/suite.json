@@ -15,7 +15,7 @@
     "cases/conflict.json"
   ],
   "pins": {
-    "mizzen": "0.2.6",
+    "mizzen": "0.2.7",
     "package": "source",
     "tools": [
       {

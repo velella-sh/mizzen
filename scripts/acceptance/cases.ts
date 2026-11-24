@@ -1381,6 +1381,81 @@ const checkReports: AcceptanceCase = {
   },
 };
 
+/** Canonical JSON as the evidence guide defines it: sorted keys, no whitespace. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+const externalEvidence: AcceptanceCase = {
+  id: "external-evidence",
+  title: "An installed Mizzen ingests, locks, and replays test and CI evidence offline and rejects changed evidence",
+  run(ctx) {
+    const site = join(ctx.dir, "evidence-site");
+    const commit = "a".repeat(40);
+    const configSha256 = "b".repeat(64);
+    const artifact = "CI artifact\n";
+    const artifactSha256 = createHash("sha256").update(artifact).digest("hex");
+    const target = { surface: "cli:install", behavior: "install" };
+    const catalog = [{ suite: "cli", name: "install", ...target }];
+    const wrap = (kind: string, id: string, payload: unknown) => ({
+      version: 1, kind, id, origin: "https://ci.example/evidence", snapshot: "v1", executedAt: "2026-11-20T02:23:01Z",
+      payloadSha256: createHash("sha256").update(canonical(payload)).digest("hex"), payload,
+    });
+    const envelopes = [
+      wrap("test", "tests", { schema: "test-json@1", catalog, results: [{ suite: "cli", name: "install", outcome: "passed" }] }),
+      wrap("ci", "ci", { schema: "ci-run@1", commit, configSha256, runId: "123", workflow: "ci.yml", artifactSha256, outcome: "passed", targets: [target] }),
+      wrap("benchmark", "speed", { schema: "benchmark@1", metric: "install-time", unit: "ms", raw: [49, 52, 50], value: 50, run: "https://ci.example/runs/123", targets: [target], environment: { os: "linux" } }),
+      wrap("test", "deleted", { schema: "test-json@1", catalog, results: [] }),
+    ];
+    tree(site, { "mizzen.yml": 'title: Evidence\ninclude: [".mizzen"]\nexclude: [".mizzen/cache"]\n', "index.md": "# Home\n" });
+    tree(ctx.dir, { "artifact.bin": artifact });
+    const pins: Record<string, { sha256: string; artifactSha256?: string }> = {};
+    for (const envelope of envelopes) {
+      const file = `${envelope.id}.json`;
+      tree(ctx.dir, { [file]: JSON.stringify(envelope) });
+      const args = ["evidence", "ingest", join(ctx.dir, file), site];
+      if (envelope.kind === "ci") {
+        check(ctx.mizzen(args, ctx.dir).status !== 0, "a CI envelope without its artifact was accepted");
+        args.push("--artifact", join(ctx.dir, "artifact.bin"));
+      }
+      const digest = output(ctx.mizzen(args, ctx.dir), `ingest ${envelope.id}`).trim();
+      check(/^[a-f0-9]{64}$/.test(digest), "ingest did not print a SHA-256");
+      pins[envelope.id] = { sha256: digest, ...(envelope.kind === "ci" ? { artifactSha256 } : {}) };
+    }
+    const bad = { ...envelopes[0]!, payload: { ...(envelopes[0]!.payload as object), results: [] } };
+    tree(ctx.dir, { "tampered.json": JSON.stringify(bad) });
+    check(ctx.mizzen(["evidence", "ingest", join(ctx.dir, "tampered.json"), site], ctx.dir).status !== 0, "an envelope with a changed payload was accepted");
+    const claim = (id: string) => ({ id, subject: { kind: "page", id: "/" }, ...target, evidence: [id] });
+    tree(site, {
+      "evidence.lock.json": JSON.stringify({
+        version: 1, snapshot: { id: "v1", commit, configSha256 }, maxAgeDays: 14, pins, surfaces: [target.surface],
+        claims: ["tests", "ci", "speed", "deleted"].map(claim),
+      }),
+    });
+    const themeRoot = theme(ctx.dir);
+    const buildArgs = (out: string) => ["build", site, "--out", out, "--theme", themeRoot, "--as-of", "2026-11-23"];
+    check(ctx.mizzen(["build", site, "--out", join(ctx.dir, "no-date"), "--theme", themeRoot], ctx.dir).status !== 0, "a build without an explicit as-of date ran");
+    const out = join(ctx.dir, "evidence-out");
+    ok(ctx.mizzen(buildArgs(out), ctx.dir), "build with the evidence lock");
+    const report = JSON.parse(read(out, ".mizzen/evidence.json")) as { claims: { id: string; status: string }[] };
+    const status = Object.fromEntries(report.claims.map((row) => [row.id, row.status]));
+    check(status.tests === "verified" && status.ci === "verified" && status.speed === "verified", `fresh matching evidence was not verified: ${JSON.stringify(status)}`);
+    check(status.deleted === "unverified", "a deleted test verified its claim");
+    check(!existsSync(join(out, "evidence.lock.json")) && !existsSync(join(out, ".mizzen/evidence")), "the build published the lock or the local store");
+    const replay = join(ctx.dir, "evidence-replay");
+    ok(ctx.mizzen(buildArgs(replay), ctx.dir), "replay the build offline");
+    check(read(replay, ".mizzen/evidence.json") === read(out, ".mizzen/evidence.json"), "the evidence report is not reproducible");
+    const stored = join(site, ".mizzen", "evidence", `${pins.tests!.sha256}.json`);
+    writeFileSync(stored, readFileSync(stored, "utf8").replace("passed", "failed"));
+    check(ctx.mizzen(buildArgs(join(ctx.dir, "evidence-tampered")), ctx.dir).status !== 0, "a changed pinned envelope was accepted");
+  },
+};
+
 const executableExamples: AcceptanceCase = {
   id: "executable-examples",
   title: "Run executable examples and publish their evidence",
@@ -1837,6 +1912,7 @@ const changePropagation: AcceptanceCase = {
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   checkReports,
+  externalEvidence,
   coverageDrivenAuthoring,
   blog,
   apiReference,
