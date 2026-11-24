@@ -68,6 +68,7 @@ Commands:
   agent task resume <id> [dir]  Resume a waiting or blocked task; --approve <ids|all>
   agent task cancel <id> [dir]  Cancel a task; --reason <text>
   api check [dir]           Fail when the data API breaks a consumer of --against <built folder|git ref>
+  behavior [dir]            Report behavior contracts, surface/test/evidence links, and drift (--json, --version, --status)
   build [dir]               Build the site into --out (default: dist)
   check [dir]               Build to a temp folder and print diagnostics only
   compare <a> <b>           Compare two build diagnostic reports
@@ -197,9 +198,14 @@ Options:
   --dry-run            For edit apply: print the diff without writing; for versions snapshot: print the files without writing
   --allow-unchecked    Apply an edit apply patch that carries neither "expected" nor "beforeHash"
   --proof <path>       Proof record for edit apply (default: <patch>.proof.json)
-  --baseline <file>    For surface: compare against an earlier report written by this command
+  --baseline <file>    For surface or behavior: compare against an earlier report written by this command
   --min <percent>      For surface: exit 1 when the documented percentage is below this, 0 to 100
-  --version <version>  For surface: the product version to inventory, recorded on every item
+  --min-verified <pct> For behavior: exit 1 when the verified percentage is below this, 0 to 100
+  --version <version>  For surface or behavior: the product version to inventory or query
+  --status <status>    For behavior: only supported, experimental, deprecated, or removed
+  --os <name>          For behavior: only behaviors that cover this operating system
+  --language <name>    For behavior: only behaviors that cover this language
+  --runtime <name>     For behavior: only behaviors that cover this runtime
   -h, --help           Show this help
 
 Exit codes: 0 ok, 1 errors, 2 usage.
@@ -218,6 +224,7 @@ From this repository, run it as `node bin/mizzen.ts`; from a site that installed
 | `mizzen agent task resume <id> [dir] --approve <ids\|all>` | Moves a `waiting` or `blocked` task back to `ready`, optionally recording human-review approvals. A finished task refuses with the same `task.transition` problem every time (exit `1`). |
 | `mizzen agent task cancel <id> [dir] --reason <text>` | Moves a task to `canceled` and keeps its events; a repeated cancel on a finished task returns the same conflict (exit `1`). |
 | `mizzen api check [dir] --against <folder\|ref>` | Builds the site and compares its data API with the one at `--against`, a built folder or a git ref; exits `1` when a collection, a field, or a version is gone or a field changed type, and prints the file, the field, and a fix. Added fields pass. |
+| `mizzen behavior [dir] --json --version <v> --status <s> --os <os> --language <lang> --runtime <rt> --baseline <file> --min-verified <percent>` | Reads the `behavior` front matter of authored pages and reports every public behavior: its stable id, title, normative statement, and source span; the public surface items it describes; the tests and expected outcomes; the evidence links or pinned ids; its status, versions, replacement, and environments; and a `verified` or `unverified` verdict from the published evidence policy. A missing surface item, test file, evidence pin, or a test not expected to pass is unverified. `--version` returns the contract at that product version, the environment flags scope the result, `--baseline` reports drift for a changed signature, test, or evidence, and `--min-verified` exits `1` below the verified percentage. Private behaviors and private evidence values are withheld. Writes nothing but the report. See [Product behavior contracts](docs/behavior-contracts.md). |
 | `mizzen build [dir] --out <dir> --theme <dir>` | Builds `dir` (default `.`) into `--out` (default `dist`). Prints diagnostics as text. A build with an error still writes the site and exits `1`. |
 | `mizzen build [dir] --diagnose` | Writes `.mizzen/build-report.json`: a versioned record of the lock, data, and content inputs, the effective config hash, rules, and reference date, the Mizzen, Node, and theme versions, the time zone and locale, and every publishable output file with its relative path and SHA-256. Moving the checkout changes nothing. See [docs/reproduce.md](docs/reproduce.md). |
 | `mizzen compare <a> <b> --format text\|json` | Compares two build reports and groups every difference under inputs, config, tools, environment, or outputs. A changed output with every other category equal is flagged `unexplained`. |
@@ -444,6 +451,7 @@ Each `*.ts` file in an outputs folder is one unit. The pipeline finds them by li
 | `sitemap` | `sitemap.xml`. |
 | `sourcemap` | `sourcemap.json`, the line-exact source map (format). |
 | `surface` | `surface.json`, the public-surface coverage report: each item's documentation state, the gaps, the documented exclusions, and the counts by area. Written only when the config declares `surface`. |
+| `behavior` | `behavior.json` and `behavior/index.html`, the public behavior contracts: each behavior's normative statement, source span, status, versions, environments, surface links, tests, public evidence links, and verification. Written only when a page declares a behavior; private behaviors and evidence values are omitted. |
 | `translations` | `translations.json`, each page's status in every configured language. |
 | `trust` | `trust.json`, each doc page's trust level, reasons, and last reviewer. |
 | `twins` | One Markdown twin per document page: the same URL with `.md` in place of the HTML file. |
