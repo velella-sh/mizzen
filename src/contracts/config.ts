@@ -83,6 +83,23 @@ export interface ExamplesConfig {
   readonly failOnFailure?: boolean;
   /** Read recorded results from `.mizzen-examples.json` instead of executing examples during a build. */
   readonly pinned?: boolean;
+  /**
+   * Run opt-in examples during the build and check their output and type errors. Default `false`, so a build runs no
+   * example and needs no lock; `mizzen examples record` is the one command that executes them.
+   */
+  readonly execute?: boolean;
+  /** Require `.mizzen-env.json` and fail a run whose host differs from it. Default `true` when `execute` is set. */
+  readonly lock?: boolean;
+  /** Milliseconds each block may run. Default the runner's `10000`. */
+  readonly timeoutMs?: number;
+  /** V8 old-space limit in MiB; `0` keeps V8's default. Default `0`. */
+  readonly memoryMb?: number;
+  /** Whether a block may reach the network. Default `deny`. */
+  readonly network?: "deny" | "allow";
+  /** Type-check visible `ts`/`js` blocks against their imports before running them. Default `true`. */
+  readonly typeCheck?: boolean;
+  /** Commands a runbook's shell steps may run. Default `[]`, so a runbook refuses every step until it is allowlisted. */
+  readonly allowlist?: readonly string[];
 }
 
 /** How a paginated API hands out its next page. */

@@ -48,8 +48,16 @@ The site config file. Every key is optional; an unknown key is an error.
 | `theme.overrides.components` | object |  | Component name → the site module that replaces it. |
 | `search` | `false` or object | `{}` | false builds no search index. As an object, text sets how much of each page's body the index keeps. |
 | `search.text` | integer | `300` | The most characters of a page's body the index keeps. Titles and headings are always indexed. |
-| `examples` | object | none | Controls failed-example diagnostics and [pinned results](/example-results/). |
+| `examples` | object | none | Controls failed-example diagnostics, [executable examples](/example-results/), and pinned results. |
 | `examples.failOnFailure` | boolean | `false` | true reports a failed example as an error at its fence, so `mizzen check` exits 1; false keeps it a warning and the build succeeds. |
+| `examples.pinned` | boolean | `false` | Read `.mizzen-examples.json` during the build instead of running fences; `mizzen examples record` writes it. |
+| `examples.execute` | boolean | `false` | Run the opt-in `test` fences during the build and attach their evidence to each page, `examples.json`, and page JSON. |
+| `examples.lock` | boolean | `true` when `execute` | Require `.mizzen-env.json` and fail a run whose host differs from it. |
+| `examples.timeoutMs` | integer | `10000` | Milliseconds each block may run before the process group is killed. |
+| `examples.memoryMb` | integer | `0` | V8 old-space limit in MiB; `0` keeps V8's default. |
+| `examples.network` | `deny` or `allow` | `deny` | Whether a block may reach the network. |
+| `examples.typeCheck` | boolean | `true` | Type-check visible `ts`/`js` blocks against their imports before running them. |
+| `examples.allowlist` | list of string | `[]` | Commands a runbook's shell steps may run; a step outside it is refused before it runs. |
 | `analytics` | object | none | A cookieless analytics tool, written as one script tag. See [Analytics and verification](/analytics/). |
 | `verify` | object | none | Search engine verification tags and files. See [Analytics and verification](/analytics/). |
 | `social` | object | none | Generated share images: `template` names a file in `_templates/social/`, `fonts` lists the font files the images are drawn with. Without the key no image is written. |
