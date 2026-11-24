@@ -58,6 +58,7 @@ The site config file. Every key is optional; an unknown key is an error.
 | `examples.network` | `deny` or `allow` | `deny` | Whether a block may reach the network. |
 | `examples.typeCheck` | boolean | `true` | Type-check visible `ts`/`js` blocks against their imports before running them. |
 | `examples.allowlist` | list of string | `[]` | Commands a runbook's shell steps may run; a step outside it is refused before it runs. |
+| `federation` | object | none | Read knowledge from other independent projects: `manifest` names the federation manifest, `project` names this site's id, `bundle` names where this site publishes its own, and `compatible` names a version or range it accepts. A normal build reads only `federation.lock.json` and the locally locked bundles. See [Federated knowledge](https://github.com/velella-sh/mizzen/blob/main/docs/federated-knowledge.md). |
 | `analytics` | object | none | A cookieless analytics tool, written as one script tag. See [Analytics and verification](/analytics/). |
 | `verify` | object | none | Search engine verification tags and files. See [Analytics and verification](/analytics/). |
 | `social` | object | none | Generated share images: `template` names a file in `_templates/social/`, `fonts` lists the font files the images are drawn with. Without the key no image is written. |

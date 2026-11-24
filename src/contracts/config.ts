@@ -920,6 +920,21 @@ export interface DecisionsConfig {
 }
 
 /**
+ * The `federation` key: the manifest of independent projects this site reads knowledge from, and where its own bundle
+ * is read. Only `mizzen federation fetch` reads a manifest's sources; a normal build reads the locally locked bundles.
+ */
+export interface FederationConfig {
+  /** The federation manifest: an `https:` URL or a path relative to the site root. */
+  readonly manifest: string;
+  /** The project id this site is in the manifest. */
+  readonly project: string;
+  /** Where this site's own bundle is read from when it is a member that publishes one. */
+  readonly bundle?: string;
+  /** A snapshot version or range this site accepts from a compatible channel; absent accepts the lock's pins. */
+  readonly compatible?: string;
+}
+
+/**
  * The site config: exactly the keys of the site config file, after the loader has checked them.
  * Every key is optional in the file; the loader fills the defaults, so the keys marked required here are always present.
  */
@@ -992,6 +1007,8 @@ export interface SiteConfig {
   readonly surface?: SurfaceConfig;
   /** Versioned decision records (ADRs). Default: none, and no decision is read or published. */
   readonly decisions?: DecisionsConfig;
+  /** Federated knowledge from other projects. Default: none, and the site reads no other project's snapshot. */
+  readonly federation?: FederationConfig;
   /** Redirect pages: old path under `base` to a path on the site or an `https` URL. Default `{}`. */
   readonly redirects: Readonly<Record<string, string>>;
   /** Turns an output off by its name (`false`). Default: every output on. */

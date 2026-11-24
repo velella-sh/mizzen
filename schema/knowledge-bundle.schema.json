@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/knowledge-bundle.schema.json",
+  "title": "Mizzen knowledge bundle",
+  "description": "One repository's published knowledge bundle: its graph, public surface, behavior contracts, and authorized evidence, with the tool version, the snapshot identity, the access policy, and a SHA-256 over its own body. Private data is left out rather than redacted in place. A reader verifies the digest before using any part.",
+  "type": "object",
+  "required": ["version", "tool", "project", "namespace", "role", "snapshot", "policy", "graph", "surface", "behaviors", "evidence", "references", "removed", "digest"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1, "description": "The contract version." },
+    "tool": { "type": "string", "minLength": 1, "description": "The engine version that wrote the bundle." },
+    "project": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "The project the bundle belongs to." },
+    "namespace": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "The namespace every identity in this bundle is qualified with." },
+    "role": { "enum": ["product", "docs", "consumer"] },
+    "snapshot": { "$ref": "#/$defs/snapshot" },
+    "policy": { "$ref": "#/$defs/policy" },
+    "graph": { "$ref": "https://velella.sh/mizzen/schema/graph.schema.json" },
+    "surface": {
+      "type": "array",
+      "description": "The project's public surface items, sorted by area then id.",
+      "items": { "$ref": "https://velella.sh/mizzen/schema/surface-report.schema.json#/$defs/item" }
+    },
+    "behaviors": {
+      "type": "array",
+      "description": "The project's public behavior contracts, sorted by id.",
+      "items": { "type": "object" }
+    },
+    "evidence": { "$ref": "#/$defs/evidence" },
+    "references": {
+      "type": "array",
+      "description": "The explicit cross-project references this project makes, sorted by source, target, and kind.",
+      "items": { "$ref": "#/$defs/reference" }
+    },
+    "removed": {
+      "type": "array",
+      "description": "Nodes the project removed, by local id and the version the removal was recorded at.",
+      "items": {
+        "type": "object",
+        "required": ["id", "version"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "version": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$", "description": "SHA-256 of the bundle without this field." }
+  },
+  "$defs": {
+    "snapshot": {
+      "type": "object",
+      "required": ["id", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "commit": { "type": "string", "minLength": 1 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "required": ["public", "audiences"],
+      "additionalProperties": false,
+      "properties": {
+        "public": { "type": "boolean", "description": "True when every reader may use this bundle." },
+        "audiences": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "description": "The audiences an authorized reader must hold." }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["version", "claims", "links"],
+      "additionalProperties": false,
+      "properties": {
+        "version": { "const": 1 },
+        "claims": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "subject", "evidence"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string", "minLength": 1 },
+              "subject": { "type": "string", "minLength": 1 },
+              "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+            }
+          }
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["from", "to", "kind", "digest"],
+            "additionalProperties": false,
+            "properties": {
+              "from": { "type": "string", "minLength": 1 },
+              "to": { "type": "string", "minLength": 1 },
+              "kind": { "type": "string", "minLength": 1 },
+              "target": {
+                "type": "object",
+                "required": ["project"],
+                "additionalProperties": false,
+                "properties": {
+                  "project": { "type": "string", "minLength": 1 },
+                  "version": { "type": "string", "minLength": 1 }
+                }
+              },
+              "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+            }
+          }
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": {
+          "type": "object",
+          "required": ["project", "id"],
+          "additionalProperties": false,
+          "properties": {
+            "project": { "type": "string", "minLength": 1 },
+            "id": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        },
+        "kind": { "type": "string", "minLength": 1 },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    }
+  }
+}

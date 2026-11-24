@@ -712,6 +712,38 @@
         }
       },
       "description": "Read versioned decision records (ADRs) and publish their current and historical decisions. A decision's behavior: link resolves against the behaviors the site's pages declare."
+    },
+    "federation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest",
+        "project"
+      ],
+      "properties": {
+        "manifest": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The federation manifest: an https URL or a path relative to the site root. Only `mizzen federation fetch` reads it; a build reads only the lock."
+        },
+        "project": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "description": "The project id this site is in the manifest, such as product, docs, or consumer."
+        },
+        "bundle": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where this site's own bundle is read from, when it publishes one: an https URL or a path relative to the site root."
+        },
+        "compatible": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A snapshot version or inclusive range this site accepts from a compatible channel, such as `>=1.2.0 <2.0.0`. Absent accepts the lock's pins."
+        }
+      },
+      "description": "Read knowledge from other independent projects. Default: none, and the site reads no other project's snapshot. A normal build reads only federation.lock.json and the locally locked bundles."
     }
   },
   "$defs": {

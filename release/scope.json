@@ -2288,6 +2288,119 @@
       "issue": 1336,
       "status": "shipped",
       "epic": 1314
+    },
+    {
+      "id": "define-a-federation-manifest",
+      "title": "Define a federation manifest",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1375
+    },
+    {
+      "id": "publish-knowledge-snapshots",
+      "title": "Publish knowledge snapshots",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1376
+    },
+    {
+      "id": "fetch-and-lock-bundles-before-build",
+      "title": "Fetch and lock bundles before build",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1377
+    },
+    {
+      "id": "namespace-cross-project-identities",
+      "title": "Namespace cross-project identities",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1378
+    },
+    {
+      "id": "compose-independent-knowledge-graphs",
+      "title": "Compose independent knowledge graphs",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1379
+    },
+    {
+      "id": "query-across-repositories",
+      "title": "Query across repositories",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1380
+    },
+    {
+      "id": "resolve-references-to-pinned-snapshots",
+      "title": "Resolve references to pinned snapshots and compatible channels",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1381
+    },
+    {
+      "id": "compile-context-packs-across-repositories",
+      "title": "Compile context packs across repositories",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1382
+    },
+    {
+      "id": "resolve-snapshot-version-compatibility",
+      "title": "Resolve snapshot version compatibility",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1383
+    },
+    {
+      "id": "trace-evidence-chains-across-projects",
+      "title": "Trace evidence chains across projects",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1384
+    },
+    {
+      "id": "handle-missing-bundles-offline",
+      "title": "Handle missing bundles offline",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1385
+    },
+    {
+      "id": "enforce-cross-repository-access-policy",
+      "title": "Enforce cross-repository access policy",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1386
+    },
+    {
+      "id": "refresh-projects-independently",
+      "title": "Refresh projects independently",
+      "status": "shipped",
+      "test": "test/federation-compose.test.ts",
+      "epic": 1319,
+      "issue": 1387
+    },
+    {
+      "id": "test-offline-federation-across-three-repositories",
+      "title": "Test offline federation across three repositories",
+      "status": "shipped",
+      "test": "test/federation-cli.test.ts",
+      "epic": 1319,
+      "issue": 1388,
+      "case": "federated-knowledge"
     }
   ]
 }

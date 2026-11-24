@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://velella.sh/mizzen/schema/federation-lock.schema.json",
+  "title": "Mizzen federation lock",
+  "description": "The pin of every project's published knowledge bundle: the manifest's own address and hash, and each bundle by SHA-256 with the snapshot it was built from. A build reads only this file and the bundle bytes it names. An optional project with no bundle carries a reason instead of a hash.",
+  "type": "object",
+  "required": ["version", "manifest", "bundles"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1, "description": "The contract version." },
+    "manifest": {
+      "type": "object",
+      "required": ["source", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string", "minLength": 1, "description": "The manifest's address as the config writes it." },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$", "description": "SHA-256 of the manifest's bytes." }
+      }
+    },
+    "bundles": {
+      "type": "object",
+      "description": "Every pinned bundle by project id.",
+      "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "snapshot": {
+      "type": "object",
+      "required": ["id", "version"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "description": "Stable snapshot id, such as snap-2026-11." },
+        "version": { "type": "string", "minLength": 1, "description": "The project's product version, used for compatibility selection." },
+        "commit": { "type": "string", "minLength": 1, "description": "The commit the snapshot was built from, when one is known." }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "required": ["project", "namespace", "role", "source", "optional"],
+      "additionalProperties": false,
+      "properties": {
+        "project": { "type": "string", "minLength": 1 },
+        "namespace": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["product", "docs", "consumer"] },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$", "description": "SHA-256 of the stored bundle bytes; absent when the project has none." },
+        "snapshot": { "$ref": "#/$defs/snapshot" },
+        "source": { "type": "string", "minLength": 1, "description": "The source the bundle was fetched from, as the manifest wrote it." },
+        "optional": { "type": "boolean", "description": "True when the project may be absent without failing the federation." },
+        "missing": { "type": "string", "minLength": 1, "description": "Why no bundle is pinned, for an optional project that could not be fetched." }
+      }
+    }
+  }
+}

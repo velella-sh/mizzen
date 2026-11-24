@@ -1509,6 +1509,104 @@ const executableExamples: AcceptanceCase = {
   },
 };
 
+const federatedKnowledge: AcceptanceCase = {
+  id: "federated-knowledge",
+  title: "Query and pack three repositories offline, and report a removed bundle as partial",
+  run(ctx) {
+    const root = join(ctx.dir, "federation");
+    // Three bundle bodies are written here rather than built, so the case runs against the installed CLI alone. Each
+    // body is what `buildBundle` writes: sorted lists and a digest over the body without the digest field.
+    const digest = (body: Record<string, unknown>): string => createHash("sha256").update(canonical(body)).digest("hex");
+    const canonical = (value: unknown): string => {
+      if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+      if (typeof value === "object" && value !== null) {
+        const record = value as Record<string, unknown>;
+        return `{${Object.keys(record).filter((key) => record[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${canonical(record[key])}`).join(",")}}`;
+      }
+      return JSON.stringify(value) ?? "null";
+    };
+    const page = (file: string, title: string): Record<string, unknown> => ({ id: `page:${file}`, kind: "page", label: title });
+    const body = (project: string, namespace: string, role: string, version: string, nodes: Record<string, unknown>[], references: Record<string, unknown>[], extra: Record<string, unknown>): Record<string, unknown> => ({
+      version: 1,
+      tool: "0.2.6",
+      project,
+      namespace,
+      role,
+      snapshot: { id: "snap-1", version },
+      policy: { public: true, audiences: [] },
+      graph: { format: 1, snapshot: { format: 1, id: `${project}-snap-1` }, nodes, edges: [] },
+      surface: [],
+      behaviors: [],
+      evidence: { version: 1, claims: [], links: [] },
+      references,
+      removed: [],
+      ...extra,
+    });
+    const product = body("product", "velella-product", "product", "1.2.0", [page("guide.md", "Guide")], [], {
+      surface: [{ id: "api:greet", area: "api", kind: "symbol", name: "greet", source: { file: "src/index.ts", line: 1, column: 1, endLine: 1, endColumn: 1 }, stability: "stable" }],
+    });
+    const docs = body("docs", "velella-docs", "docs", "1.1.0", [page("install.md", "Install")], [{ from: "page:install.md", to: { project: "product", id: "surface:api:greet" }, kind: "documents" }], {
+      behaviors: [{
+        id: "install.runs", title: "Install runs", normative: "Install works.", source: { file: "install.md", line: 1, column: 1, endLine: 1, endColumn: 1 },
+        page: { url: "/install/", source: "install.md" }, status: "supported", versions: { introduced: "1.0.0" }, environments: [], surface: [], tests: [], evidence: [],
+        verification: { status: "verified", reasons: [], required: { tests: 0, evidence: 0, kinds: [] } },
+      }],
+    });
+    const consumer = body("consumer", "velella-consumer", "consumer", "0.9.0", [page("usage.md", "Usage")], [{ from: "page:usage.md", to: { project: "docs", id: "behavior:install.runs" }, kind: "references" }], {});
+    const publish = (value: Record<string, unknown>): Record<string, unknown> => ({ ...value, digest: digest(value) });
+    tree(root, {
+      "mizzen.yml": "title: Federated\nfederation:\n  manifest: federation.json\n  project: docs\n",
+      "federation.json": JSON.stringify({
+        version: 1,
+        projects: [
+          { id: "product", namespace: "velella-product", role: "product", source: { path: "product.bundle.json" } },
+          { id: "docs", namespace: "velella-docs", role: "docs", source: { path: "docs.bundle.json" } },
+          { id: "consumer", namespace: "velella-consumer", role: "consumer", source: { path: "consumer.bundle.json" } },
+        ],
+      }),
+      "product.bundle.json": JSON.stringify(publish(product)),
+      "docs.bundle.json": JSON.stringify(publish(docs)),
+      "consumer.bundle.json": JSON.stringify(publish(consumer)),
+    });
+    ok(ctx.mizzen(["federation", "fetch", root], ctx.dir), "federation fetch");
+
+    const graph = JSON.parse(output(ctx.mizzen(["federation", "graph", root], ctx.dir), "federation graph")) as {
+      projects: { id: string }[];
+      partial: boolean;
+      digest: string;
+    };
+    check(graph.projects.length === 3 && !graph.partial, "the three-repository graph was not complete");
+    check(/^fed:/.test(graph.digest), "the composed graph has no digest");
+
+    const answer = JSON.parse(
+      output(ctx.mizzen(["federation", "query", root, "--from", "docs/snap-1/page:install.md", "--depth", "1"], ctx.dir), "federation query"),
+    ) as { citations: { id: string }[] };
+    check(answer.citations.some((citation) => citation.id === "product/snap-1/surface:api:greet"), "the cross-repository query did not reach the product");
+
+    const pack = output(ctx.mizzen(["federation", "pack", root, "--goal", "install", "--budget", "2000", "--from", "product/snap-1/page:guide.md"], ctx.dir), "federation pack");
+    check(pack.startsWith("# Federated context: install"), "the pack has no title");
+    check(pack.includes("- Project: product") && pack.includes("- Project: docs"), "the pack is not attributed to its projects");
+
+    // Removing one bundle makes the same graph partial, and names the project the manifest declared.
+    const lock = JSON.parse(read(root, "federation.lock.json")) as {
+      version: 1;
+      manifest: { source: string; sha256: string };
+      bundles: Record<string, Record<string, unknown>>;
+    };
+    lock.bundles.docs = { project: "docs", namespace: "velella-docs", role: "docs", source: "path:docs.bundle.json", optional: true, missing: "the bundle is absent." };
+    tree(root, { "federation.lock.json": JSON.stringify(lock) });
+    const partial = JSON.parse(output(ctx.mizzen(["federation", "graph", root], ctx.dir), "federation graph after removal")) as {
+      partial: boolean;
+      missing: { project: string }[];
+      projects: { id: string }[];
+    };
+    check(partial.partial === true, "a removed bundle did not mark the graph partial");
+    check(partial.missing.some((entry) => entry.project === "docs"), "the missing bundle was not named");
+    check(partial.projects.map((project) => project.id).join(",") === "consumer,product", "a known-good snapshot was dropped");
+    check(!JSON.stringify(partial).includes("PRIVATE_FEDERATION_SENTINEL"), "the graph leaked a private sentinel");
+  },
+};
+
 /** Every required case, in the order a release runs them. */
 export const CASES: readonly AcceptanceCase[] = [
   checkReports,
@@ -1540,6 +1638,7 @@ export const CASES: readonly AcceptanceCase[] = [
   knowledge,
   decisions,
   behaviorContracts,
+  federatedKnowledge,
   mcp,
   traces,
   permissions,
