@@ -91,7 +91,7 @@ function moveCodeSource(node: HastNodes): void {
     const code = node.children.find(
       (child): child is Element => child.type === "element" && child.tagName === "code",
     );
-    for (const name of ["data-src", "data-code"]) {
+    for (const name of ["data-src", "data-code", "data-example-hidden"]) {
       const value = code?.properties[name];
       if (code && value !== undefined) {
         node.properties[name] = value;
@@ -102,6 +102,21 @@ function moveCodeSource(node: HastNodes): void {
   if ("children" in node) {
     for (const child of node.children) moveCodeSource(child);
   }
+}
+
+/**
+ * Drops every element marked `data-example-hidden`, in place. A hidden setup or teardown block runs but is not public
+ * text, and its adjacent expected-output fence is dropped with it. The page's Markdown twin keeps the source, so the
+ * contract a reader can check is preserved in `index.md` (#1331). A block's parent is rewritten, never the tree's
+ * nodes, so the caller's parsed tree is untouched.
+ */
+function dropHidden(node: HastNodes): void {
+  if (!("children" in node)) return;
+  node.children = node.children.filter((child) => {
+    if (child.type === "element" && child.properties["data-example-hidden"] !== undefined) return false;
+    dropHidden(child);
+    return true;
+  });
 }
 
 /** Concatenates the literal text a node renders with: text and code, not markup or breaks. */
@@ -138,5 +153,6 @@ export async function markdownToHtml(tree: Root, sourcePath: string, spans: read
   stampSources(stamped, sourcePath, spans);
   const hast = (await processor.run(stamped)) as HastRoot;
   moveCodeSource(hast);
+  dropHidden(hast);
   return { html: processor.stringify(hast), headings };
 }

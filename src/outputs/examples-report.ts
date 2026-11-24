@@ -6,6 +6,7 @@ import { exampleFailed, exampleSandboxUnavailable } from "../pipeline/examples/d
 import { runNodeExample, type ExampleLang } from "../pipeline/examples/run-node.ts";
 import { runShellExample, sandboxAvailable } from "../pipeline/examples/run-shell.ts";
 import { exampleHash, exampleRoute, pageExamples, type ExamplesLock, type RecordedExamples } from "../examples/pinned.ts";
+import { runPageExamples, type RunPageOptions } from "../examples/run.ts";
 
 /**
  * Writes `examples.json`: one entry per page with how many runnable examples it declares, how many passed, how many
@@ -302,6 +303,65 @@ export async function recordExamples(
   return { version: 1, examples };
 }
 
+/** What {@link recordExecutableExamples} needs: the site, its root, and the locked inputs. */
+export interface RecordExecutableOptions {
+  /** The site whose pages hold the fences. */
+  readonly site: Site;
+  /** Absolute site root: where snippets, fixtures, and `node_modules` live. */
+  readonly root: string;
+  /** Absolute source folder. */
+  readonly sourceDir: string;
+  /** The recorded run's provenance. */
+  readonly provenance: Pick<RecordedExampleResult, "date" | "commit">;
+  /** The environment hash the run cites, from `.mizzen-env.json`. */
+  readonly environment?: string;
+  /** The locked limits and allowlist. */
+  readonly limits: RunPageOptions["limits"];
+  readonly allowlist?: readonly string[];
+  /** The result cache, so an unchanged session replays its stored outcome. */
+  readonly cache?: ExampleCache;
+  /** The `tsc` entry, for a test. */
+  readonly tsc?: string;
+  /** Fail a failed example as an error. */
+  readonly failOnFailure?: boolean;
+  /** Receives every finding. */
+  readonly report: (diagnostic: Diagnostic) => void;
+}
+
+/**
+ * Runs a site's opt-in examples through the session orchestrator and records one result per fence: shared sessions,
+ * hidden setup and teardown, snippets, runbooks, type-check, stdout and stderr, limits, and the cache all apply, and
+ * every result keeps its environment hash and evidence. The lock is written by the caller; this function never touches
+ * the filesystem beyond reading snippets and fixtures.
+ */
+export async function recordExecutableExamples(options: RecordExecutableOptions): Promise<ExamplesLock> {
+  const examples: Record<string, Record<string, RecordedExampleResult>> = {};
+  const failOnFailure = options.failOnFailure === true || options.site.config.examples?.failOnFailure === true;
+  for (const page of [...options.site.pages].sort((a, b) => byCodePoint(a.url, b.url))) {
+    const blocks = await pageExamples(page, true);
+    if (blocks.length === 0) continue;
+    const file = blocks[0]?.pos.file ?? page.source.file;
+    const run = await runPageExamples({
+      examples: blocks,
+      page: page.url,
+      file,
+      root: options.root,
+      sourceDir: options.sourceDir,
+      limits: options.limits,
+      ...(options.allowlist === undefined ? {} : { allowlist: options.allowlist }),
+      provenance: options.provenance,
+      ...(options.environment === undefined ? {} : { environment: options.environment }),
+      ...(options.cache === undefined ? {} : { cache: options.cache }),
+      ...(options.tsc === undefined ? {} : { tsc: options.tsc }),
+      failOnFailure,
+    });
+    const route = exampleRoute(page.url, options.site.config.base);
+    examples[route] = Object.fromEntries(run.results);
+    for (const diagnostic of run.diagnostics) options.report(diagnostic);
+  }
+  return { version: 1, examples };
+}
+
 function reportFile(body: ExamplesJson & Partial<ExamplesLock>): readonly OutputFile[] {
   return [{ path: "examples.json", contents: `${JSON.stringify(body, null, 2)}\n` }];
 }
@@ -333,6 +393,39 @@ async function pinnedReport(site: Site, report: ExamplesReportOptions["report"])
     pages.push({ url: page.url, total, passed: passedCount, failed: failedCount, skipped: total - passedCount - failedCount });
   }
   return reportFile({ pages, version: 1, examples: current });
+}
+
+/**
+ * Publishes `examples.json` from the results the build already attached to each page (`examples.execute`). The build
+ * runs the examples once, before its outputs, and attaches them to `page.examples`; this reads that one map, so the
+ * output never runs an example a second time and `examples.json`, page JSON, and the HTML always agree. A page with no
+ * results is present with zero counts.
+ */
+export function attachedReport(site: Site): readonly OutputFile[] {
+  const pages: PageExamples[] = [];
+  const examples: Record<string, Record<string, RecordedExampleResult>> = {};
+  for (const page of [...site.pages].sort((a, b) => byCodePoint(a.url, b.url))) {
+    const results = page.examples ?? {};
+    const ids = Object.keys(results).sort(byCodePoint);
+    if (ids.length === 0) {
+      pages.push({ url: page.url, total: 0, passed: 0, failed: 0, skipped: 0 });
+      continue;
+    }
+    let passedCount = 0;
+    let failedCount = 0;
+    const current: Record<string, RecordedExampleResult> = {};
+    for (const id of ids) {
+      const result = results[id]!;
+      // A build's own run never leaves a stale entry; a manually written one is skipped rather than republished.
+      if (result.status === "stale") continue;
+      current[id] = result;
+      if (result.status === "passed") passedCount += 1;
+      if (result.status === "failed") failedCount += 1;
+    }
+    examples[page.url] = current;
+    pages.push({ url: page.url, total: ids.length, passed: passedCount, failed: failedCount, skipped: ids.length - passedCount - failedCount });
+  }
+  return reportFile({ pages, version: 1, examples });
 }
 
 export async function examplesReport(
@@ -368,6 +461,8 @@ export function examplesCacheDir(env: NodeJS.ProcessEnv = process.env): string |
 export const examplesReportOutput: Output = {
   name: "examples-report",
   async run(site: Site, ctx): Promise<readonly OutputFile[]> {
+    // The build already ran and attached the examples in execute mode; the output only publishes that one map.
+    if (site.config.examples?.execute === true) return attachedReport(site);
     const cacheDir = examplesCacheDir();
     return examplesReport(site, {
       report: (diagnostic) => ctx.report(diagnostic),

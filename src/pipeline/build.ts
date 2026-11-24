@@ -458,6 +458,21 @@ export async function build(options: BuildOptions): Promise<BuildResult> {
     }));
     hookedSite = { ...hookedSite, pages };
   }
+  // With `examples.execute`, a build runs the opt-in examples itself and attaches their evidence to each page, so the
+  // HTML, `examples.json`, every page JSON, and a proof read one map. The lock is checked first; a missing one stops the
+  // run with one error and attaches nothing. A pinned build never executes, so this runs only when asked.
+  if (hookedSite.config.examples?.execute === true) {
+    const { runSiteExamples } = await import("../examples/site.ts");
+    const cacheDir = options.cache === true ? join(options.cacheDir ?? cacheRootOf(root), "examples") : undefined;
+    const { exampleCache } = await import("../pipeline/examples/cache.ts");
+    const ran = await runSiteExamples(hookedSite, {
+      root,
+      sourceDir,
+      ...(cacheDir === undefined ? {} : { cache: exampleCache({ dir: cacheDir }) }),
+      report: (finding) => diagnostics.report(finding),
+    });
+    hookedSite = ran.site;
+  }
   // Attach the state and subscription links before hashing or handing pages to a render worker.
   const site: Site =
     staleByRepositorySource.size === 0 && Object.keys(hookedSite.config.calendars ?? {}).length === 0

@@ -47,6 +47,54 @@ export interface RecordedExampleResult {
   readonly commit: string;
   /** SHA-256 of the JSON array [language, code, expected output or null]. */
   readonly sha256: string;
+  /** The exit code the run reported; absent when the language was not run. */
+  readonly exitCode?: number | null;
+  /** SHA-256 of the execution environment the run used, from `.mizzen-env.json`; absent for a skipped block. */
+  readonly environment?: string;
+  /** The evidence for this run: its outputs, its span, and any snippet it read. */
+  readonly evidence?: ExampleEvidence;
+}
+
+/** One expected-vs-actual comparison the evidence keeps. */
+export interface ExampleEvidenceOutput {
+  /** `stdout` or `stderr`. */
+  readonly stream: "stdout" | "stderr";
+  /** How the two were compared. */
+  readonly match: "exact" | "pattern";
+  /** The expected text, normalized; absent when the block checked only the exit code. */
+  readonly expected?: string;
+  /** The produced text, normalized. */
+  readonly actual: string;
+  /** True when the two agree. */
+  readonly ok: boolean;
+}
+
+/** Where a block's code came from, when it was not written inline. */
+export interface ExampleEvidenceSnippet {
+  /** The file, relative to the source folder. */
+  readonly file: string;
+  /** 1-based first line the block holds. */
+  readonly start: number;
+  /** 1-based last line the block holds, inclusive. */
+  readonly end: number;
+  /** The language the extension gave it. */
+  readonly language: string;
+}
+
+/** The portable evidence one run keeps: no temporary paths, no durations, no clocks. */
+export interface ExampleEvidence {
+  /** The exit code, or `null` when the block timed out, was refused, or did not start. */
+  readonly exitCode: number | null;
+  /** The limit that stopped the block, when one did. */
+  readonly violation?: string;
+  /** Each expected output compared, in `stdout` then `stderr` order. */
+  readonly outputs: readonly ExampleEvidenceOutput[];
+  /** The snippet read, when the block imported one. */
+  readonly snippet?: ExampleEvidenceSnippet;
+  /** True when the host confined writes; absent when the block is not run. */
+  readonly sandboxed?: boolean;
+  /** The block's session, when it shared one. */
+  readonly session?: string;
 }
 
 /** A recorded result, or evidence from an earlier version of this fence. */

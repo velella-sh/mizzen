@@ -1,0 +1,12 @@
+title: Executable examples
+description: A fixture for the executable-documentation acceptance case.
+search: false
+examples:
+  execute: true
+  lock: false
+  failOnFailure: true
+  typeCheck: false
+  timeoutMs: 15000
+  allowlist:
+    - echo
+    - test
