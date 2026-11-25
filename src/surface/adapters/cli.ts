@@ -8,6 +8,7 @@
  * line. The help is one template literal, so a help line's file line is the literal's start line plus the line's offset
  * inside it.
  */
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { relative, resolve } from "node:path";
@@ -18,14 +19,17 @@ import { itemId, sortItems } from "../contract.ts";
 
 /** What a CLI discovery needs. */
 export interface DiscoverCommandsOptions {
-  /** The CLI module's file, for spans and the accepted-flag list; defaults to this package's `src/cli/index.ts`. */
+  /** The CLI module's file, for spans and the accepted-flag list; defaults to this package's `src/cli/index.ts`, or `dist/cli/index.js` when installed. */
   readonly source?: string;
   /** The version the CLI ships in, so its items carry an introduction version. Default: none. */
   readonly version?: string;
 }
 
 /** The module that declares the CLI surface. */
-const CLI_SOURCE = fileURLToPath(new URL("../../cli/index.ts", import.meta.url));
+const CLI_TS = fileURLToPath(new URL("../../cli/index.ts", import.meta.url));
+
+/** The package ships compiled output, so an installed copy has `index.js` where a checkout has `index.ts`. */
+const CLI_SOURCE = existsSync(CLI_TS) ? CLI_TS : CLI_TS.replace(/\.ts$/, ".js");
 
 /** The 1-based line of `needle` in `source`, or 1 when it does not appear. */
 function lineOf(source: string, needle: string): number {
