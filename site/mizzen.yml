@@ -4,6 +4,9 @@ description: A deterministic docs engine with exact source positions.
 lang: en
 url: https://velella.sh
 base: /mizzen
+network:
+  source: https://velella.sh/lateen/brand/network.json
+  project: mizzen
 repository:
   url: https://github.com/velella-sh/mizzen
   branch: main
