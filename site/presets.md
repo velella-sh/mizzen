@@ -64,7 +64,7 @@ For another project in the family, use the family preset that matches the projec
 
 ```yaml
 network:
-  source: https://velella.sh/lateen/brand/network.json
+  source: https://velella.sh/network.json
   project: mizzen
 theme:
   options:

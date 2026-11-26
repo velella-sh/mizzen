@@ -5,7 +5,7 @@ lang: en
 url: https://velella.sh
 base: /mizzen
 network:
-  source: https://velella.sh/lateen/brand/network.json
+  source: https://velella.sh/network.json
   project: mizzen
 repository:
   url: https://github.com/velella-sh/mizzen
